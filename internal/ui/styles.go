@@ -16,17 +16,17 @@ var (
 
 	// File list styles
 	selectedFileStyle = lipgloss.NewStyle().
-				Foreground(colorHighlight).
+				Reverse(true).
 				Bold(true)
 
 	normalFileStyle = lipgloss.NewStyle()
 
 	// Diff line styles
 	addedLineStyle = lipgloss.NewStyle().
-			Foreground(colorGreen)
+			Background(lipgloss.Color("#1a3a1a")) // Dark greenish background
 
 	deletedLineStyle = lipgloss.NewStyle().
-				Foreground(colorRed)
+				Background(lipgloss.Color("#3a1a1a")) // Dark reddish background
 
 	contextLineStyle = lipgloss.NewStyle()
 

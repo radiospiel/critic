@@ -9,6 +9,8 @@ import (
 // GetMergeBase returns the merge base commit between HEAD and the main branch.
 // It tries "main" first, then falls back to "master".
 func GetMergeBase() (string, error) {
+	// @bot enfore that base doesn't contain spaces or other weird chars
+
 	// Try main first
 	base, err := getMergeBaseWithBranch("main")
 	if err == nil {

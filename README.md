@@ -1,4 +1,4 @@
-# Critic
+# Critic 22
 
 A code review tool for Git repositories with TUI interface.
 

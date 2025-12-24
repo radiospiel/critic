@@ -5,7 +5,9 @@
       "Bash(go build:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(git rm:*)",
+      "Bash(go run:*)"
     ]
   }
 }

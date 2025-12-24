@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -37,29 +39,19 @@ func (m *LayoutModel) SetSize(width, height int) {
 // GetFileListSize returns the size for the file list pane
 func (m *LayoutModel) GetFileListSize() (int, int) {
 	leftWidth := int(float64(m.width) * m.splitRatio)
-	// Account for borders (2 chars per border)
-	if leftWidth > 4 {
-		leftWidth -= 4
+	// Account for separator (1 char)
+	if leftWidth > 0 {
+		leftWidth -= 1
 	}
-	height := m.height
-	if height > 4 {
-		height -= 4
-	}
+	height := m.height - 1 // Account for status bar
 	return leftWidth, height
 }
 
 // GetDiffViewSize returns the size for the diff view pane
 func (m *LayoutModel) GetDiffViewSize() (int, int) {
 	leftWidth := int(float64(m.width) * m.splitRatio)
-	rightWidth := m.width - leftWidth - 1 // -1 for spacing between panes
-	// Account for borders
-	if rightWidth > 4 {
-		rightWidth -= 4
-	}
-	height := m.height
-	if height > 4 {
-		height -= 4
-	}
+	rightWidth := m.width - leftWidth - 1 // -1 for separator
+	height := m.height - 1 // Account for status bar
 	return rightWidth, height
 }
 
@@ -84,23 +76,34 @@ func (m *LayoutModel) SetFocusedPane(pane Pane) {
 
 // RenderSplitView renders two panes side-by-side
 func (m *LayoutModel) RenderSplitView(leftContent, rightContent string) string {
-	leftWidth, _ := m.GetFileListSize()
+	leftWidth, leftHeight := m.GetFileListSize()
 	rightWidth, _ := m.GetDiffViewSize()
 
-	// Create bordered views
-	leftStyle := inactiveBorderStyle.Width(leftWidth).Height(m.height - 2)
-	rightStyle := inactiveBorderStyle.Width(rightWidth).Height(m.height - 2)
+	// Apply faint style to unfocused pane
+	leftStyle := lipgloss.NewStyle().Width(leftWidth).Height(leftHeight)
+	rightStyle := lipgloss.NewStyle().Width(rightWidth).Height(leftHeight)
 
-	if m.focusedPane == FileListPane {
-		leftStyle = activeBorderStyle.Width(leftWidth).Height(m.height - 2)
+	if m.focusedPane == DiffViewPane {
+		// Dim the left pane when right is focused
+		leftStyle = leftStyle.Faint(true)
 	} else {
-		rightStyle = activeBorderStyle.Width(rightWidth).Height(m.height - 2)
+		// Dim the right pane when left is focused
+		rightStyle = rightStyle.Faint(true)
 	}
 
-	// Add titles
-	leftView := leftStyle.Render(RenderTitle("Files", m.focusedPane == FileListPane) + "\n" + leftContent)
-	rightView := rightStyle.Render(RenderTitle("Diff", m.focusedPane == DiffViewPane) + "\n" + rightContent)
+	leftView := leftStyle.Render(leftContent)
+	rightView := rightStyle.Render(rightContent)
 
-	// Join side by side
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftView, rightView)
+	// Create separator - repeat │ for full height
+	var sepBuilder strings.Builder
+	for i := 0; i < leftHeight; i++ {
+		sepBuilder.WriteString("│")
+		if i < leftHeight-1 {
+			sepBuilder.WriteString("\n")
+		}
+	}
+	separator := sepBuilder.String()
+
+	// Join: left + separator + right
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftView, separator, rightView)
 }

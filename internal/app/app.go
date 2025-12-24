@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/internal/logger"
 	"git.15b.it/eno/critic/internal/ui"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,47 +14,67 @@ import (
 
 // Model represents the main application model
 type Model struct {
-	fileList ui.FileListModel
-	diffView ui.DiffViewModel
-	layout   ui.LayoutModel
-	diff     *ctypes.Diff
-	paths    []string
-	watcher  *git.Watcher
-	err      error
-	width    int
-	height   int
-	ready    bool
+	fileList            ui.FileListModel
+	diffView            ui.DiffViewModel
+	layout              ui.LayoutModel
+	diff                *ctypes.Diff
+	paths               []string
+	watcher             *git.Watcher
+	err                 error
+	width               int
+	height              int
+	ready               bool
+	highlightingEnabled bool
+	reloading           bool
 }
 
 // NewModel creates a new application model
-func NewModel(paths []string) Model {
+func NewModel(paths []string, highlightingEnabled bool) Model {
+	logger.Info("NewModel: Creating model with %d paths, highlighting=%v", len(paths), highlightingEnabled)
+	diffView := ui.NewDiffViewModel()
+	diffView.SetHighlightingEnabled(highlightingEnabled)
+
+	// Initialize file watcher
+	watcher, err := git.NewWatcher(100) // 100ms debounce
+	if err != nil {
+		logger.Error("NewModel: Failed to create watcher: %v", err)
+		watcher = nil // Continue without watcher if it fails
+	} else {
+		logger.Info("NewModel: Watcher created successfully")
+	}
+
 	return Model{
-		fileList: ui.NewFileListModel(),
-		diffView: ui.NewDiffViewModel(),
-		layout:   ui.NewLayoutModel(),
-		paths:    paths,
+		fileList:            ui.NewFileListModel(),
+		diffView:            diffView,
+		layout:              ui.NewLayoutModel(),
+		paths:               paths,
+		watcher:             watcher,
+		highlightingEnabled: highlightingEnabled,
 	}
 }
 
 // Init initializes the application
 func (m Model) Init() tea.Cmd {
-	// Start file watcher
-	watcher, err := git.NewWatcher(300) // 300ms debounce
-	if err == nil {
-		m.watcher = watcher
-		if err := watcher.WatchPaths(m.paths); err == nil {
-			return tea.Batch(
-				loadDiffCmd(m.paths),
-				waitForFileChanges(watcher),
-				tea.EnterAltScreen,
-			)
-		}
-	}
-
-	return tea.Batch(
+	logger.Info("Init: Starting application initialization")
+	cmds := []tea.Cmd{
 		loadDiffCmd(m.paths),
 		tea.EnterAltScreen,
-	)
+	}
+
+	// Start file watcher if available
+	if m.watcher != nil {
+		logger.Info("Init: Starting file watcher")
+		if err := m.watcher.WatchPaths(m.paths); err == nil {
+			logger.Info("Init: WatchPaths succeeded, starting waitForFileChanges")
+			cmds = append(cmds, waitForFileChanges(m.watcher))
+		} else {
+			logger.Error("Init: WatchPaths failed: %v", err)
+		}
+	} else {
+		logger.Info("Init: No watcher available")
+	}
+
+	return tea.Batch(cmds...)
 }
 
 // Update handles messages and updates the model
@@ -66,7 +87,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 
-		case "tab":
+		case "tab", "shift+tab":
 			m.layout.ToggleFocus()
 
 		case "?":
@@ -79,11 +100,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newFileList, cmd := m.fileList.Update(msg)
 				m.fileList = newFileList
 				// Update diff view when file selection changes
-				m.diffView.SetFile(m.fileList.GetActiveFile())
-				cmds = append(cmds, cmd)
+				setFileCmd := m.diffView.SetFile(m.fileList.GetActiveFile())
+				cmds = append(cmds, cmd, setFileCmd)
 			} else {
-				newDiffView, cmd := m.diffView.Update(msg)
-				m.diffView = newDiffView
+				cmd := m.diffView.Update(msg)
 				cmds = append(cmds, cmd)
 			}
 		}
@@ -105,20 +125,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case diffLoadedMsg:
+		logger.Info("Update: Received diffLoadedMsg")
 		m.diff = msg.diff
 		m.err = msg.err
 		if m.diff != nil {
+			logger.Info("Update: Diff loaded with %d files", len(m.diff.Files))
+			// Remember currently selected file path
+			var currentPath string
+			if activeFile := m.fileList.GetActiveFile(); activeFile != nil {
+				currentPath = activeFile.NewPath
+				if currentPath == "" {
+					currentPath = activeFile.OldPath
+				}
+			}
+
+			// Update file list with new diff
 			m.fileList.SetFiles(m.diff.Files)
-			// Set initial file in diff view
-			m.diffView.SetFile(m.fileList.GetActiveFile())
+
+			// Try to restore selection to the same file
+			if currentPath != "" {
+				logger.Info("Update: Restoring selection to %s", currentPath)
+				m.fileList.SelectByPath(currentPath)
+			}
+
+			// Update diff view with (potentially) new content
+			cmd := m.diffView.SetFile(m.fileList.GetActiveFile())
+			cmds = append(cmds, cmd)
+		} else if m.err != nil {
+			logger.Error("Update: Diff loading failed: %v", m.err)
 		}
 
 	case fileChangedMsg:
 		// Reload diff when files change
+		logger.Info("Update: Received fileChangedMsg, reloading diff")
+		m.reloading = true
 		return m, tea.Batch(
 			loadDiffCmd(m.paths),
 			waitForFileChanges(m.watcher),
 		)
+
+	default:
+		// Route other messages to diff view (like diffRenderedMsg)
+		cmd := m.diffView.Update(msg)
+		cmds = append(cmds, cmd)
 	}
 
 	return m, tea.Batch(cmds...)
@@ -203,11 +252,14 @@ func loadDiffCmd(paths []string) tea.Cmd {
 
 func waitForFileChanges(watcher *git.Watcher) tea.Cmd {
 	if watcher == nil {
+		logger.Info("waitForFileChanges: No watcher, returning nil")
 		return nil
 	}
 
 	return func() tea.Msg {
+		logger.Info("waitForFileChanges: Waiting for file changes...")
 		<-watcher.Changes()
+		logger.Info("waitForFileChanges: File change received, returning fileChangedMsg")
 		return fileChangedMsg{}
 	}
 }

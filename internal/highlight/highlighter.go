@@ -11,6 +11,32 @@ import (
 	"github.com/alecthomas/chroma/v2/styles"
 )
 
+// Build a custom style without backgrounds - only foreground colors
+var customStyle = styles.Register(chroma.MustNewStyle("critic-custom", chroma.StyleEntries{
+	chroma.Text:                "#ffffff",
+	chroma.Keyword:             "#66d9ef",
+	chroma.KeywordNamespace:    "#f92672",
+	chroma.KeywordType:         "#66d9ef",
+	chroma.Name:                "#ffffff",
+	chroma.NameClass:           "#a6e22e",
+	chroma.NameFunction:        "#a6e22e",
+	chroma.NameBuiltin:         "#66d9ef",
+	chroma.NameVariable:        "#ffffff",
+	chroma.LiteralString:       "#e6db74",
+	chroma.LiteralNumber:       "#ae81ff",
+	chroma.Comment:             "#75715e",
+	chroma.CommentPreproc:      "#75715e",
+	chroma.Operator:            "#f92672",
+	chroma.Punctuation:         "#ffffff",
+	chroma.Generic:             "#ffffff",
+	chroma.GenericHeading:      "#75715e",
+	chroma.GenericSubheading:   "#75715e",
+	chroma.GenericDeleted:      "#ffffff",
+	chroma.GenericInserted:     "#ffffff",
+	chroma.GenericEmph:         "italic",
+	chroma.GenericStrong:       "bold",
+}))
+
 // Highlighter provides syntax highlighting for code
 type Highlighter struct {
 	formatter chroma.Formatter
@@ -19,9 +45,15 @@ type Highlighter struct {
 
 // NewHighlighter creates a new syntax highlighter
 func NewHighlighter() *Highlighter {
+	// Use terminal16m formatter which supports true color
+	formatter := formatters.Get("terminal16m")
+	if formatter == nil {
+		formatter = formatters.Get("terminal256")
+	}
+
 	return &Highlighter{
-		formatter: formatters.Get("terminal256"),
-		style:     styles.Get("monokai"),
+		formatter: formatter,
+		style:     customStyle,
 	}
 }
 

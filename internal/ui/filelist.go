@@ -137,6 +137,22 @@ func (m *FileListModel) GetActiveFile() *ctypes.FileDiff {
 	return m.activeFile
 }
 
+// SelectByPath selects a file by its path
+func (m *FileListModel) SelectByPath(path string) bool {
+	for i, file := range m.files {
+		filePath := file.NewPath
+		if filePath == "" {
+			filePath = file.OldPath
+		}
+		if filePath == path {
+			m.cursor = i
+			m.updateActiveFile()
+			return true
+		}
+	}
+	return false
+}
+
 // updateActiveFile updates the active file based on cursor position
 func (m *FileListModel) updateActiveFile() {
 	if len(m.files) > 0 && m.cursor >= 0 && m.cursor < len(m.files) {

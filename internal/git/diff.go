@@ -26,8 +26,8 @@ func GetDiff(paths []string) (*ctypes.Diff, error) {
 	}
 
 	// Build git diff command
-	// Using merge-base...HEAD syntax includes all changes from base to HEAD
-	args := []string{"diff", base + "...HEAD", "--patch", "--no-color"}
+	// Compare merge base to working directory (includes committed, staged, and unstaged changes)
+	args := []string{"diff", base, "--patch", "--no-color"}
 	args = append(args, paths...)
 
 	cmd := exec.Command("git", args...)
@@ -64,7 +64,7 @@ func GetChangedFiles(paths []string) ([]string, error) {
 	}
 
 	// Build git diff command to get file names only
-	args := []string{"diff", base + "...HEAD", "--name-only"}
+	args := []string{"diff", base, "--name-only"}
 	args = append(args, paths...)
 
 	cmd := exec.Command("git", args...)
