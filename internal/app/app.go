@@ -26,6 +26,7 @@ type Model struct {
 	ready               bool
 	highlightingEnabled bool
 	reloading           bool
+	diffMode            git.DiffMode
 }
 
 // NewModel creates a new application model
@@ -43,13 +44,17 @@ func NewModel(paths []string, highlightingEnabled bool) Model {
 		logger.Info("NewModel: Watcher created successfully")
 	}
 
+	fileList := ui.NewFileListModel()
+	fileList.SetFocused(true) // Start with file list focused
+
 	return Model{
-		fileList:            ui.NewFileListModel(),
+		fileList:            fileList,
 		diffView:            diffView,
 		layout:              ui.NewLayoutModel(),
 		paths:               paths,
 		watcher:             watcher,
 		highlightingEnabled: highlightingEnabled,
+		diffMode:            git.DiffToMergeBase, // Default mode
 	}
 }
 
@@ -57,7 +62,7 @@ func NewModel(paths []string, highlightingEnabled bool) Model {
 func (m Model) Init() tea.Cmd {
 	logger.Info("Init: Starting application initialization")
 	cmds := []tea.Cmd{
-		loadDiffCmd(m.paths),
+		loadDiffCmd(m.paths, m.diffMode),
 		tea.EnterAltScreen,
 	}
 
@@ -89,6 +94,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "tab", "shift+tab":
 			m.layout.ToggleFocus()
+			// Update focus state on both panes
+			m.fileList.SetFocused(m.layout.GetFocusedPane() == ui.FileListPane)
+			m.diffView.SetFocused(m.layout.GetFocusedPane() == ui.DiffViewPane)
+
+		case "m":
+			// Cycle through diff modes
+			m.diffMode = m.nextDiffMode()
+			logger.Info("Update: Switching to diff mode: %s", m.diffMode.String())
+			return m, loadDiffCmd(m.paths, m.diffMode)
+
+		case " ": // Space - page down diff view regardless of focus
+			// Create a synthetic pgdown key message
+			pgDownMsg := tea.KeyMsg{Type: tea.KeyType(tea.KeyPgDown)}
+			cmd := m.diffView.Update(pgDownMsg)
+			cmds = append(cmds, cmd)
+
+		case "shift+ ": // Shift+Space - page up diff view regardless of focus
+			// Create a synthetic pgup key message
+			pgUpMsg := tea.KeyMsg{Type: tea.KeyType(tea.KeyPgUp)}
+			cmd := m.diffView.Update(pgUpMsg)
+			cmds = append(cmds, cmd)
 
 		case "?":
 			// TODO: Show help screen
@@ -122,6 +148,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !m.ready {
 			m.ready = true
+		}
+
+		// Re-render diff view on window resize (to recalculate line wrapping)
+		if m.diffView.GetFile() != nil {
+			cmd := m.diffView.SetFile(m.diffView.GetFile())
+			cmds = append(cmds, cmd)
 		}
 
 	case diffLoadedMsg:
@@ -160,7 +192,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Info("Update: Received fileChangedMsg, reloading diff")
 		m.reloading = true
 		return m, tea.Batch(
-			loadDiffCmd(m.paths),
+			loadDiffCmd(m.paths, m.diffMode),
 			waitForFileChanges(m.watcher),
 		)
 
@@ -197,9 +229,26 @@ func (m Model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, mainView, statusBar)
 }
 
+// nextDiffMode cycles to the next diff mode
+func (m Model) nextDiffMode() git.DiffMode {
+	switch m.diffMode {
+	case git.DiffToMergeBase:
+		return git.DiffToLastCommit
+	case git.DiffToLastCommit:
+		return git.DiffUnstaged
+	case git.DiffUnstaged:
+		return git.DiffToMergeBase
+	default:
+		return git.DiffToMergeBase
+	}
+}
+
 // renderStatusBar renders the bottom status bar
 func (m Model) renderStatusBar() string {
 	var parts []string
+
+	// Show current diff mode
+	parts = append(parts, fmt.Sprintf("Mode: %s", m.diffMode.String()))
 
 	// Show current branch
 	branch, err := git.GetCurrentBranch()
@@ -213,7 +262,7 @@ func (m Model) renderStatusBar() string {
 	}
 
 	// Show help hint
-	parts = append(parts, "Tab: switch pane • ?: help • q: quit")
+	parts = append(parts, "m: mode • Tab: switch • ?: help • q: quit")
 
 	status := strings.Join(parts, " • ")
 
@@ -243,9 +292,9 @@ type fileChangedMsg struct{}
 
 // Commands
 
-func loadDiffCmd(paths []string) tea.Cmd {
+func loadDiffCmd(paths []string, mode git.DiffMode) tea.Cmd {
 	return func() tea.Msg {
-		diff, err := git.GetDiff(paths)
+		diff, err := git.GetDiff(paths, mode)
 		return diffLoadedMsg{diff: diff, err: err}
 	}
 }

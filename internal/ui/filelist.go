@@ -19,6 +19,7 @@ type FileListModel struct {
 	height       int
 	ready        bool
 	activeFile   *ctypes.FileDiff
+	focused      bool
 }
 
 // NewFileListModel creates a new file list model
@@ -84,12 +85,15 @@ func (m FileListModel) View() string {
 	var b strings.Builder
 
 	for i, file := range m.files {
-		cursor := " "
 		style := normalFileStyle
 
 		if i == m.cursor {
-			cursor = "▸"
-			style = selectedFileStyle
+			// Use active or inactive selection style based on focus
+			if m.focused {
+				style = selectedFileActiveStyle
+			} else {
+				style = selectedFileInactiveStyle
+			}
 		}
 
 		// Determine file status symbol
@@ -110,7 +114,7 @@ func (m FileListModel) View() string {
 			path = file.OldPath
 		}
 
-		line := fmt.Sprintf("%s %s %s", cursor, status, path)
+		line := fmt.Sprintf("%s %s", status, path)
 		b.WriteString(style.Render(line))
 		if i < len(m.files)-1 {
 			b.WriteString("\n")
@@ -170,4 +174,9 @@ func (m *FileListModel) SetSize(width, height int) {
 		m.viewport.Width = width
 		m.viewport.Height = height - 3 // Account for title and padding
 	}
+}
+
+// SetFocused sets whether this pane is focused
+func (m *FileListModel) SetFocused(focused bool) {
+	m.focused = focused
 }

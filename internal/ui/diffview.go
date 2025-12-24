@@ -28,6 +28,10 @@ type DiffViewModel struct {
 	cachedFile          *ctypes.FileDiff
 	highlightingEnabled bool
 	highlightTime       time.Duration // Accumulated syntax highlighting time
+	cursorLine          int           // Current active line (0-based)
+	totalLines          int           // Total number of lines in rendered diff
+	focused             bool          // Whether this pane is focused
+	navigableLines      []int         // Line numbers that can have cursor (diff lines only)
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -50,16 +54,48 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if m.ready {
-			m.viewport, cmd = m.viewport.Update(msg)
+			switch msg.String() {
+			case "up", "k":
+				if m.moveCursorUp() {
+					m.ensureCursorVisible()
+					return m.refreshContent()
+				}
+			case "down", "j":
+				if m.moveCursorDown() {
+					m.ensureCursorVisible()
+					return m.refreshContent()
+				}
+			case "g": // Go to top
+				if len(m.navigableLines) > 0 {
+					m.cursorLine = m.navigableLines[0]
+					m.viewport.GotoTop()
+					return m.refreshContent()
+				}
+			case "G": // Go to bottom
+				if len(m.navigableLines) > 0 {
+					m.cursorLine = m.navigableLines[len(m.navigableLines)-1]
+					m.viewport.GotoBottom()
+					return m.refreshContent()
+				}
+			default:
+				// Let viewport handle other keys (page up/down, etc)
+				m.viewport, cmd = m.viewport.Update(msg)
+			}
 		}
 
 	case diffRenderedMsg:
 		// Only apply if still viewing the same file
 		if msg.file == m.file {
 			m.cachedContent = msg.content
+			m.totalLines = msg.totalLines
+			m.navigableLines = msg.navigableLines
 			if m.ready {
 				m.viewport.SetContent(m.cachedContent)
 				m.viewport.GotoTop()
+				// Reset cursor to first navigable line
+				if len(m.navigableLines) > 0 {
+					m.cursorLine = m.navigableLines[0]
+				}
 			}
 		}
 	}
@@ -118,7 +154,10 @@ func (m *DiffViewModel) SetFile(file *ctypes.FileDiff) tea.Cmd {
 		}
 
 		// Otherwise render immediately (no highlighting)
-		m.cachedContent = m.renderDiff()
+		content, totalLines, navigableLines := m.renderDiff()
+		m.cachedContent = content
+		m.totalLines = totalLines
+		m.navigableLines = navigableLines
 		if m.ready {
 			m.viewport.SetContent(m.cachedContent)
 			m.viewport.GotoTop()
@@ -129,20 +168,102 @@ func (m *DiffViewModel) SetFile(file *ctypes.FileDiff) tea.Cmd {
 
 // diffRenderedMsg is sent when async rendering completes
 type diffRenderedMsg struct {
-	file    *ctypes.FileDiff
-	content string
+	file           *ctypes.FileDiff
+	content        string
+	totalLines     int
+	navigableLines []int
 }
 
 // renderDiffAsync renders the diff in a background goroutine
 func (m *DiffViewModel) renderDiffAsync(file *ctypes.FileDiff) tea.Cmd {
 	return func() tea.Msg {
 		// Render with highlighting in background
-		content := m.renderDiff()
+		content, totalLines, navigableLines := m.renderDiff()
 		return diffRenderedMsg{
-			file:    file,
-			content: content,
+			file:           file,
+			content:        content,
+			totalLines:     totalLines,
+			navigableLines: navigableLines,
 		}
 	}
+}
+
+// refreshContent re-renders the diff with current cursor position
+func (m *DiffViewModel) refreshContent() tea.Cmd {
+	if m.file == nil {
+		return nil
+	}
+	content, totalLines, navigableLines := m.renderDiff()
+	m.cachedContent = content
+	m.totalLines = totalLines
+	m.navigableLines = navigableLines
+	if m.ready {
+		m.viewport.SetContent(m.cachedContent)
+	}
+	return nil
+}
+
+// moveCursorUp moves cursor to previous navigable line
+func (m *DiffViewModel) moveCursorUp() bool {
+	if len(m.navigableLines) == 0 {
+		return false
+	}
+	// Find previous navigable line
+	for i := len(m.navigableLines) - 1; i >= 0; i-- {
+		if m.navigableLines[i] < m.cursorLine {
+			m.cursorLine = m.navigableLines[i]
+			return true
+		}
+	}
+	return false
+}
+
+// moveCursorDown moves cursor to next navigable line
+func (m *DiffViewModel) moveCursorDown() bool {
+	if len(m.navigableLines) == 0 {
+		return false
+	}
+	// Find next navigable line
+	for i := 0; i < len(m.navigableLines); i++ {
+		if m.navigableLines[i] > m.cursorLine {
+			m.cursorLine = m.navigableLines[i]
+			return true
+		}
+	}
+	return false
+}
+
+// ensureCursorVisible scrolls the viewport to keep cursor visible
+func (m *DiffViewModel) ensureCursorVisible() {
+	if !m.ready {
+		return
+	}
+	// Get viewport position
+	yOffset := m.viewport.YOffset
+	viewHeight := m.viewport.Height
+
+	// If cursor is above viewport, scroll up
+	if m.cursorLine < yOffset {
+		m.viewport.YOffset = m.cursorLine
+	}
+	// If cursor is below viewport, scroll down
+	if m.cursorLine >= yOffset+viewHeight {
+		m.viewport.YOffset = m.cursorLine - viewHeight + 1
+	}
+}
+
+// SetFocused sets whether this pane is focused
+func (m *DiffViewModel) SetFocused(focused bool) {
+	if m.focused != focused {
+		m.focused = focused
+		// Re-render to update cursor visibility
+		m.refreshContent()
+	}
+}
+
+// GetFile returns the currently displayed file
+func (m *DiffViewModel) GetFile() *ctypes.FileDiff {
+	return m.file
 }
 
 // SetSize sets the size of the diff view pane
@@ -169,15 +290,18 @@ func (m *DiffViewModel) SetHighlightingEnabled(enabled bool) {
 }
 
 // renderDiff renders the diff content with syntax highlighting
-func (m *DiffViewModel) renderDiff() string {
+// Returns the rendered content, total line count, and navigable line numbers
+func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	startTime := time.Now()
 	m.highlightTime = 0 // Reset accumulated highlight time
 
 	if m.file == nil {
-		return ""
+		return "", 0, nil
 	}
 
 	var b strings.Builder
+	lineNum := 0             // Track current line number for cursor highlighting
+	var navigableLines []int // Track which lines can have cursor (diff lines only)
 
 	filename := m.file.NewPath
 	if m.file.IsDeleted {
@@ -194,8 +318,12 @@ func (m *DiffViewModel) renderDiff() string {
 		header = fmt.Sprintf("📄 %s → %s (renamed)", m.file.OldPath, m.file.NewPath)
 	}
 
-	b.WriteString(hunkHeaderStyle.Render(header))
-	b.WriteString("\n\n")
+	b.WriteString(m.renderLineWithCursor(hunkHeaderStyle.Render(header), lineNum))
+	lineNum++
+	b.WriteString("\n")
+	b.WriteString(m.renderLineWithCursor("", lineNum)) // Empty line
+	lineNum++
+	b.WriteString("\n")
 
 	// Render each hunk
 	for hunkIdx, hunk := range m.file.Hunks {
@@ -204,7 +332,8 @@ func (m *DiffViewModel) renderDiff() string {
 		if hunk.Header != "" {
 			hunkHeader += " " + hunk.Header
 		}
-		b.WriteString(hunkHeaderStyle.Render(hunkHeader))
+		b.WriteString(m.renderLineWithCursor(hunkHeaderStyle.Render(hunkHeader), lineNum))
+		lineNum++
 		b.WriteString("\n")
 
 		// Batch highlight all lines in this hunk if enabled
@@ -229,13 +358,18 @@ func (m *DiffViewModel) renderDiff() string {
 			} else {
 				highlighted = line.Content
 			}
-			lineStr := m.renderLine(line, highlighted)
+			lineStr := m.renderLine(line, highlighted, lineNum)
 			b.WriteString(lineStr)
+			// Add to navigable lines (only actual diff lines, not headers)
+			navigableLines = append(navigableLines, lineNum)
+			lineNum++
 			b.WriteString("\n")
 		}
 
 		// Add spacing between hunks
 		if hunkIdx < len(m.file.Hunks)-1 {
+			b.WriteString(m.renderLineWithCursor("", lineNum))
+			lineNum++
 			b.WriteString("\n")
 		}
 	}
@@ -243,10 +377,10 @@ func (m *DiffViewModel) renderDiff() string {
 	result := b.String()
 	totalTime := time.Since(startTime)
 	renderTime := totalTime - m.highlightTime
-	logger.Info("renderDiff: total=%v, highlight=%v, render=%v, lines=%d",
-		totalTime, m.highlightTime, renderTime, m.countLines())
+	logger.Info("renderDiff: total=%v, highlight=%v, render=%v, lines=%d, navigable=%d",
+		totalTime, m.highlightTime, renderTime, m.countLines(), len(navigableLines))
 
-	return result
+	return result, lineNum, navigableLines
 }
 
 // countLines returns the total number of lines in the current file
@@ -262,7 +396,7 @@ func (m *DiffViewModel) countLines() int {
 }
 
 // renderLine renders a single diff line with pre-highlighted content
-func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string) string {
+func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string, currentLineNum int) string {
 	// Build line number prefix: " 123 + "
 	var lineNum int
 	var indicator string
@@ -283,6 +417,9 @@ func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string)
 	// Combine prefix with pre-highlighted content
 	fullLine := prefix + highlightedContent
 
+	// Expand tabs to spaces for consistent rendering across all line types
+	fullLine = expandTabsInANSI(fullLine)
+
 	// Apply diff line styling with background that spans full width
 	var styled string
 	switch line.Type {
@@ -296,7 +433,28 @@ func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string)
 		styled = fullLine
 	}
 
-	return styled
+	// Apply cursor highlighting if this is the active line
+	return m.renderLineWithCursor(styled, currentLineNum)
+}
+
+// renderLineWithCursor applies cursor highlighting if this is the active line
+func (m *DiffViewModel) renderLineWithCursor(content string, currentLineNum int) string {
+	// Only show cursor when pane is focused and line is navigable
+	if m.focused && currentLineNum == m.cursorLine && m.isNavigableLine(currentLineNum) {
+		// Apply full reverse highlighting
+		return lipgloss.NewStyle().Reverse(true).Render(content)
+	}
+	return content
+}
+
+// isNavigableLine checks if a line number is navigable (can have cursor)
+func (m *DiffViewModel) isNavigableLine(lineNum int) bool {
+	for _, navLine := range m.navigableLines {
+		if navLine == lineNum {
+			return true
+		}
+	}
+	return false
 }
 
 // applyLineBackground wraps a line with background color spanning full width
@@ -304,8 +462,7 @@ func (m *DiffViewModel) applyLineBackground(line string, bgColor string) string 
 	// Strip any background ANSI codes from syntax highlighting
 	cleaned := stripBackgroundCodes(line)
 
-	// Expand tabs to spaces (4-space tabs) - must do this for both width calc and rendering
-	cleaned = expandTabsInANSI(cleaned)
+	// Note: tabs are already expanded in renderLine before this function is called
 
 	// Calculate visible width (accounting for ANSI codes and expanded tabs)
 	visibleWidth := lipgloss.Width(cleaned)

@@ -11,24 +11,62 @@ import (
 // validCommitHash checks if a string is a valid git commit hash (SHA-1 or short form)
 var validCommitHash = regexp.MustCompile(`^[a-f0-9]{6,40}$`)
 
-// GetDiff returns the diff between the merge base and HEAD for the specified paths.
+// DiffMode represents the type of diff to show
+type DiffMode int
+
+const (
+	DiffToMergeBase DiffMode = iota // Diff from merge base to working directory
+	DiffToLastCommit                 // Diff of last commit (HEAD~1..HEAD)
+	DiffUnstaged                     // Diff of unstaged changes only
+)
+
+// String returns the name of the diff mode
+func (m DiffMode) String() string {
+	switch m {
+	case DiffToMergeBase:
+		return "Merge Base"
+	case DiffToLastCommit:
+		return "Last Commit"
+	case DiffUnstaged:
+		return "Unstaged"
+	default:
+		return "Unknown"
+	}
+}
+
+// GetDiff returns the diff for the specified paths and mode.
 // If paths is empty, returns diff for all changed files.
-func GetDiff(paths []string) (*ctypes.Diff, error) {
-	// Get merge base
-	base, err := GetMergeBase()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get merge base: %w", err)
-	}
+func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
+	// Build git diff command based on mode
+	var args []string
 
-	// Validate merge base to prevent command injection
-	if !validCommitHash.MatchString(base) {
-		return nil, fmt.Errorf("invalid merge base format: %s", base)
-	}
+	switch mode {
+	case DiffToMergeBase:
+		// Get merge base
+		base, err := GetMergeBase()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get merge base: %w", err)
+		}
 
-	// Build git diff command
-	// Compare merge base to working directory (includes committed, staged, and unstaged changes)
-	args := []string{"diff", base, "--patch", "--no-color"}
-	args = append(args, paths...)
+		// Validate merge base to prevent command injection
+		if !validCommitHash.MatchString(base) {
+			return nil, fmt.Errorf("invalid merge base format: %s", base)
+		}
+
+		// Compare merge base to working directory (includes committed, staged, and unstaged changes)
+		args = []string{"diff", base, "--patch", "--no-color"}
+		args = append(args, paths...)
+
+	case DiffToLastCommit:
+		// Show the last commit
+		args = []string{"show", "HEAD", "--patch", "--no-color"}
+		args = append(args, paths...)
+
+	case DiffUnstaged:
+		// Show only unstaged changes
+		args = []string{"diff", "--patch", "--no-color"}
+		args = append(args, paths...)
+	}
 
 	cmd := exec.Command("git", args...)
 	output, err := cmd.Output()

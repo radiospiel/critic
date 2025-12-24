@@ -79,17 +79,9 @@ func (m *LayoutModel) RenderSplitView(leftContent, rightContent string) string {
 	leftWidth, leftHeight := m.GetFileListSize()
 	rightWidth, _ := m.GetDiffViewSize()
 
-	// Apply faint style to unfocused pane
+	// No dimming - selection highlighting handles focus indication
 	leftStyle := lipgloss.NewStyle().Width(leftWidth).Height(leftHeight)
 	rightStyle := lipgloss.NewStyle().Width(rightWidth).Height(leftHeight)
-
-	if m.focusedPane == DiffViewPane {
-		// Dim the left pane when right is focused
-		leftStyle = leftStyle.Faint(true)
-	} else {
-		// Dim the right pane when left is focused
-		rightStyle = rightStyle.Faint(true)
-	}
 
 	leftView := leftStyle.Render(leftContent)
 	rightView := rightStyle.Render(rightContent)

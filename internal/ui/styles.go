@@ -14,10 +14,15 @@ var (
 	baseStyle = lipgloss.NewStyle().
 			Padding(0, 1)
 
-	// File list styles
-	selectedFileStyle = lipgloss.NewStyle().
+	// File list styles - active selection (full reverse)
+	selectedFileActiveStyle = lipgloss.NewStyle().
 				Reverse(true).
 				Bold(true)
+
+	// File list styles - inactive selection (muted reverse)
+	selectedFileInactiveStyle = lipgloss.NewStyle().
+				Reverse(true).
+				Faint(true)
 
 	normalFileStyle = lipgloss.NewStyle()
 
