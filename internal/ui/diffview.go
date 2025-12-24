@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -325,6 +327,17 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	lineNum++
 	b.WriteString("\n")
 
+	// Highlight entire file(s) once if enabled, then extract lines by line number
+	var oldFileHighlighted map[int]string // oldLineNum -> highlighted content
+	var newFileHighlighted map[int]string // newLineNum -> highlighted content
+
+	if m.highlightingEnabled {
+		hlStart := time.Now()
+		oldFileHighlighted = m.highlightFullFile(m.file, filename, true)  // old version
+		newFileHighlighted = m.highlightFullFile(m.file, filename, false) // new version
+		m.highlightTime += time.Since(hlStart)
+	}
+
 	// Render each hunk
 	for hunkIdx, hunk := range m.file.Hunks {
 		// Render hunk header
@@ -336,28 +349,38 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		lineNum++
 		b.WriteString("\n")
 
-		// Batch highlight all lines in this hunk if enabled
-		var highlightedLines []string
-		if m.highlightingEnabled {
-			hlStart := time.Now()
-			// Collect all line contents
-			lineContents := make([]string, len(hunk.Lines))
-			for i, line := range hunk.Lines {
-				lineContents[i] = line.Content
-			}
-			// Highlight all at once
-			highlightedLines = m.highlighter.HighlightLines(lineContents, filename)
-			m.highlightTime += time.Since(hlStart)
-		}
-
 		// Render hunk lines
-		for i, line := range hunk.Lines {
+		for _, line := range hunk.Lines {
 			var highlighted string
-			if m.highlightingEnabled && i < len(highlightedLines) {
-				highlighted = highlightedLines[i]
+			if m.highlightingEnabled {
+				// Look up highlighted content by line number
+				switch line.Type {
+				case ctypes.LineAdded:
+					if hl, ok := newFileHighlighted[line.NewNum]; ok {
+						highlighted = hl
+					} else {
+						highlighted = line.Content
+					}
+				case ctypes.LineDeleted:
+					if hl, ok := oldFileHighlighted[line.OldNum]; ok {
+						highlighted = hl
+					} else {
+						highlighted = line.Content
+					}
+				case ctypes.LineContext:
+					// Context exists in both, prefer new
+					if hl, ok := newFileHighlighted[line.NewNum]; ok {
+						highlighted = hl
+					} else {
+						highlighted = line.Content
+					}
+				default:
+					highlighted = line.Content
+				}
 			} else {
 				highlighted = line.Content
 			}
+
 			lineStr := m.renderLine(line, highlighted, lineNum)
 			b.WriteString(lineStr)
 			// Add to navigable lines (only actual diff lines, not headers)
@@ -393,6 +416,136 @@ func (m *DiffViewModel) countLines() int {
 		count += len(hunk.Lines)
 	}
 	return count
+}
+
+// highlightFullFile gets the complete file from git and returns highlighted lines by line number
+func (m *DiffViewModel) highlightFullFile(file *ctypes.FileDiff, filename string, useOldVersion bool) map[int]string {
+	result := make(map[int]string)
+
+	if file == nil {
+		return result
+	}
+
+	// Get full file content from git
+	var fullContent string
+	var err error
+
+	if useOldVersion {
+		// Get old version (before changes)
+		if file.IsNew {
+			// New file has no old version
+			return result
+		}
+		// Use HEAD as the old version (works for diffs to working directory)
+		// For "last commit" mode, HEAD is the new version and HEAD~1 would be old,
+		// but we'll use HEAD as a reasonable default
+		fullContent, err = m.getFileContentFromGit(file.OldPath, "HEAD")
+	} else {
+		// Get new version (current working directory or HEAD depending on mode)
+		if file.IsDeleted {
+			// Deleted file has no new version
+			return result
+		}
+		// First try working directory, then fall back to HEAD
+		fullContent, err = m.getFileContentFromGit(file.NewPath, "")
+		if err != nil {
+			// Fallback to HEAD for committed changes
+			fullContent, err = m.getFileContentFromGit(file.NewPath, "HEAD")
+		}
+	}
+
+	if err != nil || fullContent == "" {
+		// Fallback to hunk-based reconstruction if git fails
+		return m.highlightFromHunks(file, filename, useOldVersion)
+	}
+
+	// Highlight the complete file
+	highlighted, err := m.highlighter.Highlight(fullContent, filename)
+	if err != nil {
+		return result
+	}
+
+	// Split into lines and map by line number
+	lines := strings.Split(highlighted, "\n")
+	for i, line := range lines {
+		lineNum := i + 1 // Line numbers are 1-based
+		result[lineNum] = line
+	}
+
+	return result
+}
+
+// getFileContentFromGit retrieves file content from git at a specific revision
+// If revision is empty, reads from working directory
+func (m *DiffViewModel) getFileContentFromGit(path string, revision string) (string, error) {
+	var cmd *exec.Cmd
+
+	if revision == "" {
+		// Read from working directory
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		return string(content), nil
+	}
+
+	// Read from git at specific revision
+	cmd = exec.Command("git", "show", revision+":"+path)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	return string(output), nil
+}
+
+// highlightFromHunks is a fallback that reconstructs partial file from hunks
+func (m *DiffViewModel) highlightFromHunks(file *ctypes.FileDiff, filename string, useOldVersion bool) map[int]string {
+	result := make(map[int]string)
+
+	if file == nil || len(file.Hunks) == 0 {
+		return result
+	}
+
+	// Reconstruct partial file content from hunks
+	var lines []string
+	var lineNumbers []int
+
+	for _, hunk := range file.Hunks {
+		for _, line := range hunk.Lines {
+			var includeThis bool
+			var lineNum int
+
+			if useOldVersion {
+				includeThis = line.Type == ctypes.LineDeleted || line.Type == ctypes.LineContext
+				lineNum = line.OldNum
+			} else {
+				includeThis = line.Type == ctypes.LineAdded || line.Type == ctypes.LineContext
+				lineNum = line.NewNum
+			}
+
+			if includeThis && lineNum > 0 {
+				lines = append(lines, line.Content)
+				lineNumbers = append(lineNumbers, lineNum)
+			}
+		}
+	}
+
+	if len(lines) == 0 {
+		return result
+	}
+
+	// Highlight all lines at once
+	highlightedLines := m.highlighter.HighlightLines(lines, filename)
+
+	// Map line numbers to highlighted content
+	for i, lineNum := range lineNumbers {
+		if i < len(highlightedLines) {
+			result[lineNum] = highlightedLines[i]
+		}
+	}
+
+	return result
 }
 
 // renderLine renders a single diff line with pre-highlighted content
