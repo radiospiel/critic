@@ -2,12 +2,10 @@ package ui
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 
+	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/highlight"
 	"git.15b.it/eno/critic/internal/logger"
 	ctypes "git.15b.it/eno/critic/pkg/types"
@@ -15,8 +13,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
-var bgCodeRegex = regexp.MustCompile(`\x1b\[4[0-9](;[0-9]+)*m`)
 
 // DiffViewModel represents the diff viewer pane
 type DiffViewModel struct {
@@ -439,7 +435,7 @@ func (m *DiffViewModel) highlightFullFile(file *ctypes.FileDiff, filename string
 		// Use HEAD as the old version (works for diffs to working directory)
 		// For "last commit" mode, HEAD is the new version and HEAD~1 would be old,
 		// but we'll use HEAD as a reasonable default
-		fullContent, err = m.getFileContentFromGit(file.OldPath, "HEAD")
+		fullContent, err = git.GetFileContent(file.OldPath, "HEAD")
 	} else {
 		// Get new version (current working directory or HEAD depending on mode)
 		if file.IsDeleted {
@@ -447,10 +443,10 @@ func (m *DiffViewModel) highlightFullFile(file *ctypes.FileDiff, filename string
 			return result
 		}
 		// First try working directory, then fall back to HEAD
-		fullContent, err = m.getFileContentFromGit(file.NewPath, "")
+		fullContent, err = git.GetFileContent(file.NewPath, "")
 		if err != nil {
 			// Fallback to HEAD for committed changes
-			fullContent, err = m.getFileContentFromGit(file.NewPath, "HEAD")
+			fullContent, err = git.GetFileContent(file.NewPath, "HEAD")
 		}
 	}
 
@@ -473,30 +469,6 @@ func (m *DiffViewModel) highlightFullFile(file *ctypes.FileDiff, filename string
 	}
 
 	return result
-}
-
-// getFileContentFromGit retrieves file content from git at a specific revision
-// If revision is empty, reads from working directory
-func (m *DiffViewModel) getFileContentFromGit(path string, revision string) (string, error) {
-	var cmd *exec.Cmd
-
-	if revision == "" {
-		// Read from working directory
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return "", err
-		}
-		return string(content), nil
-	}
-
-	// Read from git at specific revision
-	cmd = exec.Command("git", "show", revision+":"+path)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-
-	return string(output), nil
 }
 
 // highlightFromHunks is a fallback that reconstructs partial file from hunks
@@ -641,57 +613,6 @@ func (m *DiffViewModel) applyLineBackground(line string, bgColor string) string 
 }
 
 // truncateANSI truncates a string with ANSI codes to a specific visible width
-func truncateANSI(s string, maxWidth int) string {
-	// Use lipgloss to truncate while preserving ANSI codes
-	return lipgloss.NewStyle().MaxWidth(maxWidth).Render(s)
-}
-
-// stripBackgroundCodes removes background color ANSI codes from a string
-func stripBackgroundCodes(s string) string {
-	// Remove all background color codes (40-49 are background colors)
-	return bgCodeRegex.ReplaceAllString(s, "")
-}
-
-// expandTabsInANSI expands tabs to spaces while preserving ANSI codes
-func expandTabsInANSI(s string) string {
-	const tabWidth = 4
-	var result strings.Builder
-	col := 0 // Current column position (visible characters)
-	inANSI := false
-
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-
-		// Track ANSI escape sequences (don't count toward column position)
-		if ch == '\x1b' {
-			inANSI = true
-			result.WriteByte(ch)
-			continue
-		}
-
-		if inANSI {
-			result.WriteByte(ch)
-			if ch == 'm' {
-				inANSI = false
-			}
-			continue
-		}
-
-		// Expand tabs
-		if ch == '\t' {
-			// Calculate spaces needed to reach next tab stop
-			spacesToAdd := tabWidth - (col % tabWidth)
-			result.WriteString(strings.Repeat(" ", spacesToAdd))
-			col += spacesToAdd
-		} else {
-			result.WriteByte(ch)
-			col++
-		}
-	}
-
-	return result.String()
-}
-
 func min(a, b int) int {
 	if a < b {
 		return a

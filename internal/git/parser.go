@@ -1,7 +1,6 @@
 package git
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -206,9 +205,4 @@ func splitLines(text string) []string {
 	}
 
 	return lines
-}
-
-// FormatDiffLine formats a diff line with its prefix marker
-func FormatDiffLine(line *ctypes.Line) string {
-	return fmt.Sprintf("%s%s", line.Type.String(), line.Content)
 }

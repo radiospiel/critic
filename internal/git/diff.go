@@ -2,7 +2,6 @@ package git
 
 import (
 	"fmt"
-	"os/exec"
 	"regexp"
 
 	ctypes "git.15b.it/eno/critic/pkg/types"
@@ -37,13 +36,18 @@ func (m DiffMode) String() string {
 // GetDiff returns the diff for the specified paths and mode.
 // If paths is empty, returns diff for all changed files.
 func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
+	return GetDiffWithExecutor(paths, mode, defaultExecutor)
+}
+
+// GetDiffWithExecutor returns the diff using the provided executor.
+func GetDiffWithExecutor(paths []string, mode DiffMode, executor CommandExecutor) (*ctypes.Diff, error) {
 	// Build git diff command based on mode
 	var args []string
 
 	switch mode {
 	case DiffToMergeBase:
 		// Get merge base
-		base, err := GetMergeBase()
+		base, err := GetMergeBaseWithExecutor(executor)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get merge base: %w", err)
 		}
@@ -68,12 +72,10 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 		args = append(args, paths...)
 	}
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.Output()
+	output, err := executor.Run("git", args...)
 	if err != nil {
-		// Check if it's just an empty diff
-		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) == 0 {
-			// Empty diff is valid
+		// If there's an error but output is empty, it might just be an empty diff
+		if len(output) == 0 {
 			return &ctypes.Diff{Files: []*ctypes.FileDiff{}}, nil
 		}
 		return nil, fmt.Errorf("failed to run git diff: %w", err)
@@ -86,42 +88,4 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 	}
 
 	return diff, nil
-}
-
-// GetChangedFiles returns a list of files that have changed between merge base and HEAD
-func GetChangedFiles(paths []string) ([]string, error) {
-	// Get merge base
-	base, err := GetMergeBase()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get merge base: %w", err)
-	}
-
-	// Validate merge base to prevent command injection
-	if !validCommitHash.MatchString(base) {
-		return nil, fmt.Errorf("invalid merge base format: %s", base)
-	}
-
-	// Build git diff command to get file names only
-	args := []string{"diff", base, "--name-only"}
-	args = append(args, paths...)
-
-	cmd := exec.Command("git", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get changed files: %w", err)
-	}
-
-	if len(output) == 0 {
-		return []string{}, nil
-	}
-
-	// Split output into lines
-	files := []string{}
-	for _, line := range splitLines(string(output)) {
-		if line != "" {
-			files = append(files, line)
-		}
-	}
-
-	return files, nil
 }

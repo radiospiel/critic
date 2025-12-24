@@ -65,39 +65,3 @@ var (
 			Foreground(colorSubtle).
 			Padding(0, 1)
 )
-
-// ApplyDiffLineStyle applies the appropriate style based on line type
-func ApplyDiffLineStyle(lineType rune, content string) string {
-	switch lineType {
-	case '+':
-		return addedLineStyle.Render(content)
-	case '-':
-		return deletedLineStyle.Render(content)
-	default:
-		return contextLineStyle.Render(content)
-	}
-}
-
-// RenderTitle renders a pane title
-func RenderTitle(title string, active bool) string {
-	style := titleStyle
-	if !active {
-		style = style.Foreground(colorSubtle)
-	}
-	return style.Render(title)
-}
-
-// RenderBorder renders content with a border
-func RenderBorder(content string, active bool, title string) string {
-	style := inactiveBorderStyle
-	if active {
-		style = activeBorderStyle
-	}
-
-	if title != "" {
-		style = style.BorderTop(true).BorderLeft(true).BorderRight(true).BorderBottom(true)
-		return style.Render(content)
-	}
-
-	return style.Render(content)
-}
