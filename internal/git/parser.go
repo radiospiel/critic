@@ -1,0 +1,214 @@
+package git
+
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+
+	ctypes "git.15b.it/eno/critic/pkg/types"
+)
+
+var (
+	// Regex patterns for parsing diff output
+	fileHeaderRegex = regexp.MustCompile(`^diff --git a/(.+) b/(.+)$`)
+	oldFileRegex    = regexp.MustCompile(`^--- (.+)$`)
+	newFileRegex    = regexp.MustCompile(`^\+\+\+ (.+)$`)
+	hunkHeaderRegex = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$`)
+	oldModeRegex    = regexp.MustCompile(`^old mode (.+)$`)
+	newModeRegex    = regexp.MustCompile(`^new mode (.+)$`)
+	newFileMode     = regexp.MustCompile(`^new file mode (.+)$`)
+	deletedFileMode = regexp.MustCompile(`^deleted file mode (.+)$`)
+	renameFromRegex = regexp.MustCompile(`^rename from (.+)$`)
+	renameToRegex   = regexp.MustCompile(`^rename to (.+)$`)
+	binaryRegex     = regexp.MustCompile(`^Binary files (.+) and (.+) differ$`)
+)
+
+// ParseDiff parses git diff output into a structured Diff object
+func ParseDiff(diffText string) (*ctypes.Diff, error) {
+	lines := splitLines(diffText)
+
+	diff := &ctypes.Diff{
+		Files: []*ctypes.FileDiff{},
+	}
+
+	var currentFile *ctypes.FileDiff
+	var currentHunk *ctypes.Hunk
+	var oldLineNum, newLineNum int
+
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+
+		// Check for file header
+		if matches := fileHeaderRegex.FindStringSubmatch(line); matches != nil {
+			// Save previous file if exists
+			if currentFile != nil {
+				if currentHunk != nil {
+					currentFile.Hunks = append(currentFile.Hunks, currentHunk)
+					currentHunk = nil
+				}
+				diff.Files = append(diff.Files, currentFile)
+			}
+
+			// Create new file diff
+			currentFile = &ctypes.FileDiff{
+				OldPath: matches[1],
+				NewPath: matches[2],
+				Hunks:   []*ctypes.Hunk{},
+			}
+			continue
+		}
+
+		if currentFile == nil {
+			continue
+		}
+
+		// Check for file mode changes
+		if matches := newFileMode.FindStringSubmatch(line); matches != nil {
+			currentFile.IsNew = true
+			currentFile.NewMode = matches[1]
+			continue
+		}
+
+		if matches := deletedFileMode.FindStringSubmatch(line); matches != nil {
+			currentFile.IsDeleted = true
+			currentFile.OldMode = matches[1]
+			continue
+		}
+
+		if matches := oldModeRegex.FindStringSubmatch(line); matches != nil {
+			currentFile.OldMode = matches[1]
+			continue
+		}
+
+		if matches := newModeRegex.FindStringSubmatch(line); matches != nil {
+			currentFile.NewMode = matches[1]
+			continue
+		}
+
+		if matches := renameFromRegex.FindStringSubmatch(line); matches != nil {
+			currentFile.IsRenamed = true
+			currentFile.OldPath = matches[1]
+			continue
+		}
+
+		if matches := renameToRegex.FindStringSubmatch(line); matches != nil {
+			currentFile.IsRenamed = true
+			currentFile.NewPath = matches[1]
+			continue
+		}
+
+		// Check for binary file
+		if matches := binaryRegex.FindStringSubmatch(line); matches != nil {
+			currentFile.IsBinary = true
+			continue
+		}
+
+		// Skip --- and +++ lines (old and new file paths)
+		if oldFileRegex.MatchString(line) || newFileRegex.MatchString(line) {
+			continue
+		}
+
+		// Check for hunk header
+		if matches := hunkHeaderRegex.FindStringSubmatch(line); matches != nil {
+			// Save previous hunk if exists
+			if currentHunk != nil {
+				currentFile.Hunks = append(currentFile.Hunks, currentHunk)
+			}
+
+			// Parse hunk header
+			oldStart, _ := strconv.Atoi(matches[1])
+			oldLines := 1
+			if matches[2] != "" {
+				oldLines, _ = strconv.Atoi(matches[2])
+			}
+
+			newStart, _ := strconv.Atoi(matches[3])
+			newLines := 1
+			if matches[4] != "" {
+				newLines, _ = strconv.Atoi(matches[4])
+			}
+
+			currentHunk = &ctypes.Hunk{
+				OldStart: oldStart,
+				OldLines: oldLines,
+				NewStart: newStart,
+				NewLines: newLines,
+				Header:   matches[5],
+				Lines:    []*ctypes.Line{},
+			}
+
+			oldLineNum = oldStart
+			newLineNum = newStart
+			continue
+		}
+
+		// Parse hunk lines
+		if currentHunk != nil && len(line) > 0 {
+			var lineType ctypes.LineType
+			var content string
+			var oldNum, newNum int
+
+			switch line[0] {
+			case '+':
+				lineType = ctypes.LineAdded
+				content = line[1:]
+				oldNum = 0
+				newNum = newLineNum
+				newLineNum++
+			case '-':
+				lineType = ctypes.LineDeleted
+				content = line[1:]
+				oldNum = oldLineNum
+				newNum = 0
+				oldLineNum++
+			case ' ':
+				lineType = ctypes.LineContext
+				content = line[1:]
+				oldNum = oldLineNum
+				newNum = newLineNum
+				oldLineNum++
+				newLineNum++
+			default:
+				// Skip other lines (like "\ No newline at end of file")
+				continue
+			}
+
+			currentHunk.Lines = append(currentHunk.Lines, &ctypes.Line{
+				Type:    lineType,
+				Content: content,
+				OldNum:  oldNum,
+				NewNum:  newNum,
+			})
+		}
+	}
+
+	// Save last hunk and file
+	if currentHunk != nil && currentFile != nil {
+		currentFile.Hunks = append(currentFile.Hunks, currentHunk)
+	}
+	if currentFile != nil {
+		diff.Files = append(diff.Files, currentFile)
+	}
+
+	return diff, nil
+}
+
+// splitLines splits text into lines, handling both \n and \r\n
+func splitLines(text string) []string {
+	// Replace \r\n with \n, then split on \n
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(text, "\n")
+
+	// Remove empty last line if it exists
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	return lines
+}
+
+// FormatDiffLine formats a diff line with its prefix marker
+func FormatDiffLine(line *ctypes.Line) string {
+	return fmt.Sprintf("%s%s", line.Type.String(), line.Content)
+}
