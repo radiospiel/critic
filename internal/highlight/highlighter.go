@@ -93,6 +93,39 @@ func (h *Highlighter) HighlightLine(line, filename string) string {
 	return strings.TrimSuffix(highlighted, "\n")
 }
 
+// HighlightLines highlights multiple lines at once (more efficient than line-by-line)
+// Returns a slice with the same number of elements as input
+func (h *Highlighter) HighlightLines(lines []string, filename string) []string {
+	if len(lines) == 0 {
+		return lines
+	}
+
+	// Join all lines into one block
+	combined := strings.Join(lines, "\n")
+
+	// Highlight the entire block at once
+	highlighted, err := h.Highlight(combined, filename)
+	if err != nil {
+		// Return originals on error
+		return lines
+	}
+
+	// Split back into lines
+	result := strings.Split(highlighted, "\n")
+
+	// Handle edge case: if formatter adds extra newline at end
+	if len(result) > len(lines) && result[len(result)-1] == "" {
+		result = result[:len(lines)]
+	}
+
+	// If line count mismatch (shouldn't happen), return originals
+	if len(result) != len(lines) {
+		return lines
+	}
+
+	return result
+}
+
 // getLexer returns the appropriate lexer for the given filename
 func (h *Highlighter) getLexer(filename string) chroma.Lexer {
 	// Try to get lexer by filename

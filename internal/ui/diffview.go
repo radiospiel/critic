@@ -207,9 +207,29 @@ func (m *DiffViewModel) renderDiff() string {
 		b.WriteString(hunkHeaderStyle.Render(hunkHeader))
 		b.WriteString("\n")
 
+		// Batch highlight all lines in this hunk if enabled
+		var highlightedLines []string
+		if m.highlightingEnabled {
+			hlStart := time.Now()
+			// Collect all line contents
+			lineContents := make([]string, len(hunk.Lines))
+			for i, line := range hunk.Lines {
+				lineContents[i] = line.Content
+			}
+			// Highlight all at once
+			highlightedLines = m.highlighter.HighlightLines(lineContents, filename)
+			m.highlightTime += time.Since(hlStart)
+		}
+
 		// Render hunk lines
-		for _, line := range hunk.Lines {
-			lineStr := m.renderLine(line, filename)
+		for i, line := range hunk.Lines {
+			var highlighted string
+			if m.highlightingEnabled && i < len(highlightedLines) {
+				highlighted = highlightedLines[i]
+			} else {
+				highlighted = line.Content
+			}
+			lineStr := m.renderLine(line, highlighted)
 			b.WriteString(lineStr)
 			b.WriteString("\n")
 		}
@@ -241,8 +261,8 @@ func (m *DiffViewModel) countLines() int {
 	return count
 }
 
-// renderLine renders a single diff line with syntax highlighting
-func (m *DiffViewModel) renderLine(line *ctypes.Line, filename string) string {
+// renderLine renders a single diff line with pre-highlighted content
+func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string) string {
 	// Build line number prefix: " 123 + "
 	var lineNum int
 	var indicator string
@@ -260,18 +280,8 @@ func (m *DiffViewModel) renderLine(line *ctypes.Line, filename string) string {
 
 	prefix := fmt.Sprintf("%4d %s ", lineNum, indicator)
 
-	// Apply syntax highlighting if enabled
-	var content string
-	if m.highlightingEnabled {
-		hlStart := time.Now()
-		content = m.highlighter.HighlightLine(line.Content, filename)
-		m.highlightTime += time.Since(hlStart)
-	} else {
-		content = line.Content
-	}
-
-	// Combine prefix with content
-	fullLine := prefix + content
+	// Combine prefix with pre-highlighted content
+	fullLine := prefix + highlightedContent
 
 	// Apply diff line styling with background that spans full width
 	var styled string
