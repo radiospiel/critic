@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+
+# Build the binary
+go build -o critic.bin ./cmd/critic
+
+# Execute with all arguments
+exec ./critic.bin "$@"

@@ -13,12 +13,14 @@ import (
 
 // DiffViewModel represents the diff viewer pane
 type DiffViewModel struct {
-	file        *ctypes.FileDiff
-	viewport    viewport.Model
-	width       int
-	height      int
-	ready       bool
-	highlighter *highlight.Highlighter
+	file          *ctypes.FileDiff
+	viewport      viewport.Model
+	width         int
+	height        int
+	ready         bool
+	highlighter   *highlight.Highlighter
+	cachedContent string
+	cachedFile    *ctypes.FileDiff
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -41,12 +43,6 @@ func (m DiffViewModel) Update(msg tea.Msg) (DiffViewModel, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.ready {
 			m.viewport, cmd = m.viewport.Update(msg)
-		}
-
-	case tea.WindowSizeMsg:
-		if !m.ready {
-			m.viewport = viewport.New(msg.Width, msg.Height-3)
-			m.ready = true
 		}
 	}
 
@@ -82,7 +78,14 @@ func (m DiffViewModel) View() string {
 			Render(msg)
 	}
 
-	content := m.renderDiff()
+	// Use cached content if available and file hasn't changed
+	var content string
+	if m.cachedFile == m.file && m.cachedContent != "" {
+		content = m.cachedContent
+	} else {
+		content = m.renderDiff()
+	}
+
 	if m.ready {
 		m.viewport.SetContent(content)
 		return m.viewport.View()
@@ -94,6 +97,13 @@ func (m DiffViewModel) View() string {
 // SetFile sets the current file to display
 func (m *DiffViewModel) SetFile(file *ctypes.FileDiff) {
 	m.file = file
+
+	// Pre-render and cache the diff content
+	if file != nil && (m.cachedFile != file) {
+		m.cachedContent = m.renderDiff()
+		m.cachedFile = file
+	}
+
 	if m.ready && file != nil {
 		m.viewport.GotoTop()
 	}
@@ -103,9 +113,14 @@ func (m *DiffViewModel) SetFile(file *ctypes.FileDiff) {
 func (m *DiffViewModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	if m.ready {
+
+	// Initialize viewport if not ready
+	if !m.ready {
+		m.viewport = viewport.New(width, height)
+		m.ready = true
+	} else {
 		m.viewport.Width = width
-		m.viewport.Height = height - 3 // Account for title and padding
+		m.viewport.Height = height
 	}
 }
 
