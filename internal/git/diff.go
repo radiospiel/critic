@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"os/exec"
 	"regexp"
 
 	ctypes "git.15b.it/eno/critic/pkg/types"
@@ -36,25 +37,21 @@ func (m DiffMode) String() string {
 // GetDiff returns the diff for the specified paths and mode.
 // If paths is empty, returns diff for all changed files.
 func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
-	return GetDiffWithExecutor(paths, mode, defaultExecutor)
-}
-
-// GetDiffWithExecutor returns the diff using the provided executor.
-func GetDiffWithExecutor(paths []string, mode DiffMode, executor CommandExecutor) (*ctypes.Diff, error) {
 	// Build git diff command based on mode
 	var args []string
 
 	switch mode {
 	case DiffToMergeBase:
 		// Get merge base
-		base, err := GetMergeBaseWithExecutor(executor)
+		base, err := GetMergeBase()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get merge base: %w", err)
 		}
 
-		// Validate merge base to prevent command injection
+		// Sanity check: git should always return valid commit hashes.
+		// If this fails, it indicates a catastrophic system failure.
 		if !validCommitHash.MatchString(base) {
-			return nil, fmt.Errorf("invalid merge base format: %s", base)
+			panic(fmt.Sprintf("git returned invalid merge base format: %s", base))
 		}
 
 		// Compare merge base to working directory (includes committed, staged, and unstaged changes)
@@ -72,7 +69,8 @@ func GetDiffWithExecutor(paths []string, mode DiffMode, executor CommandExecutor
 		args = append(args, paths...)
 	}
 
-	output, err := executor.Run("git", args...)
+	cmd := exec.Command("git", args...)
+	output, err := cmd.Output()
 	if err != nil {
 		// If there's an error but output is empty, it might just be an empty diff
 		if len(output) == 0 {

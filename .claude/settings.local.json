@@ -8,7 +8,10 @@
       "Bash(chmod:*)",
       "Bash(git rm:*)",
       "Bash(go run:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(grep:*)",
+      "Bash(tree:*)",
+      "Bash(perl -i -p0e 's/(\\t+t\\.(Fatal|Error)(f?)\\([^)]*\\))\\n(\\t(?!\\}))/\\1\\n\\t}\\n\\4/g' diff_test.go)"
     ]
   }
 }

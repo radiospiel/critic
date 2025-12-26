@@ -1,88 +1,28 @@
-package integration
+package critic_integration
 
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 
 	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/internal/must"
 )
 
-// setupGitRepo creates a temporary git repository for testing
-func setupGitRepo(t *testing.T) string {
-	t.Helper()
-
-	tmpDir := t.TempDir()
-
-	// Initialize git repo
-	cmd := exec.Command("git", "init")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to init git repo: %v", err)
-	}
-
-	// Configure git
-	cmd = exec.Command("git", "config", "user.name", "Test User")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to configure git user: %v", err)
-	}
-
-	cmd = exec.Command("git", "config", "user.email", "test@example.com")
-	cmd.Dir = tmpDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to configure git email: %v", err)
-	}
-
-	return tmpDir
-}
-
 // commitFile creates a file and commits it
-func commitFile(t *testing.T, repoDir, filename, content string) {
-	t.Helper()
-
-	path := filepath.Join(repoDir, filename)
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to write file: %v", err)
-	}
-
-	cmd := exec.Command("git", "add", filename)
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to git add: %v", err)
-	}
-
-	cmd = exec.Command("git", "commit", "-m", "commit "+filename)
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to git commit: %v", err)
-	}
-}
 
 // modifyFile modifies an existing file
-func modifyFile(t *testing.T, repoDir, filename, content string) {
-	t.Helper()
-
-	path := filepath.Join(repoDir, filename)
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to write file: %v", err)
-	}
-}
 
 func TestGitWorkflow_UnstagedChanges(t *testing.T) {
-	repoDir := setupGitRepo(t)
+	SetupGitRepo(t)
 
 	// Create and commit initial file
-	commitFile(t, repoDir, "test.go", "package main\n\nfunc main() {}\n")
+	must.WriteFile("test.go", "package main\n\nfunc main() {}\n")
+	CommitFile(t, "test.go")
 
 	// Modify the file (unstaged)
-	modifyFile(t, repoDir, "test.go", "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n")
+	must.WriteFile("test.go", "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n")
 
-	// Change to repo directory
-	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	os.Chdir(repoDir)
 
 	// Get unstaged diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
@@ -124,18 +64,16 @@ func TestGitWorkflow_UnstagedChanges(t *testing.T) {
 }
 
 func TestGitWorkflow_LastCommit(t *testing.T) {
-	repoDir := setupGitRepo(t)
+	SetupGitRepo(t)
 
 	// Create initial commit
-	commitFile(t, repoDir, "initial.go", "package main\n")
+	must.WriteFile("initial.go", "package main\n")
+	CommitFile(t, "initial.go")
 
 	// Create second commit with changes
-	commitFile(t, repoDir, "test.go", "package main\n\nfunc main() {\n\tfmt.Println(\"test\")\n}\n")
+	must.WriteFile("test.go", "package main\n\nfunc main() {\n\tfmt.Println(\"test\")\n}\n")
+	CommitFile(t, "test.go")
 
-	// Change to repo directory
-	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	os.Chdir(repoDir)
 
 	// Get last commit diff
 	diff, err := git.GetDiff([]string{}, git.DiffToLastCommit)
@@ -167,15 +105,12 @@ func TestGitWorkflow_LastCommit(t *testing.T) {
 }
 
 func TestGitWorkflow_EmptyDiff(t *testing.T) {
-	repoDir := setupGitRepo(t)
+	SetupGitRepo(t)
 
 	// Create and commit a file
-	commitFile(t, repoDir, "test.go", "package main\n")
+	must.WriteFile("test.go", "package main\n")
+	CommitFile(t, "test.go")
 
-	// Change to repo directory
-	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	os.Chdir(repoDir)
 
 	// Get unstaged diff (should be empty)
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
@@ -189,27 +124,15 @@ func TestGitWorkflow_EmptyDiff(t *testing.T) {
 }
 
 func TestGitWorkflow_NewFile(t *testing.T) {
-	repoDir := setupGitRepo(t)
+	SetupGitRepo(t)
 
 	// Create initial commit
-	commitFile(t, repoDir, "initial.go", "package main\n")
+	must.WriteFile("initial.go", "package main\n")
+	CommitFile(t, "initial.go")
 
 	// Add a new file (staged)
-	path := filepath.Join(repoDir, "new.go")
-	if err := os.WriteFile(path, []byte("package main\n\nfunc new() {}\n"), 0644); err != nil {
-		t.Fatalf("Failed to write file: %v", err)
-	}
-
-	cmd := exec.Command("git", "add", "new.go")
-	cmd.Dir = repoDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to git add: %v", err)
-	}
-
-	// Change to repo directory
-	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	os.Chdir(repoDir)
+	must.WriteFile("new.go", "package main\n\nfunc new() {}\n")
+	must.Exec("git", "add", "new.go")
 
 	// Get diff (should show staged changes when comparing to HEAD)
 	// Note: This tests the merge base mode which includes staged changes
@@ -226,20 +149,18 @@ func TestGitWorkflow_NewFile(t *testing.T) {
 }
 
 func TestGitWorkflow_MultipleFiles(t *testing.T) {
-	repoDir := setupGitRepo(t)
+	SetupGitRepo(t)
 
 	// Create and commit initial files
-	commitFile(t, repoDir, "file1.go", "package main\n")
-	commitFile(t, repoDir, "file2.go", "package test\n")
+	must.WriteFile("file1.go", "package main\n")
+	CommitFile(t, "file1.go")
+	must.WriteFile("file2.go", "package test\n")
+	CommitFile(t, "file2.go")
 
 	// Modify both files
-	modifyFile(t, repoDir, "file1.go", "package main\n\nimport \"fmt\"\n")
-	modifyFile(t, repoDir, "file2.go", "package test\n\nimport \"testing\"\n")
+	must.WriteFile("file1.go", "package main\n\nimport \"fmt\"\n")
+	must.WriteFile("file2.go", "package test\n\nimport \"testing\"\n")
 
-	// Change to repo directory
-	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	os.Chdir(repoDir)
 
 	// Get unstaged diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
@@ -266,15 +187,12 @@ func TestGitWorkflow_MultipleFiles(t *testing.T) {
 }
 
 func TestGitWorkflow_GetCurrentBranch(t *testing.T) {
-	repoDir := setupGitRepo(t)
+	SetupGitRepo(t)
 
 	// Create initial commit (required for branch to exist)
-	commitFile(t, repoDir, "test.go", "package main\n")
+	must.WriteFile("test.go", "package main\n")
+	CommitFile(t, "test.go")
 
-	// Change to repo directory
-	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	os.Chdir(repoDir)
 
 	branch, err := git.GetCurrentBranch()
 	if err != nil {
@@ -288,12 +206,8 @@ func TestGitWorkflow_GetCurrentBranch(t *testing.T) {
 }
 
 func TestGitWorkflow_IsGitRepo(t *testing.T) {
-	repoDir := setupGitRepo(t)
+	SetupGitRepo(t)
 
-	// Change to repo directory
-	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	os.Chdir(repoDir)
 
 	if !git.IsGitRepo() {
 		t.Error("IsGitRepo() should return true for git repository")
@@ -309,22 +223,21 @@ func TestGitWorkflow_IsGitRepo(t *testing.T) {
 }
 
 func TestGitWorkflow_PathFiltering(t *testing.T) {
-	repoDir := setupGitRepo(t)
+	SetupGitRepo(t)
 
 	// Create and commit multiple files
-	commitFile(t, repoDir, "file1.go", "package main\n")
-	commitFile(t, repoDir, "file2.go", "package test\n")
-	commitFile(t, repoDir, "file3.go", "package other\n")
+	must.WriteFile("file1.go", "package main\n")
+	CommitFile(t, "file1.go")
+	must.WriteFile("file2.go", "package test\n")
+	CommitFile(t, "file2.go")
+	must.WriteFile("file3.go", "package other\n")
+	CommitFile(t, "file3.go")
 
 	// Modify all files
-	modifyFile(t, repoDir, "file1.go", "package main\n\nimport \"fmt\"\n")
-	modifyFile(t, repoDir, "file2.go", "package test\n\nimport \"testing\"\n")
-	modifyFile(t, repoDir, "file3.go", "package other\n\nimport \"os\"\n")
+	must.WriteFile("file1.go", "package main\n\nimport \"fmt\"\n")
+	must.WriteFile("file2.go", "package test\n\nimport \"testing\"\n")
+	must.WriteFile("file3.go", "package other\n\nimport \"os\"\n")
 
-	// Change to repo directory
-	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	os.Chdir(repoDir)
 
 	// Get diff for only file1.go
 	diff, err := git.GetDiff([]string{"file1.go"}, git.DiffUnstaged)
@@ -338,5 +251,90 @@ func TestGitWorkflow_PathFiltering(t *testing.T) {
 
 	if diff.Files[0].NewPath != "file1.go" {
 		t.Errorf("Expected file1.go, got %s", diff.Files[0].NewPath)
+	}
+}
+
+func TestGitWorkflow_MergeBaseWithMainBranch(t *testing.T) {
+	SetupGitRepo(t)
+
+	// Create initial commit on default branch (usually "main" or "master")
+	must.WriteFile("initial.go", "package main\n")
+	CommitFile(t, "initial.go")
+
+	// Ensure we're on "main" branch (modern git default)
+	exec.Command("git", "branch", "-M", "main").Run() // Ignore error - might already be "main"
+
+	// Create a feature branch
+	must.Exec("git", "checkout", "-b", "feature")
+
+	// Make a commit on feature branch
+	must.WriteFile("feature.go", "package feature\n")
+	CommitFile(t, "feature.go")
+
+
+	// GetMergeBase should find the merge base with "main" branch
+	mergeBase, err := git.GetMergeBase()
+	if err != nil {
+		t.Fatalf("GetMergeBase() error = %v", err)
+	}
+
+	if mergeBase == "" {
+		t.Error("GetMergeBase() returned empty string")
+	}
+
+	// Verify it found a valid commit hash (at least 7 chars)
+	if len(mergeBase) < 7 {
+		t.Errorf("GetMergeBase() = %q, expected valid commit hash", mergeBase)
+	}
+
+	// Verify the merge base is a valid commit
+	output := must.Run("git", "cat-file", "-t", mergeBase)
+	if string(output) != "commit\n" {
+		t.Errorf("Merge base %q is not a commit, got: %s", mergeBase, output)
+	}
+}
+
+func TestGitWorkflow_MergeBaseFallbackToMaster(t *testing.T) {
+	SetupGitRepo(t)
+
+	// Create initial commit on default branch
+	must.WriteFile("initial.go", "package main\n")
+	CommitFile(t, "initial.go")
+
+	// Rename branch to "master" to test fallback behavior
+	// (modern git uses "main" by default, but we want to test "master" fallback)
+	must.Exec("git", "branch", "-m", "master")
+
+	// Create a feature branch
+	must.Exec("git", "checkout", "-b", "feature")
+
+	// Make a commit on feature branch
+	must.WriteFile("feature.go", "package feature\n")
+	CommitFile(t, "feature.go")
+
+
+	// GetMergeBase should work even though there's no "main" branch
+	// It should fallback to "master"
+	mergeBase, err := git.GetMergeBase()
+	if err != nil {
+		t.Fatalf("GetMergeBase() error = %v, should fallback to master", err)
+	}
+
+	if mergeBase == "" {
+		t.Error("GetMergeBase() returned empty string")
+	}
+
+	// Verify it found a valid commit hash
+	if len(mergeBase) < 7 {
+		t.Errorf("GetMergeBase() = %q, expected valid commit hash", mergeBase)
+	}
+
+	// Verify current branch is "feature"
+	currentBranch, err := git.GetCurrentBranch()
+	if err != nil {
+		t.Fatalf("GetCurrentBranch() error = %v", err)
+	}
+	if currentBranch != "feature" {
+		t.Errorf("Expected current branch 'feature', got %q", currentBranch)
 	}
 }
