@@ -66,6 +66,11 @@ func (h *Highlighter) Highlight(code, filename string) (string, error) {
 		return code, nil
 	}
 
+	// Expand tabs to spaces before highlighting
+	language := GetLanguage(filename)
+	tabWidth := TabWidth(language)
+	code = expandTabs(code, tabWidth)
+
 	// Tokenize the code
 	iterator, err := lexer.Tokenise(nil, code)
 	if err != nil {
