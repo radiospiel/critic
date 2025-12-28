@@ -9,12 +9,18 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+// FileChange represents a file change event
+type FileChange struct {
+	Path string
+}
+
 // Watcher watches files for changes
 type Watcher struct {
 	watcher     *fsnotify.Watcher
 	debouncer   *time.Timer
 	debounceMs  int
-	changesChan chan struct{}
+	changesChan chan FileChange
+	lastChange  string // Track last changed file for debouncing
 }
 
 // NewWatcher creates a new file watcher
@@ -29,7 +35,7 @@ func NewWatcher(debounceMs int) (*Watcher, error) {
 	watcher := &Watcher{
 		watcher:     w,
 		debounceMs:  debounceMs,
-		changesChan: make(chan struct{}, 1),
+		changesChan: make(chan FileChange, 1),
 	}
 
 	// Start event loop immediately
@@ -139,7 +145,7 @@ func (w *Watcher) eventLoop() {
 				event.Op&fsnotify.Rename == fsnotify.Rename ||
 				event.Op&fsnotify.Remove == fsnotify.Remove {
 				logger.Info("eventLoop: File change detected: %s %s", event.Op, event.Name)
-				w.debounceChange()
+				w.debounceChange(event.Name)
 			}
 
 		case err, ok := <-w.watcher.Errors:
@@ -153,8 +159,10 @@ func (w *Watcher) eventLoop() {
 }
 
 // debounceChange debounces file change events
-func (w *Watcher) debounceChange() {
-	logger.Debug("debounceChange: Called")
+func (w *Watcher) debounceChange(path string) {
+	logger.Debug("debounceChange: Called for %s", path)
+	w.lastChange = path
+
 	// Reset debounce timer
 	if w.debouncer != nil {
 		w.debouncer.Stop()
@@ -162,10 +170,10 @@ func (w *Watcher) debounceChange() {
 	}
 
 	w.debouncer = time.AfterFunc(time.Duration(w.debounceMs)*time.Millisecond, func() {
-		logger.Info("debounceChange: Timer fired, sending change notification")
+		logger.Info("debounceChange: Timer fired, sending change notification for %s", w.lastChange)
 		// Signal change on non-blocking send
 		select {
-		case w.changesChan <- struct{}{}:
+		case w.changesChan <- FileChange{Path: w.lastChange}:
 			logger.Info("debounceChange: Change notification sent")
 		default:
 			logger.Info("debounceChange: Channel already has pending change, skipping")
@@ -174,7 +182,7 @@ func (w *Watcher) debounceChange() {
 }
 
 // Changes returns a channel that receives notifications when files change
-func (w *Watcher) Changes() <-chan struct{} {
+func (w *Watcher) Changes() <-chan FileChange {
 	return w.changesChan
 }
 

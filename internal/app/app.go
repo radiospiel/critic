@@ -196,12 +196,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case fileChangedMsg:
-		// Reload diff when files change
-		logger.Info("Update: Received fileChangedMsg, reloading diff")
+		// Check if the changed file is currently being viewed
+		activeFile := m.fileList.GetActiveFile()
+		if activeFile != nil {
+			// Get the path of the currently viewed file
+			currentPath := activeFile.NewPath
+			if currentPath == "" {
+				currentPath = activeFile.OldPath
+			}
+
+			// Check if this is the file that changed (compare absolute paths)
+			if msg.path != "" && filePathMatches(msg.path, currentPath) {
+				logger.Info("Update: Changed file %s is currently viewed, immediately re-rendering", msg.path)
+				// Immediately re-render the current file
+				cmd := m.diffView.SetFile(activeFile)
+				cmds = append(cmds, cmd)
+			}
+		}
+
+		// Also reload the full diff in the background to update file list
+		logger.Info("Update: Reloading full diff in background")
 		m.reloading = true
 		return m, tea.Batch(
-			loadDiffCmd(&m),
-			waitForFileChanges(m.watcher),
+			append(cmds,
+				loadDiffCmd(&m),
+				waitForFileChanges(m.watcher),
+			)...,
 		)
 
 	case baseResolverInitializedMsg:
@@ -295,7 +315,9 @@ type diffLoadedMsg struct {
 	err  error
 }
 
-type fileChangedMsg struct{}
+type fileChangedMsg struct {
+	path string
+}
 
 type baseResolverInitializedMsg struct {
 	resolver *git.BaseResolver
@@ -377,6 +399,23 @@ func resolveBase(base string) (string, error) {
 	return git.ResolveRef(base)
 }
 
+// filePathMatches checks if two file paths refer to the same file
+// Handles both relative and absolute paths
+func filePathMatches(path1, path2 string) bool {
+	// Simple case: direct match
+	if path1 == path2 {
+		return true
+	}
+
+	// Try to match by suffix (handles absolute vs relative paths)
+	// For example: /abs/path/file.go matches file.go or path/file.go
+	if strings.HasSuffix(path1, path2) || strings.HasSuffix(path2, path1) {
+		return true
+	}
+
+	return false
+}
+
 func waitForFileChanges(watcher *git.Watcher) tea.Cmd {
 	if watcher == nil {
 		logger.Info("waitForFileChanges: No watcher, returning nil")
@@ -385,8 +424,8 @@ func waitForFileChanges(watcher *git.Watcher) tea.Cmd {
 
 	return func() tea.Msg {
 		logger.Info("waitForFileChanges: Waiting for file changes...")
-		<-watcher.Changes()
-		logger.Info("waitForFileChanges: File change received, returning fileChangedMsg")
-		return fileChangedMsg{}
+		change := <-watcher.Changes()
+		logger.Info("waitForFileChanges: File change received for %s, returning fileChangedMsg", change.Path)
+		return fileChangedMsg{path: change.Path}
 	}
 }
