@@ -98,8 +98,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.fileList.SetFocused(m.layout.GetFocusedPane() == ui.FileListPane)
 			m.diffView.SetFocused(m.layout.GetFocusedPane() == ui.DiffViewPane)
 
-		case "m":
-			// Cycle through diff modes
+		case "b":
+			// Cycle through diff modes (bases)
 			m.diffMode = m.nextDiffMode()
 			logger.Info("Update: Switching to diff mode: %s", m.diffMode.String())
 			return m, loadDiffCmd(m.paths, m.diffMode)
@@ -262,7 +262,7 @@ func (m Model) renderStatusBar() string {
 	}
 
 	// Show help hint
-	parts = append(parts, "m: mode • Tab: switch • ?: help • q: quit")
+	parts = append(parts, "b: base • Tab: switch • ?: help • q: quit")
 
 	status := strings.Join(parts, " • ")
 
