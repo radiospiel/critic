@@ -1,6 +1,8 @@
 package highlight
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -312,5 +314,297 @@ func TestCustomStyle(t *testing.T) {
 	h := NewHighlighter()
 	if h.style != customStyle {
 		t.Error("Highlighter should use customStyle")
+	}
+}
+
+func TestTabWidth(t *testing.T) {
+	tests := []struct {
+		language string
+		want     int
+	}{
+		{"go", 4},
+		{"Go", 4},
+		{"golang", 4},
+		{"ruby", 2},
+		{"Ruby", 2},
+		{"rb", 2},
+		{"python", 4},
+		{"javascript", 4},
+		{"unknown", 4},
+		{"", 4},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.language, func(t *testing.T) {
+			got := TabWidth(tt.language)
+			if got != tt.want {
+				t.Errorf("TabWidth(%q) = %d, want %d", tt.language, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExpandTabs(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		tabWidth int
+		want     string
+	}{
+		{
+			name:     "No tabs",
+			code:     "hello world",
+			tabWidth: 4,
+			want:     "hello world",
+		},
+		{
+			name:     "Single tab at start (4 spaces)",
+			code:     "\thello",
+			tabWidth: 4,
+			want:     "    hello",
+		},
+		{
+			name:     "Single tab at start (2 spaces)",
+			code:     "\thello",
+			tabWidth: 2,
+			want:     "  hello",
+		},
+		{
+			name:     "Tab after 1 char (4-space tabs)",
+			code:     "a\tb",
+			tabWidth: 4,
+			want:     "a   b",
+		},
+		{
+			name:     "Tab after 1 char (2-space tabs)",
+			code:     "a\tb",
+			tabWidth: 2,
+			want:     "a b",
+		},
+		{
+			name:     "Multiple tabs (4-space)",
+			code:     "\t\thello",
+			tabWidth: 4,
+			want:     "        hello",
+		},
+		{
+			name:     "Multiple tabs (2-space)",
+			code:     "\t\thello",
+			tabWidth: 2,
+			want:     "    hello",
+		},
+		{
+			name:     "Tab with newline reset",
+			code:     "\thello\n\tworld",
+			tabWidth: 4,
+			want:     "    hello\n    world",
+		},
+		{
+			name:     "Mixed tabs and spaces",
+			code:     " \thello",
+			tabWidth: 4,
+			want:     "    hello",
+		},
+		{
+			name:     "Empty string",
+			code:     "",
+			tabWidth: 4,
+			want:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := expandTabs(tt.code, tt.tabWidth)
+			if got != tt.want {
+				t.Errorf("expandTabs() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHighlight_ExpandsTabsBeforeHighlighting(t *testing.T) {
+	h := NewHighlighter()
+
+	// Go code with tabs (should expand to 4 spaces)
+	goCode := "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}"
+	result, err := h.Highlight(goCode, "test.go")
+	if err != nil {
+		t.Fatalf("Highlight() error = %v", err)
+	}
+
+	// Result should not contain tab characters
+	if strings.Contains(result, "\t") {
+		t.Error("Highlight() result contains tab characters, should be expanded to spaces")
+	}
+
+	// Result should contain the expanded spaces
+	if !strings.Contains(result, "    fmt.Println") {
+		t.Error("Highlight() should expand tabs to 4 spaces for Go code")
+	}
+}
+
+func TestHighlight_WithEmoji(t *testing.T) {
+	h := NewHighlighter()
+	code := "// Comment with emoji: 🎨 🚀 ✨\npackage main"
+
+	result, err := h.Highlight(code, "test.go")
+	if err != nil {
+		t.Fatalf("Highlight() error = %v", err)
+	}
+
+	// Emoji should be preserved
+	if !strings.Contains(result, "🎨") || !strings.Contains(result, "🚀") || !strings.Contains(result, "✨") {
+		t.Error("Highlight() should preserve emoji characters")
+	}
+}
+
+func TestHighlight_WithUmlautsAndSpecialChars(t *testing.T) {
+	h := NewHighlighter()
+	code := "# Kommentar mit Umlauten: äöü ÄÖÜ ß\nclass Grüße"
+
+	result, err := h.Highlight(code, "test.rb")
+	if err != nil {
+		t.Fatalf("Highlight() error = %v", err)
+	}
+
+	// German umlauts and special characters should be preserved
+	specialChars := []string{"ä", "ö", "ü", "Ä", "Ö", "Ü", "ß", "ü"}
+	for _, char := range specialChars {
+		if !strings.Contains(result, char) {
+			t.Errorf("Highlight() should preserve character %q", char)
+		}
+	}
+}
+
+func TestHighlight_WithNonASCII(t *testing.T) {
+	h := NewHighlighter()
+	tests := []struct {
+		name     string
+		code     string
+		filename string
+		chars    []string
+	}{
+		{
+			name:     "Japanese characters",
+			code:     "# こんにちは世界\nclass Hello",
+			filename: "test.rb",
+			chars:    []string{"こ", "ん", "に", "ち", "は", "世", "界"},
+		},
+		{
+			name:     "Chinese characters",
+			code:     "# 你好世界\nclass Hello",
+			filename: "test.rb",
+			chars:    []string{"你", "好", "世", "界"},
+		},
+		{
+			name:     "Cyrillic characters",
+			code:     "# Привет мир\nclass Hello",
+			filename: "test.rb",
+			chars:    []string{"П", "р", "и", "в", "е", "т"},
+		},
+		{
+			name:     "Mixed emoji and text",
+			code:     "// TODO: Add feature 📝\n// BUG: Fix issue 🐛\npackage main",
+			filename: "test.go",
+			chars:    []string{"📝", "🐛"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := h.Highlight(tt.code, tt.filename)
+			if err != nil {
+				t.Fatalf("Highlight() error = %v", err)
+			}
+
+			for _, char := range tt.chars {
+				if !strings.Contains(result, char) {
+					t.Errorf("Highlight() should preserve character %q", char)
+				}
+			}
+		})
+	}
+}
+
+func TestHighlight_RealWorldGoFile(t *testing.T) {
+	h := NewHighlighter()
+
+	// Read the real Go test file with tabs
+	content, err := os.ReadFile(filepath.Join("testdata", "sample.go"))
+	if err != nil {
+		t.Fatalf("Failed to read testdata/sample.go: %v", err)
+	}
+
+	code := string(content)
+
+	// Verify the file actually contains tabs
+	if !strings.Contains(code, "\t") {
+		t.Skip("Test file does not contain tabs")
+	}
+
+	result, err := h.Highlight(code, "sample.go")
+	if err != nil {
+		t.Fatalf("Highlight() error = %v", err)
+	}
+
+	// Result should not contain tabs
+	if strings.Contains(result, "\t") {
+		t.Error("Highlight() result contains tab characters, should be expanded")
+	}
+
+	// Should preserve special characters from the file
+	if !strings.Contains(result, "äöü") {
+		t.Error("Highlight() should preserve German umlauts from test file")
+	}
+	if !strings.Contains(result, "🎨") {
+		t.Error("Highlight() should preserve emoji from test file")
+	}
+
+	// Check that tabs were expanded to 4 spaces (Go standard)
+	// The file has "func main() {" with a tab before "fmt.Println"
+	if !strings.Contains(result, "    fmt.Println") {
+		t.Error("Highlight() should expand tabs to 4 spaces for Go code")
+	}
+}
+
+func TestHighlight_RealWorldRubyFile(t *testing.T) {
+	h := NewHighlighter()
+
+	// Read the real Ruby test file with tabs
+	content, err := os.ReadFile(filepath.Join("testdata", "sample.rb"))
+	if err != nil {
+		t.Fatalf("Failed to read testdata/sample.rb: %v", err)
+	}
+
+	code := string(content)
+
+	// Verify the file actually contains tabs
+	if !strings.Contains(code, "\t") {
+		t.Skip("Test file does not contain tabs")
+	}
+
+	result, err := h.Highlight(code, "sample.rb")
+	if err != nil {
+		t.Fatalf("Highlight() error = %v", err)
+	}
+
+	// Result should not contain tabs
+	if strings.Contains(result, "\t") {
+		t.Error("Highlight() result contains tab characters, should be expanded")
+	}
+
+	// Should preserve special characters from the file
+	specialChars := []string{"äöü", "ß", "🚀"}
+	for _, char := range specialChars {
+		if !strings.Contains(result, char) {
+			t.Errorf("Highlight() should preserve %q from test file", char)
+		}
+	}
+
+	// Check that tabs were expanded to 2 spaces (Ruby standard)
+	// The file has "class Greeter" with a tab before "def initialize"
+	if !strings.Contains(result, "  def initialize") {
+		t.Error("Highlight() should expand tabs to 2 spaces for Ruby code")
 	}
 }
