@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"git.15b.it/eno/critic/internal/cli"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/logger"
 	"git.15b.it/eno/critic/internal/ui"
@@ -14,26 +15,29 @@ import (
 
 // Model represents the main application model
 type Model struct {
-	fileList            ui.FileListModel
-	diffView            ui.DiffViewModel
-	layout              ui.LayoutModel
-	diff                *ctypes.Diff
-	paths               []string
-	watcher             *git.Watcher
-	err                 error
-	width               int
-	height              int
-	ready               bool
-	highlightingEnabled bool
-	reloading           bool
-	diffMode            git.DiffMode
+	fileList     ui.FileListModel
+	diffView     ui.DiffViewModel
+	layout       ui.LayoutModel
+	diff         *ctypes.Diff
+	bases        []string        // List of base refs
+	current      string          // Current target ref
+	currentBase  int             // Index of current base
+	paths        []string        // Paths to diff
+	extensions   []string        // File extensions to include
+	resolver     *git.BaseResolver // Base resolver with polling
+	watcher      *git.Watcher
+	err          error
+	width        int
+	height       int
+	ready        bool
+	reloading    bool
 }
 
 // NewModel creates a new application model
-func NewModel(paths []string, highlightingEnabled bool) Model {
-	logger.Info("NewModel: Creating model with %d paths, highlighting=%v", len(paths), highlightingEnabled)
+func NewModel(args *cli.Args) Model {
+	logger.Info("NewModel: Creating model with %d paths, %d bases", len(args.Paths), len(args.Bases))
 	diffView := ui.NewDiffViewModel()
-	diffView.SetHighlightingEnabled(highlightingEnabled)
+	diffView.SetHighlightingEnabled(true) // Always enable highlighting
 
 	// Initialize file watcher
 	watcher, err := git.NewWatcher(100) // 100ms debounce
@@ -48,21 +52,25 @@ func NewModel(paths []string, highlightingEnabled bool) Model {
 	fileList.SetFocused(true) // Start with file list focused
 
 	return Model{
-		fileList:            fileList,
-		diffView:            diffView,
-		layout:              ui.NewLayoutModel(),
-		paths:               paths,
-		watcher:             watcher,
-		highlightingEnabled: highlightingEnabled,
-		diffMode:            git.DiffToMergeBase, // Default mode
+		fileList:   fileList,
+		diffView:   diffView,
+		layout:     ui.NewLayoutModel(),
+		bases:      args.Bases,
+		current:    args.Current,
+		currentBase: 0, // Start with first base
+		paths:      args.Paths,
+		extensions: args.Extensions,
+		watcher:    watcher,
 	}
 }
 
 // Init initializes the application
 func (m Model) Init() tea.Cmd {
 	logger.Info("Init: Starting application initialization")
+
 	cmds := []tea.Cmd{
-		loadDiffCmd(m.paths, m.diffMode),
+		initBaseResolverCmd(&m),
+		loadDiffCmd(&m),
 		tea.EnterAltScreen,
 	}
 
@@ -99,10 +107,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.diffView.SetFocused(m.layout.GetFocusedPane() == ui.DiffViewPane)
 
 		case "b":
-			// Cycle through diff modes (bases)
-			m.diffMode = m.nextDiffMode()
-			logger.Info("Update: Switching to diff mode: %s", m.diffMode.String())
-			return m, loadDiffCmd(m.paths, m.diffMode)
+			// Cycle through bases
+			m.currentBase = (m.currentBase + 1) % len(m.bases)
+			logger.Info("Update: Switching to base %d: %s", m.currentBase, m.bases[m.currentBase])
+			return m, loadDiffCmd(&m)
 
 		case " ": // Space - page down diff view regardless of focus
 			// Create a synthetic pgdown key message
@@ -192,9 +200,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Info("Update: Received fileChangedMsg, reloading diff")
 		m.reloading = true
 		return m, tea.Batch(
-			loadDiffCmd(m.paths, m.diffMode),
+			loadDiffCmd(&m),
 			waitForFileChanges(m.watcher),
 		)
+
+	case baseResolverInitializedMsg:
+		logger.Info("Update: BaseResolver initialized")
+		m.resolver = msg.resolver
+		return m, nil
+
+	case baseChangedMsg:
+		// Base changed due to polling - reload diff
+		logger.Info("Update: Received baseChangedMsg, reloading diff")
+		return m, loadDiffCmd(&m)
 
 	default:
 		// Route other messages to diff view (like diffRenderedMsg)
@@ -229,26 +247,15 @@ func (m Model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, mainView, statusBar)
 }
 
-// nextDiffMode cycles to the next diff mode
-func (m Model) nextDiffMode() git.DiffMode {
-	switch m.diffMode {
-	case git.DiffToMergeBase:
-		return git.DiffToLastCommit
-	case git.DiffToLastCommit:
-		return git.DiffUnstaged
-	case git.DiffUnstaged:
-		return git.DiffToMergeBase
-	default:
-		return git.DiffToMergeBase
-	}
-}
-
 // renderStatusBar renders the bottom status bar
 func (m Model) renderStatusBar() string {
 	var parts []string
 
-	// Show current diff mode
-	parts = append(parts, fmt.Sprintf("Mode: %s", m.diffMode.String()))
+	// Show current base and target
+	if len(m.bases) > 0 {
+		base := m.bases[m.currentBase]
+		parts = append(parts, fmt.Sprintf("Base: %s → %s", base, m.current))
+	}
 
 	// Show current branch
 	branch, err := git.GetCurrentBranch()
@@ -290,13 +297,72 @@ type diffLoadedMsg struct {
 
 type fileChangedMsg struct{}
 
+type baseResolverInitializedMsg struct {
+	resolver *git.BaseResolver
+}
+
+type baseChangedMsg struct{}
+
 // Commands
 
-func loadDiffCmd(paths []string, mode git.DiffMode) tea.Cmd {
+func initBaseResolverCmd(m *Model) tea.Cmd {
 	return func() tea.Msg {
-		diff, err := git.GetDiff(paths, mode)
+		resolver, err := git.NewBaseResolver(m.bases, m.current, func() {
+			// This callback is called when bases change
+			// We'll send a message to trigger reload
+			logger.Info("BaseResolver: Bases changed, triggering reload")
+		})
+		if err != nil {
+			logger.Error("Failed to initialize base resolver: %v", err)
+			return nil
+		}
+		return baseResolverInitializedMsg{resolver: resolver}
+	}
+}
+
+func loadDiffCmd(m *Model) tea.Cmd {
+	return func() tea.Msg {
+		// Get current base name
+		baseName := m.bases[m.currentBase]
+
+		// Resolve base to commit SHA
+		var baseCommit string
+		if m.resolver != nil {
+			sha, ok := m.resolver.GetResolvedBase(baseName)
+			if !ok {
+				// Fall back to resolving directly
+				resolvedSHA, err := resolveBase(baseName)
+				if err != nil {
+					return diffLoadedMsg{diff: nil, err: fmt.Errorf("failed to resolve base %s: %w", baseName, err)}
+				}
+				baseCommit = resolvedSHA
+			} else {
+				baseCommit = sha
+			}
+		} else {
+			// No resolver yet, resolve directly
+			resolvedSHA, err := resolveBase(baseName)
+			if err != nil {
+				return diffLoadedMsg{diff: nil, err: fmt.Errorf("failed to resolve base %s: %w", baseName, err)}
+			}
+			baseCommit = resolvedSHA
+		}
+
+		logger.Info("loadDiffCmd: Loading diff from %s (%s) to %s", baseName, baseCommit, m.current)
+
+		// For now, use GetDiff with DiffToMergeBase mode
+		// TODO: Update GetDiff to accept base commit directly
+		diff, err := git.GetDiff(m.paths, git.DiffToMergeBase)
+
 		return diffLoadedMsg{diff: diff, err: err}
 	}
+}
+
+func resolveBase(base string) (string, error) {
+	if base == "merge-base" {
+		return git.GetMergeBase()
+	}
+	return git.ResolveRef(base)
 }
 
 func waitForFileChanges(watcher *git.Watcher) tea.Cmd {
