@@ -10,19 +10,21 @@ import (
 
 // GitDiffState implements DiffState using git as the source
 type GitDiffState struct {
-	paths     []string
-	mode      git.DiffMode
-	diff      *ctypes.Diff
-	mu        sync.RWMutex
-	callbacks []OnChangeCallback
+	paths        []string
+	mode         git.DiffMode
+	diff         *ctypes.Diff
+	mu           sync.RWMutex
+	callbacks    map[int]OnChangeCallback
+	nextCallbackID int
 }
 
 // NewGitDiffState creates a new GitDiffState
 func NewGitDiffState(paths []string, mode git.DiffMode) (*GitDiffState, error) {
 	state := &GitDiffState{
-		paths:     paths,
-		mode:      mode,
-		callbacks: []OnChangeCallback{},
+		paths:        paths,
+		mode:         mode,
+		callbacks:    make(map[int]OnChangeCallback),
+		nextCallbackID: 0,
 	}
 
 	// Initial load
@@ -118,20 +120,16 @@ func (s *GitDiffState) OnChange(callback OnChangeCallback) func() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.callbacks = append(s.callbacks, callback)
+	// Assign ID and store callback
+	id := s.nextCallbackID
+	s.nextCallbackID++
+	s.callbacks[id] = callback
 
 	// Return unregister function
 	return func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-
-		for i, cb := range s.callbacks {
-			// Compare function pointers
-			if &cb == &callback {
-				s.callbacks = append(s.callbacks[:i], s.callbacks[i+1:]...)
-				break
-			}
-		}
+		delete(s.callbacks, id)
 	}
 }
 
@@ -145,8 +143,11 @@ func (s *GitDiffState) Refresh() error {
 	s.mu.Lock()
 	oldDiff := s.diff
 	s.diff = newDiff
-	callbacks := make([]OnChangeCallback, len(s.callbacks))
-	copy(callbacks, s.callbacks)
+	// Copy callbacks to avoid holding lock during notifications
+	callbacks := make(map[int]OnChangeCallback, len(s.callbacks))
+	for id, cb := range s.callbacks {
+		callbacks[id] = cb
+	}
 	s.mu.Unlock()
 
 	// Notify callbacks of changes
@@ -156,7 +157,7 @@ func (s *GitDiffState) Refresh() error {
 }
 
 // notifyChanges compares old and new diffs and notifies callbacks
-func (s *GitDiffState) notifyChanges(oldDiff, newDiff *ctypes.Diff, callbacks []OnChangeCallback) {
+func (s *GitDiffState) notifyChanges(oldDiff, newDiff *ctypes.Diff, callbacks map[int]OnChangeCallback) {
 	if len(callbacks) == 0 {
 		return
 	}
