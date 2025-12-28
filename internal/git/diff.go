@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strings"
 
 	ctypes "git.15b.it/eno/critic/pkg/types"
 )
@@ -86,4 +87,21 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 	}
 
 	return diff, nil
+}
+
+// ResolveRef resolves a git reference (branch, tag, or commit) to a commit SHA
+// Returns the resolved SHA or an error if the ref doesn't exist
+func ResolveRef(ref string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--verify", ref)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve ref %s: %w", ref, err)
+	}
+
+	sha := strings.TrimSpace(string(output))
+	if !validCommitHash.MatchString(sha) {
+		return "", fmt.Errorf("invalid commit SHA returned for ref %s: %s", ref, sha)
+	}
+
+	return sha, nil
 }
