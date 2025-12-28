@@ -115,6 +115,12 @@ func (m FileListModel) View() string {
 		}
 
 		line := fmt.Sprintf("%s %s", status, path)
+
+		// Prevent word wrapping by setting max width and truncating if needed
+		if m.width > 0 {
+			style = style.MaxWidth(m.width).Inline(true)
+		}
+
 		b.WriteString(style.Render(line))
 		if i < len(m.files)-1 {
 			b.WriteString("\n")
