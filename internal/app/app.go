@@ -199,18 +199,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check if the changed file is currently being viewed
 		activeFile := m.fileList.GetActiveFile()
 		if activeFile != nil {
-			// Get the path of the currently viewed file
-			currentPath := activeFile.NewPath
-			if currentPath == "" {
-				currentPath = activeFile.OldPath
+			// Get the git-relative path of the currently viewed file
+			currentGitPath := activeFile.NewPath
+			if currentGitPath == "" {
+				currentGitPath = activeFile.OldPath
 			}
 
-			// Check if this is the file that changed (compare absolute paths)
-			if msg.path != "" && filePathMatches(msg.path, currentPath) {
-				logger.Info("Update: Changed file %s is currently viewed, immediately re-rendering", msg.path)
+			// Convert watcher absolute path to git-relative path
+			changedGitPath := git.AbsPathToGitPath(msg.path)
+
+			logger.Info("Update: File changed: watcher=%q -> git=%q, active=%q", msg.path, changedGitPath, currentGitPath)
+
+			// Compare git-relative paths
+			if changedGitPath != "" && changedGitPath == currentGitPath {
+				logger.Info("Update: MATCH! Changed file is currently viewed, immediately re-rendering")
 				// Immediately re-render the current file
 				cmd := m.diffView.SetFile(activeFile)
 				cmds = append(cmds, cmd)
+			} else {
+				logger.Info("Update: No match - changed file is not currently viewed")
 			}
 		}
 
@@ -393,27 +400,27 @@ func loadDiffCmd(m *Model) tea.Cmd {
 }
 
 func resolveBase(base string) (string, error) {
-	if base == "merge-base" {
-		return git.GetMergeBase()
-	}
-	return git.ResolveRef(base)
-}
-
-// filePathMatches checks if two file paths refer to the same file
-// Handles both relative and absolute paths
-func filePathMatches(path1, path2 string) bool {
-	// Simple case: direct match
-	if path1 == path2 {
-		return true
+	// Check if base is already a commit SHA (hexadecimal)
+	// If it is, use it directly without computing merge-base
+	if git.IsCommitSHA(base) {
+		// Verify it's a valid ref and return the full SHA
+		return git.ResolveRef(base)
 	}
 
-	// Try to match by suffix (handles absolute vs relative paths)
-	// For example: /abs/path/file.go matches file.go or path/file.go
-	if strings.HasSuffix(path1, path2) || strings.HasSuffix(path2, path1) {
-		return true
+	// For branch names (not commit SHAs), compute merge-base with HEAD
+	// This ensures we diff from where the branch diverged, not the branch tip
+	baseSHA, err := git.ResolveRef(base)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve ref %s: %w", base, err)
 	}
 
-	return false
+	// Get merge-base between HEAD and the branch
+	mergeBase, err := git.GetMergeBaseBetween("HEAD", baseSHA)
+	if err != nil {
+		return "", fmt.Errorf("failed to get merge base with %s: %w", base, err)
+	}
+
+	return mergeBase, nil
 }
 
 func waitForFileChanges(watcher *git.Watcher) tea.Cmd {

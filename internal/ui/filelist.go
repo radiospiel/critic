@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"git.15b.it/eno/critic/internal/git"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -108,10 +109,10 @@ func (m FileListModel) View() string {
 			status = "M"
 		}
 
-		// Get file path to display
-		path := file.NewPath
+		// Get file path to display (convert git-relative to cwd-relative)
+		path := git.GitPathToDisplayPath(file.NewPath)
 		if file.IsDeleted {
-			path = file.OldPath
+			path = git.GitPathToDisplayPath(file.OldPath)
 		}
 
 		line := fmt.Sprintf("%s %s", status, path)

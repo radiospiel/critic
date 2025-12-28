@@ -148,3 +148,8 @@ func ResolveRef(ref string) (string, error) {
 
 	return sha, nil
 }
+
+// IsCommitSHA checks if a string looks like a commit SHA (hexadecimal, 6-40 chars)
+func IsCommitSHA(s string) bool {
+	return validCommitHash.MatchString(s)
+}

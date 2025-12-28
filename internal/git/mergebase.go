@@ -51,6 +51,27 @@ func getMergeBaseWithBranch(branch string) (string, error) {
 	return base, nil
 }
 
+// GetMergeBaseBetween returns the merge base commit between two refs
+func GetMergeBaseBetween(ref1, ref2 string) (string, error) {
+	cmd := exec.Command("git", "merge-base", ref1, ref2)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to find merge base between %s and %s: %w", ref1, ref2, err)
+	}
+
+	base := strings.TrimSpace(string(output))
+	if base == "" {
+		return "", fmt.Errorf("empty merge base between %s and %s", ref1, ref2)
+	}
+
+	// Sanity check: git should always return valid commit hashes.
+	if !validCommitHash.MatchString(base) {
+		panic(fmt.Sprintf("git returned invalid merge base format: %s", base))
+	}
+
+	return base, nil
+}
+
 // GetCurrentBranch returns the name of the current branch
 func GetCurrentBranch() (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")

@@ -1,10 +1,15 @@
 package git
 
 import (
+	"fmt"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
+	"git.15b.it/eno/critic/internal/must"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 )
 
@@ -22,6 +27,69 @@ var (
 	renameToRegex   = regexp.MustCompile(`^rename to (.+)$`)
 	binaryRegex     = regexp.MustCompile(`^Binary files (.+) and (.+) differ$`)
 )
+
+var (
+	gitRootCache     string
+	cwdCache         string
+	pathCacheOnce    sync.Once
+)
+
+// initPathCache initializes the cached git root and cwd (never changes during runtime)
+func initPathCache() {
+	pathCacheOnce.Do(func() {
+		// Get git root
+		cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+		output, err := cmd.Output()
+		if err != nil {
+			panic(fmt.Sprintf("failed to get git root: %v", err))
+		}
+		gitRootCache = strings.TrimSpace(string(output))
+
+		// Get current working directory
+		cwdCache = must.Must2(filepath.Abs("."))
+	})
+}
+
+// AbsPathToGitPath converts an absolute filesystem path to a git-relative path
+// Used for comparing fsnotify paths with git diff paths
+func AbsPathToGitPath(absPath string) string {
+	initPathCache()
+
+	if absPath == "" || absPath == "/dev/null" {
+		return absPath
+	}
+
+	// Make path relative to git root
+	relPath, err := filepath.Rel(gitRootCache, absPath)
+	if err != nil {
+		// If we can't make it relative, return as-is
+		return absPath
+	}
+
+	return relPath
+}
+
+// GitPathToDisplayPath converts a git-relative path to a path relative to cwd
+// Used for display in the UI
+func GitPathToDisplayPath(gitPath string) string {
+	initPathCache()
+
+	if gitPath == "" || gitPath == "/dev/null" {
+		return gitPath
+	}
+
+	// Git path is relative to git root, convert to absolute
+	absPath := filepath.Join(gitRootCache, gitPath)
+
+	// Make relative to cwd for display
+	relPath, err := filepath.Rel(cwdCache, absPath)
+	if err != nil {
+		// If we can't make it relative, return the git path as-is
+		return gitPath
+	}
+
+	return relPath
+}
 
 // ParseDiff parses git diff output into a structured Diff object
 func ParseDiff(diffText string) (*ctypes.Diff, error) {

@@ -46,17 +46,17 @@ func NewWatcher(debounceMs int) (*Watcher, error) {
 }
 
 // WatchPaths starts watching the specified paths
-// If paths is empty, watches the current directory recursively
+// If paths is empty or ["."], watches the current directory recursively
 func (w *Watcher) WatchPaths(paths []string) error {
 	logger.Info("WatchPaths: Called with %d paths: %v", len(paths), paths)
 	var err error
 
-	if len(paths) == 0 {
-		// Watch entire git repository recursively
+	// Watch recursively if no paths or just "."
+	if len(paths) == 0 || (len(paths) == 1 && paths[0] == ".") {
 		logger.Info("WatchPaths: Watching recursively from '.'")
 		err = w.watchRecursive(".")
 	} else {
-		// Extract unique parent directories
+		// Extract unique parent directories from file paths
 		dirs := make(map[string]bool)
 		for _, path := range paths {
 			// Get absolute path
@@ -65,12 +65,23 @@ func (w *Watcher) WatchPaths(paths []string) error {
 				absPath = path
 			}
 
-			// Get directory
-			dir := filepath.Dir(absPath)
-			dirs[dir] = true
+			// Check if path is a directory
+			info, statErr := os.Stat(absPath)
+			if statErr == nil && info.IsDir() {
+				// Watch directory recursively
+				logger.Info("WatchPaths: Watching directory recursively: %s", absPath)
+				if err := w.watchRecursive(absPath); err != nil {
+					logger.Error("WatchPaths: Failed to watch directory %s: %v", absPath, err)
+					return err
+				}
+			} else {
+				// Get parent directory of file
+				dir := filepath.Dir(absPath)
+				dirs[dir] = true
+			}
 		}
 
-		// Watch each directory
+		// Watch parent directories of files
 		for dir := range dirs {
 			logger.Info("WatchPaths: Adding directory: %s", dir)
 			if err := w.watcher.Add(dir); err != nil {

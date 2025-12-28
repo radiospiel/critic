@@ -10,7 +10,7 @@ import (
 
 // Args represents parsed command-line arguments
 type Args struct {
-	Bases      []string // List of base points (e.g., ["merge-base", "origin/main", "HEAD"])
+	Bases      []string // List of base points (e.g., ["main", "origin/main", "HEAD"])
 	Current    string   // Current target (e.g., "current" or a git ref)
 	Paths      []string // Paths to diff
 	Extensions []string // File extensions to include
@@ -110,10 +110,11 @@ func parseBasesCurrent(arg string, result *Args) error {
 func getDefaultBases() ([]string, error) {
 	bases := []string{}
 
-	// 1. Add merge base against main/master (if exists)
-	mergeBase, err := git.GetMergeBase()
-	if err == nil && mergeBase != "" {
-		bases = append(bases, "merge-base")
+	// 1. Add main/master if it exists (will use merge-base automatically)
+	if branchExists("main") {
+		bases = append(bases, "main")
+	} else if branchExists("master") {
+		bases = append(bases, "master")
 	}
 
 	// 2. Add origin/<current-branch> if it exists

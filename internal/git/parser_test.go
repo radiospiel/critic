@@ -8,8 +8,6 @@ import (
 	"git.15b.it/eno/critic/internal/assert"
 )
 
-// compareDiff compares actual and expected diffs using JSON serialization
-
 func TestParseDiff_Empty(t *testing.T) {
 	actual, err := ParseDiff("")
 	if err != nil {

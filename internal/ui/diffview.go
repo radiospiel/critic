@@ -301,9 +301,9 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	lineNum := 0             // Track current line number for cursor highlighting
 	var navigableLines []int // Track which lines can have cursor (diff lines only)
 
-	filename := m.file.NewPath
+	filename := git.GitPathToDisplayPath(m.file.NewPath)
 	if m.file.IsDeleted {
-		filename = m.file.OldPath
+		filename = git.GitPathToDisplayPath(m.file.OldPath)
 	}
 
 	// Render file header
@@ -313,7 +313,9 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	} else if m.file.IsDeleted {
 		header += " (deleted)"
 	} else if m.file.IsRenamed {
-		header = fmt.Sprintf("📄 %s → %s (renamed)", m.file.OldPath, m.file.NewPath)
+		header = fmt.Sprintf("📄 %s → %s (renamed)",
+			git.GitPathToDisplayPath(m.file.OldPath),
+			git.GitPathToDisplayPath(m.file.NewPath))
 	}
 
 	b.WriteString(m.renderLineWithCursor(hunkHeaderStyle.Render(header), lineNum))
