@@ -89,6 +89,49 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 	return diff, nil
 }
 
+// GetDiffBetween returns the diff between a base commit and a target.
+// base is a commit SHA, target is either "current" for working directory or a commit SHA.
+// If paths is empty, returns diff for all changed files.
+func GetDiffBetween(base, target string, paths []string) (*ctypes.Diff, error) {
+	// Validate base commit
+	if !validCommitHash.MatchString(base) {
+		return nil, fmt.Errorf("invalid base commit SHA: %s", base)
+	}
+
+	// Build git diff command
+	var args []string
+	if target == "current" {
+		// Compare base to working directory (includes committed, staged, and unstaged changes)
+		args = []string{"diff", base, "--patch", "--no-color"}
+	} else {
+		// Validate target commit
+		if !validCommitHash.MatchString(target) {
+			return nil, fmt.Errorf("invalid target commit SHA: %s", target)
+		}
+		// Compare base to target commit
+		args = []string{"diff", base + ".." + target, "--patch", "--no-color"}
+	}
+	args = append(args, paths...)
+
+	cmd := exec.Command("git", args...)
+	output, err := cmd.Output()
+	if err != nil {
+		// If there's an error but output is empty, it might just be an empty diff
+		if len(output) == 0 {
+			return &ctypes.Diff{Files: []*ctypes.FileDiff{}}, nil
+		}
+		return nil, fmt.Errorf("failed to run git diff: %w", err)
+	}
+
+	// Parse the diff output
+	diff, err := ParseDiff(string(output))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse diff: %w", err)
+	}
+
+	return diff, nil
+}
+
 // ResolveRef resolves a git reference (branch, tag, or commit) to a commit SHA
 // Returns the resolved SHA or an error if the ref doesn't exist
 func ResolveRef(ref string) (string, error) {

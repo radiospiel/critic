@@ -348,11 +348,23 @@ func loadDiffCmd(m *Model) tea.Cmd {
 			baseCommit = resolvedSHA
 		}
 
-		logger.Info("loadDiffCmd: Loading diff from %s (%s) to %s", baseName, baseCommit, m.current)
+		// Resolve target (might be "current" or a git ref)
+		var targetCommit string
+		if m.current == "current" {
+			targetCommit = "current"
+		} else {
+			// Resolve target ref to commit SHA
+			sha, err := git.ResolveRef(m.current)
+			if err != nil {
+				return diffLoadedMsg{diff: nil, err: fmt.Errorf("failed to resolve target %s: %w", m.current, err)}
+			}
+			targetCommit = sha
+		}
 
-		// For now, use GetDiff with DiffToMergeBase mode
-		// TODO: Update GetDiff to accept base commit directly
-		diff, err := git.GetDiff(m.paths, git.DiffToMergeBase)
+		logger.Info("loadDiffCmd: Loading diff from %s (%s) to %s (%s)", baseName, baseCommit, m.current, targetCommit)
+
+		// Use GetDiffBetween to get diff between specific commits
+		diff, err := git.GetDiffBetween(baseCommit, targetCommit, m.paths)
 
 		return diffLoadedMsg{diff: diff, err: err}
 	}
