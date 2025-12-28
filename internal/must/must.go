@@ -23,6 +23,10 @@ func Must2[T any](val T, err error) T {
 
 // WriteFile writes content to a file, panicking on error.
 // Accepts either string or []byte.
+//
+// Examples:
+// must.WriteFile("text.txt", "hello world")              // string
+// must.WriteFile("binary.dat", []byte{0x00, 0x01, 0x02}) // []byte
 func WriteFile(filename string, content any) {
 	var data []byte
 	switch v := content.(type) {
@@ -34,24 +38,16 @@ func WriteFile(filename string, content any) {
 		panic(fmt.Sprintf("WriteFile(%s): unsupported type %T, expected string or []byte", filename, content))
 	}
 	if err := os.WriteFile(filename, data, 0644); err != nil {
-		panic(fmt.Sprintf("WriteFile(%s) failed: %v", filename, err))
+		panic(fmt.Sprintf("WriteFile(%s, %d byte) failed: %v", filename, len(data), err))
 	}
 }
 
 // Exec executes a command, panicking on error.
-func Exec(name string, args ...string) {
-	cmd := exec.Command(name, args...)
-	if err := cmd.Run(); err != nil {
-		panic(fmt.Sprintf("Exec(%s %v) failed: %v", name, args, err))
-	}
-}
-
-// Run executes a command and returns its output, panicking on error.
-func Run(name string, args ...string) []byte {
+func Exec(name string, args ...string) []byte {
 	cmd := exec.Command(name, args...)
 	output, err := cmd.Output()
 	if err != nil {
-		panic(fmt.Sprintf("Run(%s %v) failed: %v", name, args, err))
+		panic(fmt.Sprintf("Exec(%s %v) failed: %v", name, args, err))
 	}
 	return output
 }

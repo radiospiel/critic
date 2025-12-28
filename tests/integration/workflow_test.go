@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"testing"
 
+	"git.15b.it/eno/critic/internal/assert"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/must"
 )
@@ -23,7 +24,6 @@ func TestGitWorkflow_UnstagedChanges(t *testing.T) {
 	// Modify the file (unstaged)
 	must.WriteFile("test.go", "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n")
 
-
 	// Get unstaged diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
 	if err != nil {
@@ -34,14 +34,11 @@ func TestGitWorkflow_UnstagedChanges(t *testing.T) {
 		t.Fatal("GetDiff() returned nil")
 	}
 
-	if len(diff.Files) != 1 {
-		t.Fatalf("Expected 1 file in diff, got %d", len(diff.Files))
-	}
+	assert.Equals(t, len(diff.Files), 1)
 
 	file := diff.Files[0]
-	if file.NewPath != "test.go" {
-		t.Errorf("File path = %q, want test.go", file.NewPath)
-	}
+
+	assert.Equals(t, file.NewPath, "test.go")
 
 	if len(file.Hunks) == 0 {
 		t.Fatal("Expected at least one hunk")
@@ -73,7 +70,6 @@ func TestGitWorkflow_LastCommit(t *testing.T) {
 	// Create second commit with changes
 	must.WriteFile("test.go", "package main\n\nfunc main() {\n\tfmt.Println(\"test\")\n}\n")
 	CommitFile(t, "test.go")
-
 
 	// Get last commit diff
 	diff, err := git.GetDiff([]string{}, git.DiffToLastCommit)
@@ -111,16 +107,13 @@ func TestGitWorkflow_EmptyDiff(t *testing.T) {
 	must.WriteFile("test.go", "package main\n")
 	CommitFile(t, "test.go")
 
-
 	// Get unstaged diff (should be empty)
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
 	if err != nil {
 		t.Fatalf("GetDiff() error = %v", err)
 	}
 
-	if len(diff.Files) != 0 {
-		t.Errorf("Expected no files in diff, got %d", len(diff.Files))
-	}
+	assert.Equals(t, len(diff.Files), 0)
 }
 
 func TestGitWorkflow_NewFile(t *testing.T) {
@@ -161,7 +154,6 @@ func TestGitWorkflow_MultipleFiles(t *testing.T) {
 	must.WriteFile("file1.go", "package main\n\nimport \"fmt\"\n")
 	must.WriteFile("file2.go", "package test\n\nimport \"testing\"\n")
 
-
 	// Get unstaged diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
 	if err != nil {
@@ -193,11 +185,7 @@ func TestGitWorkflow_GetCurrentBranch(t *testing.T) {
 	must.WriteFile("test.go", "package main\n")
 	CommitFile(t, "test.go")
 
-
-	branch, err := git.GetCurrentBranch()
-	if err != nil {
-		t.Fatalf("GetCurrentBranch() error = %v", err)
-	}
+	branch := must.Must2(git.GetCurrentBranch())
 
 	// Default branch is typically "master" or "main"
 	if branch != "master" && branch != "main" {
@@ -207,7 +195,6 @@ func TestGitWorkflow_GetCurrentBranch(t *testing.T) {
 
 func TestGitWorkflow_IsGitRepo(t *testing.T) {
 	SetupGitRepo(t)
-
 
 	if !git.IsGitRepo() {
 		t.Error("IsGitRepo() should return true for git repository")
@@ -237,7 +224,6 @@ func TestGitWorkflow_PathFiltering(t *testing.T) {
 	must.WriteFile("file1.go", "package main\n\nimport \"fmt\"\n")
 	must.WriteFile("file2.go", "package test\n\nimport \"testing\"\n")
 	must.WriteFile("file3.go", "package other\n\nimport \"os\"\n")
-
 
 	// Get diff for only file1.go
 	diff, err := git.GetDiff([]string{"file1.go"}, git.DiffUnstaged)
@@ -271,8 +257,9 @@ func TestGitWorkflow_MergeBaseWithMainBranch(t *testing.T) {
 	must.WriteFile("feature.go", "package feature\n")
 	CommitFile(t, "feature.go")
 
-
 	// GetMergeBase should find the merge base with "main" branch
+	mergeBase := must.Must2(git.GetMergeBase())
+
 	mergeBase, err := git.GetMergeBase()
 	if err != nil {
 		t.Fatalf("GetMergeBase() error = %v", err)
@@ -288,10 +275,8 @@ func TestGitWorkflow_MergeBaseWithMainBranch(t *testing.T) {
 	}
 
 	// Verify the merge base is a valid commit
-	output := must.Run("git", "cat-file", "-t", mergeBase)
-	if string(output) != "commit\n" {
-		t.Errorf("Merge base %q is not a commit, got: %s", mergeBase, output)
-	}
+	output := must.Exec("git", "cat-file", "-t", mergeBase)
+	assert.Equals(t, output, "commit\n")
 }
 
 func TestGitWorkflow_MergeBaseFallbackToMaster(t *testing.T) {
@@ -312,17 +297,9 @@ func TestGitWorkflow_MergeBaseFallbackToMaster(t *testing.T) {
 	must.WriteFile("feature.go", "package feature\n")
 	CommitFile(t, "feature.go")
 
-
 	// GetMergeBase should work even though there's no "main" branch
 	// It should fallback to "master"
-	mergeBase, err := git.GetMergeBase()
-	if err != nil {
-		t.Fatalf("GetMergeBase() error = %v, should fallback to master", err)
-	}
-
-	if mergeBase == "" {
-		t.Error("GetMergeBase() returned empty string")
-	}
+	mergeBase := must.Must2(git.GetMergeBase())
 
 	// Verify it found a valid commit hash
 	if len(mergeBase) < 7 {
@@ -330,11 +307,6 @@ func TestGitWorkflow_MergeBaseFallbackToMaster(t *testing.T) {
 	}
 
 	// Verify current branch is "feature"
-	currentBranch, err := git.GetCurrentBranch()
-	if err != nil {
-		t.Fatalf("GetCurrentBranch() error = %v", err)
-	}
-	if currentBranch != "feature" {
-		t.Errorf("Expected current branch 'feature', got %q", currentBranch)
-	}
+	currentBranch := must.Must2(git.GetCurrentBranch())
+	assert.Equals(t, currentBranch, "feature")
 }

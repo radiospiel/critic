@@ -5,14 +5,10 @@ import (
 
 	ctypes "git.15b.it/eno/critic/pkg/types"
 
-	tu "git.15b.it/eno/critic/internal/testutils"
+	"git.15b.it/eno/critic/internal/assert"
 )
 
 // compareDiff compares actual and expected diffs using JSON serialization
-func compareDiff(t *testing.T, actual, expected *ctypes.Diff) {
-	t.Helper()
-	tu.CompareJSON(t, actual, expected)
-}
 
 func TestParseDiff_Empty(t *testing.T) {
 	actual, err := ParseDiff("")
@@ -24,7 +20,7 @@ func TestParseDiff_Empty(t *testing.T) {
 		Files: []*ctypes.FileDiff{},
 	}
 
-	compareDiff(t, actual, expected)
+	assert.CompareJSON(t, actual, expected)
 }
 
 func TestParseDiff_SingleFile(t *testing.T) {
@@ -66,7 +62,7 @@ func TestParseDiff_SingleFile(t *testing.T) {
 		},
 	}
 
-	compareDiff(t, actual, expected)
+	assert.CompareJSON(t, actual, expected)
 }
 
 func TestParseDiff_MultipleFiles(t *testing.T) {
@@ -125,7 +121,7 @@ diff --git a/file2.go b/file2.go
 		},
 	}
 
-	compareDiff(t, actual, expected)
+	assert.CompareJSON(t, actual, expected)
 }
 
 func TestParseDiff_MultipleHunks(t *testing.T) {
@@ -181,7 +177,7 @@ func TestParseDiff_MultipleHunks(t *testing.T) {
 		},
 	}
 
-	compareDiff(t, actual, expected)
+	assert.CompareJSON(t, actual, expected)
 }
 
 func TestParseDiff_NewFile(t *testing.T) {
@@ -223,7 +219,7 @@ new file mode 100644
 		},
 	}
 
-	compareDiff(t, actual, expected)
+	assert.CompareJSON(t, actual, expected)
 }
 
 func TestParseDiff_DeletedFile(t *testing.T) {
@@ -265,7 +261,7 @@ deleted file mode 100644
 		},
 	}
 
-	compareDiff(t, actual, expected)
+	assert.CompareJSON(t, actual, expected)
 }
 
 func TestParseDiff_RenamedFile(t *testing.T) {
@@ -303,7 +299,7 @@ rename to new.go
 		},
 	}
 
-	compareDiff(t, actual, expected)
+	assert.CompareJSON(t, actual, expected)
 }
 
 func TestParseDiff_BinaryFile(t *testing.T) {
@@ -326,7 +322,7 @@ Binary files a/image.png and b/image.png differ`
 		},
 	}
 
-	compareDiff(t, actual, expected)
+	assert.CompareJSON(t, actual, expected)
 }
 
 func TestParseDiff_LineNumbers(t *testing.T) {
@@ -371,7 +367,7 @@ func TestParseDiff_LineNumbers(t *testing.T) {
 		},
 	}
 
-	compareDiff(t, actual, expected)
+	assert.CompareJSON(t, actual, expected)
 }
 
 func TestParseDiff_ModeChange(t *testing.T) {
@@ -410,7 +406,7 @@ new mode 100755
 		},
 	}
 
-	compareDiff(t, actual, expected)
+	assert.CompareJSON(t, actual, expected)
 }
 
 func TestSplitLines(t *testing.T) {

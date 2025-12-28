@@ -3,9 +3,9 @@ package critic_integration
 import (
 	"testing"
 
+	"git.15b.it/eno/critic/internal/assert"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/must"
-	tu "git.15b.it/eno/critic/internal/testutils"
 )
 
 func TestGetFileContent_FromGit(t *testing.T) {
@@ -17,9 +17,8 @@ func TestGetFileContent_FromGit(t *testing.T) {
 	CommitFile(t, "test.go")
 
 	// Get content from HEAD
-	content, err := git.GetFileContent("test.go", "HEAD")
-	tu.AssertNoError(t, err)
-	tu.AssertEquals(t, content, testContent)
+	content := mustGetFileContent(t, "test.go", "HEAD")
+	assert.Equals(t, content, testContent)
 }
 
 func TestGetFileContent_FromWorkingDirectory(t *testing.T) {
@@ -35,14 +34,20 @@ func TestGetFileContent_FromWorkingDirectory(t *testing.T) {
 	must.WriteFile("file.txt", modifiedContent)
 
 	// Get content from working directory (empty revision)
-	content, err := git.GetFileContent("file.txt", "")
-	tu.AssertNoError(t, err)
-	tu.AssertEquals(t, content, modifiedContent)
+	content := mustGetFileContent(t, "file.txt", "")
+	assert.Equals(t, content, modifiedContent)
 
 	// Verify we can still get original from git
-	contentFromGit, err := git.GetFileContent("file.txt", "HEAD")
-	tu.AssertNoError(t, err)
-	tu.AssertEquals(t, contentFromGit, initialContent)
+	contentFromGit := mustGetFileContent(t, "file.txt", "HEAD")
+	assert.Equals(t, contentFromGit, initialContent)
+}
+
+func mustGetFileContent(t *testing.T, path string, revision string) string {
+	content, err := git.GetFileContent(path, revision)
+	if err != nil {
+		t.Fatalf("git.GetFileContent(%v, %v) error = %v", path, revision, err)
+	}
+	return content
 }
 
 func TestGetFileContent_DifferentRevisions(t *testing.T) {
@@ -64,28 +69,19 @@ func TestGetFileContent_DifferentRevisions(t *testing.T) {
 	CommitFile(t, "history.txt")
 
 	// Test HEAD (should be version 3)
-	content, err := git.GetFileContent("history.txt", "HEAD")
-	if err != nil {
-		t.Fatalf("git.GetFileContent(HEAD) error = %v", err)
-	}
+	content := mustGetFileContent(t, "history.txt", "HEAD")
 	if content != content3 {
 		t.Errorf("git.GetFileContent(HEAD) = %q, want %q", content, content3)
 	}
 
 	// Test HEAD~1 (should be version 2)
-	content, err = git.GetFileContent("history.txt", "HEAD~1")
-	if err != nil {
-		t.Fatalf("git.GetFileContent(HEAD~1) error = %v", err)
-	}
+	content = mustGetFileContent(t, "history.txt", "HEAD~1")
 	if content != content2 {
 		t.Errorf("git.GetFileContent(HEAD~1) = %q, want %q", content, content2)
 	}
 
 	// Test HEAD~2 (should be version 1)
-	content, err = git.GetFileContent("history.txt", "HEAD~2")
-	if err != nil {
-		t.Fatalf("git.GetFileContent(HEAD~2) error = %v", err)
-	}
+	content = mustGetFileContent(t, "history.txt", "HEAD~2")
 	if content != content1 {
 		t.Errorf("git.GetFileContent(HEAD~2) = %q, want %q", content, content1)
 	}
@@ -100,7 +96,7 @@ func TestGetFileContent_SpecificCommitHash(t *testing.T) {
 	CommitFile(t, "file.txt")
 
 	// Get the commit hash
-	output := must.Run("git", "rev-parse", "HEAD")
+	output := must.Exec("git", "rev-parse", "HEAD")
 	commitHash := string(output[:7]) // Use short hash
 
 	// Modify the file
@@ -108,14 +104,8 @@ func TestGetFileContent_SpecificCommitHash(t *testing.T) {
 	CommitFile(t, "file.txt")
 
 	// Get content from specific commit
-	content, err := git.GetFileContent("file.txt", commitHash)
-	if err != nil {
-		t.Fatalf("git.GetFileContent(%s) error = %v", commitHash, err)
-	}
-
-	if content != testContent {
-		t.Errorf("git.GetFileContent(%s) = %q, want %q", commitHash, content, testContent)
-	}
+	content := mustGetFileContent(t, "file.txt", commitHash)
+	assert.Equals(t, content, testContent)
 }
 
 func TestGetFileContent_NonexistentFileInGit(t *testing.T) {
@@ -127,9 +117,7 @@ func TestGetFileContent_NonexistentFileInGit(t *testing.T) {
 
 	// Try to get non-existent file from git
 	_, err := git.GetFileContent("does-not-exist.txt", "HEAD")
-	if err == nil {
-		t.Error("git.GetFileContent() should return error for non-existent file in git")
-	}
+	assert.Error(t, err, "git.GetFileContent() should return error for non-existent file in git")
 }
 
 func TestGetFileContent_NonexistentFileOnDisk(t *testing.T) {
@@ -137,9 +125,7 @@ func TestGetFileContent_NonexistentFileOnDisk(t *testing.T) {
 
 	// Try to get non-existent file from disk
 	_, err := git.GetFileContent("does-not-exist.txt", "")
-	if err == nil {
-		t.Error("git.GetFileContent() should return error for non-existent file on disk")
-	}
+	assert.Error(t, err, "git.GetFileContent() should return error for non-existent file on disk")
 }
 
 func TestGetFileContent_InvalidRevision(t *testing.T) {
@@ -151,9 +137,7 @@ func TestGetFileContent_InvalidRevision(t *testing.T) {
 
 	// Try to get file from invalid revision
 	_, err := git.GetFileContent("file.txt", "invalid-revision-xyz")
-	if err == nil {
-		t.Error("git.GetFileContent() should return error for invalid revision")
-	}
+	assert.Error(t, err, "git.GetFileContent() should return error for invalid revision")
 }
 
 func TestGetFileContent_FileInSubdirectory(t *testing.T) {
@@ -172,14 +156,8 @@ func TestGetFileContent_FileInSubdirectory(t *testing.T) {
 	must.Exec("git", "commit", "-m", "add module")
 
 	// Get content from git
-	content, err := git.GetFileContent("src/pkg/module.go", "HEAD")
-	if err != nil {
-		t.Fatalf("git.GetFileContent() error = %v", err)
-	}
-
-	if content != testContent {
-		t.Errorf("git.GetFileContent() = %q, want %q", content, testContent)
-	}
+	content := mustGetFileContent(t, "src/pkg/module.go", "HEAD")
+	assert.Equals(t, content, testContent)
 }
 
 func TestGetFileContent_BinaryFile(t *testing.T) {
@@ -194,15 +172,10 @@ func TestGetFileContent_BinaryFile(t *testing.T) {
 	must.Exec("git", "commit", "-m", "add binary")
 
 	// Get content from git (should work, even though it's binary)
-	content, err := git.GetFileContent("binary.dat", "HEAD")
-	if err != nil {
-		t.Fatalf("git.GetFileContent() error = %v", err)
-	}
+	content := mustGetFileContent(t, "binary.dat", "HEAD")
 
 	// Verify binary content is preserved
-	if string(content) != string(binaryContent) {
-		t.Errorf("git.GetFileContent() binary content mismatch")
-	}
+	assert.Equals(t, content, binaryContent)
 }
 
 func TestGetFileContent_EmptyFile(t *testing.T) {
@@ -213,11 +186,7 @@ func TestGetFileContent_EmptyFile(t *testing.T) {
 	CommitFile(t, "empty.txt")
 
 	// Get empty file content
-	content, err := git.GetFileContent("empty.txt", "HEAD")
-	if err != nil {
-		t.Fatalf("git.GetFileContent() error = %v", err)
-	}
-
+	content := mustGetFileContent(t, "empty.txt", "HEAD")
 	if content != "" {
 		t.Errorf("git.GetFileContent() = %q, want empty string", content)
 	}
