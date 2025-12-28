@@ -542,9 +542,6 @@ func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string,
 	// Combine prefix with pre-highlighted content
 	fullLine := prefix + highlightedContent
 
-	// Expand tabs to spaces for consistent rendering across all line types
-	fullLine = expandTabsInANSI(fullLine)
-
 	// Apply diff line styling with background that spans full width
 	var styled string
 	switch line.Type {
