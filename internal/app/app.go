@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"git.15b.it/eno/critic/internal/cli"
@@ -68,10 +70,13 @@ func NewModel(args *cli.Args) Model {
 func (m Model) Init() tea.Cmd {
 	logger.Info("Init: Starting application initialization")
 
+	// Check terminal color support
+	checkTerminalColors()
+
 	cmds := []tea.Cmd{
 		initBaseResolverCmd(&m),
 		loadDiffCmd(&m),
-		tea.EnterAltScreen,
+		disableTerminalLineWrap, // This now handles alternate screen + nowrap
 	}
 
 	// Start file watcher if available
@@ -98,7 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
-			return m, tea.Quit
+			return m, tea.Sequence(enableTerminalLineWrap, tea.Quit)
 
 		case "tab", "shift+tab":
 			m.layout.ToggleFocus()
@@ -158,11 +163,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ready = true
 		}
 
-		// Re-render diff view on window resize (to recalculate line wrapping)
-		if m.diffView.GetFile() != nil {
-			cmd := m.diffView.SetFile(m.diffView.GetFile())
-			cmds = append(cmds, cmd)
-		}
+		// TODO: Resize handling - no repaint works in Terminal.app but not iTerm
+		// Using fullscreen mode (\x1b[?1049h) + nowrap (\x1b[?7l) prevents flicker
+		// in Terminal.app without repainting, but iTerm still shows artifacts.
+		// Need to investigate iTerm-specific behavior or add conditional repaint.
 
 	case diffLoadedMsg:
 		logger.Info("Update: Received diffLoadedMsg")
@@ -281,13 +285,7 @@ func (m Model) renderStatusBar() string {
 	// Show current base and target
 	if len(m.bases) > 0 {
 		base := m.bases[m.currentBase]
-		parts = append(parts, fmt.Sprintf("Base: %s → %s", base, m.current))
-	}
-
-	// Show current branch
-	branch, err := git.GetCurrentBranch()
-	if err == nil {
-		parts = append(parts, fmt.Sprintf("Branch: %s", branch))
+		parts = append(parts, fmt.Sprintf("[B]ase: %s → %s", base, m.current))
 	}
 
 	// Show file count
@@ -296,13 +294,20 @@ func (m Model) renderStatusBar() string {
 	}
 
 	// Show help hint
-	parts = append(parts, "b: base • Tab: switch • ?: help • q: quit")
+	parts = append(parts, "[Tab] switch • [?] help • [q] quit")
 
 	status := strings.Join(parts, " • ")
 
-	return lipgloss.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"}).
-		Padding(0, 1).
+	// Truncate if too long (account for padding)
+	maxLen := m.width - 4 // subtract padding and some margin
+	if maxLen > 3 && len(status) > maxLen {
+		status = status[:maxLen-3] + "..."
+	}
+
+	return ui.GetStatusStyle().
+		Width(m.width).
+		MaxWidth(m.width).
+		Inline(true).
 		Render(status)
 }
 
@@ -332,7 +337,52 @@ type baseResolverInitializedMsg struct {
 
 type baseChangedMsg struct{}
 
+// checkTerminalColors verifies the terminal supports at least 256 colors
+func checkTerminalColors() {
+	// Check TERM environment variable
+	term := os.Getenv("TERM")
+	if term == "" {
+		fmt.Fprintf(os.Stderr, "Warning: TERM environment variable not set\n")
+		fmt.Fprintf(os.Stderr, "Syntax highlighting may not work correctly\n")
+		return
+	}
+
+	// Try to get color count using tput
+	cmd := exec.Command("tput", "colors")
+	output, err := cmd.Output()
+	if err != nil {
+		logger.Info("Could not determine color support: %v", err)
+		return
+	}
+
+	colors := strings.TrimSpace(string(output))
+	colorCount := 0
+	fmt.Sscanf(colors, "%d", &colorCount)
+
+	if colorCount < 256 {
+		fmt.Fprintf(os.Stderr, "Warning: Terminal supports only %d colors (256+ recommended)\n", colorCount)
+		fmt.Fprintf(os.Stderr, "TERM=%s - consider using xterm-256color\n", term)
+		fmt.Fprintf(os.Stderr, "Syntax highlighting backgrounds may not display correctly\n\n")
+	} else {
+		logger.Info("Terminal color support: %d colors", colorCount)
+	}
+}
+
 // Commands
+
+// disableTerminalLineWrap sends escape sequence to disable line wrapping
+func disableTerminalLineWrap() tea.Msg {
+	fmt.Print("\x1b[?7l")    // DECAWM - disable auto wrap mode
+	fmt.Print("\x1b[?1049h") // Use alternate screen buffer with better isolation
+	return nil
+}
+
+// enableTerminalLineWrap sends escape sequence to re-enable line wrapping
+func enableTerminalLineWrap() tea.Msg {
+	fmt.Print("\x1b[?1049l") // Exit alternate screen buffer
+	fmt.Print("\x1b[?7h")    // DECAWM - enable auto wrap mode
+	return nil
+}
 
 func initBaseResolverCmd(m *Model) tea.Cmd {
 	return func() tea.Msg {

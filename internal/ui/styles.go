@@ -26,12 +26,12 @@ var (
 
 	normalFileStyle = lipgloss.NewStyle()
 
-	// Diff line styles
+	// Diff line styles - use adaptive colors for better terminal compatibility
 	addedLineStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("#1a3a1a")) // Dark greenish background
+			Background(lipgloss.AdaptiveColor{Light: "#d4f4dd", Dark: "#1a3a1a"}) // Greenish background
 
 	deletedLineStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("#3a1a1a")) // Dark reddish background
+				Background(lipgloss.AdaptiveColor{Light: "#ffdce0", Dark: "#3a1a1a"}) // Reddish background
 
 	contextLineStyle = lipgloss.NewStyle()
 
@@ -62,6 +62,12 @@ var (
 
 	// Status bar style
 	statusStyle = lipgloss.NewStyle().
-			Foreground(colorSubtle).
+			Background(lipgloss.Color("#6B95D8")). // Darker blue background
+			Foreground(lipgloss.Color("#000000")). // Black text for contrast
 			Padding(0, 1)
 )
+
+// GetStatusStyle returns the status bar style
+func GetStatusStyle() lipgloss.Style {
+	return statusStyle
+}

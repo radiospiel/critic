@@ -11,8 +11,8 @@ import (
 	"github.com/alecthomas/chroma/v2/styles"
 )
 
-// Build a custom style without backgrounds - only foreground colors
-var customStyle = styles.Register(chroma.MustNewStyle("critic-custom", chroma.StyleEntries{
+// Base foreground colors
+var baseFg = chroma.StyleEntries{
 	chroma.Text:                "#ffffff",
 	chroma.Keyword:             "#66d9ef",
 	chroma.KeywordNamespace:    "#f92672",
@@ -24,8 +24,8 @@ var customStyle = styles.Register(chroma.MustNewStyle("critic-custom", chroma.St
 	chroma.NameVariable:        "#ffffff",
 	chroma.LiteralString:       "#e6db74",
 	chroma.LiteralNumber:       "#ae81ff",
-	chroma.Comment:             "#75715e",
-	chroma.CommentPreproc:      "#75715e",
+	chroma.Comment:             "#99aa88",
+	chroma.CommentPreproc:      "#99aa88",
 	chroma.Operator:            "#f92672",
 	chroma.Punctuation:         "#ffffff",
 	chroma.Generic:             "#ffffff",
@@ -35,56 +35,85 @@ var customStyle = styles.Register(chroma.MustNewStyle("critic-custom", chroma.St
 	chroma.GenericInserted:     "#ffffff",
 	chroma.GenericEmph:         "italic",
 	chroma.GenericStrong:       "bold",
-}))
+}
+
+// Helper to add background to all style entries
+func withBg(base chroma.StyleEntries, bg string) chroma.StyleEntries {
+	result := make(chroma.StyleEntries)
+	result[chroma.Background] = "bg:" + bg
+	for token, fg := range base {
+		result[token] = fg + " bg:" + bg
+	}
+	return result
+}
+
+// Styles with different backgrounds
+var styleAdded = styles.Register(chroma.MustNewStyle("critic-added", withBg(baseFg, "#1a3a1a")))
+var styleDeleted = styles.Register(chroma.MustNewStyle("critic-deleted", withBg(baseFg, "#3a1a1a")))
+var styleContext = styles.Register(chroma.MustNewStyle("critic-context", withBg(baseFg, "#000000")))
 
 // Highlighter provides syntax highlighting for code
 type Highlighter struct {
 	formatter chroma.Formatter
-	style     *chroma.Style
 }
 
 // NewHighlighter creates a new syntax highlighter
 func NewHighlighter() *Highlighter {
-	// Use terminal16m formatter which supports true color
-	formatter := formatters.Get("terminal16m")
+	// Use terminal256 formatter for better Terminal.app compatibility
+	// terminal16m (true color) can have issues with Terminal.app
+	formatter := formatters.Get("terminal256")
 	if formatter == nil {
-		formatter = formatters.Get("terminal256")
+		formatter = formatters.Get("terminal16m")
 	}
 
 	return &Highlighter{
 		formatter: formatter,
-		style:     customStyle,
 	}
 }
 
-// Highlight applies syntax highlighting to the given code
-func (h *Highlighter) Highlight(code, filename string) (string, error) {
-	// Get lexer based on filename
+// HighlightWithStyle highlights code with a specific chroma style
+func (h *Highlighter) HighlightWithStyle(code, filename string, style *chroma.Style) (string, error) {
 	lexer := h.getLexer(filename)
 	if lexer == nil {
-		// If no lexer found, return code as-is
 		return code, nil
 	}
 
-	// Expand tabs to spaces before highlighting
 	language := GetLanguage(filename)
 	tabWidth := TabWidth(language)
 	code = expandTabs(code, tabWidth)
 
-	// Tokenize the code
 	iterator, err := lexer.Tokenise(nil, code)
 	if err != nil {
 		return code, err
 	}
 
-	// Format with ANSI colors
 	var buf bytes.Buffer
-	err = h.formatter.Format(&buf, h.style, iterator)
+	err = h.formatter.Format(&buf, style, iterator)
 	if err != nil {
 		return code, err
 	}
 
 	return buf.String(), nil
+}
+
+// Highlight applies syntax highlighting with context style
+func (h *Highlighter) Highlight(code, filename string) (string, error) {
+	return h.HighlightWithStyle(code, filename, styleContext)
+}
+
+// GetAddedStyle returns the style for added lines
+func GetAddedStyle() *chroma.Style {
+	return styleAdded
+}
+
+// GetDeletedStyle returns the style for deleted lines
+func GetDeletedStyle() *chroma.Style {
+	return styleDeleted
+}
+
+// GetContextStyle returns the style for context lines
+func GetContextStyle() *chroma.Style {
+	return styleContext
 }
 
 // HighlightLine highlights a single line of code

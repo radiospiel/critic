@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"git.15b.it/eno/critic/internal/highlight"
 	"git.15b.it/eno/critic/internal/logger"
 	ctypes "git.15b.it/eno/critic/pkg/types"
+	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -277,6 +279,8 @@ func (m *DiffViewModel) SetSize(width, height int) {
 		m.viewport.Width = width
 		m.viewport.Height = height
 	}
+
+	// Experiment: Don't repaint on resize
 }
 
 // SetHighlightingEnabled enables or disables syntax highlighting
@@ -318,21 +322,23 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 			git.GitPathToDisplayPath(m.file.NewPath))
 	}
 
-	b.WriteString(m.renderLineWithCursor(hunkHeaderStyle.Render(header), lineNum))
+	b.WriteString(m.renderLineWithCursor(m.truncateToWidth(hunkHeaderStyle.Render(header)), lineNum))
 	lineNum++
 	b.WriteString("\n")
-	b.WriteString(m.renderLineWithCursor("", lineNum)) // Empty line
+	b.WriteString(m.renderLineWithCursor(m.truncateToWidth(""), lineNum)) // Empty line
 	lineNum++
 	b.WriteString("\n")
 
-	// Highlight entire file(s) once if enabled, then extract lines by line number
-	var oldFileHighlighted map[int]string // oldLineNum -> highlighted content
-	var newFileHighlighted map[int]string // newLineNum -> highlighted content
+	// Highlight files with appropriate background styles
+	var oldFileDeleted map[int]string  // old file with deleted background
+	var newFileAdded map[int]string    // new file with added background
+	var newFileContext map[int]string  // new file with context background
 
 	if m.highlightingEnabled {
 		hlStart := time.Now()
-		oldFileHighlighted = m.highlightFullFile(m.file, filename, true)  // old version
-		newFileHighlighted = m.highlightFullFile(m.file, filename, false) // new version
+		oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
+		newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
+		newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
 		m.highlightTime += time.Since(hlStart)
 	}
 
@@ -343,7 +349,7 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		if hunk.Header != "" {
 			hunkHeader += " " + hunk.Header
 		}
-		b.WriteString(m.renderLineWithCursor(hunkHeaderStyle.Render(hunkHeader), lineNum))
+		b.WriteString(m.renderLineWithCursor(m.truncateToWidth(hunkHeaderStyle.Render(hunkHeader)), lineNum))
 		lineNum++
 		b.WriteString("\n")
 
@@ -351,23 +357,22 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		for _, line := range hunk.Lines {
 			var highlighted string
 			if m.highlightingEnabled {
-				// Look up highlighted content by line number
+				// Use pre-highlighted content with appropriate background
 				switch line.Type {
 				case ctypes.LineAdded:
-					if hl, ok := newFileHighlighted[line.NewNum]; ok {
+					if hl, ok := newFileAdded[line.NewNum]; ok {
 						highlighted = hl
 					} else {
 						highlighted = line.Content
 					}
 				case ctypes.LineDeleted:
-					if hl, ok := oldFileHighlighted[line.OldNum]; ok {
+					if hl, ok := oldFileDeleted[line.OldNum]; ok {
 						highlighted = hl
 					} else {
 						highlighted = line.Content
 					}
 				case ctypes.LineContext:
-					// Context exists in both, prefer new
-					if hl, ok := newFileHighlighted[line.NewNum]; ok {
+					if hl, ok := newFileContext[line.NewNum]; ok {
 						highlighted = hl
 					} else {
 						highlighted = line.Content
@@ -389,7 +394,7 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 
 		// Add spacing between hunks
 		if hunkIdx < len(m.file.Hunks)-1 {
-			b.WriteString(m.renderLineWithCursor("", lineNum))
+			b.WriteString(m.renderLineWithCursor(m.truncateToWidth(""), lineNum))
 			lineNum++
 			b.WriteString("\n")
 		}
@@ -416,8 +421,8 @@ func (m *DiffViewModel) countLines() int {
 	return count
 }
 
-// highlightFullFile gets the complete file from git and returns highlighted lines by line number
-func (m *DiffViewModel) highlightFullFile(file *ctypes.FileDiff, filename string, useOldVersion bool) map[int]string {
+// highlightFullFileWithStyle highlights a file with a specific chroma style
+func (m *DiffViewModel) highlightFullFileWithStyle(file *ctypes.FileDiff, filename string, useOldVersion bool, style *chroma.Style) map[int]string {
 	result := make(map[int]string)
 
 	if file == nil {
@@ -457,8 +462,8 @@ func (m *DiffViewModel) highlightFullFile(file *ctypes.FileDiff, filename string
 		return m.highlightFromHunks(file, filename, useOldVersion)
 	}
 
-	// Highlight the complete file
-	highlighted, err := m.highlighter.Highlight(fullContent, filename)
+	// Highlight the complete file with the specified style
+	highlighted, err := m.highlighter.HighlightWithStyle(fullContent, filename, style)
 	if err != nil {
 		return result
 	}
@@ -544,18 +549,9 @@ func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string,
 	// Combine prefix with pre-highlighted content
 	fullLine := prefix + highlightedContent
 
-	// Apply diff line styling with background that spans full width
-	var styled string
-	switch line.Type {
-	case ctypes.LineAdded:
-		styled = m.applyLineBackground(fullLine, "\x1b[48;2;26;58;26m") // Dark greenish
-	case ctypes.LineDeleted:
-		styled = m.applyLineBackground(fullLine, "\x1b[48;2;58;26;26m") // Dark reddish
-	case ctypes.LineContext:
-		styled = contextLineStyle.Render(fullLine)
-	default:
-		styled = fullLine
-	}
+	// Chroma provides backgrounds but may reset between tokens
+	// We need to ensure background spans the full line
+	styled := m.ensureFullLineBackground(fullLine, line.Type)
 
 	// Apply cursor highlighting if this is the active line
 	return m.renderLineWithCursor(styled, currentLineNum)
@@ -581,20 +577,99 @@ func (m *DiffViewModel) isNavigableLine(lineNum int) bool {
 	return false
 }
 
-// applyLineBackground wraps a line with background color spanning full width
+// truncateToWidth truncates or pads a line to exactly match viewport width
+func (m *DiffViewModel) truncateToWidth(line string) string {
+	visibleWidth := lipgloss.Width(line)
+	if visibleWidth > m.width {
+		return truncateANSI(line, m.width)
+	} else if visibleWidth < m.width {
+		// Pad to full width - need to preserve the last background color for padding
+		// Extract the last background color from the line (if any)
+		lastBg := extractLastBackground(line)
+		padding := strings.Repeat(" ", m.width - visibleWidth)
+		if lastBg != "" {
+			// Apply the background color to padding spaces
+			return line + lastBg + padding + "\x1b[0m"
+		}
+		return line + padding
+	}
+	return line
+}
+
+// ensureFullLineBackground strips chroma's backgrounds and applies our own for full width
+func (m *DiffViewModel) ensureFullLineBackground(line string, lineType ctypes.LineType) string {
+	// Strip all background codes from chroma
+	cleaned := stripAllStyleCodes(line)
+
+	// Get the appropriate background color for this line type
+	var bgCode string
+	switch lineType {
+	case ctypes.LineAdded:
+		bgCode = "\x1b[48;5;22m" // Dark green in 256-color
+	case ctypes.LineDeleted:
+		bgCode = "\x1b[48;5;52m" // Dark red in 256-color
+	default:
+		bgCode = "\x1b[48;5;0m" // Black in 256-color
+	}
+
+	// Calculate width and pad if needed
+	visibleWidth := lipgloss.Width(cleaned)
+	if visibleWidth > m.width {
+		cleaned = truncateANSI(cleaned, m.width)
+		visibleWidth = m.width
+	}
+
+	padding := ""
+	if visibleWidth < m.width {
+		padding = strings.Repeat(" ", m.width - visibleWidth)
+	}
+
+	// Wrap entire line with background: bg + content + padding + reset
+	return bgCode + cleaned + padding + "\x1b[0m"
+}
+
+// extractLastBackground finds the last background color code in a string
+func extractLastBackground(s string) string {
+	// Look for background color codes: \x1b[48;... or \x1b[4X where X is 0-9
+	bgRegex := regexp.MustCompile(`\x1b\[(?:48;[0-9;]+|4[0-9])m`)
+	matches := bgRegex.FindAllString(s, -1)
+	if len(matches) > 0 {
+		return matches[len(matches)-1]
+	}
+	return ""
+}
+
+// applyLineBackgroundWithStyle applies background using lipgloss style (supports adaptive colors)
+func (m *DiffViewModel) applyLineBackgroundWithStyle(line string, style lipgloss.Style) string {
+	// Strip all style codes except foreground colors
+	cleaned := stripAllStyleCodes(line)
+
+	// Calculate visible width
+	visibleWidth := lipgloss.Width(cleaned)
+
+	// Truncate if too long, pad if too short
+	var processed string
+	if visibleWidth > m.width {
+		processed = truncateANSI(cleaned, m.width)
+	} else {
+		paddingWidth := m.width - visibleWidth
+		processed = cleaned + strings.Repeat(" ", paddingWidth)
+	}
+
+	// Use lipgloss style to render with proper background (handles adaptive colors)
+	return style.Width(m.width).Render(processed)
+}
+
+// applyLineBackground wraps a line with background color spanning full width (legacy)
 func (m *DiffViewModel) applyLineBackground(line string, bgColor string) string {
-	// Strip any background ANSI codes from syntax highlighting
+	// Strip any background ANSI codes and reset codes from syntax highlighting
 	cleaned := stripBackgroundCodes(line)
+	cleaned = stripResetCodes(cleaned)
 
 	// Note: tabs are already expanded in renderLine before this function is called
 
 	// Calculate visible width (accounting for ANSI codes and expanded tabs)
 	visibleWidth := lipgloss.Width(cleaned)
-
-	// Replace full resets with foreground-only resets (preserves background)
-	// \x1b[0m resets everything, \x1b[39m resets only foreground
-	cleaned = strings.ReplaceAll(cleaned, "\x1b[0m", "\x1b[39m")
-	cleaned = strings.ReplaceAll(cleaned, "\x1b[m", "\x1b[39m")
 
 	// Truncate if too long, pad if too short
 	var processed string
@@ -608,6 +683,7 @@ func (m *DiffViewModel) applyLineBackground(line string, bgColor string) string 
 	}
 
 	// Build final string: bg + content + full reset
+	// Now that we've stripped all resets, the background will span the entire line
 	return bgColor + processed + "\x1b[0m"
 }
 
