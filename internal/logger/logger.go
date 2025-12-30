@@ -89,16 +89,16 @@ func (l *NullLogger) Print(v ...interface{}) {}
 // Println does nothing
 func (l *NullLogger) Println(v ...interface{}) {}
 
-// Init initializes the logger
+// Init initializes the package-level logger
 func Init() error {
 	var err error
 	once.Do(func() {
-		fileLogger, e := NewFileLogger("/tmp/critic.log")
+		f, e := os.OpenFile("/tmp/critic.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if e != nil {
 			err = e
 			return
 		}
-		logger = fileLogger.logger
+		logger = log.New(f, "", log.LstdFlags|log.Lmicroseconds)
 	})
 	return err
 }
