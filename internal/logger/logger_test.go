@@ -13,35 +13,13 @@ func TestNewFileLogger(t *testing.T) {
 	logPath := filepath.Join(tmpDir, "test.log")
 
 	logger := NewFileLogger(logPath)
-	defer logger.Close()
 
 	if logger == nil {
 		t.Fatal("NewFileLogger() returned nil")
 	}
 
-	if logger.logger == nil {
-		t.Error("FileLogger.logger is nil")
-	}
-
-	if logger.file == nil {
-		t.Error("FileLogger.file is nil")
-	}
-}
-
-func TestFileLogger_Methods(t *testing.T) {
-	tmpDir := t.TempDir()
-	logPath := filepath.Join(tmpDir, "test.log")
-
-	l := NewFileLogger(logPath)
-	defer l.Close()
-
-	// Test all logging methods - they should not panic
-	l.Info("test info %s", "message")
-	l.Error("test error %s", "message")
-	l.Debug("test debug %s", "message")
-	l.Log("test log %s", "message")
-	l.Print("test print")
-	l.Println("test println")
+	// Test logging - should not panic
+	logger.Printf("test message")
 
 	// Verify log file exists and has content
 	content, err := os.ReadFile(logPath)
@@ -53,27 +31,8 @@ func TestFileLogger_Methods(t *testing.T) {
 		t.Error("Log file is empty")
 	}
 
-	contentStr := string(content)
-	if !strings.Contains(contentStr, "INFO: test info message") {
-		t.Error("Log should contain INFO message")
-	}
-	if !strings.Contains(contentStr, "ERROR: test error message") {
-		t.Error("Log should contain ERROR message")
-	}
-	if !strings.Contains(contentStr, "DEBUG: test debug message") {
-		t.Error("Log should contain DEBUG message")
-	}
-}
-
-func TestFileLogger_Close(t *testing.T) {
-	tmpDir := t.TempDir()
-	logPath := filepath.Join(tmpDir, "test.log")
-
-	l := NewFileLogger(logPath)
-
-	err := l.Close()
-	if err != nil {
-		t.Errorf("Close() error = %v", err)
+	if !strings.Contains(string(content), "test message") {
+		t.Error("Log should contain test message")
 	}
 }
 

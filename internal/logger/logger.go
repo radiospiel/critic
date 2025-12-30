@@ -13,57 +13,10 @@ var (
 	once   sync.Once
 )
 
-// FileLogger implements file-based logging
-type FileLogger struct {
-	logger *log.Logger
-	file   *os.File
-}
-
 // NewFileLogger creates a new file-based logger
-func NewFileLogger(path string) *FileLogger {
+func NewFileLogger(path string) *log.Logger {
 	f := must.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	return &FileLogger{
-		logger: log.New(f, "", log.LstdFlags|log.Lmicroseconds),
-		file:   f,
-	}
-}
-
-// Close closes the log file
-func (l *FileLogger) Close() error {
-	if l.file != nil {
-		return l.file.Close()
-	}
-	return nil
-}
-
-// Info logs an info message
-func (l *FileLogger) Info(format string, v ...interface{}) {
-	l.logger.Printf("INFO: "+format, v...)
-}
-
-// Error logs an error message
-func (l *FileLogger) Error(format string, v ...interface{}) {
-	l.logger.Printf("ERROR: "+format, v...)
-}
-
-// Debug logs a debug message
-func (l *FileLogger) Debug(format string, v ...interface{}) {
-	l.logger.Printf("DEBUG: "+format, v...)
-}
-
-// Log logs a message
-func (l *FileLogger) Log(format string, v ...interface{}) {
-	l.logger.Printf(format, v...)
-}
-
-// Print logs a message
-func (l *FileLogger) Print(v ...interface{}) {
-	l.logger.Print(v...)
-}
-
-// Println logs a message with newline
-func (l *FileLogger) Println(v ...interface{}) {
-	l.logger.Println(v...)
+	return log.New(f, "", log.LstdFlags|log.Lmicroseconds)
 }
 
 // NullLogger is a logger that discards all output
@@ -95,8 +48,7 @@ func (l *NullLogger) Println(v ...interface{}) {}
 // Init initializes the package-level logger
 func Init() {
 	once.Do(func() {
-		f := must.OpenFile("/tmp/critic.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		logger = log.New(f, "", log.LstdFlags|log.Lmicroseconds)
+		logger = NewFileLogger("/tmp/critic.log")
 	})
 }
 
