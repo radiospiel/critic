@@ -93,12 +93,12 @@ func (l *NullLogger) Println(v ...interface{}) {}
 func Init() error {
 	var err error
 	once.Do(func() {
-		f, e := os.OpenFile("/tmp/critic.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		fileLogger, e := NewFileLogger("/tmp/critic.log")
 		if e != nil {
 			err = e
 			return
 		}
-		logger = log.New(f, "", log.LstdFlags|log.Lmicroseconds)
+		logger = fileLogger.logger
 	})
 	return err
 }
