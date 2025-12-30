@@ -1,29 +1,17 @@
 package logger
 
 import (
-	"io"
 	"log"
 	"os"
 	"sync"
 )
 
-// Logger is an interface for logging operations
-type Logger interface {
-	Info(format string, v ...interface{})
-	Error(format string, v ...interface{})
-	Debug(format string, v ...interface{})
-	Log(format string, v ...interface{})
-	Print(v ...interface{})
-	Println(v ...interface{})
-}
-
 var (
-	defaultLogger Logger
-	once          sync.Once
-	mu            sync.RWMutex
+	logger *log.Logger
+	once   sync.Once
 )
 
-// FileLogger implements Logger interface with file output
+// FileLogger implements file-based logging
 type FileLogger struct {
 	logger *log.Logger
 	file   *os.File
@@ -40,14 +28,6 @@ func NewFileLogger(path string) (*FileLogger, error) {
 		logger: log.New(f, "", log.LstdFlags|log.Lmicroseconds),
 		file:   f,
 	}, nil
-}
-
-// NewFileLoggerWithWriter creates a logger with a custom writer
-func NewFileLoggerWithWriter(w io.Writer) *FileLogger {
-	return &FileLogger{
-		logger: log.New(w, "", log.LstdFlags|log.Lmicroseconds),
-		file:   nil, // No file to close
-	}
 }
 
 // Close closes the log file
@@ -88,7 +68,7 @@ func (l *FileLogger) Println(v ...interface{}) {
 	l.logger.Println(v...)
 }
 
-// NullLogger is a logger that discards all output (for testing)
+// NullLogger is a logger that discards all output
 type NullLogger struct{}
 
 // Info does nothing
@@ -109,40 +89,26 @@ func (l *NullLogger) Print(v ...interface{}) {}
 // Println does nothing
 func (l *NullLogger) Println(v ...interface{}) {}
 
-// Init initializes the default logger
+// Init initializes the logger
 func Init() error {
 	var err error
 	once.Do(func() {
-		l, e := NewFileLogger("/tmp/critic.log")
+		f, e := os.OpenFile("/tmp/critic.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if e != nil {
 			err = e
 			return
 		}
-		SetLogger(l)
+		logger = log.New(f, "", log.LstdFlags|log.Lmicroseconds)
 	})
 	return err
 }
 
-// SetLogger sets the logger instance (useful for testing)
-func SetLogger(l Logger) {
-	mu.Lock()
-	defer mu.Unlock()
-	defaultLogger = l
-}
-
-// getLogger returns the current logger instance
-func getLogger() Logger {
-	mu.RLock()
-	defer mu.RUnlock()
-	return defaultLogger
-}
-
-// Package-level convenience functions that delegate to the default logger
+// Package-level convenience functions
 
 // Log writes a log message
 func Log(format string, v ...interface{}) {
-	if l := getLogger(); l != nil {
-		l.Log(format, v...)
+	if logger != nil {
+		logger.Printf(format, v...)
 	}
 }
 
@@ -158,35 +124,35 @@ func Printf(format string, v ...interface{}) {
 
 // Error writes an error log message
 func Error(format string, v ...interface{}) {
-	if l := getLogger(); l != nil {
-		l.Error(format, v...)
+	if logger != nil {
+		logger.Printf("ERROR: "+format, v...)
 	}
 }
 
 // Info writes an info log message
 func Info(format string, v ...interface{}) {
-	if l := getLogger(); l != nil {
-		l.Info(format, v...)
+	if logger != nil {
+		logger.Printf("INFO: "+format, v...)
 	}
 }
 
 // Debug writes a debug log message
 func Debug(format string, v ...interface{}) {
-	if l := getLogger(); l != nil {
-		l.Debug(format, v...)
+	if logger != nil {
+		logger.Printf("DEBUG: "+format, v...)
 	}
 }
 
 // Println writes a log message with newline
 func Println(v ...interface{}) {
-	if l := getLogger(); l != nil {
-		l.Println(v...)
+	if logger != nil {
+		logger.Println(v...)
 	}
 }
 
 // Print writes a log message
 func Print(v ...interface{}) {
-	if l := getLogger(); l != nil {
-		l.Print(v...)
+	if logger != nil {
+		logger.Print(v...)
 	}
 }
