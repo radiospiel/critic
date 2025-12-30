@@ -41,11 +41,6 @@ func SetNullLog() {
 	logger = newNullLogger()
 }
 
-// SetStderr sets the logger to write to stderr
-func SetStderr() {
-	logger = log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds)
-}
-
 // Package-level convenience functions
 
 // Log writes a log message
