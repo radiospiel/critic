@@ -12,10 +12,7 @@ func TestNewFileLogger(t *testing.T) {
 	tmpDir := t.TempDir()
 	logPath := filepath.Join(tmpDir, "test.log")
 
-	logger, err := NewFileLogger(logPath)
-	if err != nil {
-		t.Fatalf("NewFileLogger() error = %v", err)
-	}
+	logger := NewFileLogger(logPath)
 	defer logger.Close()
 
 	if logger == nil {
@@ -31,21 +28,11 @@ func TestNewFileLogger(t *testing.T) {
 	}
 }
 
-func TestNewFileLogger_InvalidPath(t *testing.T) {
-	_, err := NewFileLogger("/nonexistent/invalid/path/test.log")
-	if err == nil {
-		t.Error("NewFileLogger() should return error for invalid path")
-	}
-}
-
 func TestFileLogger_Methods(t *testing.T) {
 	tmpDir := t.TempDir()
 	logPath := filepath.Join(tmpDir, "test.log")
 
-	l, err := NewFileLogger(logPath)
-	if err != nil {
-		t.Fatalf("NewFileLogger() error = %v", err)
-	}
+	l := NewFileLogger(logPath)
 	defer l.Close()
 
 	// Test all logging methods - they should not panic
@@ -82,12 +69,9 @@ func TestFileLogger_Close(t *testing.T) {
 	tmpDir := t.TempDir()
 	logPath := filepath.Join(tmpDir, "test.log")
 
-	l, err := NewFileLogger(logPath)
-	if err != nil {
-		t.Fatalf("NewFileLogger() error = %v", err)
-	}
+	l := NewFileLogger(logPath)
 
-	err = l.Close()
+	err := l.Close()
 	if err != nil {
 		t.Errorf("Close() error = %v", err)
 	}
@@ -110,16 +94,10 @@ func TestInit(t *testing.T) {
 	logger = nil
 	once = sync.Once{}
 
-	err := Init()
-	if err != nil {
-		t.Errorf("Init() error = %v", err)
-	}
+	Init()
 
 	// Calling Init again should not reinitialize
-	err = Init()
-	if err != nil {
-		t.Errorf("Second Init() error = %v", err)
-	}
+	Init()
 }
 
 func TestGlobalFunctions(t *testing.T) {
@@ -127,10 +105,7 @@ func TestGlobalFunctions(t *testing.T) {
 	logger = nil
 	once = sync.Once{}
 
-	err := Init()
-	if err != nil {
-		t.Fatalf("Init() error = %v", err)
-	}
+	Init()
 
 	// Test global functions - should not panic
 	Log("test %s", "log")

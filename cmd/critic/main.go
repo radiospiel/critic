@@ -13,9 +13,7 @@ import (
 
 func main() {
 	// Initialize logger
-	if err := logger.Init(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to initialize logger: %v\n", err)
-	}
+	logger.Init()
 	logger.Info("=== Critic starting ===")
 
 	// Check if we're in a git repository

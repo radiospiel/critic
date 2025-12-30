@@ -65,3 +65,12 @@ func Remove(path string) {
 		panic(fmt.Sprintf("Remove(%s) failed: %v", path, err))
 	}
 }
+
+// OpenFile opens a file with the specified flags and permissions, panicking on error.
+func OpenFile(name string, flag int, perm os.FileMode) *os.File {
+	f, err := os.OpenFile(name, flag, perm)
+	if err != nil {
+		panic(fmt.Sprintf("OpenFile(%s) failed: %v", name, err))
+	}
+	return f
+}

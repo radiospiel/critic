@@ -4,6 +4,8 @@ import (
 	"log"
 	"os"
 	"sync"
+
+	"git.15b.it/eno/critic/internal/must"
 )
 
 var (
@@ -18,16 +20,12 @@ type FileLogger struct {
 }
 
 // NewFileLogger creates a new file-based logger
-func NewFileLogger(path string) (*FileLogger, error) {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, err
-	}
-
+func NewFileLogger(path string) *FileLogger {
+	f := must.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	return &FileLogger{
 		logger: log.New(f, "", log.LstdFlags|log.Lmicroseconds),
 		file:   f,
-	}, nil
+	}
 }
 
 // Close closes the log file
@@ -71,6 +69,11 @@ func (l *FileLogger) Println(v ...interface{}) {
 // NullLogger is a logger that discards all output
 type NullLogger struct{}
 
+// NewNullLogger creates a new null logger
+func NewNullLogger() *NullLogger {
+	return &NullLogger{}
+}
+
 // Info does nothing
 func (l *NullLogger) Info(format string, v ...interface{}) {}
 
@@ -90,17 +93,11 @@ func (l *NullLogger) Print(v ...interface{}) {}
 func (l *NullLogger) Println(v ...interface{}) {}
 
 // Init initializes the package-level logger
-func Init() error {
-	var err error
+func Init() {
 	once.Do(func() {
-		f, e := os.OpenFile("/tmp/critic.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if e != nil {
-			err = e
-			return
-		}
+		f := must.OpenFile("/tmp/critic.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		logger = log.New(f, "", log.LstdFlags|log.Lmicroseconds)
 	})
-	return err
 }
 
 // Package-level convenience functions
