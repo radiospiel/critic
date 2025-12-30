@@ -57,17 +57,26 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 
 		// Compare merge base to working directory (includes committed, staged, and unstaged changes)
 		args = []string{"diff", base, "--patch", "--no-color"}
-		args = append(args, paths...)
+		if len(paths) > 0 {
+			args = append(args, "--")
+			args = append(args, paths...)
+		}
 
 	case DiffToLastCommit:
 		// Show the last commit
 		args = []string{"show", "HEAD", "--patch", "--no-color"}
-		args = append(args, paths...)
+		if len(paths) > 0 {
+			args = append(args, "--")
+			args = append(args, paths...)
+		}
 
 	case DiffUnstaged:
 		// Show only unstaged changes
 		args = []string{"diff", "--patch", "--no-color"}
-		args = append(args, paths...)
+		if len(paths) > 0 {
+			args = append(args, "--")
+			args = append(args, paths...)
+		}
 	}
 
 	cmd := exec.Command("git", args...)
@@ -111,7 +120,10 @@ func GetDiffBetween(base, target string, paths []string) (*ctypes.Diff, error) {
 		// Compare base to target commit
 		args = []string{"diff", base + ".." + target, "--patch", "--no-color"}
 	}
-	args = append(args, paths...)
+	if len(paths) > 0 {
+		args = append(args, "--")
+		args = append(args, paths...)
+	}
 
 	cmd := exec.Command("git", args...)
 	output, err := cmd.Output()
