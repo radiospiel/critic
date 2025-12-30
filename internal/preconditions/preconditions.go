@@ -1,0 +1,25 @@
+package preconditions
+
+import (
+	"fmt"
+
+	"git.15b.it/eno/critic/internal/logger"
+)
+
+// Check ensures that a condition is true.
+// If the condition is false, it panics with the formatted error message.
+//
+// Use this to validate arguments, state, or any other precondition.
+//
+// Example:
+//
+//	Check(count >= 0, "count must be non-negative: %d", count)
+//	Check(config != nil, "config must not be nil")
+//	Check(isInitialized, "must call Init() before use")
+func Check(condition bool, format string, args ...interface{}) {
+	if !condition {
+		msg := fmt.Sprintf(format, args...)
+		logger.Error("Precondition failed: %s", msg)
+		panic(msg)
+	}
+}

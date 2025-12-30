@@ -8,9 +8,21 @@ import (
 	"git.15b.it/eno/critic/internal/must"
 )
 
+// Level represents a log level
+type Level int
+
+const (
+	DEBUG Level = iota
+	INFO
+	WARN
+	ERROR
+	FATAL
+)
+
 var (
 	logger *log.Logger
 	once   sync.Once
+	level  Level = INFO // default log level
 )
 
 // ensureLogger initializes the logger if not already set
@@ -41,6 +53,11 @@ func SetNullLog() {
 	logger = newNullLogger()
 }
 
+// SetLevel sets the minimum log level
+func SetLevel(l Level) {
+	level = l
+}
+
 // Package-level convenience functions
 
 // Log writes a log message
@@ -61,18 +78,43 @@ func Printf(format string, v ...interface{}) {
 
 // Error writes an error log message
 func Error(format string, v ...interface{}) {
+	if level > ERROR {
+		return
+	}
 	ensureLogger()
 	logger.Printf("ERROR: "+format, v...)
 }
 
+// Warn writes a warning log message
+func Warn(format string, v ...interface{}) {
+	if level > WARN {
+		return
+	}
+	ensureLogger()
+	logger.Printf("WARN: "+format, v...)
+}
+
+// Fatal writes a fatal error log message and exits
+func Fatal(format string, v ...interface{}) {
+	ensureLogger()
+	logger.Printf("FATAL: "+format, v...)
+	os.Exit(1)
+}
+
 // Info writes an info log message
 func Info(format string, v ...interface{}) {
+	if level > INFO {
+		return
+	}
 	ensureLogger()
 	logger.Printf("INFO: "+format, v...)
 }
 
 // Debug writes a debug log message
 func Debug(format string, v ...interface{}) {
+	if level > DEBUG {
+		return
+	}
 	ensureLogger()
 	logger.Printf("DEBUG: "+format, v...)
 }
