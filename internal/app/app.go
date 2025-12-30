@@ -163,10 +163,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ready = true
 		}
 
-		// TODO: Resize handling - no repaint works in Terminal.app but not iTerm
-		// Using fullscreen mode (\x1b[?1049h) + nowrap (\x1b[?7l) prevents flicker
-		// in Terminal.app without repainting, but iTerm still shows artifacts.
-		// Need to investigate iTerm-specific behavior or add conditional repaint.
+		// Terminal.app handles resize cleanly with fullscreen+nowrap modes,
+		// but iTerm2 and others may need explicit repaint to avoid artifacts
+		return m, tea.ClearScreen
 
 	case diffLoadedMsg:
 		logger.Info("Update: Received diffLoadedMsg")
