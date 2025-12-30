@@ -33,6 +33,7 @@ type Model struct {
 	height       int
 	ready        bool
 	reloading    bool
+	showHelp     bool            // Whether to show help screen
 }
 
 // NewModel creates a new application model
@@ -130,7 +131,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 
 		case "?":
-			// TODO: Show help screen
+			// Toggle help screen
+			m.showHelp = !m.showHelp
 			return m, nil
 
 		default:
@@ -275,7 +277,14 @@ func (m Model) View() string {
 	statusBar := m.renderStatusBar()
 
 	// Combine main view and status bar
-	return lipgloss.JoinVertical(lipgloss.Left, mainView, statusBar)
+	view := lipgloss.JoinVertical(lipgloss.Left, mainView, statusBar)
+
+	// Overlay help screen if showing
+	if m.showHelp {
+		return m.renderHelpOverlay(view)
+	}
+
+	return view
 }
 
 // renderStatusBar renders the bottom status bar
@@ -485,4 +494,70 @@ func waitForFileChanges(watcher *git.Watcher) tea.Cmd {
 		logger.Info("waitForFileChanges: File change received for %s, returning fileChangedMsg", change.Path)
 		return fileChangedMsg{path: change.Path}
 	}
+}
+
+// renderHelpOverlay renders the help screen overlay
+func (m Model) renderHelpOverlay(underlay string) string {
+	helpContent := `
+  CRITIC - Git Diff Viewer
+
+  NAVIGATION
+    Tab           Switch focus between file list and diff view
+    ↑/↓           Navigate up/down
+    PgUp/PgDn     Page up/down in diff view
+    Space         Page down in diff view
+    Shift+Space   Page up in diff view
+    Home/End      Jump to start/end
+    j/k           Vim-style navigation (down/up)
+
+  FILE LIST
+    Enter         Select and view file
+    g             Jump to top
+    G             Jump to bottom
+
+  DIFF VIEW
+    [/]           Previous/next hunk
+    n/p           Next/previous file
+
+  BASE SWITCHING
+    b/B           Switch to next/previous base
+
+  OTHER
+    r             Reload diff
+    ?             Toggle this help screen
+    q             Quit
+
+  Press ? to close this help
+`
+
+	// Create a centered box with the help content
+	helpStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("63")).
+		Padding(1, 2).
+		Width(60).
+		Background(lipgloss.Color("235")).
+		Foreground(lipgloss.Color("252"))
+
+	helpBox := helpStyle.Render(helpContent)
+
+	// Center the help box on the screen
+	verticalPadding := (m.height - lipgloss.Height(helpBox)) / 2
+	horizontalPadding := (m.width - lipgloss.Width(helpBox)) / 2
+
+	if verticalPadding < 0 {
+		verticalPadding = 0
+	}
+	if horizontalPadding < 0 {
+		horizontalPadding = 0
+	}
+
+	// Position the help box
+	positioned := lipgloss.NewStyle().
+		MarginTop(verticalPadding).
+		MarginLeft(horizontalPadding).
+		Render(helpBox)
+
+	// Overlay on the main view
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, positioned)
 }
