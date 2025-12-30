@@ -12,8 +12,6 @@ import (
 )
 
 func main() {
-	// Initialize logger
-	logger.Init()
 	logger.Info("=== Critic starting ===")
 
 	// Check if we're in a git repository

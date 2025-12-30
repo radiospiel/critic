@@ -13,6 +13,13 @@ var (
 	once   sync.Once
 )
 
+// ensureLogger initializes the logger if not already set
+func ensureLogger() {
+	once.Do(func() {
+		logger = log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds)
+	})
+}
+
 // newFileLogger creates a new file-based logger
 func newFileLogger(path string) *log.Logger {
 	f := must.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -22,13 +29,6 @@ func newFileLogger(path string) *log.Logger {
 // newNullLogger creates a logger that discards all output
 func newNullLogger() *log.Logger {
 	return newFileLogger("/dev/null")
-}
-
-// Init initializes the package-level logger to stderr
-func Init() {
-	once.Do(func() {
-		logger = log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds)
-	})
 }
 
 // SetLogFile sets the logger to write to a file
@@ -50,9 +50,8 @@ func SetStderr() {
 
 // Log writes a log message
 func Log(format string, v ...interface{}) {
-	if logger != nil {
-		logger.Printf(format, v...)
-	}
+	ensureLogger()
+	logger.Printf(format, v...)
 }
 
 // Logf is an alias for Log
@@ -67,35 +66,30 @@ func Printf(format string, v ...interface{}) {
 
 // Error writes an error log message
 func Error(format string, v ...interface{}) {
-	if logger != nil {
-		logger.Printf("ERROR: "+format, v...)
-	}
+	ensureLogger()
+	logger.Printf("ERROR: "+format, v...)
 }
 
 // Info writes an info log message
 func Info(format string, v ...interface{}) {
-	if logger != nil {
-		logger.Printf("INFO: "+format, v...)
-	}
+	ensureLogger()
+	logger.Printf("INFO: "+format, v...)
 }
 
 // Debug writes a debug log message
 func Debug(format string, v ...interface{}) {
-	if logger != nil {
-		logger.Printf("DEBUG: "+format, v...)
-	}
+	ensureLogger()
+	logger.Printf("DEBUG: "+format, v...)
 }
 
 // Println writes a log message with newline
 func Println(v ...interface{}) {
-	if logger != nil {
-		logger.Println(v...)
-	}
+	ensureLogger()
+	logger.Println(v...)
 }
 
 // Print writes a log message
 func Print(v ...interface{}) {
-	if logger != nil {
-		logger.Print(v...)
-	}
+	ensureLogger()
+	logger.Print(v...)
 }
