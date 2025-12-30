@@ -501,3 +501,41 @@ func TestGetDiff_WithContextLines(t *testing.T) {
 		t.Error("Expected added line in diff")
 	}
 }
+
+// TestGetDiff_AmbiguousFilename tests that files with names that look like git refs
+// (like "HEAD", "master", etc.) are handled correctly using the "--" separator
+func TestGetDiff_AmbiguousFilename(t *testing.T) {
+	SetupGitRepo(t)
+
+	// Create and commit a file with an ambiguous name
+	must.WriteFile("HEAD", "original content\n")
+	CommitFile(t, "HEAD")
+
+	// Modify the file (unstaged)
+	must.WriteFile("HEAD", "modified content\n")
+
+	// Get diff for the specific file
+	// This should work correctly with "--" separator
+	diff, err := git.GetDiff([]string{"HEAD"}, git.DiffUnstaged)
+	if err != nil {
+		t.Fatalf("GetDiff failed: %v", err)
+	}
+
+	// Verify we got a diff for the file
+	if len(diff.Files) == 0 {
+		t.Fatal("Expected diff for file 'HEAD', got empty diff")
+	}
+
+	// Verify the diff is for the file "HEAD", not a git reference
+	foundFile := false
+	for _, file := range diff.Files {
+		if file.NewPath == "HEAD" || file.OldPath == "HEAD" {
+			foundFile = true
+			break
+		}
+	}
+
+	if !foundFile {
+		t.Error("Expected diff to contain file 'HEAD'")
+	}
+}
