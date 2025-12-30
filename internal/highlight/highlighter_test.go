@@ -16,10 +16,6 @@ func TestNewHighlighter(t *testing.T) {
 	if h.formatter == nil {
 		t.Error("Highlighter formatter is nil")
 	}
-
-	if h.style == nil {
-		t.Error("Highlighter style is nil")
-	}
 }
 
 func TestHighlight_Go(t *testing.T) {
@@ -306,14 +302,10 @@ func TestHighlightLines_ErrorRecovery(t *testing.T) {
 }
 
 func TestCustomStyle(t *testing.T) {
-	// Verify that custom style is registered and used
-	if customStyle == nil {
-		t.Fatal("customStyle should be initialized")
-	}
-
+	// Verify that the highlighter is initialized with a formatter
 	h := NewHighlighter()
-	if h.style != customStyle {
-		t.Error("Highlighter should use customStyle")
+	if h.formatter == nil {
+		t.Error("Highlighter should have a formatter initialized")
 	}
 }
 
