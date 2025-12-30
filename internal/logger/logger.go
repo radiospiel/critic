@@ -19,31 +19,10 @@ func NewFileLogger(path string) *log.Logger {
 	return log.New(f, "", log.LstdFlags|log.Lmicroseconds)
 }
 
-// NullLogger is a logger that discards all output
-type NullLogger struct{}
-
-// NewNullLogger creates a new null logger
-func NewNullLogger() *NullLogger {
-	return &NullLogger{}
+// NewNullLogger creates a logger that discards all output
+func NewNullLogger() *log.Logger {
+	return NewFileLogger("/dev/null")
 }
-
-// Info does nothing
-func (l *NullLogger) Info(format string, v ...interface{}) {}
-
-// Error does nothing
-func (l *NullLogger) Error(format string, v ...interface{}) {}
-
-// Debug does nothing
-func (l *NullLogger) Debug(format string, v ...interface{}) {}
-
-// Log does nothing
-func (l *NullLogger) Log(format string, v ...interface{}) {}
-
-// Print does nothing
-func (l *NullLogger) Print(v ...interface{}) {}
-
-// Println does nothing
-func (l *NullLogger) Println(v ...interface{}) {}
 
 // Init initializes the package-level logger
 func Init() {
