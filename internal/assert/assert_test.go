@@ -2,6 +2,8 @@ package assert
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -58,4 +60,42 @@ func TestAssertStringContains(t *testing.T) {
 func TestAssertLen(t *testing.T) {
 	Length(t, "hello", 5)
 	Length(t, []int{1, 2, 3}, 3)
+}
+
+func TestAssertEqualsWithCustomMessage(t *testing.T) {
+	// Test custom error messages with format string
+	// This test will fail initially to demonstrate the feature works
+	// when implemented, it should show both default and custom messages
+
+	// Create a mock testing.T to capture the error message
+	mockT := &mockTestingT{}
+
+	// This should fail and include the custom message
+	Equals(mockT, 42, 100, "Expected value to be %d but got %d", 100, 42)
+
+	if !mockT.failed {
+		t.Error("Expected Equals to fail with mismatched values")
+	}
+
+	if !strings.Contains(mockT.errorMsg, "Expected value to be 100 but got 42") {
+		t.Errorf("Expected custom message in error, got: %s", mockT.errorMsg)
+	}
+}
+
+// mockTestingT is a minimal mock of testing.T for testing assert functions
+type mockTestingT struct {
+	failed   bool
+	errorMsg string
+}
+
+func (m *mockTestingT) Helper() {}
+
+func (m *mockTestingT) Errorf(format string, args ...interface{}) {
+	m.failed = true
+	m.errorMsg = fmt.Sprintf(format, args...)
+}
+
+func (m *mockTestingT) Fatalf(format string, args ...interface{}) {
+	m.failed = true
+	m.errorMsg = fmt.Sprintf(format, args...)
 }

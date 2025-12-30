@@ -8,14 +8,25 @@ import (
 	"testing"
 )
 
+// testingT is an interface wrapper around *testing.T
+type testingT interface {
+	Helper()
+	Errorf(format string, args ...interface{})
+}
+
 // Equals checks if actual equals expected and fails the test if not.
 // Works with any comparable type (strings, ints, bools, etc.)
-func Equals(t *testing.T, actual any, expected any) {
+// Optional msgAndArgs can provide a custom error message: first arg is format string, rest are values.
+func Equals(t testingT, actual any, expected any, msgAndArgs ...interface{}) {
 	t.Helper()
 
 	if !isEqual(actual, expected) {
-		t.Errorf("Equals failed:\n  Expected: %v\n  Actual:   %v", expected, actual)
-
+		msg := fmt.Sprintf("Equals failed:\n  Expected: %v\n  Actual:   %v", expected, actual)
+		if len(msgAndArgs) > 0 {
+			customMsg := formatMessage(msgAndArgs...)
+			msg = customMsg + "\n" + msg
+		}
+		t.Errorf("%s", msg)
 	}
 }
 
@@ -33,6 +44,25 @@ func isEqual(actual any, expected any) bool {
 	}
 
 	return reflect.DeepEqual(actual, expected)
+}
+
+// formatMessage formats a custom error message from variadic arguments.
+// First argument should be a format string, remaining arguments are values for formatting.
+func formatMessage(msgAndArgs ...interface{}) string {
+	if len(msgAndArgs) == 0 {
+		return ""
+	}
+	if len(msgAndArgs) == 1 {
+		msg := msgAndArgs[0]
+		if msgStr, ok := msg.(string); ok {
+			return msgStr
+		}
+		return fmt.Sprintf("%+v", msg)
+	}
+	if format, ok := msgAndArgs[0].(string); ok {
+		return fmt.Sprintf(format, msgAndArgs[1:]...)
+	}
+	return fmt.Sprintf("%+v", msgAndArgs[0])
 }
 
 func compareAsBytes(content any) bool {
