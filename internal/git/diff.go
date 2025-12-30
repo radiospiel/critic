@@ -73,10 +73,6 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 	cmd := exec.Command("git", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		// If there's an error but output is empty, it might just be an empty diff
-		if len(output) == 0 {
-			return &ctypes.Diff{Files: []*ctypes.FileDiff{}}, nil
-		}
 		return nil, fmt.Errorf("failed to run git diff: %w", err)
 	}
 
@@ -116,10 +112,6 @@ func GetDiffBetween(base, target string, paths []string) (*ctypes.Diff, error) {
 	cmd := exec.Command("git", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		// If there's an error but output is empty, it might just be an empty diff
-		if len(output) == 0 {
-			return &ctypes.Diff{Files: []*ctypes.FileDiff{}}, nil
-		}
 		return nil, fmt.Errorf("failed to run git diff: %w", err)
 	}
 
