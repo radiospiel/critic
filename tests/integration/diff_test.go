@@ -501,3 +501,26 @@ func TestGetDiff_WithContextLines(t *testing.T) {
 		t.Error("Expected added line in diff")
 	}
 }
+
+// TestGitDiff_ErrorWithEmptyOutput tests whether git diff can return
+// an error with empty output. This helps verify if the error handling
+// at diff.go:75-79 is actually needed.
+func TestGitDiff_ErrorWithEmptyOutput(t *testing.T) {
+	SetupGitRepo(t)
+
+	// Try various scenarios that might produce error with empty output
+
+	// Scenario 1: Non-existent file path (should return empty diff, not error)
+	diff, err := git.GetDiff([]string{"nonexistent.txt"}, git.DiffUnstaged)
+	t.Logf("Scenario 1 - Nonexistent file: err=%v, files=%d", err, len(diff.Files))
+
+	// Scenario 2: Empty diff (no changes)
+	must.WriteFile("test.txt", "content\n")
+	CommitFile(t, "test.txt")
+	diff, err = git.GetDiff([]string{}, git.DiffUnstaged)
+	t.Logf("Scenario 2 - No changes: err=%v, files=%d", err, len(diff.Files))
+
+	// Conclusion: In normal operation, git diff doesn't return an error with empty output.
+	// The error handling at diff.go:75-79 appears to be defensive programming but may not
+	// be reachable in practice.
+}
