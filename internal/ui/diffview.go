@@ -439,10 +439,10 @@ func (m *DiffViewModel) highlightFullFileWithStyle(file *ctypes.FileDiff, filena
 			// New file has no old version
 			return result
 		}
-		// Use HEAD as the old version (works for diffs to working directory)
-		// For "last commit" mode, HEAD is the new version and HEAD~1 would be old,
-		// but we'll use HEAD as a reasonable default
-		fullContent, err = git.GetFileContent(file.OldPath, "HEAD")
+		// For old version, always use hunk-based reconstruction since we don't know
+		// which commit is the "old" version (it depends on diff mode: HEAD for unstaged,
+		// HEAD~1 for last commit, merge-base for merge-base mode)
+		return m.highlightFromHunks(file, filename, useOldVersion)
 	} else {
 		// Get new version (current working directory or HEAD depending on mode)
 		if file.IsDeleted {
@@ -476,6 +476,12 @@ func (m *DiffViewModel) highlightFullFileWithStyle(file *ctypes.FileDiff, filena
 	}
 
 	return result
+}
+
+// HighlightFullFileWithStyle highlights a full file with syntax highlighting.
+// Exported for testing purposes.
+func (m *DiffViewModel) HighlightFullFileWithStyle(file *ctypes.FileDiff, filename string, useOldVersion bool, style *chroma.Style) map[int]string {
+	return m.highlightFullFileWithStyle(file, filename, useOldVersion, style)
 }
 
 // highlightFromHunks is a fallback that reconstructs partial file from hunks

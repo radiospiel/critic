@@ -16,7 +16,9 @@
       "Bash(timeout 1 ./critic:*)",
       "Bash(git checkout:*)",
       "Bash(git branch:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(echo:*)",
+      "Bash(git stash:*)"
     ]
   }
 }

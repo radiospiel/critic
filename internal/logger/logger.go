@@ -3,6 +3,7 @@ package logger
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"git.15b.it/eno/critic/internal/must"
@@ -28,7 +29,13 @@ var (
 // ensureLogger initializes the logger if not already set
 func ensureLogger() {
 	once.Do(func() {
-		logger = log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds)
+		// Use ${TMPDIR:-/tmp}/critic.log as the log file
+		tmpDir := os.Getenv("TMPDIR")
+		if tmpDir == "" {
+			tmpDir = "/tmp"
+		}
+		logPath := filepath.Join(tmpDir, "critic.log")
+		logger = newFileLogger(logPath)
 	})
 }
 

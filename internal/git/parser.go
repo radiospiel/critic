@@ -29,9 +29,9 @@ var (
 )
 
 var (
-	gitRootCache     string
-	cwdCache         string
-	pathCacheOnce    sync.Once
+	gitRootCache  string
+	cwdCache      string
+	pathCacheOnce sync.Once
 )
 
 // initPathCache initializes the cached git root and cwd (never changes during runtime)
@@ -263,6 +263,7 @@ func ParseDiff(diffText string) (*ctypes.Diff, error) {
 
 // splitLines splits text into lines, handling both \n and \r\n
 func splitLines(text string) []string {
+	// TODO: rebuild using regexps
 	// Replace \r\n with \n, then split on \n
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	lines := strings.Split(text, "\n")

@@ -1,25 +1,27 @@
-I see this diff on internal/git/parser_test.go:
+Bug: Deleted lines showing wrong content in "Last Commit" mode
 
-M internal/git/diff.go              │  11 - func TestParseDiff_Empty(t *testing.T) {
-M internal/git/mergebase.go         │  12 -     actual, err := ParseDiff("")
-M internal/git/parser.go            │  11   func TestParseDiff_Empty(t *testing.T) {
-M internal/git/parser_test.go       │  12       actual, err := ParseDiff("")
-+ internal/git/path_test.go         │  13       if err != nil {
-M internal/git/watcher.go           │
+When viewing diffs in "Last Commit" mode, deleted lines were displaying content from the
+new version of the file instead of the old version. For example, when a comment was deleted,
+the diff would show the function declaration below it as the deleted content.
 
-but this is wrong.
+Example: Deleting lines 11-12 (comment + blank) should show:
+  11 - // compareDiff compares actual and expected diffs using JSON serialization
+  12 -
+  11   func TestParseDiff_Empty(t *testing.T) {
+  12       actual, err := ParseDiff("")
 
-Correct is this:
+But instead showed:
+  11 - func TestParseDiff_Empty(t *testing.T) {
+  12 -     actual, err := ParseDiff("")
+  11   func TestParseDiff_Empty(t *testing.T) {
+  12       actual, err := ParseDiff("")
 
-diff --git a/internal/git/parser_test.go b/internal/git/parser_test.go
-index db5c608..8c84ef5 100644
---- a/internal/git/parser_test.go
-+++ b/internal/git/parser_test.go
-@@ -8,8 +8,6 @@ import (
-        "git.15b.it/eno/critic/internal/assert"
- )
+----------------------------------------------------------------------------------------------------
 
--// compareDiff compares actual and expected diffs using JSON serialization
--
- func TestParseDiff_Empty(t *testing.T) {
-        actual, err := ParseDiff("")
+Root cause: internal/ui/diffview.go:445 was using HEAD to get old file content for syntax
+highlighting. HEAD is only the old version for unstaged diffs. In "Last Commit" mode, HEAD
+is the NEW version (HEAD~1 is old), causing deleted lines to show new file content.
+
+Fix: Always use hunk-based reconstruction for old version syntax highlighting, which correctly
+rebuilds the old file from diff hunks regardless of diff mode (unstaged, last commit, or
+merge-base).
