@@ -13,22 +13,37 @@ var (
 	once   sync.Once
 )
 
-// NewFileLogger creates a new file-based logger
-func NewFileLogger(path string) *log.Logger {
+// newFileLogger creates a new file-based logger
+func newFileLogger(path string) *log.Logger {
 	f := must.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	return log.New(f, "", log.LstdFlags|log.Lmicroseconds)
 }
 
-// NewNullLogger creates a logger that discards all output
-func NewNullLogger() *log.Logger {
-	return NewFileLogger("/dev/null")
+// newNullLogger creates a logger that discards all output
+func newNullLogger() *log.Logger {
+	return newFileLogger("/dev/null")
 }
 
-// Init initializes the package-level logger
+// Init initializes the package-level logger to stderr
 func Init() {
 	once.Do(func() {
-		logger = NewFileLogger("/tmp/critic.log")
+		logger = log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds)
 	})
+}
+
+// SetLogFile sets the logger to write to a file
+func SetLogFile(path string) {
+	logger = newFileLogger(path)
+}
+
+// SetNullLog sets the logger to discard all output
+func SetNullLog() {
+	logger = newNullLogger()
+}
+
+// SetStderr sets the logger to write to stderr
+func SetStderr() {
+	logger = log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds)
 }
 
 // Package-level convenience functions
