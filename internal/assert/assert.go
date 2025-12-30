@@ -148,15 +148,20 @@ func isNil(v interface{}) bool {
 // details are optional and can provide additional details about the failed assertion, using a format string and values.
 func Error(t testingT, err error, expectedError string, details ...interface{}) {
 	t.Helper()
-	if err == nil {
-		msg := "assert.Error(...) failed:\n  Expected an error but got nil"
-		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
-	} else if !strings.Contains(err.Error(), expectedError) {
-		msg := fmt.Sprintf("assert.Error(...) failed:\n  Expected error to contain: %q\n  Got:                       %v", expectedError, err)
-		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
+
+	if err != nil && strings.Contains(err.Error(), expectedError) {
+		return
 	}
+
+	msg := ""
+	if err == nil {
+		msg = "assert.Error(...) failed:\n  Expected an error but got nil"
+	} else {
+		msg = fmt.Sprintf("assert.Error(...) failed:\n  Expected error to contain: %q\n  Got:                       %v", expectedError, err)
+	}
+
+	msg = messageWithDetails(msg, details...)
+	t.Error(msg)
 }
 
 // NoError checks if err is nil and fails if it's not.
