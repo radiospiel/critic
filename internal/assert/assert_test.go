@@ -7,81 +7,6 @@ import (
 	"testing"
 )
 
-func TestAssertEquals(t *testing.T) {
-	// This should pass
-	Equals(t, 42, 42)
-	Equals(t, "hello", "hello")
-	Equals(t, true, true)
-}
-
-func TestAssertNotEquals(t *testing.T) {
-	// This should pass
-	NotEquals(t, 42, 43)
-	NotEquals(t, "hello", "world")
-	NotEquals(t, true, false)
-}
-
-func TestAssertTrue(t *testing.T) {
-	True(t, true, "Should be true")
-	True(t, 1 == 1, "1 should equal 1")
-}
-
-func TestAssertFalse(t *testing.T) {
-	False(t, false, "Should be false")
-	False(t, 1 == 2, "1 should not equal 2")
-}
-
-func TestAssertNil(t *testing.T) {
-	var nilPtr *int
-	Nil(t, nil, "nil should be nil")
-	Nil(t, nilPtr, "nil pointer should be nil")
-}
-
-func TestAssertNotNil(t *testing.T) {
-	value := 42
-	NotNil(t, &value, "pointer should not be nil")
-	NotNil(t, "string", "string should not be nil")
-}
-
-func TestAssertError(t *testing.T) {
-	err := errors.New("test error")
-	Error(t, err, "Should have an error")
-}
-
-func TestAssertNoError(t *testing.T) {
-	NoError(t, nil)
-}
-
-func TestAssertStringContains(t *testing.T) {
-	Contains(t, "hello world", "world")
-	Contains(t, "package main", "main")
-}
-
-func TestAssertLen(t *testing.T) {
-	Length(t, "hello", 5)
-	Length(t, []int{1, 2, 3}, 3)
-}
-
-func TestAssertEqualsWithCustomMessage(t *testing.T) {
-	// Test custom error messages with format string
-	// This test will fail initially to demonstrate the feature works
-	// when implemented, it should show both default and custom messages
-
-	// Create a mock testing.T to capture the error message
-	mockT := &mockTestingT{}
-
-	// This should fail and include the custom message
-	Equals(mockT, 42, 100, "Expected value to be %d but got %d", 100, 42)
-
-	if !mockT.failed {
-		t.Error("Expected Equals to fail with mismatched values")
-	}
-
-	if !strings.Contains(mockT.errorMsg, "Expected value to be 100 but got 42") {
-		t.Errorf("Expected custom message in error, got: %s", mockT.errorMsg)
-	}
-}
-
 // mockTestingT is a minimal mock of testing.T for testing assert functions
 type mockTestingT struct {
 	failed   bool
@@ -90,12 +15,168 @@ type mockTestingT struct {
 
 func (m *mockTestingT) Helper() {}
 
-func (m *mockTestingT) Errorf(format string, args ...interface{}) {
+func (m *mockTestingT) Error(args ...interface{}) {
 	m.failed = true
-	m.errorMsg = fmt.Sprintf(format, args...)
+	m.errorMsg = fmt.Sprint(args...)
 }
 
-func (m *mockTestingT) Fatalf(format string, args ...interface{}) {
-	m.failed = true
-	m.errorMsg = fmt.Sprintf(format, args...)
+func (m *mockTestingT) expectMockSuccessful(t *testing.T) {
+	t.Helper()
+	if m.failed {
+		t.Errorf("Expected mock to succeed, but it failed with: %s", m.errorMsg)
+	}
+}
+
+func (m *mockTestingT) expectMockFailure(t *testing.T, expectedSubstring string) {
+	t.Helper()
+	if !m.failed {
+		t.Error("Expected mock to fail, but it succeeded")
+	}
+	if expectedSubstring != "" && !strings.Contains(m.errorMsg, expectedSubstring) {
+		t.Errorf("Expected error message to contain %q, got: %s", expectedSubstring, m.errorMsg)
+	}
+}
+
+func (m *mockTestingT) resetMock() {
+	m.failed = false
+	m.errorMsg = ""
+}
+
+func TestAssertEquals(t *testing.T) {
+	m := &mockTestingT{}
+
+	// These should pass
+	Equals(m, 42, 42)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	Equals(m, "hello", "hello")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	Equals(m, true, true)
+	m.expectMockSuccessful(t)
+}
+
+func TestAssertNotEquals(t *testing.T) {
+	m := &mockTestingT{}
+
+	// These should pass
+	NotEquals(m, 42, 43)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	NotEquals(m, "hello", "world")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	NotEquals(m, true, false)
+	m.expectMockSuccessful(t)
+}
+
+func TestAssertTrue(t *testing.T) {
+	m := &mockTestingT{}
+
+	True(m, true, "Should be true")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	True(m, 1 == 1, "1 should equal 1")
+	m.expectMockSuccessful(t)
+}
+
+func TestAssertFalse(t *testing.T) {
+	m := &mockTestingT{}
+
+	False(m, false, "Should be false")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	False(m, 1 == 2, "1 should not equal 2")
+	m.expectMockSuccessful(t)
+}
+
+func TestAssertNil(t *testing.T) {
+	m := &mockTestingT{}
+	var nilPtr *int
+
+	Nil(m, nil, "nil should be nil")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	Nil(m, nilPtr, "nil pointer should be nil")
+	m.expectMockSuccessful(t)
+}
+
+func TestAssertNotNil(t *testing.T) {
+	m := &mockTestingT{}
+	value := 42
+
+	NotNil(m, &value, "pointer should not be nil")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	NotNil(m, "string", "string should not be nil")
+	m.expectMockSuccessful(t)
+}
+
+func TestAssertError(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Should pass - error contains expected string
+	err := errors.New("test error")
+	Error(m, err, "test error")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should pass - error contains substring
+	Error(m, err, "test")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should fail - error is nil
+	Error(m, nil, "test error")
+	m.expectMockFailure(t, "Expected an error but got nil")
+	m.resetMock()
+
+	// Should fail - error doesn't contain expected string
+	Error(m, err, "different error")
+	m.expectMockFailure(t, "Expected error to contain")
+}
+
+func TestAssertNoError(t *testing.T) {
+	m := &mockTestingT{}
+
+	NoError(m, nil)
+	m.expectMockSuccessful(t)
+}
+
+func TestAssertStringContains(t *testing.T) {
+	m := &mockTestingT{}
+
+	Contains(m, "hello world", "world")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	Contains(m, "package main", "main")
+	m.expectMockSuccessful(t)
+}
+
+func TestAssertLen(t *testing.T) {
+	m := &mockTestingT{}
+
+	Length(m, "hello", 5)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	Length(m, []int{1, 2, 3}, 3)
+	m.expectMockSuccessful(t)
+}
+
+func TestAssertEqualsWithCustomMessage(t *testing.T) {
+	m := &mockTestingT{}
+
+	// This should fail and include the custom message
+	Equals(m, 42, 100, "Expected value to be %d but got %d", 100, 42)
+	m.expectMockFailure(t, "Expected value to be 100 but got 42")
 }

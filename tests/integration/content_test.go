@@ -117,7 +117,7 @@ func TestGetFileContent_NonexistentFileInGit(t *testing.T) {
 
 	// Try to get non-existent file from git
 	_, err := git.GetFileContent("does-not-exist.txt", "HEAD")
-	assert.Error(t, err, "git.GetFileContent() should return error for non-existent file in git")
+	assert.Error(t, err, "exit status", "git.GetFileContent() should return error for non-existent file in git")
 }
 
 func TestGetFileContent_NonexistentFileOnDisk(t *testing.T) {
@@ -125,7 +125,7 @@ func TestGetFileContent_NonexistentFileOnDisk(t *testing.T) {
 
 	// Try to get non-existent file from disk
 	_, err := git.GetFileContent("does-not-exist.txt", "")
-	assert.Error(t, err, "git.GetFileContent() should return error for non-existent file on disk")
+	assert.Error(t, err, "no such file or directory", "git.GetFileContent() should return error for non-existent file on disk")
 }
 
 func TestGetFileContent_InvalidRevision(t *testing.T) {
@@ -137,7 +137,7 @@ func TestGetFileContent_InvalidRevision(t *testing.T) {
 
 	// Try to get file from invalid revision
 	_, err := git.GetFileContent("file.txt", "invalid-revision-xyz")
-	assert.Error(t, err, "git.GetFileContent() should return error for invalid revision")
+	assert.Error(t, err, "exit status", "git.GetFileContent() should return error for invalid revision")
 }
 
 func TestGetFileContent_FileInSubdirectory(t *testing.T) {

@@ -5,36 +5,41 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"testing"
+
+	"git.15b.it/eno/critic/internal/preconditions"
 )
 
-// testingT is an interface wrapper around *testing.T
+// testingT is an interface that abstracts the testing.T API.
+// This allows assert functions to work seamlessly with both *testing.T
+// (the standard Go test runner) and mock implementations for testing the
+// assert package itself. Since *testing.T implements these methods, callers
+// can pass *testing.T directly to functions accepting testingT.
 type testingT interface {
 	Helper()
-	Errorf(format string, args ...interface{})
+	Error(args ...interface{})
 }
 
 // Equals checks if actual equals expected and fails the test if not.
 // Works with any comparable type (strings, ints, bools, etc.)
-// Optional msgAndArgs can provide a custom error message: first arg is format string, rest are values.
-func Equals(t testingT, actual any, expected any, msgAndArgs ...interface{}) {
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func Equals(t testingT, actual any, expected any, details ...interface{}) {
 	t.Helper()
 
 	if !isEqual(actual, expected) {
-		msg := fmt.Sprintf("Equals failed:\n  Expected: %v\n  Actual:   %v", expected, actual)
-		if len(msgAndArgs) > 0 {
-			customMsg := formatMessage(msgAndArgs...)
-			msg = customMsg + "\n" + msg
-		}
-		t.Errorf("%s", msg)
+		msg := fmt.Sprintf("assert.Equals(...) failed:\n  Expected: %v\n  Actual:   %v", expected, actual)
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
 
 // NotEquals checks if actual does not equal expected and fails the test if they are equal.
-func NotEquals[T comparable](t *testing.T, actual, expected T) {
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func NotEquals[T comparable](t testingT, actual, expected T, details ...interface{}) {
 	t.Helper()
 	if isEqual(actual, expected) {
-		t.Errorf("NotEquals failed:\n  Expected not to equal: %v\n  Actual:                %v", expected, actual)
+		msg := fmt.Sprintf("assert.NotEquals(...) failed:\n  Expected not to equal: %v\n  Actual:                %v", expected, actual)
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
 
@@ -46,23 +51,16 @@ func isEqual(actual any, expected any) bool {
 	return reflect.DeepEqual(actual, expected)
 }
 
-// formatMessage formats a custom error message from variadic arguments.
-// First argument should be a format string, remaining arguments are values for formatting.
-func formatMessage(msgAndArgs ...interface{}) string {
-	if len(msgAndArgs) == 0 {
-		return ""
+// messageWithDetails prepends a custom message to the default message if details is provided.
+func messageWithDetails(msg string, details ...interface{}) string {
+	if len(details) > 0 {
+		format, ok := details[0].(string)
+		preconditions.Check(ok, "first argument to custom message must be a format string, got %T", details[0])
+
+		customMsg := fmt.Sprintf(format, details[1:]...)
+		return customMsg + "\n" + msg
 	}
-	if len(msgAndArgs) == 1 {
-		msg := msgAndArgs[0]
-		if msgStr, ok := msg.(string); ok {
-			return msgStr
-		}
-		return fmt.Sprintf("%+v", msg)
-	}
-	if format, ok := msgAndArgs[0].(string); ok {
-		return fmt.Sprintf(format, msgAndArgs[1:]...)
-	}
-	return fmt.Sprintf("%+v", msgAndArgs[0])
+	return msg
 }
 
 func compareAsBytes(content any) bool {
@@ -88,34 +86,46 @@ func bytesFrom(content any) []byte {
 }
 
 // True checks if the condition is true and fails if not.
-func True(t *testing.T, condition bool, message string) {
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func True(t testingT, condition bool, details ...interface{}) {
 	t.Helper()
 	if !condition {
-		t.Errorf("True failed: %s", message)
+		msg := "assert.True(...) failed"
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
 
 // False checks if the condition is false and fails if not.
-func False(t *testing.T, condition bool, message string) {
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func False(t testingT, condition bool, details ...interface{}) {
 	t.Helper()
 	if condition {
-		t.Errorf("False failed: %s", message)
+		msg := "assert.False(...) failed"
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
 
 // Nil checks if the value is nil and fails if not.
-func Nil(t *testing.T, value interface{}, message string) {
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func Nil(t testingT, value interface{}, details ...interface{}) {
 	t.Helper()
 	if !isNil(value) {
-		t.Errorf("Nil failed: %s\n  Expected: nil\n  Actual:   %v", message, value)
+		msg := fmt.Sprintf("assert.Nil(...) failed:\n  Expected: nil\n  Actual:   %v", value)
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
 
 // NotNil checks if the value is not nil and fails if it is nil.
-func NotNil(t *testing.T, value interface{}, message string) {
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func NotNil(t testingT, value interface{}, details ...interface{}) {
 	t.Helper()
 	if isNil(value) {
-		t.Errorf("NotNil failed: %s\n  Expected: not nil\n  Actual:   nil", message)
+		msg := "assert.NotNil(...) failed:\n  Expected: not nil\n  Actual:   nil"
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
 
@@ -133,36 +143,53 @@ func isNil(v interface{}) bool {
 	}
 }
 
-// Error checks if err is not nil and fails if it is nil.
-func Error(t *testing.T, err error, message string) {
+// Error checks if err is not nil and contains the expected error string.
+// expectedError is a string that must be present in the error's String() representation.
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func Error(t testingT, err error, expectedError string, details ...interface{}) {
 	t.Helper()
 	if err == nil {
-		t.Errorf("Error failed: %s\n  Expected an error but got nil", message)
+		msg := "assert.Error(...) failed:\n  Expected an error but got nil"
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
+	} else if !strings.Contains(err.Error(), expectedError) {
+		msg := fmt.Sprintf("assert.Error(...) failed:\n  Expected error to contain: %q\n  Got:                       %v", expectedError, err)
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
 
 // NoError checks if err is nil and fails if it's not.
-func NoError(t *testing.T, err error) {
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func NoError(t testingT, err error, details ...interface{}) {
 	t.Helper()
 	if err != nil {
-		t.Fatalf("NoError failed:\n  Expected no error\n  Got:      %v", err)
+		msg := fmt.Sprintf("assert.NoError(...) failed:\n  Expected no error\n  Got:      %v", err)
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
 
 // Contains checks if str contains substring and fails if not.
-func Contains(t *testing.T, str, substr string) {
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func Contains(t testingT, str, substr string, details ...interface{}) {
 	t.Helper()
 	if !strings.Contains(str, substr) {
-		t.Errorf("Contains failed:\n  String:    %q\n  Should contain: %q", str, substr)
+		msg := fmt.Sprintf("assert.Contains(...) failed:\n  String:         %q\n  Should contain: %q", str, substr)
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
 
 // Length checks if the length of the slice/map/string equals expected length.
-func Length(t *testing.T, actual interface{}, expectedLen int) {
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func Length(t testingT, actual interface{}, expectedLen int, details ...interface{}) {
 	t.Helper()
 	actualLen := getLength(actual)
 	if actualLen != expectedLen {
-		t.Errorf("Length failed:\n  Expected length: %d\n  Actual length:   %d\n  Value: %v", expectedLen, actualLen, actual)
+		msg := fmt.Sprintf("assert.Length(...) failed:\n  Expected length: %d\n  Actual length:   %d\n  Value: %v", expectedLen, actualLen, actual)
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
 
