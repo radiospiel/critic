@@ -3,6 +3,7 @@ package critic_integration
 import (
 	"testing"
 
+	"github.com/samber/lo"
 	"git.15b.it/eno/critic/internal/assert"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/must"
@@ -68,15 +69,13 @@ func TestParseDiff_Empty(t *testing.T) {
 	// Should have hunks with deleted lines
 	assert.True(t, len(file.Hunks) > 0, "Expected at least one hunk")
 
-	// Find the deleted lines
-	var deletedLines []*ctypes.Line
-	for _, hunk := range file.Hunks {
-		for _, line := range hunk.Lines {
-			if line.Type == ctypes.LineDeleted {
-				deletedLines = append(deletedLines, line)
-			}
-		}
-	}
+	// Find all deleted lines using lo
+	allLines := lo.FlatMap(file.Hunks, func(hunk *ctypes.Hunk, _ int) []*ctypes.Line {
+		return hunk.Lines
+	})
+	deletedLines := lo.Filter(allLines, func(line *ctypes.Line, _ int) bool {
+		return line.Type == ctypes.LineDeleted
+	})
 
 	// Should have 2 deleted lines: the comment and the blank line
 	assert.Length(t, deletedLines, 2, "Expected 2 deleted lines")
@@ -105,17 +104,10 @@ func TestParseDiff_Empty(t *testing.T) {
 		"Deleted lines should have NewNum = 0")
 
 	// Find the context line after the deletions (the function declaration)
-	var funcDeclLine *ctypes.Line
-	for _, hunk := range file.Hunks {
-		for _, line := range hunk.Lines {
-			if line.Type == ctypes.LineContext && contains(line.Content, "func TestParseDiff_Empty") {
-				funcDeclLine = line
-				break
-			}
-		}
-	}
-
-	assert.NotNil(t, funcDeclLine, "Expected to find function declaration as context line")
+	funcDeclLine, found := lo.Find(allLines, func(line *ctypes.Line) bool {
+		return line.Type == ctypes.LineContext && contains(line.Content, "func TestParseDiff_Empty")
+	})
+	assert.True(t, found, "Expected to find function declaration as context line")
 
 	// Function declaration should be at old line 9, new line 7
 	// (moved up by 2 lines after deleting the comment and blank line)

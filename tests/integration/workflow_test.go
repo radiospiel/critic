@@ -5,9 +5,11 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/samber/lo"
 	"git.15b.it/eno/critic/internal/assert"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/must"
+	ctypes "git.15b.it/eno/critic/pkg/types"
 )
 
 // commitFile creates a file and commits it
@@ -44,16 +46,13 @@ func TestGitWorkflow_UnstagedChanges(t *testing.T) {
 		t.Fatal("Expected at least one hunk")
 	}
 
-	// Verify we have added lines
-	hasAddedLines := false
-	for _, hunk := range file.Hunks {
-		for _, line := range hunk.Lines {
-			if line.Type == 1 { // LineAdded
-				hasAddedLines = true
-				break
-			}
-		}
-	}
+	// Verify we have added lines using lo
+	allLines := lo.FlatMap(file.Hunks, func(hunk *ctypes.Hunk, _ int) []*ctypes.Line {
+		return hunk.Lines
+	})
+	hasAddedLines := lo.SomeBy(allLines, func(line *ctypes.Line) bool {
+		return line.Type == ctypes.LineAdded
+	})
 
 	if !hasAddedLines {
 		t.Error("Expected to find added lines in diff")
