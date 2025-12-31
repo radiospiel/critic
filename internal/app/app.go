@@ -42,28 +42,32 @@ func NewModel(args *cli.Args) Model {
 	diffView := ui.NewDiffViewModel()
 	diffView.SetHighlightingEnabled(true) // Always enable highlighting
 
-	// Initialize file watcher
-	watcher, err := git.NewWatcher(100) // 100ms debounce
-	if err != nil {
-		logger.Error("NewModel: Failed to create watcher: %v", err)
-		watcher = nil // Continue without watcher if it fails
+	// Only initialize file watcher when diffing against "current"
+	var watcher *git.Watcher
+	if args.Current == "current" {
+		w, err := git.NewWatcher(100) // 100ms debounce
+		if err != nil {
+			logger.Fatal("Failed to create file watcher: %v", err)
+		}
+		logger.Info("NewModel: Watcher created for 'current' mode")
+		watcher = w
 	} else {
-		logger.Info("NewModel: Watcher created successfully")
+		logger.Info("NewModel: No watcher (diffing against %s, not 'current')", args.Current)
 	}
 
 	fileList := ui.NewFileListModel()
 	fileList.SetFocused(true) // Start with file list focused
 
 	return Model{
-		fileList:   fileList,
-		diffView:   diffView,
-		layout:     ui.NewLayoutModel(),
-		bases:      args.Bases,
-		current:    args.Current,
+		fileList:    fileList,
+		diffView:    diffView,
+		layout:      ui.NewLayoutModel(),
+		bases:       args.Bases,
+		current:     args.Current,
 		currentBase: 0, // Start with first base
-		paths:      args.Paths,
-		extensions: args.Extensions,
-		watcher:    watcher,
+		paths:       args.Paths,
+		extensions:  args.Extensions,
+		watcher:     watcher,
 	}
 }
 
