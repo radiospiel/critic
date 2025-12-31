@@ -17,6 +17,18 @@ type FileChange struct {
 	Path string
 }
 
+// fileEvent represents an internal event in the pipeline
+type fileEvent struct {
+	path string
+	op   fsnotify.Op
+}
+
+// fsnotifyCompacter tracks the compaction state for a single file
+type fsnotifyCompacter struct {
+	timer  *time.Timer
+	lastOp fsnotify.Op // Last operation received
+}
+
 // Watcher watches files for changes using a pipeline architecture:
 // fsnotify → eventLoop → filterLoop → debounceLoop → changesChan
 type Watcher struct {
@@ -30,10 +42,10 @@ type Watcher struct {
 
 	// Pipeline channels
 	rawEvents      chan fsnotify.Event
-	filteredEvents chan string // Absolute file paths
+	filteredEvents chan fileEvent
 
 	// Per-file debouncing
-	debouncers map[string]*time.Timer
+	debouncers map[string]*fsnotifyCompacter
 	debounceMu sync.Mutex
 
 	// Lifecycle
@@ -58,8 +70,8 @@ func NewWatcher(debounceMs int) (*Watcher, error) {
 		debounceMs:     debounceMs,
 		changesChan:    make(chan FileChange, 10), // Buffered for multiple files
 		rawEvents:      make(chan fsnotify.Event, 100),
-		filteredEvents: make(chan string, 100),
-		debouncers:     make(map[string]*time.Timer),
+		filteredEvents: make(chan fileEvent, 100),
+		debouncers:     make(map[string]*fsnotifyCompacter),
 		stopChan:       make(chan struct{}),
 		gitRoot:        gitRoot,
 	}
@@ -218,7 +230,7 @@ func (w *Watcher) filterLoop() {
 			if w.shouldIncludeFile(event.Name) {
 				logger.Debug("filterLoop: File passed filter: %s", event.Name)
 				select {
-				case w.filteredEvents <- event.Name:
+				case w.filteredEvents <- fileEvent{path: event.Name, op: event.Op}:
 					logger.Debug("filterLoop: Forwarded to debouncer")
 				default:
 					logger.Debug("filterLoop: Dropped event (channel full): %s", event.Name)
@@ -234,41 +246,55 @@ func (w *Watcher) filterLoop() {
 	}
 }
 
-// debounceLoop debounces events per-file
+// debounceLoop compacts events per-file
 func (w *Watcher) debounceLoop() {
 	logger.Info("debounceLoop: Started")
 	for {
 		select {
-		case path := <-w.filteredEvents:
-			logger.Debug("debounceLoop: Received event for %s", path)
+		case event := <-w.filteredEvents:
+			logger.Debug("debounceLoop: Received event for %s: %s", event.path, event.op)
 
 			w.debounceMu.Lock()
 
-			// Cancel existing timer for this file
-			if timer, exists := w.debouncers[path]; exists {
-				timer.Stop()
-				logger.Debug("debounceLoop: Cancelled previous timer for %s", path)
+			// Get or create compacter for this file
+			compacter, exists := w.debouncers[event.path]
+			if exists {
+				// Timer already running - just update last operation
+				compacter.lastOp = event.op
+				logger.Debug("debounceLoop: Updated lastOp for %s to %s", event.path, event.op)
+			} else {
+				// First event for this file - create compacter and start timer
+				compacter = &fsnotifyCompacter{
+					lastOp: event.op,
+				}
+				w.debouncers[event.path] = compacter
+
+				compacter.timer = time.AfterFunc(
+					time.Duration(w.debounceMs)*time.Millisecond,
+					func() {
+						w.debounceMu.Lock()
+						comp := w.debouncers[event.path]
+						delete(w.debouncers, event.path)
+						w.debounceMu.Unlock()
+
+						// Omit event if last operation was REMOVE (file was deleted)
+						if comp.lastOp&fsnotify.Remove == fsnotify.Remove {
+							logger.Info("debounceLoop: Omitting event for deleted file: %s", event.path)
+							return
+						}
+
+						logger.Info("debounceLoop: Timer fired for %s, emitting change", event.path)
+						// Send change notification
+						select {
+						case w.changesChan <- FileChange{Path: event.path}:
+							logger.Info("debounceLoop: Change notification sent for %s", event.path)
+						default:
+							logger.Debug("debounceLoop: Dropped change (channel full): %s", event.path)
+						}
+					},
+				)
+				logger.Debug("debounceLoop: Started timer for %s", event.path)
 			}
-
-			// Create new timer for this file
-			w.debouncers[path] = time.AfterFunc(
-				time.Duration(w.debounceMs)*time.Millisecond,
-				func() {
-					logger.Info("debounceLoop: Timer fired for %s, emitting change", path)
-					// Send change notification
-					select {
-					case w.changesChan <- FileChange{Path: path}:
-						logger.Info("debounceLoop: Change notification sent for %s", path)
-					default:
-						logger.Debug("debounceLoop: Dropped change (channel full): %s", path)
-					}
-
-					// Clean up debouncer
-					w.debounceMu.Lock()
-					delete(w.debouncers, path)
-					w.debounceMu.Unlock()
-				},
-			)
 
 			w.debounceMu.Unlock()
 
@@ -327,10 +353,12 @@ func (w *Watcher) Close() error {
 	// Signal all goroutines to stop
 	close(w.stopChan)
 
-	// Stop all active debounce timers
+	// Stop all active compacter timers
 	w.debounceMu.Lock()
-	for path, timer := range w.debouncers {
-		timer.Stop()
+	for path, compacter := range w.debouncers {
+		if compacter.timer != nil {
+			compacter.timer.Stop()
+		}
 		logger.Debug("Close: Stopped timer for %s", path)
 	}
 	w.debounceMu.Unlock()
