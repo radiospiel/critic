@@ -54,9 +54,7 @@ func TestGitWorkflow_UnstagedChanges(t *testing.T) {
 		return line.Type == ctypes.LineAdded
 	})
 
-	if !hasAddedLines {
-		t.Error("Expected to find added lines in diff")
-	}
+	assert.True(t, hasAddedLines, "Expected to find added lines in diff")
 }
 
 func TestGitWorkflow_LastCommit(t *testing.T) {
@@ -86,17 +84,11 @@ func TestGitWorkflow_LastCommit(t *testing.T) {
 	}
 
 	// Find test.go in the diff
-	found := false
-	for _, file := range diff.Files {
-		if file.NewPath == "test.go" {
-			found = true
-			break
-		}
-	}
+	_, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "test.go"
+	})
 
-	if !found {
-		t.Error("Expected test.go in last commit diff")
-	}
+	assert.True(t, found, "Expected test.go in last commit diff")
 }
 
 func TestGitWorkflow_EmptyDiff(t *testing.T) {
@@ -164,17 +156,15 @@ func TestGitWorkflow_MultipleFiles(t *testing.T) {
 	}
 
 	// Verify both files are in diff
-	fileNames := make(map[string]bool)
-	for _, file := range diff.Files {
-		fileNames[file.NewPath] = true
-	}
+	hasFile1 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "file1.go"
+	})
+	hasFile2 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "file2.go"
+	})
 
-	if !fileNames["file1.go"] {
-		t.Error("Expected file1.go in diff")
-	}
-	if !fileNames["file2.go"] {
-		t.Error("Expected file2.go in diff")
-	}
+	assert.True(t, hasFile1, "Expected file1.go in diff")
+	assert.True(t, hasFile2, "Expected file2.go in diff")
 }
 
 func TestGitWorkflow_GetCurrentBranch(t *testing.T) {

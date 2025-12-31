@@ -57,13 +57,10 @@ func TestParseDiff_Empty(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Find parser_test.go in the diff
-	var file *ctypes.FileDiff
-	for _, f := range diff.Files {
-		if f.NewPath == "parser_test.go" {
-			file = f
-			break
-		}
-	}
+	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "parser_test.go"
+	})
+	assert.True(t, found, "Expected parser_test.go in diff")
 	assert.NotNil(t, file, "Expected parser_test.go in diff")
 
 	// Should have hunks with deleted lines

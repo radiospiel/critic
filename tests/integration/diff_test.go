@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/samber/lo"
+	"git.15b.it/eno/critic/internal/assert"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/must"
 	ctypes "git.15b.it/eno/critic/pkg/types"
@@ -57,9 +58,7 @@ func TestGetDiff_UnstagedMode(t *testing.T) {
 		return line.Type == ctypes.LineAdded
 	})
 
-	if !hasAddedLines {
-		t.Error("Expected to find added lines in diff")
-	}
+	assert.True(t, hasAddedLines, "Expected to find added lines in diff")
 }
 
 func TestGetDiff_LastCommitMode(t *testing.T) {
@@ -90,20 +89,12 @@ func TestGetDiff_LastCommitMode(t *testing.T) {
 	}
 
 	// Find test.go in the diff
-	found := false
-	for _, file := range diff.Files {
-		if file.NewPath == "test.go" {
-			found = true
-			if !file.IsNew {
-				t.Error("Expected test.go to be marked as new file")
-			}
-			break
-		}
-	}
+	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "test.go"
+	})
 
-	if !found {
-		t.Error("Expected test.go in last commit diff")
-	}
+	assert.True(t, found, "Expected test.go in last commit diff")
+	assert.True(t, file.IsNew, "Expected test.go to be marked as new file")
 }
 
 func TestGetDiff_MergeBaseMode(t *testing.T) {
@@ -141,23 +132,15 @@ func TestGetDiff_MergeBaseMode(t *testing.T) {
 	}
 
 	// Should include the new file
-	foundNew := false
-	foundModified := false
-	for _, file := range diff.Files {
-		if file.NewPath == "feature.go" {
-			foundNew = true
-		}
-		if file.NewPath == "initial.go" {
-			foundModified = true
-		}
-	}
+	foundNew := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "feature.go"
+	})
+	foundModified := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "initial.go"
+	})
 
-	if !foundNew {
-		t.Error("Expected feature.go in merge base diff")
-	}
-	if !foundModified {
-		t.Error("Expected initial.go (modified) in merge base diff")
-	}
+	assert.True(t, foundNew, "Expected feature.go in merge base diff")
+	assert.True(t, foundModified, "Expected initial.go (modified) in merge base diff")
 }
 
 func TestGetDiff_EmptyDiff(t *testing.T) {
@@ -236,17 +219,15 @@ func TestGetDiff_MultipleFiles(t *testing.T) {
 	}
 
 	// Verify both files are in diff
-	fileNames := make(map[string]bool)
-	for _, file := range diff.Files {
-		fileNames[file.NewPath] = true
-	}
+	hasFile1 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "file1.go"
+	})
+	hasFile2 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "file2.go"
+	})
 
-	if !fileNames["file1.go"] {
-		t.Error("Expected file1.go in diff")
-	}
-	if !fileNames["file2.go"] {
-		t.Error("Expected file2.go in diff")
-	}
+	assert.True(t, hasFile1, "Expected file1.go in diff")
+	assert.True(t, hasFile2, "Expected file2.go in diff")
 }
 
 func TestGetDiff_NewFile(t *testing.T) {
@@ -270,20 +251,12 @@ func TestGetDiff_NewFile(t *testing.T) {
 	}
 
 	// Should show the new file
-	found := false
-	for _, file := range diff.Files {
-		if file.NewPath == "new.go" {
-			found = true
-			if !file.IsNew {
-				t.Error("Expected new.go to be marked as new file")
-			}
-			break
-		}
-	}
+	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "new.go"
+	})
 
-	if !found {
-		t.Error("Expected new.go in diff")
-	}
+	assert.True(t, found, "Expected new.go in diff")
+	assert.True(t, file.IsNew, "Expected new.go to be marked as new file")
 }
 
 func TestGetDiff_DeletedFile(t *testing.T) {
@@ -306,20 +279,12 @@ func TestGetDiff_DeletedFile(t *testing.T) {
 	}
 
 	// Should show the deleted file
-	found := false
-	for _, file := range diff.Files {
-		if file.OldPath == "delete.go" {
-			found = true
-			if !file.IsDeleted {
-				t.Error("Expected delete.go to be marked as deleted")
-			}
-			break
-		}
-	}
+	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.OldPath == "delete.go"
+	})
 
-	if !found {
-		t.Error("Expected delete.go in diff")
-	}
+	assert.True(t, found, "Expected delete.go in diff")
+	assert.True(t, file.IsDeleted, "Expected delete.go to be marked as deleted")
 }
 
 func TestGetDiff_FileInSubdirectory(t *testing.T) {
@@ -381,11 +346,10 @@ func TestGetDiff_MultiplePathsFilter(t *testing.T) {
 	}
 
 	// Verify file3.go is not included
-	for _, file := range diff.Files {
-		if file.NewPath == "file3.go" {
-			t.Error("file3.go should not be in filtered diff")
-		}
-	}
+	hasFile3 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "file3.go"
+	})
+	assert.False(t, hasFile3, "file3.go should not be in filtered diff")
 }
 
 func TestGetDiff_LargeFile(t *testing.T) {
@@ -474,30 +438,19 @@ func TestGetDiff_WithContextLines(t *testing.T) {
 	hunk := diff.Files[0].Hunks[0]
 
 	// Should have context lines, deleted line, and added line
-	hasContext := false
-	hasDeleted := false
-	hasAdded := false
+	hasContext := lo.SomeBy(hunk.Lines, func(line *ctypes.Line) bool {
+		return line.Type == ctypes.LineContext
+	})
+	hasDeleted := lo.SomeBy(hunk.Lines, func(line *ctypes.Line) bool {
+		return line.Type == ctypes.LineDeleted
+	})
+	hasAdded := lo.SomeBy(hunk.Lines, func(line *ctypes.Line) bool {
+		return line.Type == ctypes.LineAdded
+	})
 
-	for _, line := range hunk.Lines {
-		switch line.Type {
-		case ctypes.LineContext:
-			hasContext = true
-		case ctypes.LineDeleted:
-			hasDeleted = true
-		case ctypes.LineAdded:
-			hasAdded = true
-		}
-	}
-
-	if !hasContext {
-		t.Error("Expected context lines in diff")
-	}
-	if !hasDeleted {
-		t.Error("Expected deleted line in diff")
-	}
-	if !hasAdded {
-		t.Error("Expected added line in diff")
-	}
+	assert.True(t, hasContext, "Expected context lines in diff")
+	assert.True(t, hasDeleted, "Expected deleted line in diff")
+	assert.True(t, hasAdded, "Expected added line in diff")
 }
 
 // TestGetDiff_AmbiguousFilename tests that files with names that look like git refs
@@ -525,17 +478,11 @@ func TestGetDiff_AmbiguousFilename(t *testing.T) {
 	}
 
 	// Verify the diff is for the file "HEAD", not a git reference
-	foundFile := false
-	for _, file := range diff.Files {
-		if file.NewPath == "HEAD" || file.OldPath == "HEAD" {
-			foundFile = true
-			break
-		}
-	}
+	foundFile := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "HEAD" || f.OldPath == "HEAD"
+	})
 
-	if !foundFile {
-		t.Error("Expected diff to contain file 'HEAD'")
-	}
+	assert.True(t, foundFile, "Expected diff to contain file 'HEAD'")
 }
 
 // TestGitDiff_ErrorWithEmptyOutput tests whether git diff can return
