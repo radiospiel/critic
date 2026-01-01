@@ -9,55 +9,33 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var commandHandler func(*app.Args) error
-
-// OnCommand sets the callback to run when the command is executed
-func OnCommand(handler func(*app.Args) error) {
-	commandHandler = handler
-}
-
-// Execute runs the CLI application
-func Execute() error {
-	return NewRootCmd().Execute()
+// Execute runs the CLI application with the given handler
+func Execute(handler func(*app.Args) error) error {
+	return newRootCmd(handler).Execute()
 }
 
 // ParseArgsForTesting parses command-line arguments without running the app
 // This is exported for testing purposes only
 func ParseArgsForTesting(args []string) (*app.Args, error) {
 	var result *app.Args
-	var parseErr error
 
-	// Save the original handler
-	originalHandler := commandHandler
-
-	// Set a test handler that captures the args
-	OnCommand(func(a *app.Args) error {
+	// Create command with a test handler that captures the args
+	cmd := newRootCmd(func(a *app.Args) error {
 		result = a
 		return nil
 	})
 
-	// Restore the original handler when done
-	defer func() {
-		commandHandler = originalHandler
-	}()
-
-	// Create command and execute
-	cmd := NewRootCmd()
 	cmd.SetArgs(args)
 
 	if err := cmd.Execute(); err != nil {
 		return nil, err
 	}
 
-	if parseErr != nil {
-		return nil, parseErr
-	}
-
 	return result, nil
 }
 
-// NewRootCmd creates the root cobra command
-func NewRootCmd() *cobra.Command {
+// newRootCmd creates the root cobra command with the given handler
+func newRootCmd(handler func(*app.Args) error) *cobra.Command {
 	var extensionsFlag []string
 
 	cmd := &cobra.Command{
@@ -131,12 +109,8 @@ Examples:
 				}
 			}
 
-			// Call the command handler (set via OnCommand)
-			if commandHandler != nil {
-				return commandHandler(parsedArgs)
-			}
-
-			return fmt.Errorf("no command handler set")
+			// Call the command handler
+			return handler(parsedArgs)
 		},
 	}
 

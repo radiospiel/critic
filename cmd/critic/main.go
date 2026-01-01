@@ -8,11 +8,7 @@ import (
 )
 
 func main() {
-	// Set the command handler
-	cli.OnCommand(app.Run)
-
-	// Execute the CLI
-	if err := cli.Execute(); err != nil {
+	if err := cli.Execute(app.Run); err != nil {
 		os.Exit(1)
 	}
 }
