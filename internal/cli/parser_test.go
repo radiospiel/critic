@@ -5,30 +5,29 @@ import (
 
 	"git.15b.it/eno/critic/internal/app"
 	"git.15b.it/eno/critic/internal/assert"
-	"git.15b.it/eno/critic/internal/config"
 )
 
 func TestParse(t *testing.T) {
 	tests := []struct {
-		name    string
-		args    []string
-		want    *app.Args
-		wantErr bool
+		name          string
+		args          []string
+		expected      *app.Args
+		expectedError string
 	}{
 		{
 			name: "Empty args uses defaults",
 			args: []string{},
-			want: &app.Args{
+			expected: &app.Args{
 				Bases:      nil, // No bases specified - app layer will add defaults
 				Current:    "current",
 				Paths:      []string{"."},
-				Extensions: config.DefaultFileExtensions,
+				Extensions: []string{}, // No extensions specified - app layer will add defaults
 			},
 		},
 		{
 			name: "Custom extensions",
 			args: []string{"--extensions=go,rs"},
-			want: &app.Args{
+			expected: &app.Args{
 				Bases:      nil, // No bases specified - app layer will add defaults
 				Current:    "current",
 				Paths:      []string{"."},
@@ -38,47 +37,47 @@ func TestParse(t *testing.T) {
 		{
 			name: "Single base to current",
 			args: []string{"main..current"},
-			want: &app.Args{
+			expected: &app.Args{
 				Bases:      []string{"main"},
 				Current:    "current",
 				Paths:      []string{"."},
-				Extensions: config.DefaultFileExtensions,
+				Extensions: []string{},
 			},
 		},
 		{
 			name: "Multiple bases to current",
 			args: []string{"merge-base,origin/main,HEAD..current"},
-			want: &app.Args{
+			expected: &app.Args{
 				Bases:      []string{"merge-base", "origin/main", "HEAD"},
 				Current:    "current",
 				Paths:      []string{"."},
-				Extensions: config.DefaultFileExtensions,
+				Extensions: []string{},
 			},
 		},
 		{
 			name: "Bases to specific ref",
 			args: []string{"main,develop..v1.0.0"},
-			want: &app.Args{
+			expected: &app.Args{
 				Bases:      []string{"main", "develop"},
 				Current:    "v1.0.0",
 				Paths:      []string{"."},
-				Extensions: config.DefaultFileExtensions,
+				Extensions: []string{},
 			},
 		},
 		{
 			name: "With explicit paths",
 			args: []string{"main..current", "--", "src", "tests"},
-			want: &app.Args{
+			expected: &app.Args{
 				Bases:      []string{"main"},
 				Current:    "current",
 				Paths:      []string{"src", "tests"},
-				Extensions: config.DefaultFileExtensions,
+				Extensions: []string{},
 			},
 		},
 		{
 			name: "Extensions and paths",
 			args: []string{"--extensions=go,rs", "main..current", "--", "src"},
-			want: &app.Args{
+			expected: &app.Args{
 				Bases:      []string{"main"},
 				Current:    "current",
 				Paths:      []string{"src"},
@@ -88,99 +87,95 @@ func TestParse(t *testing.T) {
 		{
 			name: "Just bases (no current specified)",
 			args: []string{"main,develop"},
-			want: &app.Args{
+			expected: &app.Args{
 				Bases:      []string{"main", "develop"},
 				Current:    "current", // Default
 				Paths:      []string{"."},
-				Extensions: config.DefaultFileExtensions,
+				Extensions: []string{},
 			},
 		},
 		{
-			name:    "Unknown flag",
-			args:    []string{"--unknown"},
-			wantErr: true,
+			name:          "Unknown flag",
+			args:          []string{"--unknown"},
+			expectedError: "unknown",
 		},
 		{
-			name:    "Too many .. separators",
-			args:    []string{"a..b..c"},
-			wantErr: true,
+			name:          "Too many .. separators",
+			args:          []string{"a..b..c"},
+			expectedError: "too many '..' separators",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseArgsForTesting(tt.args)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
+			actual, err := ParseArgsForTesting(tt.args)
+			if tt.expectedError != "" {
+				assert.Error(t, err, tt.expectedError)
 				return
 			}
-			if tt.wantErr {
-				return
-			}
+			assert.NoError(t, err)
 
-			assert.Equals(t, got.Extensions, tt.want.Extensions)
-			assert.Equals(t, got.Bases, tt.want.Bases)
-			assert.Equals(t, got.Current, tt.want.Current)
-			assert.Equals(t, got.Paths, tt.want.Paths)
+			assert.Equals(t, actual.Extensions, tt.expected.Extensions)
+			assert.Equals(t, actual.Bases, tt.expected.Bases)
+			assert.Equals(t, actual.Current, tt.expected.Current)
+			assert.Equals(t, actual.Paths, tt.expected.Paths)
 		})
 	}
 }
 
 func TestParseBasesCurrent(t *testing.T) {
 	tests := []struct {
-		name      string
-		arg       string
-		wantBases []string
-		wantCurrent string
-		wantErr   bool
+		name            string
+		arg             string
+		expectedBases   []string
+		expectedCurrent string
+		expectedError   string
 	}{
 		{
-			name:      "Single base",
-			arg:       "main..current",
-			wantBases: []string{"main"},
-			wantCurrent: "current",
+			name:            "Single base",
+			arg:             "main..current",
+			expectedBases:   []string{"main"},
+			expectedCurrent: "current",
 		},
 		{
-			name:      "Multiple bases",
-			arg:       "a,b,c..current",
-			wantBases: []string{"a", "b", "c"},
-			wantCurrent: "current",
+			name:            "Multiple bases",
+			arg:             "a,b,c..current",
+			expectedBases:   []string{"a", "b", "c"},
+			expectedCurrent: "current",
 		},
 		{
-			name:      "No current (just bases)",
-			arg:       "main,develop",
-			wantBases: []string{"main", "develop"},
-			wantCurrent: "current", // Default
+			name:            "No current (just bases)",
+			arg:             "main,develop",
+			expectedBases:   []string{"main", "develop"},
+			expectedCurrent: "current", // Default
 		},
 		{
-			name:      "Empty bases",
-			arg:       "..current",
-			wantBases: nil,
-			wantCurrent: "current",
+			name:            "Empty bases",
+			arg:             "..current",
+			expectedBases:   nil,
+			expectedCurrent: "current",
 		},
 		{
-			name:    "Too many separators",
-			arg:     "a..b..c",
-			wantErr: true,
+			name:          "Too many separators",
+			arg:           "a..b..c",
+			expectedError: "too many '..' separators",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := &app.Args{
+			actual := &app.Args{
 				Current: "current", // Default
 			}
-			err := parseBasesCurrent(tt.arg, result)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("parseBasesCurrent() error = %v, wantErr %v", err, tt.wantErr)
+			err := parseBasesCurrent(tt.arg, actual)
+			if tt.expectedError != "" {
+				assert.Error(t, err, tt.expectedError)
 				return
 			}
-			if tt.wantErr {
-				return
-			}
+			assert.NoError(t, err)
 
-			assert.Equals(t, result.Bases, tt.wantBases)
-			assert.Equals(t, result.Current, tt.wantCurrent)
+			assert.Equals(t, actual.Bases, tt.expectedBases)
+			assert.Equals(t, actual.Current, tt.expectedCurrent)
 		})
 	}
 }

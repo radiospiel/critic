@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/logger"
 	"git.15b.it/eno/critic/internal/ui"
@@ -72,6 +73,11 @@ func Run(args *Args) error {
 			return fmt.Errorf("failed to determine default bases: %w", err)
 		}
 		args.Bases = bases
+	}
+
+	// Set default extensions if none were specified
+	if len(args.Extensions) == 0 {
+		args.Extensions = config.DefaultFileExtensions
 	}
 
 	// Create and run the application

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"git.15b.it/eno/critic/internal/app"
-	"git.15b.it/eno/critic/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -76,7 +75,7 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Parse arguments
 			parsedArgs := &app.Args{
-				Extensions: extensionsFlag,
+				Extensions: ensureSlice(extensionsFlag),
 				Paths:      []string{"."},
 				Current:    "current", // Default to working directory
 			}
@@ -115,9 +114,17 @@ Examples:
 	}
 
 	// Define flags
-	cmd.Flags().StringSliceVar(&extensionsFlag, "extensions", config.DefaultFileExtensions, "Comma-separated list of file extensions to include")
+	cmd.Flags().StringSliceVar(&extensionsFlag, "extensions", nil, "Comma-separated list of file extensions to include")
 
 	return cmd
+}
+
+// ensureSlice converts nil to an empty slice
+func ensureSlice(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // parseBasesCurrent parses the "base1,base2,base3..current" syntax
