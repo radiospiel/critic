@@ -266,6 +266,11 @@ func (m *DiffViewModel) GetFile() *ctypes.FileDiff {
 	return m.file
 }
 
+// GetCursorLine returns the current cursor line number
+func (m *DiffViewModel) GetCursorLine() int {
+	return m.cursorLine
+}
+
 // SetSize sets the size of the diff view pane
 func (m *DiffViewModel) SetSize(width, height int) {
 	m.width = width
