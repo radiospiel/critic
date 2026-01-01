@@ -27,11 +27,22 @@ func ParseArgsForTesting(args []string) (*app.Args, error) {
 	var result *app.Args
 	var parseErr error
 
-	cmd := newTestCmd(func(a *app.Args, err error) {
+	// Save the original handler
+	originalHandler := commandHandler
+
+	// Set a test handler that captures the args
+	OnCommand(func(a *app.Args) error {
 		result = a
-		parseErr = err
+		return nil
 	})
 
+	// Restore the original handler when done
+	defer func() {
+		commandHandler = originalHandler
+	}()
+
+	// Create command and execute
+	cmd := NewRootCmd()
 	cmd.SetArgs(args)
 
 	if err := cmd.Execute(); err != nil {
@@ -43,68 +54,6 @@ func ParseArgsForTesting(args []string) (*app.Args, error) {
 	}
 
 	return result, nil
-}
-
-// newTestCmd creates a command for testing that doesn't run the app
-func newTestCmd(callback func(*app.Args, error)) *cobra.Command {
-	var extensionsFlag []string
-
-	cmd := &cobra.Command{
-		Use:           "critic [flags] [base1,base2..current] [-- path1 path2 ...]",
-		Short:         "Critic - Git diff viewer",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		Args: func(cmd *cobra.Command, args []string) error {
-			argsLenAtDash := cmd.ArgsLenAtDash()
-			if argsLenAtDash >= 0 {
-				if argsLenAtDash > 1 {
-					return fmt.Errorf("accepts at most 1 arg before --, received %d", argsLenAtDash)
-				}
-				return nil
-			}
-			if len(args) > 1 {
-				return fmt.Errorf("accepts at most 1 arg, received %d", len(args))
-			}
-			return nil
-		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			parsedArgs := &app.Args{
-				Extensions: extensionsFlag,
-				Paths:      []string{"."},
-				Current:    "current",
-			}
-
-			argsLenAtDash := cmd.ArgsLenAtDash()
-			var baseArg string
-			if argsLenAtDash >= 0 {
-				if argsLenAtDash > 0 {
-					baseArg = args[0]
-				}
-				pathArgs := args[argsLenAtDash:]
-				if len(pathArgs) > 0 {
-					parsedArgs.Paths = pathArgs
-				}
-			} else {
-				if len(args) > 0 {
-					baseArg = args[0]
-				}
-			}
-
-			if baseArg != "" {
-				if err := parseBasesCurrent(baseArg, parsedArgs); err != nil {
-					callback(nil, err)
-					return err
-				}
-			}
-
-			callback(parsedArgs, nil)
-			return nil
-		},
-	}
-
-	cmd.Flags().StringSliceVar(&extensionsFlag, "extensions", config.DefaultFileExtensions, "Comma-separated list of file extensions to include")
-
-	return cmd
 }
 
 // NewRootCmd creates the root cobra command
