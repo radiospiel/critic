@@ -6,6 +6,7 @@ import (
 
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
+	"github.com/spf13/cobra"
 )
 
 // Args represents parsed command-line arguments
@@ -18,71 +19,135 @@ type Args struct {
 
 // Parse parses command-line arguments into structured Args
 // Supports: critic --extensions=c,rb,go base1,base2,base3..current -- path1 path2 path3
+// Now implemented using Cobra
 func Parse(args []string) (*Args, error) {
-	result := &Args{
-		Extensions: config.DefaultFileExtensions,
-		Paths:      []string{"."},
-		Current:    "current", // Default to working directory
+	var result *Args
+	var parseErr error
+	executed := false
+
+	// Create root command with a custom RunE that captures args
+	rootCmd := newRootCmd(func(args *Args, err error) {
+		result = args
+		parseErr = err
+		executed = true
+	})
+
+	// Set args
+	rootCmd.SetArgs(args)
+
+	// Execute
+	if err := rootCmd.Execute(); err != nil {
+		return nil, err
 	}
 
-	// Separate args into flags and positional args
-	var positional []string
-	var pathArgs []string
-	foundSeparator := false
-
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-
-		if foundSeparator {
-			// After --, everything is a path
-			pathArgs = append(pathArgs, arg)
-			continue
-		}
-
-		if arg == "--" {
-			foundSeparator = true
-			continue
-		}
-
-		if strings.HasPrefix(arg, "--extensions=") {
-			// Parse extensions flag
-			exts := strings.TrimPrefix(arg, "--extensions=")
-			if exts != "" {
-				result.Extensions = strings.Split(exts, ",")
-			}
-			continue
-		}
-
-		if strings.HasPrefix(arg, "--") {
-			return nil, fmt.Errorf("unknown flag: %s", arg)
-		}
-
-		// Positional argument
-		positional = append(positional, arg)
+	if parseErr != nil {
+		return nil, parseErr
 	}
 
-	// If paths were explicitly provided, use them
-	if len(pathArgs) > 0 {
-		result.Paths = pathArgs
-	}
-
-	// Parse base..current syntax from positional args
-	if len(positional) > 0 {
-		if err := parseBasesCurrent(positional[0], result); err != nil {
-			return nil, err
-		}
-	}
-
-	// Set default bases if none were specified
-	if len(result.Bases) == 0 {
-		bases, err := getDefaultBases()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine default bases: %w", err)
-		}
-		result.Bases = bases
+	// If command wasn't executed (e.g., --help), result will be nil
+	if !executed {
+		// Help or version was displayed, exit gracefully
+		// Cobra already printed the output, so we just need to exit
+		return nil, fmt.Errorf("help displayed")
 	}
 
 	return result, nil
+}
+
+// newRootCmd creates the root cobra command
+func newRootCmd(callback func(*Args, error)) *cobra.Command {
+	var extensionsFlag []string
+
+	cmd := &cobra.Command{
+		Use:   "critic [flags] [base1,base2..current] [-- path1 path2 ...]",
+		Short: "Critic - Git diff viewer with side-by-side comparison",
+		Long: `Critic is a terminal-based git diff viewer that shows changes side-by-side.
+
+Syntax:
+  critic [base1,base2,base3..current] [-- path1 path2 path3]
+
+Examples:
+  critic                           # Compare against default bases (main/master, origin/<branch>, HEAD)
+  critic main..current             # Compare main branch to working directory
+  critic main,develop..current     # Compare against multiple bases
+  critic HEAD~1..HEAD              # Compare two commits
+  critic -- src tests              # Only show changes in src and tests directories
+  critic --extensions=go,rs        # Only show .go and .rs files
+`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args: func(cmd *cobra.Command, args []string) error {
+			// Custom validator: allow at most 1 arg before --, any number after --
+			argsLenAtDash := cmd.ArgsLenAtDash()
+			if argsLenAtDash >= 0 {
+				// There was a -- separator
+				// args before -- should be at most 1
+				if argsLenAtDash > 1 {
+					return fmt.Errorf("accepts at most 1 arg before --, received %d", argsLenAtDash)
+				}
+				return nil
+			}
+			// No -- separator, so all args are positional
+			if len(args) > 1 {
+				return fmt.Errorf("accepts at most 1 arg, received %d", len(args))
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result := &Args{
+				Extensions: extensionsFlag,
+				Paths:      []string{"."},
+				Current:    "current", // Default to working directory
+			}
+
+			// Get paths after -- separator
+			argsLenAtDash := cmd.ArgsLenAtDash()
+			var baseArg string
+			if argsLenAtDash >= 0 {
+				// There was a -- separator
+				// The base..current arg is before --
+				if argsLenAtDash > 0 {
+					baseArg = args[0]
+				}
+				// Paths are after --
+				pathArgs := args[argsLenAtDash:]
+				if len(pathArgs) > 0 {
+					result.Paths = pathArgs
+				}
+			} else {
+				// No -- separator
+				if len(args) > 0 {
+					baseArg = args[0]
+				}
+			}
+
+			// Parse base..current syntax
+			if baseArg != "" {
+				if err := parseBasesCurrent(baseArg, result); err != nil {
+					callback(nil, err)
+					return err
+				}
+			}
+
+			// Set default bases if none were specified
+			if len(result.Bases) == 0 {
+				bases, err := getDefaultBases()
+				if err != nil {
+					callback(nil, fmt.Errorf("failed to determine default bases: %w", err))
+					return err
+				}
+				result.Bases = bases
+			}
+
+			callback(result, nil)
+			return nil
+		},
+	}
+
+	// Define flags
+	cmd.Flags().StringSliceVar(&extensionsFlag, "extensions", config.DefaultFileExtensions, "Comma-separated list of file extensions to include")
+
+	return cmd
 }
 
 // parseBasesCurrent parses the "base1,base2,base3..current" syntax

@@ -19,7 +19,15 @@ func main() {
 
 	// Parse command-line arguments
 	args, err := cli.Parse(os.Args[1:])
-	preconditions.Check(err == nil, "Failed to parse arguments: %v", err)
+	if err != nil {
+		// Check if this is just help being displayed
+		if err.Error() == "help displayed" {
+			// Help was displayed, exit successfully
+			os.Exit(0)
+		}
+		// Real error
+		preconditions.Check(false, "Failed to parse arguments: %v", err)
+	}
 
 	// Create and run the application
 	m := app.NewModel(args)
