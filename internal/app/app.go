@@ -139,7 +139,9 @@ func NewModel(args *Args) Model {
 
 	// Initialize comment manager
 	cwd, _ := os.Getwd()
-	commentManager := comments.NewFileManager(cwd)
+	commentManager := comments.NewFileManager(cwd, args.Current)
+	fileList.SetCommentManager(commentManager)
+	diffView.SetCommentManager(commentManager)
 
 	return Model{
 		fileList:       fileList,
@@ -237,9 +239,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				activeFile := m.fileList.GetActiveFile()
 				if activeFile != nil {
 					// Get the current cursor line from diff view
-					lineNum := m.diffView.GetCursorLine()
-					// Load existing comment if any
-					existingComment := "" // TODO: Load from file
+					cursorLine := m.diffView.GetCursorLine()
+
+					// Check if the cursor is on a comment line
+					isCommentLine, sourceLine := m.diffView.IsCommentLine(cursorLine)
+
+					// Determine the source line number to use
+					var lineNum int
+					existingComment := ""
+
+					if isCommentLine {
+						// Cursor is on a comment preview line - edit that comment
+						lineNum = sourceLine
+						// Load the existing comment from file
+						gitPath := activeFile.NewPath
+						if activeFile.IsDeleted {
+							gitPath = activeFile.OldPath
+						}
+						if criticFile, err := m.commentManager.LoadComments(gitPath); err == nil {
+							if comment, exists := criticFile.Comments[lineNum]; exists {
+								// Join all comment lines with newlines
+								existingComment = strings.Join(comment.Lines, "\n")
+							}
+						}
+					} else {
+						// Cursor is on a regular diff line - create new comment
+						// We need to get the actual source line number from the diff line
+						// For now, use the cursor line as the line number
+						// TODO: Map cursor line to actual source line number
+						lineNum = cursorLine
+					}
+
 					cmd := m.commentEditor.Activate(lineNum, existingComment)
 					cmds = append(cmds, cmd)
 					return m, tea.Batch(cmds...)
@@ -396,9 +426,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case ui.CommentCancelledMsg:
-		// Just log that comment editing was cancelled
-		logger.Info("Comment editing cancelled")
 
 	default:
 		// Route other messages to diff view (like diffRenderedMsg)

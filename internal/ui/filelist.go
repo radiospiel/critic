@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"git.15b.it/eno/critic/internal/comments"
 	"git.15b.it/eno/critic/internal/git"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -13,14 +14,15 @@ import (
 
 // FileListModel represents the file list pane
 type FileListModel struct {
-	files        []*ctypes.FileDiff
-	cursor       int
-	viewport     viewport.Model
-	width        int
-	height       int
-	ready        bool
-	activeFile   *ctypes.FileDiff
-	focused      bool
+	files          []*ctypes.FileDiff
+	cursor         int
+	viewport       viewport.Model
+	width          int
+	height         int
+	ready          bool
+	activeFile     *ctypes.FileDiff
+	focused        bool
+	commentManager *comments.FileManager
 }
 
 // NewFileListModel creates a new file list model
@@ -115,7 +117,20 @@ func (m FileListModel) View() string {
 			path = git.GitPathToDisplayPath(file.OldPath)
 		}
 
-		line := fmt.Sprintf("%s %s", status, path)
+		// Check if file has comments
+		commentIndicator := " "
+		if m.commentManager != nil {
+			// Use the git-relative path for checking comments
+			gitPath := file.NewPath
+			if file.IsDeleted {
+				gitPath = file.OldPath
+			}
+			if m.commentManager.HasComments(gitPath) {
+				commentIndicator = "💬"
+			}
+		}
+
+		line := fmt.Sprintf("%s%s %s", commentIndicator, status, path)
 
 		// Prevent word wrapping by setting max width and truncating if needed
 		if m.width > 0 {
@@ -186,4 +201,9 @@ func (m *FileListModel) SetSize(width, height int) {
 // SetFocused sets whether this pane is focused
 func (m *FileListModel) SetFocused(focused bool) {
 	m.focused = focused
+}
+
+// SetCommentManager sets the comment manager for checking file comments
+func (m *FileListModel) SetCommentManager(cm *comments.FileManager) {
+	m.commentManager = cm
 }

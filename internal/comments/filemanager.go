@@ -11,34 +11,45 @@ import (
 
 // FileManager handles saving and loading critic comment files
 type FileManager struct {
-	// Base directory for resolving relative paths
-	baseDir string
+	// Git repository root directory
+	gitRoot string
+	// Target name (e.g. "current", "main", "HEAD")
+	target string
 }
 
 // NewFileManager creates a new file manager
-func NewFileManager(baseDir string) *FileManager {
+func NewFileManager(gitRoot string, target string) *FileManager {
 	return &FileManager{
-		baseDir: baseDir,
+		gitRoot: gitRoot,
+		target:  target,
 	}
 }
 
-// GetCriticFilePath returns the path to the .critic.md file for a given original file
-func (fm *FileManager) GetCriticFilePath(originalPath string) string {
-	return originalPath + ".critic.md"
+// GetCriticDir returns the base .critic directory path
+func (fm *FileManager) GetCriticDir() string {
+	return filepath.Join(fm.gitRoot, ".critic", fm.target)
 }
 
-// GetCriticOriginalPath returns the path to the .critic.original file for a given original file
+// GetCriticCommentsPath returns the path to the .comments file for a given original file
+// e.g., .critic/current/src/main.go.comments
+func (fm *FileManager) GetCriticCommentsPath(originalPath string) string {
+	return filepath.Join(fm.GetCriticDir(), originalPath+".comments")
+}
+
+// GetCriticOriginalPath returns the path to the original file copy
+// e.g., .critic/current/src/main.go
 func (fm *FileManager) GetCriticOriginalPath(originalPath string) string {
-	return originalPath + ".critic.original"
+	return filepath.Join(fm.GetCriticDir(), originalPath)
 }
 
-// LoadComments loads comments from a .critic.md file
+// LoadComments loads comments from a .comments file
 func (fm *FileManager) LoadComments(originalPath string) (*types.CriticFile, error) {
-	criticPath := fm.GetCriticFilePath(originalPath)
+	commentsPath := fm.GetCriticCommentsPath(originalPath)
 
-	// Check if the critic file exists
-	if _, err := os.Stat(criticPath); os.IsNotExist(err) {
+	// Check if the comments file exists
+	if _, err := os.Stat(commentsPath); os.IsNotExist(err) {
 		// No comments file exists, return empty comment structure
+		// Read from the working directory original file
 		originalLines, err := fm.readFileLines(originalPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read original file: %w", err)
@@ -51,29 +62,37 @@ func (fm *FileManager) LoadComments(originalPath string) (*types.CriticFile, err
 		}, nil
 	}
 
-	// Parse the existing critic file
-	return ParseCriticFile(criticPath)
+	// Parse the existing comments file
+	criticFile, err := ParseCriticFile(commentsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set the correct file path (parser sets it to the .comments file path)
+	criticFile.FilePath = originalPath
+	return criticFile, nil
 }
 
-// SaveComments saves comments to .critic.md and .critic.original files
+// SaveComments saves comments to .comments and original copy files
 func (fm *FileManager) SaveComments(criticFile *types.CriticFile) error {
+	originalCopyPath := fm.GetCriticOriginalPath(criticFile.FilePath)
+	commentsPath := fm.GetCriticCommentsPath(criticFile.FilePath)
+
 	// Ensure the directory exists
-	dir := filepath.Dir(criticFile.FilePath)
+	dir := filepath.Dir(commentsPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Save the .critic.original file (just the original content without comments)
-	originalPath := fm.GetCriticOriginalPath(criticFile.FilePath)
-	if err := fm.writeFileLines(originalPath, criticFile.OriginalLines); err != nil {
-		return fmt.Errorf("failed to write critic.original file: %w", err)
+	// Save the original copy (just the original content without comments)
+	if err := fm.writeFileLines(originalCopyPath, criticFile.OriginalLines); err != nil {
+		return fmt.Errorf("failed to write original copy: %w", err)
 	}
 
-	// Save the .critic.md file (original content with embedded comments)
-	criticPath := fm.GetCriticFilePath(criticFile.FilePath)
+	// Save the .comments file (original content with embedded comments)
 	formattedContent := FormatCriticFile(criticFile)
-	if err := os.WriteFile(criticPath, []byte(formattedContent), 0644); err != nil {
-		return fmt.Errorf("failed to write critic.md file: %w", err)
+	if err := os.WriteFile(commentsPath, []byte(formattedContent), 0644); err != nil {
+		return fmt.Errorf("failed to write comments file: %w", err)
 	}
 
 	return nil
@@ -81,23 +100,34 @@ func (fm *FileManager) SaveComments(criticFile *types.CriticFile) error {
 
 // HasComments checks if a file has any critic comments
 func (fm *FileManager) HasComments(originalPath string) bool {
-	criticPath := fm.GetCriticFilePath(originalPath)
-	_, err := os.Stat(criticPath)
-	return err == nil
+	commentsPath := fm.GetCriticCommentsPath(originalPath)
+
+	// Check if comments file exists
+	if _, err := os.Stat(commentsPath); os.IsNotExist(err) {
+		return false
+	}
+
+	// Check if it actually has comments (not just an empty file)
+	criticFile, err := fm.LoadComments(originalPath)
+	if err != nil {
+		return false
+	}
+
+	return len(criticFile.Comments) > 0
 }
 
 // DeleteComments removes the critic comment files for a given original file
 func (fm *FileManager) DeleteComments(originalPath string) error {
-	criticPath := fm.GetCriticFilePath(originalPath)
-	originalBackupPath := fm.GetCriticOriginalPath(originalPath)
+	commentsPath := fm.GetCriticCommentsPath(originalPath)
+	originalCopyPath := fm.GetCriticOriginalPath(originalPath)
 
 	// Remove both files, ignoring "not found" errors
-	if err := os.Remove(criticPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove critic.md file: %w", err)
+	if err := os.Remove(commentsPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove comments file: %w", err)
 	}
 
-	if err := os.Remove(originalBackupPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove critic.original file: %w", err)
+	if err := os.Remove(originalCopyPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove original copy: %w", err)
 	}
 
 	return nil

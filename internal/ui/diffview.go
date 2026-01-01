@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"git.15b.it/eno/critic/internal/comments"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/highlight"
 	"git.15b.it/eno/critic/internal/logger"
@@ -32,6 +33,8 @@ type DiffViewModel struct {
 	totalLines          int           // Total number of lines in rendered diff
 	focused             bool          // Whether this pane is focused
 	navigableLines      []int         // Line numbers that can have cursor (diff lines only)
+	commentManager      *comments.FileManager
+	commentLines        map[int]int   // Maps rendered line number to source line number for comment lines
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -296,6 +299,21 @@ func (m *DiffViewModel) SetHighlightingEnabled(enabled bool) {
 	m.cachedFile = nil
 }
 
+// SetCommentManager sets the comment manager for loading comments
+func (m *DiffViewModel) SetCommentManager(cm *comments.FileManager) {
+	m.commentManager = cm
+}
+
+// IsCommentLine returns true if the given line number is a comment line
+// and returns the source line number for that comment
+func (m *DiffViewModel) IsCommentLine(lineNum int) (bool, int) {
+	if m.commentLines == nil {
+		return false, 0
+	}
+	sourceLine, ok := m.commentLines[lineNum]
+	return ok, sourceLine
+}
+
 // renderDiff renders the diff content with syntax highlighting
 // Returns the rendered content, total line count, and navigable line numbers
 func (m *DiffViewModel) renderDiff() (string, int, []int) {
@@ -309,6 +327,23 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	var b strings.Builder
 	lineNum := 0             // Track current line number for cursor highlighting
 	var navigableLines []int // Track which lines can have cursor (diff lines only)
+
+	// Initialize comment tracking
+	m.commentLines = make(map[int]int)
+
+	// Load comments for this file if comment manager is available
+	var fileComments *ctypes.CriticFile
+	if m.commentManager != nil {
+		// Get the git-relative path
+		gitPath := m.file.NewPath
+		if m.file.IsDeleted {
+			gitPath = m.file.OldPath
+		}
+		// Try to load comments
+		if loaded, err := m.commentManager.LoadComments(gitPath); err == nil {
+			fileComments = loaded
+		}
+	}
 
 	filename := git.GitPathToDisplayPath(m.file.NewPath)
 	if m.file.IsDeleted {
@@ -395,6 +430,21 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 			navigableLines = append(navigableLines, lineNum)
 			lineNum++
 			b.WriteString("\n")
+
+			// Check if there's a comment for this line
+			if fileComments != nil && line.NewNum > 0 {
+				if comment, exists := fileComments.Comments[line.NewNum]; exists && len(comment.Lines) > 0 {
+					// Render the comment preview line (first line of comment only)
+					commentPreview := m.renderCommentPreview(comment.Lines[0], lineNum)
+					b.WriteString(commentPreview)
+					// Track this as a comment line
+					m.commentLines[lineNum] = line.NewNum
+					// Add to navigable lines so user can select it
+					navigableLines = append(navigableLines, lineNum)
+					lineNum++
+					b.WriteString("\n")
+				}
+			}
 		}
 
 		// Add spacing between hunks
@@ -536,6 +586,39 @@ func (m *DiffViewModel) highlightFromHunks(file *ctypes.FileDiff, filename strin
 	}
 
 	return result
+}
+
+// renderCommentPreview renders a comment preview line with dark text on dark yellow background
+func (m *DiffViewModel) renderCommentPreview(commentText string, currentLineNum int) string {
+	// Style: dark text on dark yellow background (ANSI 256-color)
+	// Dark yellow background: \x1b[48;5;136m (or similar dark yellow)
+	// Dark/black foreground: \x1b[38;5;0m
+	const darkYellowBg = "\x1b[48;5;136m" // Dark yellow/gold background
+	const darkFg = "\x1b[38;5;0m"          // Black text
+
+	// Prefix to show this is a comment
+	prefix := "    💬 "
+
+	// Combine prefix and comment text
+	content := prefix + commentText
+
+	// Calculate visible width
+	visibleWidth := lipgloss.Width(content)
+
+	// Truncate or pad to match viewport width
+	var processed string
+	if visibleWidth > m.width {
+		processed = truncateANSI(content, m.width)
+	} else {
+		padding := strings.Repeat(" ", m.width-visibleWidth)
+		processed = content + padding
+	}
+
+	// Apply dark text on dark yellow background
+	styled := darkYellowBg + darkFg + processed + "\x1b[0m"
+
+	// Apply cursor highlighting if this is the active line
+	return m.renderLineWithCursor(styled, currentLineNum)
 }
 
 // renderLine renders a single diff line with pre-highlighted content

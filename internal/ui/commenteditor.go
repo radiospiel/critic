@@ -46,17 +46,9 @@ func (m *CommentEditor) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+s":
-			// Save and continue editing
-			return m.saveComment(false)
-
-		case "ctrl+x":
+		case "esc":
 			// Save and exit
 			return m.saveComment(true)
-
-		case "esc":
-			// Cancel editing
-			return m.cancelEdit()
 
 		default:
 			// Pass other keys to textarea
@@ -83,7 +75,7 @@ func (m CommentEditor) View() string {
 		Padding(0, 1)
 
 	title := titleStyle.Render("Edit Comment")
-	help := helpStyle.Render("Ctrl+S: Save | Ctrl+X: Save & Exit | Esc: Cancel")
+	help := helpStyle.Render("Esc: Save & Exit")
 
 	content := m.textarea.View()
 
@@ -142,9 +134,6 @@ type CommentSavedMsg struct {
 	Exit    bool
 }
 
-// CommentCancelledMsg is sent when comment editing is cancelled
-type CommentCancelledMsg struct{}
-
 // saveComment saves the current comment
 func (m *CommentEditor) saveComment(exit bool) tea.Cmd {
 	comment := m.GetComment()
@@ -160,13 +149,5 @@ func (m *CommentEditor) saveComment(exit bool) tea.Cmd {
 			Comment: comment,
 			Exit:    exit,
 		}
-	}
-}
-
-// cancelEdit cancels the current edit
-func (m *CommentEditor) cancelEdit() tea.Cmd {
-	m.Deactivate()
-	return func() tea.Msg {
-		return CommentCancelledMsg{}
 	}
 }
