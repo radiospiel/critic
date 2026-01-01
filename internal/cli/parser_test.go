@@ -9,11 +9,10 @@ import (
 
 func TestParse(t *testing.T) {
 	tests := []struct {
-		name           string
-		args           []string
-		want           *app.Args
-		wantErr        bool
-		skipBasesCheck bool
+		name    string
+		args    []string
+		want    *app.Args
+		wantErr bool
 	}{
 		{
 			name: "Empty args uses defaults",
@@ -24,7 +23,6 @@ func TestParse(t *testing.T) {
 				Paths:      []string{"."},
 				Extensions: nil, // Will check separately
 			},
-			skipBasesCheck: true, // Bases are empty at CLI level
 		},
 		{
 			name: "Custom extensions",
@@ -35,7 +33,6 @@ func TestParse(t *testing.T) {
 				Paths:      []string{"."},
 				Extensions: []string{"go", "rs"},
 			},
-			skipBasesCheck: true, // Bases are empty at CLI level
 		},
 		{
 			name: "Single base to current",
@@ -132,12 +129,11 @@ func TestParse(t *testing.T) {
 				}
 			}
 
-			// Check bases unless skipBasesCheck is true
-			if !tt.skipBasesCheck {
-				if !reflect.DeepEqual(got.Bases, tt.want.Bases) {
-					t.Errorf("Parse() Bases = %v, want %v", got.Bases, tt.want.Bases)
-				}
+			// Check bases
+			if !reflect.DeepEqual(got.Bases, tt.want.Bases) {
+				t.Errorf("Parse() Bases = %v, want %v", got.Bases, tt.want.Bases)
 			}
+
 			if got.Current != tt.want.Current {
 				t.Errorf("Parse() Current = %v, want %v", got.Current, tt.want.Current)
 			}
