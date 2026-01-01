@@ -74,10 +74,12 @@ where the input is nil
 
 #### Diff Synchronization (`internal/comments/diffsync.go`)
 
-- `SyncComments()`: Synchronizes comments when the original file changes
-- Calculates diff between old and new content
-- Remaps comment positions to new line numbers
-- Drops comments for deleted lines
+- `SyncComments()`: Synchronizes comments when the original file changes using git diff
+- `buildLineMappingWithGit()`: Uses `git diff --no-index` to generate accurate line mappings
+- `parseUnifiedDiff()`: Parses unified diff format to build line-to-line mappings
+- Handles insertions, deletions, and modifications correctly
+- Special handling for edge cases (insertions at file start/end)
+- Drops comments for deleted lines, preserves comments on modified lines
 
 #### UI Component (`internal/ui/commenteditor.go`)
 
