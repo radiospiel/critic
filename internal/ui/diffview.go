@@ -305,12 +305,42 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	lineNum := 0             // Track current line number for cursor highlighting
 	var navigableLines []int // Track which lines can have cursor (diff lines only)
 
+	// Render file header
+	lineNum = m.renderFileHeader(&b, lineNum)
+
+	// Prepare syntax-highlighted content for all line types
+	highlightedContent := m.prepareHighlightedContent()
+
+	// Render all hunks
+	lineNum = m.renderHunks(&b, lineNum, &navigableLines, highlightedContent)
+
+	result := b.String()
+	m.logRenderMetrics(startTime, len(navigableLines))
+
+	return result, lineNum, navigableLines
+}
+
+// renderFileHeader renders the file header section and returns the updated line number
+func (m *DiffViewModel) renderFileHeader(b *strings.Builder, lineNum int) int {
 	filename := git.GitPathToDisplayPath(m.file.NewPath)
 	if m.file.IsDeleted {
 		filename = git.GitPathToDisplayPath(m.file.OldPath)
 	}
 
-	// Render file header
+	header := m.buildFileHeaderText(filename)
+
+	b.WriteString(m.renderLineWithCursor(m.truncateToWidth(hunkHeaderStyle.Render(header)), lineNum))
+	lineNum++
+	b.WriteString("\n")
+	b.WriteString(m.renderLineWithCursor(m.truncateToWidth(""), lineNum)) // Empty line
+	lineNum++
+	b.WriteString("\n")
+
+	return lineNum
+}
+
+// buildFileHeaderText builds the header text for the current file
+func (m *DiffViewModel) buildFileHeaderText(filename string) string {
 	header := fmt.Sprintf("📄 %s", filename)
 	if m.file.IsNew {
 		header += " (new)"
@@ -321,76 +351,46 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 			git.GitPathToDisplayPath(m.file.OldPath),
 			git.GitPathToDisplayPath(m.file.NewPath))
 	}
+	return header
+}
 
-	b.WriteString(m.renderLineWithCursor(m.truncateToWidth(hunkHeaderStyle.Render(header)), lineNum))
-	lineNum++
-	b.WriteString("\n")
-	b.WriteString(m.renderLineWithCursor(m.truncateToWidth(""), lineNum)) // Empty line
-	lineNum++
-	b.WriteString("\n")
+// highlightedContentMaps holds syntax-highlighted content for different line types
+type highlightedContentMaps struct {
+	oldFileDeleted map[int]string // old file with deleted background
+	newFileAdded   map[int]string // new file with added background
+	newFileContext map[int]string // new file with context background
+}
 
-	// Highlight files with appropriate background styles
-	var oldFileDeleted map[int]string  // old file with deleted background
-	var newFileAdded map[int]string    // new file with added background
-	var newFileContext map[int]string  // new file with context background
-
-	if m.highlightingEnabled {
-		hlStart := time.Now()
-		oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
-		newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
-		newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
-		m.highlightTime += time.Since(hlStart)
+// prepareHighlightedContent prepares syntax-highlighted content for all line types
+func (m *DiffViewModel) prepareHighlightedContent() highlightedContentMaps {
+	content := highlightedContentMaps{
+		oldFileDeleted: make(map[int]string),
+		newFileAdded:   make(map[int]string),
+		newFileContext: make(map[int]string),
 	}
 
-	// Render each hunk
+	if !m.highlightingEnabled {
+		return content
+	}
+
+	filename := git.GitPathToDisplayPath(m.file.NewPath)
+	if m.file.IsDeleted {
+		filename = git.GitPathToDisplayPath(m.file.OldPath)
+	}
+
+	hlStart := time.Now()
+	content.oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
+	content.newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
+	content.newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
+	m.highlightTime += time.Since(hlStart)
+
+	return content
+}
+
+// renderHunks renders all hunks and returns the updated line number
+func (m *DiffViewModel) renderHunks(b *strings.Builder, lineNum int, navigableLines *[]int, highlightedContent highlightedContentMaps) int {
 	for hunkIdx, hunk := range m.file.Hunks {
-		// Render hunk header
-		hunkHeader := fmt.Sprintf("@@ -%d,%d +%d,%d @@", hunk.OldStart, hunk.OldLines, hunk.NewStart, hunk.NewLines)
-		if hunk.Header != "" {
-			hunkHeader += " " + hunk.Header
-		}
-		b.WriteString(m.renderLineWithCursor(m.truncateToWidth(hunkHeaderStyle.Render(hunkHeader)), lineNum))
-		lineNum++
-		b.WriteString("\n")
-
-		// Render hunk lines
-		for _, line := range hunk.Lines {
-			var highlighted string
-			if m.highlightingEnabled {
-				// Use pre-highlighted content with appropriate background
-				switch line.Type {
-				case ctypes.LineAdded:
-					if hl, ok := newFileAdded[line.NewNum]; ok {
-						highlighted = hl
-					} else {
-						highlighted = line.Content
-					}
-				case ctypes.LineDeleted:
-					if hl, ok := oldFileDeleted[line.OldNum]; ok {
-						highlighted = hl
-					} else {
-						highlighted = line.Content
-					}
-				case ctypes.LineContext:
-					if hl, ok := newFileContext[line.NewNum]; ok {
-						highlighted = hl
-					} else {
-						highlighted = line.Content
-					}
-				default:
-					highlighted = line.Content
-				}
-			} else {
-				highlighted = line.Content
-			}
-
-			lineStr := m.renderLine(line, highlighted, lineNum)
-			b.WriteString(lineStr)
-			// Add to navigable lines (only actual diff lines, not headers)
-			navigableLines = append(navigableLines, lineNum)
-			lineNum++
-			b.WriteString("\n")
-		}
+		lineNum = m.renderHunk(b, lineNum, navigableLines, hunk, highlightedContent)
 
 		// Add spacing between hunks
 		if hunkIdx < len(m.file.Hunks)-1 {
@@ -399,14 +399,64 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 			b.WriteString("\n")
 		}
 	}
+	return lineNum
+}
 
-	result := b.String()
+// renderHunk renders a single hunk and returns the updated line number
+func (m *DiffViewModel) renderHunk(b *strings.Builder, lineNum int, navigableLines *[]int, hunk *ctypes.Hunk, highlightedContent highlightedContentMaps) int {
+	// Render hunk header
+	hunkHeader := fmt.Sprintf("@@ -%d,%d +%d,%d @@", hunk.OldStart, hunk.OldLines, hunk.NewStart, hunk.NewLines)
+	if hunk.Header != "" {
+		hunkHeader += " " + hunk.Header
+	}
+	b.WriteString(m.renderLineWithCursor(m.truncateToWidth(hunkHeaderStyle.Render(hunkHeader)), lineNum))
+	lineNum++
+	b.WriteString("\n")
+
+	// Render hunk lines
+	for _, line := range hunk.Lines {
+		highlighted := m.getHighlightedContent(line, highlightedContent)
+		lineStr := m.renderLine(line, highlighted, lineNum)
+		b.WriteString(lineStr)
+		// Add to navigable lines (only actual diff lines, not headers)
+		*navigableLines = append(*navigableLines, lineNum)
+		lineNum++
+		b.WriteString("\n")
+	}
+
+	return lineNum
+}
+
+// getHighlightedContent retrieves the appropriate highlighted content for a line
+func (m *DiffViewModel) getHighlightedContent(line *ctypes.Line, highlightedContent highlightedContentMaps) string {
+	if !m.highlightingEnabled {
+		return line.Content
+	}
+
+	switch line.Type {
+	case ctypes.LineAdded:
+		if hl, ok := highlightedContent.newFileAdded[line.NewNum]; ok {
+			return hl
+		}
+	case ctypes.LineDeleted:
+		if hl, ok := highlightedContent.oldFileDeleted[line.OldNum]; ok {
+			return hl
+		}
+	case ctypes.LineContext:
+		if hl, ok := highlightedContent.newFileContext[line.NewNum]; ok {
+			return hl
+		}
+	}
+
+	return line.Content
+}
+
+// logRenderMetrics logs performance metrics for the render operation
+func (m *DiffViewModel) logRenderMetrics(startTime time.Time, navigableCount int) {
 	totalTime := time.Since(startTime)
 	renderTime := totalTime - m.highlightTime
 	logger.Info("renderDiff: total=%v, highlight=%v, render=%v, lines=%d, navigable=%d",
-		totalTime, m.highlightTime, renderTime, m.countLines(), len(navigableLines))
-
-	return result, lineNum, navigableLines
+		totalTime, m.highlightTime, renderTime, m.countLines(), navigableCount)
 }
 
 // countLines returns the total number of lines in the current file
