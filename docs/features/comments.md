@@ -74,12 +74,17 @@ where the input is nil
 
 #### Diff Synchronization (`internal/comments/diffsync.go`)
 
-- `SyncComments()`: Synchronizes comments when the original file changes using git diff
-- `buildLineMappingWithGit()`: Uses `git diff --no-index` to generate accurate line mappings
-- `parseUnifiedDiff()`: Parses unified diff format to build line-to-line mappings
-- Handles insertions, deletions, and modifications correctly
+The synchronization system uses `git diff` to build line mappings rather than applying patches directly, because CRITIC comment blocks embedded in the file break the context matching required by `git apply`.
+
+- `SyncComments()`: Synchronizes comments when the original file changes
+- `buildLineMappingWithGit()`: Uses `git diff --no-index --unified=0` to generate accurate line mappings
+- `parseUnifiedDiff()`: Parses unified diff hunk headers to build old→new line number mappings
+- Handles insertions (OldCount=0), deletions (NewCount=0), and modifications correctly
 - Special handling for edge cases (insertions at file start/end)
-- Drops comments for deleted lines, preserves comments on modified lines
+- Comments on deleted lines are dropped; comments on unchanged lines are preserved at their new positions
+
+**Why line mapping instead of `git apply`?**
+Direct patch application with `git apply` fails because the CRITIC blocks break context matching. For example, if a diff expects consecutive lines `[line1, line2, line3]` but the file contains `[line1, CRITIC_BLOCK, line2, line3]`, git apply cannot find the context and fails.
 
 #### UI Component (`internal/ui/commenteditor.go`)
 
