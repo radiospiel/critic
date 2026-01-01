@@ -90,3 +90,19 @@ func IsGitRepo() bool {
 	_, err := cmd.Output()
 	return err == nil
 }
+
+// GetRepoRoot returns the root directory of the git repository
+func GetRepoRoot() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get repo root: %w", err)
+	}
+
+	root := strings.TrimSpace(string(output))
+	if root == "" {
+		return "", fmt.Errorf("empty repo root")
+	}
+
+	return root, nil
+}

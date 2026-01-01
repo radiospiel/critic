@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"git.15b.it/eno/critic/internal/comments"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/highlight"
 	"git.15b.it/eno/critic/internal/logger"
@@ -32,13 +33,27 @@ type DiffViewModel struct {
 	totalLines          int           // Total number of lines in rendered diff
 	focused             bool          // Whether this pane is focused
 	navigableLines      []int         // Line numbers that can have cursor (diff lines only)
+	commentInput        CommentInputModel
+	commentStorage      *comments.Storage
+	fileComments        map[int]*comments.Comment // Comments for current file (keyed by line number)
+	lineToFileLineNum   map[int]int               // Map from display line number to actual file line number
 }
 
 // NewDiffViewModel creates a new diff viewer model
 func NewDiffViewModel() DiffViewModel {
+	storage, err := comments.NewStorage()
+	if err != nil {
+		logger.Error("Failed to create comment storage: %v", err)
+		storage = nil
+	}
+
 	return DiffViewModel{
 		highlighter:         highlight.NewHighlighter(),
 		highlightingEnabled: true, // Default to enabled
+		commentInput:        NewCommentInputModel(),
+		commentStorage:      storage,
+		fileComments:        make(map[int]*comments.Comment),
+		lineToFileLineNum:   make(map[int]int),
 	}
 }
 
@@ -51,10 +66,83 @@ func (m DiffViewModel) Init() tea.Cmd {
 func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 
+	// If comment input is visible, route messages to it
+	if m.commentInput.IsVisible() {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			// All key messages go to comment input when it's visible
+			m.commentInput, cmd = m.commentInput.Update(msg)
+			return cmd
+		case CommentSavedMsg:
+			// Save the comment
+			if m.commentStorage != nil && m.file != nil {
+				filePath := m.file.NewPath
+				if filePath == "" {
+					filePath = m.file.OldPath
+				}
+				err := m.commentStorage.SaveComment(filePath, msg.LineNumber, msg.Content)
+				if err != nil {
+					logger.Error("Failed to save comment: %v", err)
+				} else {
+					logger.Info("Comment saved for line %d", msg.LineNumber)
+					// Reload comments for this file
+					m.loadCommentsForCurrentFile()
+				}
+			}
+			m.commentInput.Hide()
+			return m.refreshContent()
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if m.ready {
 			switch msg.String() {
+			case "enter":
+				// Open comment input for current line
+				if m.focused && m.commentStorage != nil {
+					fileLineNum, ok := m.lineToFileLineNum[m.cursorLine]
+					if ok {
+						filePath := m.file.NewPath
+						if filePath == "" {
+							filePath = m.file.OldPath
+						}
+
+						// Check if there's an existing comment
+						if comment, exists := m.fileComments[fileLineNum]; exists {
+							// Edit existing comment
+							m.commentInput.ShowEdit(fileLineNum, filePath, comment.Content)
+						} else {
+							// Create new comment
+							m.commentInput.Show(fileLineNum, filePath)
+						}
+						return nil
+					}
+				}
+
+			case "d":
+				// Delete comment at current line (if exists)
+				if m.focused && m.commentStorage != nil {
+					fileLineNum, ok := m.lineToFileLineNum[m.cursorLine]
+					if ok {
+						if _, exists := m.fileComments[fileLineNum]; exists {
+							filePath := m.file.NewPath
+							if filePath == "" {
+								filePath = m.file.OldPath
+							}
+							err := m.commentStorage.DeleteComment(filePath, fileLineNum)
+							if err != nil {
+								logger.Error("Failed to delete comment: %v", err)
+							} else {
+								logger.Info("Comment deleted for line %d", fileLineNum)
+								// Reload comments
+								m.loadCommentsForCurrentFile()
+								return m.refreshContent()
+							}
+						}
+					}
+				}
+
 			case "up", "k":
 				if m.moveCursorUp() {
 					m.ensureCursorVisible()
@@ -105,6 +193,25 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the diff view
 func (m DiffViewModel) View() string {
+	// If comment input is visible, show it as an overlay
+	if m.commentInput.IsVisible() {
+		// Show comment input overlay on top of diff view
+		return lipgloss.Place(
+			m.width,
+			m.height,
+			lipgloss.Center,
+			lipgloss.Center,
+			m.commentInput.View(),
+			lipgloss.WithWhitespaceChars(" "),
+			lipgloss.WithWhitespaceForeground(lipgloss.AdaptiveColor{Light: "#000", Dark: "#000"}),
+		)
+	}
+
+	return m.renderBaseView()
+}
+
+// renderBaseView renders the base diff view without overlays
+func (m DiffViewModel) renderBaseView() string {
 	if m.file == nil {
 		return lipgloss.NewStyle().
 			Padding(1, 2).
@@ -144,6 +251,9 @@ func (m DiffViewModel) View() string {
 func (m *DiffViewModel) SetFile(file *ctypes.FileDiff) tea.Cmd {
 	m.file = file
 
+	// Load comments for this file
+	m.loadCommentsForCurrentFile()
+
 	// Pre-render and cache the diff content
 	if file != nil && (m.cachedFile != file) {
 		m.cachedFile = file
@@ -164,6 +274,28 @@ func (m *DiffViewModel) SetFile(file *ctypes.FileDiff) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// loadCommentsForCurrentFile loads comments for the currently displayed file
+func (m *DiffViewModel) loadCommentsForCurrentFile() {
+	if m.file == nil || m.commentStorage == nil {
+		m.fileComments = make(map[int]*comments.Comment)
+		return
+	}
+
+	filePath := m.file.NewPath
+	if filePath == "" {
+		filePath = m.file.OldPath
+	}
+
+	loadedComments, err := m.commentStorage.LoadComments(filePath)
+	if err != nil {
+		logger.Error("Failed to load comments: %v", err)
+		m.fileComments = make(map[int]*comments.Comment)
+	} else {
+		m.fileComments = loadedComments
+		logger.Info("Loaded %d comments for %s", len(loadedComments), filePath)
+	}
 }
 
 // diffRenderedMsg is sent when async rendering completes
@@ -280,6 +412,9 @@ func (m *DiffViewModel) SetSize(width, height int) {
 		m.viewport.Height = height
 	}
 
+	// Size the comment input
+	m.commentInput.SetSize(width, height)
+
 	// Experiment: Don't repaint on resize
 }
 
@@ -304,6 +439,9 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	var b strings.Builder
 	lineNum := 0             // Track current line number for cursor highlighting
 	var navigableLines []int // Track which lines can have cursor (diff lines only)
+
+	// Reset line number mapping
+	m.lineToFileLineNum = make(map[int]int)
 
 	filename := git.GitPathToDisplayPath(m.file.NewPath)
 	if m.file.IsDeleted {
@@ -384,7 +522,20 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 				highlighted = line.Content
 			}
 
-			lineStr := m.renderLine(line, highlighted, lineNum)
+			// Track mapping between display line and file line number
+			fileLineNum := line.NewNum
+			if line.Type == ctypes.LineDeleted {
+				fileLineNum = line.OldNum
+			}
+			m.lineToFileLineNum[lineNum] = fileLineNum
+
+			// Check if this line has a comment
+			hasComment := false
+			if _, exists := m.fileComments[fileLineNum]; exists {
+				hasComment = true
+			}
+
+			lineStr := m.renderLine(line, highlighted, lineNum, hasComment)
 			b.WriteString(lineStr)
 			// Add to navigable lines (only actual diff lines, not headers)
 			navigableLines = append(navigableLines, lineNum)
@@ -534,7 +685,7 @@ func (m *DiffViewModel) highlightFromHunks(file *ctypes.FileDiff, filename strin
 }
 
 // renderLine renders a single diff line with pre-highlighted content
-func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string, currentLineNum int) string {
+func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string, currentLineNum int, hasComment bool) string {
 	// Build line number prefix: " 123 + "
 	var lineNum int
 	var indicator string
@@ -550,7 +701,13 @@ func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string,
 		indicator = " "
 	}
 
-	prefix := fmt.Sprintf("%4d %s ", lineNum, indicator)
+	// Add comment indicator if comment exists
+	commentIndicator := " "
+	if hasComment {
+		commentIndicator = "💬"
+	}
+
+	prefix := fmt.Sprintf("%4d %s %s ", lineNum, indicator, commentIndicator)
 
 	// Combine prefix with pre-highlighted content
 	fullLine := prefix + highlightedContent
