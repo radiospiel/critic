@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"git.15b.it/eno/critic/internal/cli"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/logger"
 	"git.15b.it/eno/critic/internal/ui"
@@ -14,6 +13,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// Args represents parsed command-line arguments
+type Args struct {
+	Bases      []string // List of base points (e.g., ["main", "origin/main", "HEAD"])
+	Current    string   // Current target (e.g., "current" or a git ref)
+	Paths      []string // Paths to diff
+	Extensions []string // File extensions to include
+}
 
 // Model represents the main application model
 type Model struct {
@@ -37,7 +44,7 @@ type Model struct {
 }
 
 // NewModel creates a new application model
-func NewModel(args *cli.Args) Model {
+func NewModel(args *Args) Model {
 	logger.Info("NewModel: Creating model with %d paths, %d bases", len(args.Paths), len(args.Bases))
 	diffView := ui.NewDiffViewModel()
 	diffView.SetHighlightingEnabled(true) // Always enable highlighting

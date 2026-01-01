@@ -4,39 +4,37 @@ import (
 	"fmt"
 	"strings"
 
+	"git.15b.it/eno/critic/internal/app"
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/internal/logger"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
 
-// Args represents parsed command-line arguments
-type Args struct {
-	Bases      []string // List of base points (e.g., ["main", "origin/main", "HEAD"])
-	Current    string   // Current target (e.g., "current" or a git ref)
-	Paths      []string // Paths to diff
-	Extensions []string // File extensions to include
+// Execute runs the CLI application
+func Execute() {
+	if err := NewRootCmd().Execute(); err != nil {
+		// Cobra already printed the error
+		// Just exit with error code
+		logger.Error("Command failed: %v", err)
+	}
 }
 
-// Parse parses command-line arguments into structured Args
-// Supports: critic --extensions=c,rb,go base1,base2,base3..current -- path1 path2 path3
-// Now implemented using Cobra
-func Parse(args []string) (*Args, error) {
-	var result *Args
+// ParseArgsForTesting parses command-line arguments without running the app
+// This is exported for testing purposes only
+func ParseArgsForTesting(args []string) (*app.Args, error) {
+	var result *app.Args
 	var parseErr error
-	executed := false
 
-	// Create root command with a custom RunE that captures args
-	rootCmd := newRootCmd(func(args *Args, err error) {
-		result = args
+	cmd := newTestCmd(func(a *app.Args, err error) {
+		result = a
 		parseErr = err
-		executed = true
 	})
 
-	// Set args
-	rootCmd.SetArgs(args)
+	cmd.SetArgs(args)
 
-	// Execute
-	if err := rootCmd.Execute(); err != nil {
+	if err := cmd.Execute(); err != nil {
 		return nil, err
 	}
 
@@ -44,18 +42,82 @@ func Parse(args []string) (*Args, error) {
 		return nil, parseErr
 	}
 
-	// If command wasn't executed (e.g., --help), result will be nil
-	if !executed {
-		// Help or version was displayed, exit gracefully
-		// Cobra already printed the output, so we just need to exit
-		return nil, fmt.Errorf("help displayed")
-	}
-
 	return result, nil
 }
 
-// newRootCmd creates the root cobra command
-func newRootCmd(callback func(*Args, error)) *cobra.Command {
+// newTestCmd creates a command for testing that doesn't run the app
+func newTestCmd(callback func(*app.Args, error)) *cobra.Command {
+	var extensionsFlag []string
+
+	cmd := &cobra.Command{
+		Use:           "critic [flags] [base1,base2..current] [-- path1 path2 ...]",
+		Short:         "Critic - Git diff viewer",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args: func(cmd *cobra.Command, args []string) error {
+			argsLenAtDash := cmd.ArgsLenAtDash()
+			if argsLenAtDash >= 0 {
+				if argsLenAtDash > 1 {
+					return fmt.Errorf("accepts at most 1 arg before --, received %d", argsLenAtDash)
+				}
+				return nil
+			}
+			if len(args) > 1 {
+				return fmt.Errorf("accepts at most 1 arg, received %d", len(args))
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			parsedArgs := &app.Args{
+				Extensions: extensionsFlag,
+				Paths:      []string{"."},
+				Current:    "current",
+			}
+
+			argsLenAtDash := cmd.ArgsLenAtDash()
+			var baseArg string
+			if argsLenAtDash >= 0 {
+				if argsLenAtDash > 0 {
+					baseArg = args[0]
+				}
+				pathArgs := args[argsLenAtDash:]
+				if len(pathArgs) > 0 {
+					parsedArgs.Paths = pathArgs
+				}
+			} else {
+				if len(args) > 0 {
+					baseArg = args[0]
+				}
+			}
+
+			if baseArg != "" {
+				if err := parseBasesCurrent(baseArg, parsedArgs); err != nil {
+					callback(nil, err)
+					return err
+				}
+			}
+
+			if len(parsedArgs.Bases) == 0 {
+				bases, err := getDefaultBases()
+				if err != nil {
+					callback(nil, fmt.Errorf("failed to determine default bases: %w", err))
+					return err
+				}
+				parsedArgs.Bases = bases
+			}
+
+			callback(parsedArgs, nil)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringSliceVar(&extensionsFlag, "extensions", config.DefaultFileExtensions, "Comma-separated list of file extensions to include")
+
+	return cmd
+}
+
+// NewRootCmd creates the root cobra command
+func NewRootCmd() *cobra.Command {
 	var extensionsFlag []string
 
 	cmd := &cobra.Command{
@@ -93,8 +155,18 @@ Examples:
 			}
 			return nil
 		},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			logger.Info("=== Critic starting ===")
+
+			// Check if we're in a git repository
+			if !git.IsGitRepo() {
+				return fmt.Errorf("not a git repository")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result := &Args{
+			// Parse arguments
+			parsedArgs := &app.Args{
 				Extensions: extensionsFlag,
 				Paths:      []string{"."},
 				Current:    "current", // Default to working directory
@@ -112,7 +184,7 @@ Examples:
 				// Paths are after --
 				pathArgs := args[argsLenAtDash:]
 				if len(pathArgs) > 0 {
-					result.Paths = pathArgs
+					parsedArgs.Paths = pathArgs
 				}
 			} else {
 				// No -- separator
@@ -123,23 +195,28 @@ Examples:
 
 			// Parse base..current syntax
 			if baseArg != "" {
-				if err := parseBasesCurrent(baseArg, result); err != nil {
-					callback(nil, err)
+				if err := parseBasesCurrent(baseArg, parsedArgs); err != nil {
 					return err
 				}
 			}
 
 			// Set default bases if none were specified
-			if len(result.Bases) == 0 {
+			if len(parsedArgs.Bases) == 0 {
 				bases, err := getDefaultBases()
 				if err != nil {
-					callback(nil, fmt.Errorf("failed to determine default bases: %w", err))
-					return err
+					return fmt.Errorf("failed to determine default bases: %w", err)
 				}
-				result.Bases = bases
+				parsedArgs.Bases = bases
 			}
 
-			callback(result, nil)
+			// Create and run the application
+			m := app.NewModel(parsedArgs)
+			p := tea.NewProgram(m, tea.WithAltScreen())
+
+			if _, err := p.Run(); err != nil {
+				return fmt.Errorf("application error: %w", err)
+			}
+
 			return nil
 		},
 	}
@@ -151,7 +228,7 @@ Examples:
 }
 
 // parseBasesCurrent parses the "base1,base2,base3..current" syntax
-func parseBasesCurrent(arg string, result *Args) error {
+func parseBasesCurrent(arg string, result *app.Args) error {
 	parts := strings.Split(arg, "..")
 
 	if len(parts) > 2 {

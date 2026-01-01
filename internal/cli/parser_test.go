@@ -3,19 +3,21 @@ package cli
 import (
 	"reflect"
 	"testing"
+
+	"git.15b.it/eno/critic/internal/app"
 )
 
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []string
-		want    *Args
+		want    *app.Args
 		wantErr bool
 	}{
 		{
 			name: "Empty args uses defaults",
 			args: []string{},
-			want: &Args{
+			want: &app.Args{
 				Bases:      nil, // Will be populated by getDefaultBases - skip check
 				Current:    "current",
 				Paths:      []string{"."},
@@ -25,7 +27,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "Custom extensions",
 			args: []string{"--extensions=go,rs"},
-			want: &Args{
+			want: &app.Args{
 				Bases:      nil, // Will be populated by getDefaultBases - skip check
 				Current:    "current",
 				Paths:      []string{"."},
@@ -35,7 +37,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "Single base to current",
 			args: []string{"main..current"},
-			want: &Args{
+			want: &app.Args{
 				Bases:      []string{"main"},
 				Current:    "current",
 				Paths:      []string{"."},
@@ -45,7 +47,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "Multiple bases to current",
 			args: []string{"merge-base,origin/main,HEAD..current"},
-			want: &Args{
+			want: &app.Args{
 				Bases:      []string{"merge-base", "origin/main", "HEAD"},
 				Current:    "current",
 				Paths:      []string{"."},
@@ -55,7 +57,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "Bases to specific ref",
 			args: []string{"main,develop..v1.0.0"},
-			want: &Args{
+			want: &app.Args{
 				Bases:      []string{"main", "develop"},
 				Current:    "v1.0.0",
 				Paths:      []string{"."},
@@ -65,7 +67,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "With explicit paths",
 			args: []string{"main..current", "--", "src", "tests"},
-			want: &Args{
+			want: &app.Args{
 				Bases:      []string{"main"},
 				Current:    "current",
 				Paths:      []string{"src", "tests"},
@@ -75,7 +77,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "Extensions and paths",
 			args: []string{"--extensions=go,rs", "main..current", "--", "src"},
-			want: &Args{
+			want: &app.Args{
 				Bases:      []string{"main"},
 				Current:    "current",
 				Paths:      []string{"src"},
@@ -85,7 +87,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "Just bases (no current specified)",
 			args: []string{"main,develop"},
-			want: &Args{
+			want: &app.Args{
 				Bases:      []string{"main", "develop"},
 				Current:    "current", // Default
 				Paths:      []string{"."},
@@ -106,7 +108,7 @@ func TestParse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parse(tt.args)
+			got, err := ParseArgsForTesting(tt.args)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -189,7 +191,7 @@ func TestParseBasesCurrent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := &Args{
+			result := &app.Args{
 				Current: "current", // Default
 			}
 			err := parseBasesCurrent(tt.arg, result)
