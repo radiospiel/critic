@@ -5,6 +5,7 @@ import (
 
 	"git.15b.it/eno/critic/internal/app"
 	"git.15b.it/eno/critic/internal/assert"
+	"git.15b.it/eno/critic/internal/config"
 )
 
 func TestParse(t *testing.T) {
@@ -21,7 +22,7 @@ func TestParse(t *testing.T) {
 				Bases:      nil, // No bases specified - app layer will add defaults
 				Current:    "current",
 				Paths:      []string{"."},
-				Extensions: nil, // Will check separately
+				Extensions: config.DefaultFileExtensions,
 			},
 		},
 		{
@@ -41,7 +42,7 @@ func TestParse(t *testing.T) {
 				Bases:      []string{"main"},
 				Current:    "current",
 				Paths:      []string{"."},
-				Extensions: nil,
+				Extensions: config.DefaultFileExtensions,
 			},
 		},
 		{
@@ -51,7 +52,7 @@ func TestParse(t *testing.T) {
 				Bases:      []string{"merge-base", "origin/main", "HEAD"},
 				Current:    "current",
 				Paths:      []string{"."},
-				Extensions: nil,
+				Extensions: config.DefaultFileExtensions,
 			},
 		},
 		{
@@ -61,7 +62,7 @@ func TestParse(t *testing.T) {
 				Bases:      []string{"main", "develop"},
 				Current:    "v1.0.0",
 				Paths:      []string{"."},
-				Extensions: nil,
+				Extensions: config.DefaultFileExtensions,
 			},
 		},
 		{
@@ -71,7 +72,7 @@ func TestParse(t *testing.T) {
 				Bases:      []string{"main"},
 				Current:    "current",
 				Paths:      []string{"src", "tests"},
-				Extensions: nil,
+				Extensions: config.DefaultFileExtensions,
 			},
 		},
 		{
@@ -91,7 +92,7 @@ func TestParse(t *testing.T) {
 				Bases:      []string{"main", "develop"},
 				Current:    "current", // Default
 				Paths:      []string{"."},
-				Extensions: nil,
+				Extensions: config.DefaultFileExtensions,
 			},
 		},
 		{
@@ -117,14 +118,7 @@ func TestParse(t *testing.T) {
 				return
 			}
 
-			// Skip extensions check if expected is nil (will use defaults)
-			if tt.want.Extensions != nil {
-				assert.Equals(t, got.Extensions, tt.want.Extensions)
-			} else {
-				// Just check that extensions were set
-				assert.True(t, len(got.Extensions) > 0, "Extensions should not be empty when using defaults")
-			}
-
+			assert.Equals(t, got.Extensions, tt.want.Extensions)
 			assert.Equals(t, got.Bases, tt.want.Bases)
 			assert.Equals(t, got.Current, tt.want.Current)
 			assert.Equals(t, got.Paths, tt.want.Paths)
