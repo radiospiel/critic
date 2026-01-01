@@ -9,30 +9,33 @@ import (
 
 func TestParse(t *testing.T) {
 	tests := []struct {
-		name    string
-		args    []string
-		want    *app.Args
-		wantErr bool
+		name           string
+		args           []string
+		want           *app.Args
+		wantErr        bool
+		skipBasesCheck bool
 	}{
 		{
 			name: "Empty args uses defaults",
 			args: []string{},
 			want: &app.Args{
-				Bases:      nil, // Will be populated by getDefaultBases - skip check
+				Bases:      nil, // No bases specified - app layer will add defaults
 				Current:    "current",
 				Paths:      []string{"."},
 				Extensions: nil, // Will check separately
 			},
+			skipBasesCheck: true, // Bases are empty at CLI level
 		},
 		{
 			name: "Custom extensions",
 			args: []string{"--extensions=go,rs"},
 			want: &app.Args{
-				Bases:      nil, // Will be populated by getDefaultBases - skip check
+				Bases:      nil, // No bases specified - app layer will add defaults
 				Current:    "current",
 				Paths:      []string{"."},
 				Extensions: []string{"go", "rs"},
 			},
+			skipBasesCheck: true, // Bases are empty at CLI level
 		},
 		{
 			name: "Single base to current",
@@ -129,15 +132,10 @@ func TestParse(t *testing.T) {
 				}
 			}
 
-			// Skip bases check if expected is nil (will use defaults)
-			if tt.want.Bases != nil {
+			// Check bases unless skipBasesCheck is true
+			if !tt.skipBasesCheck {
 				if !reflect.DeepEqual(got.Bases, tt.want.Bases) {
 					t.Errorf("Parse() Bases = %v, want %v", got.Bases, tt.want.Bases)
-				}
-			} else {
-				// Just check that bases were populated
-				if len(got.Bases) == 0 {
-					t.Error("Parse() Bases should not be empty when using defaults")
 				}
 			}
 			if got.Current != tt.want.Current {

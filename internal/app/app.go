@@ -22,6 +22,69 @@ type Args struct {
 	Extensions []string // File extensions to include
 }
 
+// GetDefaultBases returns the default base points based on git state
+func GetDefaultBases() ([]string, error) {
+	bases := []string{}
+
+	// 1. Add main/master if it exists (will use merge-base automatically)
+	if branchExists("main") {
+		bases = append(bases, "main")
+	} else if branchExists("master") {
+		bases = append(bases, "master")
+	}
+
+	// 2. Add origin/<current-branch> if it exists
+	branch, err := git.GetCurrentBranch()
+	if err == nil && branch != "" {
+		originBranch := "origin/" + branch
+		// Check if origin branch exists
+		if branchExists(originBranch) {
+			bases = append(bases, originBranch)
+		}
+	}
+
+	// 3. Add HEAD (last committed version)
+	bases = append(bases, "HEAD")
+
+	return bases, nil
+}
+
+// branchExists checks if a git ref exists
+func branchExists(ref string) bool {
+	// Try to resolve the ref
+	_, err := git.ResolveRef(ref)
+	return err == nil
+}
+
+// Run runs the application with the given arguments
+func Run(args *Args) error {
+	logger.Info("=== Critic starting ===")
+
+	// Check if we're in a git repository
+	if !git.IsGitRepo() {
+		return fmt.Errorf("not a git repository")
+	}
+
+	// Set default bases if none were specified
+	if len(args.Bases) == 0 {
+		bases, err := GetDefaultBases()
+		if err != nil {
+			return fmt.Errorf("failed to determine default bases: %w", err)
+		}
+		args.Bases = bases
+	}
+
+	// Create and run the application
+	m := NewModel(args)
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("application error: %w", err)
+	}
+
+	return nil
+}
+
 // Model represents the main application model
 type Model struct {
 	fileList     ui.FileListModel

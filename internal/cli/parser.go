@@ -6,19 +6,19 @@ import (
 
 	"git.15b.it/eno/critic/internal/app"
 	"git.15b.it/eno/critic/internal/config"
-	"git.15b.it/eno/critic/internal/git"
-	"git.15b.it/eno/critic/internal/logger"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
 
+var commandHandler func(*app.Args) error
+
+// OnCommand sets the callback to run when the command is executed
+func OnCommand(handler func(*app.Args) error) {
+	commandHandler = handler
+}
+
 // Execute runs the CLI application
-func Execute() {
-	if err := NewRootCmd().Execute(); err != nil {
-		// Cobra already printed the error
-		// Just exit with error code
-		logger.Error("Command failed: %v", err)
-	}
+func Execute() error {
+	return NewRootCmd().Execute()
 }
 
 // ParseArgsForTesting parses command-line arguments without running the app
@@ -97,15 +97,6 @@ func newTestCmd(callback func(*app.Args, error)) *cobra.Command {
 				}
 			}
 
-			if len(parsedArgs.Bases) == 0 {
-				bases, err := getDefaultBases()
-				if err != nil {
-					callback(nil, fmt.Errorf("failed to determine default bases: %w", err))
-					return err
-				}
-				parsedArgs.Bases = bases
-			}
-
 			callback(parsedArgs, nil)
 			return nil
 		},
@@ -155,15 +146,6 @@ Examples:
 			}
 			return nil
 		},
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			logger.Info("=== Critic starting ===")
-
-			// Check if we're in a git repository
-			if !git.IsGitRepo() {
-				return fmt.Errorf("not a git repository")
-			}
-			return nil
-		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Parse arguments
 			parsedArgs := &app.Args{
@@ -200,24 +182,12 @@ Examples:
 				}
 			}
 
-			// Set default bases if none were specified
-			if len(parsedArgs.Bases) == 0 {
-				bases, err := getDefaultBases()
-				if err != nil {
-					return fmt.Errorf("failed to determine default bases: %w", err)
-				}
-				parsedArgs.Bases = bases
+			// Call the command handler (set via OnCommand)
+			if commandHandler != nil {
+				return commandHandler(parsedArgs)
 			}
 
-			// Create and run the application
-			m := app.NewModel(parsedArgs)
-			p := tea.NewProgram(m, tea.WithAltScreen())
-
-			if _, err := p.Run(); err != nil {
-				return fmt.Errorf("application error: %w", err)
-			}
-
-			return nil
+			return fmt.Errorf("no command handler set")
 		},
 	}
 
@@ -248,36 +218,3 @@ func parseBasesCurrent(arg string, result *app.Args) error {
 	return nil
 }
 
-// getDefaultBases returns the default base points based on git state
-func getDefaultBases() ([]string, error) {
-	bases := []string{}
-
-	// 1. Add main/master if it exists (will use merge-base automatically)
-	if branchExists("main") {
-		bases = append(bases, "main")
-	} else if branchExists("master") {
-		bases = append(bases, "master")
-	}
-
-	// 2. Add origin/<current-branch> if it exists
-	branch, err := git.GetCurrentBranch()
-	if err == nil && branch != "" {
-		originBranch := "origin/" + branch
-		// Check if origin branch exists
-		if branchExists(originBranch) {
-			bases = append(bases, originBranch)
-		}
-	}
-
-	// 3. Add HEAD (last committed version)
-	bases = append(bases, "HEAD")
-
-	return bases, nil
-}
-
-// branchExists checks if a git ref exists
-func branchExists(ref string) bool {
-	// Try to resolve the ref
-	_, err := git.ResolveRef(ref)
-	return err == nil
-}
