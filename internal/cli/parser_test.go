@@ -1,10 +1,10 @@
 package cli
 
 import (
-	"reflect"
 	"testing"
 
 	"git.15b.it/eno/critic/internal/app"
+	"git.15b.it/eno/critic/internal/assert"
 )
 
 func TestParse(t *testing.T) {
@@ -119,27 +119,15 @@ func TestParse(t *testing.T) {
 
 			// Skip extensions check if expected is nil (will use defaults)
 			if tt.want.Extensions != nil {
-				if !reflect.DeepEqual(got.Extensions, tt.want.Extensions) {
-					t.Errorf("Parse() Extensions = %v, want %v", got.Extensions, tt.want.Extensions)
-				}
+				assert.Equals(t, got.Extensions, tt.want.Extensions)
 			} else {
 				// Just check that extensions were set
-				if len(got.Extensions) == 0 {
-					t.Error("Parse() Extensions should not be empty when using defaults")
-				}
+				assert.True(t, len(got.Extensions) > 0, "Extensions should not be empty when using defaults")
 			}
 
-			// Check bases
-			if !reflect.DeepEqual(got.Bases, tt.want.Bases) {
-				t.Errorf("Parse() Bases = %v, want %v", got.Bases, tt.want.Bases)
-			}
-
-			if got.Current != tt.want.Current {
-				t.Errorf("Parse() Current = %v, want %v", got.Current, tt.want.Current)
-			}
-			if !reflect.DeepEqual(got.Paths, tt.want.Paths) {
-				t.Errorf("Parse() Paths = %v, want %v", got.Paths, tt.want.Paths)
-			}
+			assert.Equals(t, got.Bases, tt.want.Bases)
+			assert.Equals(t, got.Current, tt.want.Current)
+			assert.Equals(t, got.Paths, tt.want.Paths)
 		})
 	}
 }
@@ -197,12 +185,8 @@ func TestParseBasesCurrent(t *testing.T) {
 				return
 			}
 
-			if !reflect.DeepEqual(result.Bases, tt.wantBases) {
-				t.Errorf("parseBasesCurrent() Bases = %v, want %v", result.Bases, tt.wantBases)
-			}
-			if result.Current != tt.wantCurrent {
-				t.Errorf("parseBasesCurrent() Current = %v, want %v", result.Current, tt.wantCurrent)
-			}
+			assert.Equals(t, result.Bases, tt.wantBases)
+			assert.Equals(t, result.Current, tt.wantCurrent)
 		})
 	}
 }
