@@ -138,14 +138,31 @@ func (m FileListModel) View() string {
 			leftIndicator = " "
 		}
 
-		line := fmt.Sprintf("%s%s %s", leftIndicator, status, path)
+		// Build the content (status + path) that will be styled
+		content := fmt.Sprintf("%s %s", status, path)
 
-		// Prevent word wrapping by setting max width and truncating if needed
-		if m.width > 0 {
-			style = style.MaxWidth(m.width).Inline(true)
+		// Render based on whether this is selected
+		if i == m.cursor {
+			// For selected line: render indicator first, then styled content spanning to right edge
+			availableWidth := m.width - 1 // -1 for left indicator
+			if availableWidth > 0 {
+				// Apply selection style with full width spanning to right edge
+				styledContent := style.Width(availableWidth).Render(content)
+				b.WriteString(leftIndicator)
+				b.WriteString(styledContent)
+			} else {
+				// Fallback if width is too small
+				line := fmt.Sprintf("%s%s", leftIndicator, content)
+				b.WriteString(style.Render(line))
+			}
+		} else {
+			// For non-selected lines: render as before
+			line := fmt.Sprintf("%s%s", leftIndicator, content)
+			if m.width > 0 {
+				style = style.MaxWidth(m.width).Inline(true)
+			}
+			b.WriteString(style.Render(line))
 		}
-
-		b.WriteString(style.Render(line))
 		if i < len(m.files)-1 {
 			b.WriteString("\n")
 		}
