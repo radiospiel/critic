@@ -449,15 +449,19 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 			// Check if there's a comment for this line
 			if fileComments != nil && line.NewNum > 0 {
 				if comment, exists := fileComments.Comments[line.NewNum]; exists && len(comment.Lines) > 0 {
-					// Render the comment preview line (first line of comment only)
-					commentPreview := m.renderCommentPreview(comment.Lines[0], lineNum)
-					b.WriteString(commentPreview)
-					// Track this as a comment line
-					m.commentLines[lineNum] = line.NewNum
-					// Add to navigable lines so user can select it
-					navigableLines = append(navigableLines, lineNum)
-					lineNum++
-					b.WriteString("\n")
+					// Render up to 6 lines of the comment preview
+					commentLines := m.renderCommentPreview(comment.Lines, lineNum)
+					for i, commentLine := range commentLines {
+						b.WriteString(commentLine)
+						// Track the first comment line for navigation
+						if i == 0 {
+							m.commentLines[lineNum] = line.NewNum
+						}
+						// Add to navigable lines so user can select it
+						navigableLines = append(navigableLines, lineNum)
+						lineNum++
+						b.WriteString("\n")
+					}
 				}
 			}
 		}
@@ -603,37 +607,55 @@ func (m *DiffViewModel) highlightFromHunks(file *ctypes.FileDiff, filename strin
 	return result
 }
 
-// renderCommentPreview renders a comment preview line with dark text on dark yellow background
-func (m *DiffViewModel) renderCommentPreview(commentText string, currentLineNum int) string {
-	// Style: dark text on dark yellow background (ANSI 256-color)
-	// Dark yellow background: \x1b[48;5;136m (or similar dark yellow)
-	// Dark/black foreground: \x1b[38;5;0m
-	const darkYellowBg = "\x1b[48;5;136m" // Dark yellow/gold background
-	const darkFg = "\x1b[38;5;0m"          // Black text
-
-	// Prefix to show this is a comment
-	prefix := "    💬 "
-
-	// Combine prefix and comment text
-	content := prefix + commentText
-
-	// Calculate visible width
-	visibleWidth := lipgloss.Width(content)
-
-	// Truncate or pad to match viewport width
-	var processed string
-	if visibleWidth > m.width {
-		processed = truncateANSI(content, m.width)
-	} else {
-		padding := strings.Repeat(" ", m.width-visibleWidth)
-		processed = content + padding
+// renderCommentPreview renders up to 6 lines of a comment preview with dark text on black background
+// Each line starts with a half-width block character in yellow/gold color
+func (m *DiffViewModel) renderCommentPreview(commentLines []string, startLineNum int) []string {
+	// Limit to 6 lines
+	maxLines := 6
+	linesToRender := len(commentLines)
+	if linesToRender > maxLines {
+		linesToRender = maxLines
 	}
 
-	// Apply dark text on dark yellow background
-	styled := darkYellowBg + darkFg + processed + "\x1b[0m"
+	result := make([]string, linesToRender)
 
-	// Apply cursor highlighting if this is the active line
-	return m.renderLineWithCursor(styled, currentLineNum)
+	// ANSI color codes
+	const yellowFg = "\x1b[38;5;220m"     // Yellow/gold foreground for block
+	const darkFg = "\x1b[38;5;250m"       // Light gray text
+	const blackBg = "\x1b[48;5;0m"        // Black background
+	const reset = "\x1b[0m"
+
+	// Half-width block character
+	const halfBlock = "▌"
+
+	for i := 0; i < linesToRender; i++ {
+		// Start with colored half-block + space
+		prefix := yellowFg + halfBlock + reset + " "
+
+		// Combine prefix and comment text
+		content := prefix + commentLines[i]
+
+		// Calculate visible width
+		visibleWidth := lipgloss.Width(content)
+
+		// Truncate or pad to match viewport width
+		var processed string
+		if visibleWidth > m.width {
+			processed = truncateANSI(content, m.width)
+		} else {
+			padding := strings.Repeat(" ", m.width-visibleWidth)
+			processed = content + padding
+		}
+
+		// Apply black background and light text
+		styled := blackBg + darkFg + processed + reset
+
+		// Apply cursor highlighting if this is the active line
+		currentLineNum := startLineNum + i
+		result[i] = m.renderLineWithCursor(styled, currentLineNum)
+	}
+
+	return result
 }
 
 // renderLine renders a single diff line with pre-highlighted content
