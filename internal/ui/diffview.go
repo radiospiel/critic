@@ -664,7 +664,7 @@ func (m *DiffViewModel) renderCommentPreview(commentLines []string, startLineNum
 	// ANSI color codes
 	const yellowFg = "\x1b[38;5;220m"     // Yellow/gold foreground for block
 	const darkFg = "\x1b[38;5;250m"       // Light gray text
-	const blackBg = "\x1b[48;5;0m"        // Black background
+	const darkYellowBg = "\x1b[48;5;58m"  // Dark yellowish background
 	const reset = "\x1b[0m"
 
 	// Half-width block characters
@@ -696,8 +696,8 @@ func (m *DiffViewModel) renderCommentPreview(commentLines []string, startLineNum
 		// Add right half-block at the end
 		processed = processed + yellowFg + rightHalfBlock + reset
 
-		// Apply black background and light text
-		styled := blackBg + darkFg + processed + reset
+		// Apply dark yellowish background and light text
+		styled := darkYellowBg + darkFg + processed + reset
 
 		// Apply cursor highlighting if this is the active line
 		currentLineNum := startLineNum + i
