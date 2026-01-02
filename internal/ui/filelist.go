@@ -90,6 +90,18 @@ func (m FileListModel) View() string {
 	for i, file := range m.files {
 		style := normalFileStyle
 
+		// Check if file has comments
+		hasComments := false
+		if m.commentManager != nil {
+			// Use the git-relative path for checking comments
+			gitPath := file.NewPath
+			if file.IsDeleted {
+				gitPath = file.OldPath
+			}
+			hasComments = m.commentManager.HasComments(gitPath)
+		}
+
+		// Apply styles based on cursor position and comment status
 		if i == m.cursor {
 			// Use active or inactive selection style based on focus
 			if m.focused {
@@ -97,6 +109,12 @@ func (m FileListModel) View() string {
 			} else {
 				style = selectedFileInactiveStyle
 			}
+		} else if hasComments {
+			// File has comments but not selected: dark text on yellow background
+			style = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("0")).      // Dark/black text
+				Background(lipgloss.Color("220")).    // Yellow background
+				Padding(0, 1)
 		}
 
 		// Determine file status symbol
@@ -117,20 +135,7 @@ func (m FileListModel) View() string {
 			path = git.GitPathToDisplayPath(file.OldPath)
 		}
 
-		// Check if file has comments
-		commentIndicator := " "
-		if m.commentManager != nil {
-			// Use the git-relative path for checking comments
-			gitPath := file.NewPath
-			if file.IsDeleted {
-				gitPath = file.OldPath
-			}
-			if m.commentManager.HasComments(gitPath) {
-				commentIndicator = "💬"
-			}
-		}
-
-		line := fmt.Sprintf("%s%s %s", commentIndicator, status, path)
+		line := fmt.Sprintf("%s %s", status, path)
 
 		// Prevent word wrapping by setting max width and truncating if needed
 		if m.width > 0 {
