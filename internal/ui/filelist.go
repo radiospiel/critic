@@ -135,7 +135,15 @@ func (m FileListModel) View() string {
 			path = git.GitPathToDisplayPath(file.OldPath)
 		}
 
-		line := fmt.Sprintf("%s %s", status, path)
+		var line string
+		if hasComments && i != m.cursor {
+			// Add yellow half-blocks on left and right for files with comments
+			const yellowBlock = "\x1b[38;5;220m▌\x1b[0m"
+			const rightYellowBlock = "\x1b[38;5;220m▐\x1b[0m"
+			line = fmt.Sprintf("%s%s %s%s", yellowBlock, status, path, rightYellowBlock)
+		} else {
+			line = fmt.Sprintf("%s %s", status, path)
+		}
 
 		// Prevent word wrapping by setting max width and truncating if needed
 		if m.width > 0 {

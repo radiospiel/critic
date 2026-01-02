@@ -625,27 +625,34 @@ func (m *DiffViewModel) renderCommentPreview(commentLines []string, startLineNum
 	const blackBg = "\x1b[48;5;0m"        // Black background
 	const reset = "\x1b[0m"
 
-	// Half-width block character
-	const halfBlock = "▌"
+	// Half-width block characters
+	const leftHalfBlock = "▌"
+	const rightHalfBlock = "▐"
 
 	for i := 0; i < linesToRender; i++ {
 		// Start with colored half-block + space
-		prefix := yellowFg + halfBlock + reset + " "
+		prefix := yellowFg + leftHalfBlock + reset + " "
 
 		// Combine prefix and comment text
 		content := prefix + commentLines[i]
 
-		// Calculate visible width
+		// Calculate visible width (accounting for the right block we'll add)
 		visibleWidth := lipgloss.Width(content)
 
-		// Truncate or pad to match viewport width
+		// Reserve space for the right half-block
+		availableWidth := m.width - 1 // -1 for right half-block
+
+		// Truncate or pad to match viewport width minus the right block
 		var processed string
-		if visibleWidth > m.width {
-			processed = truncateANSI(content, m.width)
+		if visibleWidth > availableWidth {
+			processed = truncateANSI(content, availableWidth)
 		} else {
-			padding := strings.Repeat(" ", m.width-visibleWidth)
+			padding := strings.Repeat(" ", availableWidth-visibleWidth)
 			processed = content + padding
 		}
+
+		// Add right half-block at the end
+		processed = processed + yellowFg + rightHalfBlock + reset
 
 		// Apply black background and light text
 		styled := blackBg + darkFg + processed + reset
