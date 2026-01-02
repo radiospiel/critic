@@ -170,6 +170,31 @@ func (m *DiffViewModel) SetFile(file *ctypes.FileDiff) tea.Cmd {
 	return nil
 }
 
+// RefreshFile forces a re-render of the current file (used when comments change)
+func (m *DiffViewModel) RefreshFile() tea.Cmd {
+	if m.file == nil {
+		return nil
+	}
+
+	// Clear cache to force re-render
+	m.cachedFile = nil
+
+	// Re-render with highlighting if enabled
+	if m.highlightingEnabled {
+		return m.renderDiffAsync(m.file)
+	}
+
+	// Otherwise render immediately
+	content, totalLines, navigableLines := m.renderDiff()
+	m.cachedContent = content
+	m.totalLines = totalLines
+	m.navigableLines = navigableLines
+	if m.ready {
+		m.viewport.SetContent(m.cachedContent)
+	}
+	return nil
+}
+
 // diffRenderedMsg is sent when async rendering completes
 type diffRenderedMsg struct {
 	file           *ctypes.FileDiff

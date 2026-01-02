@@ -421,8 +421,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					logger.Error("Failed to save comments: %v", err)
 				} else {
 					logger.Info("Comment saved for line %d", msg.LineNum)
-					// Refresh the diff view to show the new/updated comment inline
-					cmd := m.diffView.SetFile(activeFile)
+					// Force refresh the diff view to show the new/updated comment inline
+					cmd := m.diffView.RefreshFile()
 					cmds = append(cmds, cmd)
 				}
 			}
