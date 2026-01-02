@@ -146,6 +146,14 @@ func (m FileListModel) View() string {
 			// For selected line: render indicator first, then styled content spanning to right edge
 			availableWidth := m.width - 1 // -1 for left indicator
 			if availableWidth > 0 {
+				// Truncate content if it's too long, then apply width to span to edge
+				if lipgloss.Width(content) > availableWidth {
+					// Truncate to fit
+					runes := []rune(content)
+					if len(runes) > availableWidth {
+						content = string(runes[:availableWidth])
+					}
+				}
 				// Apply selection style with full width spanning to right edge
 				styledContent := style.Width(availableWidth).Render(content)
 				b.WriteString(leftIndicator)

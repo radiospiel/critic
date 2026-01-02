@@ -36,6 +36,7 @@ type DiffViewModel struct {
 	commentManager      *comments.FileManager
 	commentLines        map[int]int   // Maps rendered line number to source line number for comment lines
 	sourceLines         map[int]int   // Maps rendered line number to source line number for all diff lines
+	preserveCursorLine  int           // Source line to restore cursor to after refresh (0 = don't preserve)
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -95,10 +96,47 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 			m.navigableLines = msg.navigableLines
 			if m.ready {
 				m.viewport.SetContent(m.cachedContent)
-				m.viewport.GotoTop()
-				// Reset cursor to first navigable line
-				if len(m.navigableLines) > 0 {
-					m.cursorLine = m.navigableLines[0]
+
+				// Restore cursor position if we're preserving it
+				if m.preserveCursorLine > 0 {
+					// Find the rendered line that corresponds to the source line
+					restored := false
+					for renderedLine, sourceLine := range m.sourceLines {
+						if sourceLine == m.preserveCursorLine {
+							m.cursorLine = renderedLine
+							// Ensure cursor is visible
+							m.ensureCursorVisible()
+							restored = true
+							break
+						}
+					}
+					// If we couldn't restore, try to find first comment line for that source
+					if !restored {
+						for renderedLine, sourceLine := range m.commentLines {
+							if sourceLine == m.preserveCursorLine {
+								m.cursorLine = renderedLine
+								m.ensureCursorVisible()
+								restored = true
+								break
+							}
+						}
+					}
+					// Clear the preserve flag
+					m.preserveCursorLine = 0
+
+					// If we couldn't find the line, just go to top
+					if !restored {
+						m.viewport.GotoTop()
+						if len(m.navigableLines) > 0 {
+							m.cursorLine = m.navigableLines[0]
+						}
+					}
+				} else {
+					// Normal behavior: go to top and reset cursor
+					m.viewport.GotoTop()
+					if len(m.navigableLines) > 0 {
+						m.cursorLine = m.navigableLines[0]
+					}
 				}
 			}
 		}
@@ -176,6 +214,16 @@ func (m *DiffViewModel) RefreshFile() tea.Cmd {
 		return nil
 	}
 
+	// Save current cursor position (as source line) to restore after refresh
+	currentSourceLine := m.GetSourceLine(m.cursorLine)
+	if currentSourceLine == 0 {
+		// Try to get from comment lines
+		if sourceLine, ok := m.commentLines[m.cursorLine]; ok {
+			currentSourceLine = sourceLine
+		}
+	}
+	m.preserveCursorLine = currentSourceLine
+
 	// Clear cache to force re-render
 	m.cachedFile = nil
 
@@ -184,13 +232,37 @@ func (m *DiffViewModel) RefreshFile() tea.Cmd {
 		return m.renderDiffAsync(m.file)
 	}
 
-	// Otherwise render immediately
+	// Otherwise render immediately (non-async path)
 	content, totalLines, navigableLines := m.renderDiff()
 	m.cachedContent = content
 	m.totalLines = totalLines
 	m.navigableLines = navigableLines
 	if m.ready {
 		m.viewport.SetContent(m.cachedContent)
+
+		// Restore cursor position for synchronous render
+		if m.preserveCursorLine > 0 {
+			restored := false
+			for renderedLine, sourceLine := range m.sourceLines {
+				if sourceLine == m.preserveCursorLine {
+					m.cursorLine = renderedLine
+					m.ensureCursorVisible()
+					restored = true
+					break
+				}
+			}
+			if !restored {
+				for renderedLine, sourceLine := range m.commentLines {
+					if sourceLine == m.preserveCursorLine {
+						m.cursorLine = renderedLine
+						m.ensureCursorVisible()
+						restored = true
+						break
+					}
+				}
+			}
+			m.preserveCursorLine = 0
+		}
 	}
 	return nil
 }
