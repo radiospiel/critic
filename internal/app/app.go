@@ -217,12 +217,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, loadDiffCmd(&m)
 
 		case " ": // Space - page down diff view regardless of focus
-			// Scroll by height - 3 (but at least 1 row)
-			m.diffView.ScrollPageDown()
+			// Scroll by height - 3 (but at least 1 row) and position cursor on second line
+			cmd := m.diffView.ScrollPageDown()
+			cmds = append(cmds, cmd)
 
 		case "shift+ ": // Shift+Space - page up diff view regardless of focus
-			// Scroll by height - 3 (but at least 1 row)
-			m.diffView.ScrollPageUp()
+			// Scroll by height - 3 (but at least 1 row) and position cursor on second line
+			cmd := m.diffView.ScrollPageUp()
+			cmds = append(cmds, cmd)
 
 		case "?":
 			// Toggle help screen

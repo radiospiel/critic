@@ -257,9 +257,10 @@ func (m *DiffViewModel) ensureCursorVisible() {
 }
 
 // ScrollPageDown scrolls down by viewport height minus 3 (but at least 1 row)
-func (m *DiffViewModel) ScrollPageDown() {
-	if !m.ready {
-		return
+// and positions cursor on the second navigable line in the viewport
+func (m *DiffViewModel) ScrollPageDown() tea.Cmd {
+	if !m.ready || len(m.navigableLines) == 0 {
+		return nil
 	}
 	scrollAmount := m.viewport.Height - 3
 	if scrollAmount < 1 {
@@ -277,12 +278,56 @@ func (m *DiffViewModel) ScrollPageDown() {
 	}
 
 	m.viewport.YOffset = newOffset
+
+	// Position cursor on the second navigable line visible in viewport
+	m.positionCursorInViewport(1) // 1 means second line (0-indexed)
+
+	// Refresh to show cursor at new position
+	return m.refreshContent()
+}
+
+// positionCursorInViewport moves cursor to the nth navigable line in the current viewport
+func (m *DiffViewModel) positionCursorInViewport(nth int) {
+	if len(m.navigableLines) == 0 {
+		return
+	}
+
+	viewStart := m.viewport.YOffset
+	viewEnd := viewStart + m.viewport.Height
+
+	// Find navigable lines within the current viewport
+	visibleNavigableLines := []int{}
+	for _, lineNum := range m.navigableLines {
+		if lineNum >= viewStart && lineNum < viewEnd {
+			visibleNavigableLines = append(visibleNavigableLines, lineNum)
+		}
+	}
+
+	if len(visibleNavigableLines) == 0 {
+		// No navigable lines in viewport, just use the first one after viewStart
+		for _, lineNum := range m.navigableLines {
+			if lineNum >= viewStart {
+				m.cursorLine = lineNum
+				return
+			}
+		}
+		// Fallback to last navigable line
+		m.cursorLine = m.navigableLines[len(m.navigableLines)-1]
+		return
+	}
+
+	// Position on the nth visible line (or last if not enough lines)
+	if nth >= len(visibleNavigableLines) {
+		nth = len(visibleNavigableLines) - 1
+	}
+	m.cursorLine = visibleNavigableLines[nth]
 }
 
 // ScrollPageUp scrolls up by viewport height minus 3 (but at least 1 row)
-func (m *DiffViewModel) ScrollPageUp() {
-	if !m.ready {
-		return
+// and positions cursor on the second navigable line in the viewport
+func (m *DiffViewModel) ScrollPageUp() tea.Cmd {
+	if !m.ready || len(m.navigableLines) == 0 {
+		return nil
 	}
 	scrollAmount := m.viewport.Height - 3
 	if scrollAmount < 1 {
@@ -296,6 +341,12 @@ func (m *DiffViewModel) ScrollPageUp() {
 	}
 
 	m.viewport.YOffset = newOffset
+
+	// Position cursor on the second navigable line visible in viewport
+	m.positionCursorInViewport(1) // 1 means second line (0-indexed)
+
+	// Refresh to show cursor at new position
+	return m.refreshContent()
 }
 
 // SetFocused sets whether this pane is focused
