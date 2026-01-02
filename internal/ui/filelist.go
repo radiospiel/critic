@@ -101,7 +101,7 @@ func (m FileListModel) View() string {
 			hasComments = m.commentManager.HasComments(gitPath)
 		}
 
-		// Apply styles based on cursor position and comment status
+		// Apply styles based on cursor position
 		if i == m.cursor {
 			// Use active or inactive selection style based on focus
 			if m.focused {
@@ -109,12 +109,6 @@ func (m FileListModel) View() string {
 			} else {
 				style = selectedFileInactiveStyle
 			}
-		} else if hasComments {
-			// File has comments but not selected: dark text on yellow background
-			style = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("0")).      // Dark/black text
-				Background(lipgloss.Color("220")).    // Yellow background
-				Padding(0, 1)
 		}
 
 		// Determine file status symbol
@@ -135,15 +129,16 @@ func (m FileListModel) View() string {
 			path = git.GitPathToDisplayPath(file.OldPath)
 		}
 
-		var line string
-		if hasComments && i != m.cursor {
-			// Add yellow half-blocks on left and right for files with comments
+		// Add left indicator: yellow half-block for commented files, space for others
+		var leftIndicator string
+		if hasComments {
 			const yellowBlock = "\x1b[38;5;220m▌\x1b[0m"
-			const rightYellowBlock = "\x1b[38;5;220m▐\x1b[0m"
-			line = fmt.Sprintf("%s%s %s%s", yellowBlock, status, path, rightYellowBlock)
+			leftIndicator = yellowBlock
 		} else {
-			line = fmt.Sprintf("%s %s", status, path)
+			leftIndicator = " "
 		}
+
+		line := fmt.Sprintf("%s%s %s", leftIndicator, status, path)
 
 		// Prevent word wrapping by setting max width and truncating if needed
 		if m.width > 0 {
