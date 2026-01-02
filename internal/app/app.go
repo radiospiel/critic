@@ -263,11 +263,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 					} else {
-						// Cursor is on a regular diff line - create new comment
-						// We need to get the actual source line number from the diff line
-						// For now, use the cursor line as the line number
-						// TODO: Map cursor line to actual source line number
-						lineNum = cursorLine
+						// Cursor is on a regular diff line - get the source line number
+						lineNum = m.diffView.GetSourceLine(cursorLine)
+						if lineNum == 0 {
+							// Can't comment on this line (e.g., header line)
+							return m, nil
+						}
 					}
 
 					cmd := m.commentEditor.Activate(lineNum, existingComment)
@@ -422,6 +423,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					logger.Error("Failed to save comments: %v", err)
 				} else {
 					logger.Info("Comment saved for line %d", msg.LineNum)
+					// Refresh the diff view to show the new/updated comment inline
+					cmd := m.diffView.SetFile(activeFile)
+					cmds = append(cmds, cmd)
 				}
 			}
 		}

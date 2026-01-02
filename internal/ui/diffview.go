@@ -35,6 +35,7 @@ type DiffViewModel struct {
 	navigableLines      []int         // Line numbers that can have cursor (diff lines only)
 	commentManager      *comments.FileManager
 	commentLines        map[int]int   // Maps rendered line number to source line number for comment lines
+	sourceLines         map[int]int   // Maps rendered line number to source line number for all diff lines
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -314,6 +315,15 @@ func (m *DiffViewModel) IsCommentLine(lineNum int) (bool, int) {
 	return ok, sourceLine
 }
 
+// GetSourceLine returns the source line number for a rendered line number
+// Returns 0 if the line doesn't map to a source line
+func (m *DiffViewModel) GetSourceLine(renderedLine int) int {
+	if m.sourceLines == nil {
+		return 0
+	}
+	return m.sourceLines[renderedLine]
+}
+
 // renderDiff renders the diff content with syntax highlighting
 // Returns the rendered content, total line count, and navigable line numbers
 func (m *DiffViewModel) renderDiff() (string, int, []int) {
@@ -328,8 +338,9 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	lineNum := 0             // Track current line number for cursor highlighting
 	var navigableLines []int // Track which lines can have cursor (diff lines only)
 
-	// Initialize comment tracking
+	// Initialize comment and source line tracking
 	m.commentLines = make(map[int]int)
+	m.sourceLines = make(map[int]int)
 
 	// Load comments for this file if comment manager is available
 	var fileComments *ctypes.CriticFile
@@ -428,6 +439,10 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 			b.WriteString(lineStr)
 			// Add to navigable lines (only actual diff lines, not headers)
 			navigableLines = append(navigableLines, lineNum)
+			// Track mapping from rendered line to source line
+			if line.NewNum > 0 {
+				m.sourceLines[lineNum] = line.NewNum
+			}
 			lineNum++
 			b.WriteString("\n")
 
