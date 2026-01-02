@@ -639,14 +639,12 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 			// Check if there's a comment for this line
 			if fileComments != nil && line.NewNum > 0 {
 				if comment, exists := fileComments.Comments[line.NewNum]; exists && len(comment.Lines) > 0 {
-					// Render up to 6 lines of the comment preview
+					// Render up to 6 lines of the comment preview (plus indicator if needed)
 					commentLines := m.renderCommentPreview(comment.Lines, lineNum)
-					for i, commentLine := range commentLines {
+					for _, commentLine := range commentLines {
 						b.WriteString(commentLine)
-						// Track the first comment line for navigation
-						if i == 0 {
-							m.commentLines[lineNum] = line.NewNum
-						}
+						// Track all comment lines (including indicator) for navigation
+						m.commentLines[lineNum] = line.NewNum
 						// Add to navigable lines so user can select it
 						navigableLines = append(navigableLines, lineNum)
 						lineNum++
@@ -802,17 +800,27 @@ func (m *DiffViewModel) highlightFromHunks(file *ctypes.FileDiff, filename strin
 func (m *DiffViewModel) renderCommentPreview(commentLines []string, startLineNum int) []string {
 	// Limit to 6 lines
 	maxLines := 6
-	linesToRender := len(commentLines)
+	totalLines := len(commentLines)
+	linesToRender := totalLines
 	if linesToRender > maxLines {
 		linesToRender = maxLines
 	}
 
-	result := make([]string, linesToRender)
+	// Check if we need to add a "more lines" indicator
+	hasMore := totalLines > maxLines
+	resultSize := linesToRender
+	if hasMore {
+		resultSize++ // Add one more for the indicator
+	}
+
+	result := make([]string, resultSize)
 
 	// ANSI color codes
 	const yellowFg = "\x1b[38;5;220m"     // Yellow/gold foreground for block
 	const darkFg = "\x1b[38;5;250m"       // Light gray text
+	const grayFg = "\x1b[38;5;240m"       // Gray text for indicator
 	const darkYellowBg = "\x1b[48;5;58m"  // Dark yellowish background
+	const blackBg = "\x1b[48;5;0m"        // Black background
 	const reset = "\x1b[0m"
 
 	// Half-width block characters
@@ -850,6 +858,39 @@ func (m *DiffViewModel) renderCommentPreview(commentLines []string, startLineNum
 		// Apply cursor highlighting if this is the active line
 		currentLineNum := startLineNum + i
 		result[i] = m.renderLineWithCursor(styled, currentLineNum)
+	}
+
+	// Add "more lines" indicator if needed
+	if hasMore {
+		moreCount := totalLines - maxLines
+		indicatorText := fmt.Sprintf("(%d more lines)", moreCount)
+
+		// Start with colored half-block + space
+		prefix := yellowFg + leftHalfBlock + reset + " "
+		content := prefix + indicatorText
+
+		// Calculate visible width
+		visibleWidth := lipgloss.Width(content)
+		availableWidth := m.width - 1 // -1 for right half-block
+
+		// Truncate or pad to match viewport width
+		var processed string
+		if visibleWidth > availableWidth {
+			processed = truncateANSI(content, availableWidth)
+		} else {
+			padding := strings.Repeat(" ", availableWidth-visibleWidth)
+			processed = content + padding
+		}
+
+		// Add right half-block at the end
+		processed = processed + yellowFg + rightHalfBlock + reset
+
+		// Apply black background and gray text for the indicator
+		styled := blackBg + grayFg + processed + reset
+
+		// Apply cursor highlighting if this is the active line
+		currentLineNum := startLineNum + linesToRender
+		result[linesToRender] = m.renderLineWithCursor(styled, currentLineNum)
 	}
 
 	return result
