@@ -256,6 +256,48 @@ func (m *DiffViewModel) ensureCursorVisible() {
 	}
 }
 
+// ScrollPageDown scrolls down by viewport height minus 3 (but at least 1 row)
+func (m *DiffViewModel) ScrollPageDown() {
+	if !m.ready {
+		return
+	}
+	scrollAmount := m.viewport.Height - 3
+	if scrollAmount < 1 {
+		scrollAmount = 1
+	}
+
+	// Calculate new offset
+	newOffset := m.viewport.YOffset + scrollAmount
+	maxOffset := m.totalLines - m.viewport.Height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if newOffset > maxOffset {
+		newOffset = maxOffset
+	}
+
+	m.viewport.YOffset = newOffset
+}
+
+// ScrollPageUp scrolls up by viewport height minus 3 (but at least 1 row)
+func (m *DiffViewModel) ScrollPageUp() {
+	if !m.ready {
+		return
+	}
+	scrollAmount := m.viewport.Height - 3
+	if scrollAmount < 1 {
+		scrollAmount = 1
+	}
+
+	// Calculate new offset
+	newOffset := m.viewport.YOffset - scrollAmount
+	if newOffset < 0 {
+		newOffset = 0
+	}
+
+	m.viewport.YOffset = newOffset
+}
+
 // SetFocused sets whether this pane is focused
 func (m *DiffViewModel) SetFocused(focused bool) {
 	if m.focused != focused {

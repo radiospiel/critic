@@ -217,16 +217,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, loadDiffCmd(&m)
 
 		case " ": // Space - page down diff view regardless of focus
-			// Create a synthetic pgdown key message
-			pgDownMsg := tea.KeyMsg{Type: tea.KeyType(tea.KeyPgDown)}
-			cmd := m.diffView.Update(pgDownMsg)
-			cmds = append(cmds, cmd)
+			// Scroll by height - 3 (but at least 1 row)
+			m.diffView.ScrollPageDown()
 
 		case "shift+ ": // Shift+Space - page up diff view regardless of focus
-			// Create a synthetic pgup key message
-			pgUpMsg := tea.KeyMsg{Type: tea.KeyType(tea.KeyPgUp)}
-			cmd := m.diffView.Update(pgUpMsg)
-			cmds = append(cmds, cmd)
+			// Scroll by height - 3 (but at least 1 row)
+			m.diffView.ScrollPageUp()
 
 		case "?":
 			// Toggle help screen
