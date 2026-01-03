@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"git.15b.it/eno/critic/internal/comments"
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/logger"
@@ -93,23 +94,25 @@ func Run(args *Args) error {
 
 // Model represents the main application model
 type Model struct {
-	fileList     ui.FileListModel
-	diffView     ui.DiffViewModel
-	layout       ui.LayoutModel
-	diff         *ctypes.Diff
-	bases        []string        // List of base refs
-	current      string          // Current target ref
-	currentBase  int             // Index of current base
-	paths        []string        // Paths to diff
-	extensions   []string        // File extensions to include
-	resolver     *git.BaseResolver // Base resolver with polling
-	watcher      *git.Watcher
-	err          error
-	width        int
-	height       int
-	ready        bool
-	reloading    bool
-	showHelp     bool            // Whether to show help screen
+	fileList       ui.FileListModel
+	diffView       ui.DiffViewModel
+	commentEditor  ui.CommentEditor
+	layout         ui.LayoutModel
+	diff           *ctypes.Diff
+	bases          []string              // List of base refs
+	current        string                // Current target ref
+	currentBase    int                   // Index of current base
+	paths          []string              // Paths to diff
+	extensions     []string              // File extensions to include
+	resolver       *git.BaseResolver     // Base resolver with polling
+	watcher        *git.Watcher
+	commentManager *comments.FileManager // Manages comment files
+	err            error
+	width          int
+	height         int
+	ready          bool
+	reloading      bool
+	showHelp       bool // Whether to show help screen
 }
 
 // NewModel creates a new application model
@@ -134,16 +137,24 @@ func NewModel(args *Args) Model {
 	fileList := ui.NewFileListModel()
 	fileList.SetFocused(true) // Start with file list focused
 
+	// Initialize comment manager
+	cwd, _ := os.Getwd()
+	commentManager := comments.NewFileManager(cwd, args.Current)
+	fileList.SetCommentManager(commentManager)
+	diffView.SetCommentManager(commentManager)
+
 	return Model{
-		fileList:    fileList,
-		diffView:    diffView,
-		layout:      ui.NewLayoutModel(),
-		bases:       args.Bases,
-		current:     args.Current,
-		currentBase: 0, // Start with first base
-		paths:       args.Paths,
-		extensions:  args.Extensions,
-		watcher:     watcher,
+		fileList:       fileList,
+		diffView:       diffView,
+		commentEditor:  ui.NewCommentEditor(),
+		layout:         ui.NewLayoutModel(),
+		bases:          args.Bases,
+		current:        args.Current,
+		currentBase:    0, // Start with first base
+		paths:          args.Paths,
+		extensions:     args.Extensions,
+		watcher:        watcher,
+		commentManager: commentManager,
 	}
 }
 
@@ -182,6 +193,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// If comment editor is active, route all keys to it
+		if m.commentEditor.IsActive() {
+			cmd := m.commentEditor.Update(msg)
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Sequence(enableTerminalLineWrap, tea.Quit)
@@ -199,21 +217,63 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, loadDiffCmd(&m)
 
 		case " ": // Space - page down diff view regardless of focus
-			// Create a synthetic pgdown key message
-			pgDownMsg := tea.KeyMsg{Type: tea.KeyType(tea.KeyPgDown)}
-			cmd := m.diffView.Update(pgDownMsg)
+			// Scroll by height - 3 (but at least 1 row) and position cursor on second line
+			cmd := m.diffView.ScrollPageDown()
 			cmds = append(cmds, cmd)
 
 		case "shift+ ": // Shift+Space - page up diff view regardless of focus
-			// Create a synthetic pgup key message
-			pgUpMsg := tea.KeyMsg{Type: tea.KeyType(tea.KeyPgUp)}
-			cmd := m.diffView.Update(pgUpMsg)
+			// Scroll by height - 3 (but at least 1 row) and position cursor on second line
+			cmd := m.diffView.ScrollPageUp()
 			cmds = append(cmds, cmd)
 
 		case "?":
 			// Toggle help screen
 			m.showHelp = !m.showHelp
 			return m, nil
+
+		case "enter":
+			// Activate comment editor when focused on diff view
+			if m.layout.GetFocusedPane() == ui.DiffViewPane {
+				activeFile := m.fileList.GetActiveFile()
+				if activeFile != nil {
+					// Get the current cursor line from diff view
+					cursorLine := m.diffView.GetCursorLine()
+
+					// Check if the cursor is on a comment line
+					isCommentLine, sourceLine := m.diffView.IsCommentLine(cursorLine)
+
+					// Determine the source line number to use
+					var lineNum int
+					existingComment := ""
+
+					if isCommentLine {
+						// Cursor is on a comment preview line - edit that comment
+						lineNum = sourceLine
+						// Load the existing comment from file
+						gitPath := activeFile.NewPath
+						if activeFile.IsDeleted {
+							gitPath = activeFile.OldPath
+						}
+						if criticFile, err := m.commentManager.LoadComments(gitPath); err == nil {
+							if comment, exists := criticFile.Comments[lineNum]; exists {
+								// Join all comment lines with newlines
+								existingComment = strings.Join(comment.Lines, "\n")
+							}
+						}
+					} else {
+						// Cursor is on a regular diff line - get the source line number
+						lineNum = m.diffView.GetSourceLine(cursorLine)
+						if lineNum == 0 {
+							// Can't comment on this line (e.g., header line)
+							return m, nil
+						}
+					}
+
+					cmd := m.commentEditor.Activate(lineNum, existingComment)
+					cmds = append(cmds, cmd)
+					return m, tea.Batch(cmds...)
+				}
+			}
 
 		default:
 			// Route key messages to focused pane
@@ -240,6 +300,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		rightWidth, rightHeight := m.layout.GetDiffViewSize()
 		m.diffView.SetSize(rightWidth, rightHeight)
+
+		// Update comment editor size
+		editorWidth := msg.Width - 24  // Account for border and padding
+		editorHeight := msg.Height - 10 // Account for border, padding, and other UI elements
+		m.commentEditor.SetSize(editorWidth, editorHeight)
 
 		if !m.ready {
 			m.ready = true
@@ -326,10 +391,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Info("Update: Received baseChangedMsg, reloading diff")
 		return m, loadDiffCmd(&m)
 
+	case ui.CommentSavedMsg:
+		// Save the comment to file
+		activeFile := m.fileList.GetActiveFile()
+		if activeFile != nil {
+			filePath := activeFile.NewPath
+			if filePath == "" {
+				filePath = activeFile.OldPath
+			}
+
+			// Load existing comments
+			criticFile, err := m.commentManager.LoadComments(filePath)
+			if err != nil {
+				logger.Error("Failed to load comments: %v", err)
+			} else {
+				// Update or add the comment
+				if msg.Comment != "" {
+					criticFile.Comments[msg.LineNum] = &ctypes.CriticBlock{
+						LineNumber: msg.LineNum,
+						Lines:      strings.Split(msg.Comment, "\n"),
+					}
+				} else {
+					// Empty comment means delete
+					delete(criticFile.Comments, msg.LineNum)
+				}
+
+				// Save the updated comments
+				if err := m.commentManager.SaveComments(criticFile); err != nil {
+					logger.Error("Failed to save comments: %v", err)
+				} else {
+					logger.Info("Comment saved for line %d", msg.LineNum)
+					// Force refresh the diff view to show the new/updated comment inline
+					cmd := m.diffView.RefreshFile()
+					cmds = append(cmds, cmd)
+				}
+			}
+		}
+
+
 	default:
 		// Route other messages to diff view (like diffRenderedMsg)
 		cmd := m.diffView.Update(msg)
 		cmds = append(cmds, cmd)
+
+		// Also route to comment editor in case it's a message it handles
+		editorCmd := m.commentEditor.Update(msg)
+		cmds = append(cmds, editorCmd)
 	}
 
 	return m, tea.Batch(cmds...)
@@ -357,6 +464,36 @@ func (m Model) View() string {
 
 	// Combine main view and status bar
 	view := lipgloss.JoinVertical(lipgloss.Left, mainView, statusBar)
+
+	// Overlay comment editor if active
+	if m.commentEditor.IsActive() {
+		// Render comment editor in a centered modal
+		editorView := m.commentEditor.View()
+		editorStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("205")).
+			Padding(1, 2).
+			Width(m.width - 20).
+			MaxWidth(m.width - 20)
+
+		styledEditor := editorStyle.Render(editorView)
+
+		// Calculate position for centering
+		lines := strings.Split(view, "\n")
+		editorLines := strings.Split(styledEditor, "\n")
+		startLine := (len(lines) - len(editorLines)) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Overlay editor on view
+		for i, line := range editorLines {
+			if startLine+i < len(lines) {
+				lines[startLine+i] = line
+			}
+		}
+		return strings.Join(lines, "\n")
+	}
 
 	// Overlay help screen if showing
 	if m.showHelp {

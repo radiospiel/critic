@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"git.15b.it/eno/critic/internal/comments"
 	"git.15b.it/eno/critic/internal/git"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -13,14 +14,15 @@ import (
 
 // FileListModel represents the file list pane
 type FileListModel struct {
-	files        []*ctypes.FileDiff
-	cursor       int
-	viewport     viewport.Model
-	width        int
-	height       int
-	ready        bool
-	activeFile   *ctypes.FileDiff
-	focused      bool
+	files          []*ctypes.FileDiff
+	cursor         int
+	viewport       viewport.Model
+	width          int
+	height         int
+	ready          bool
+	activeFile     *ctypes.FileDiff
+	focused        bool
+	commentManager *comments.FileManager
 }
 
 // NewFileListModel creates a new file list model
@@ -88,6 +90,18 @@ func (m FileListModel) View() string {
 	for i, file := range m.files {
 		style := normalFileStyle
 
+		// Check if file has comments
+		hasComments := false
+		if m.commentManager != nil {
+			// Use the git-relative path for checking comments
+			gitPath := file.NewPath
+			if file.IsDeleted {
+				gitPath = file.OldPath
+			}
+			hasComments = m.commentManager.HasComments(gitPath)
+		}
+
+		// Apply styles based on cursor position
 		if i == m.cursor {
 			// Use active or inactive selection style based on focus
 			if m.focused {
@@ -115,14 +129,48 @@ func (m FileListModel) View() string {
 			path = git.GitPathToDisplayPath(file.OldPath)
 		}
 
-		line := fmt.Sprintf("%s %s", status, path)
-
-		// Prevent word wrapping by setting max width and truncating if needed
-		if m.width > 0 {
-			style = style.MaxWidth(m.width).Inline(true)
+		// Add left indicator: yellow half-block for commented files, space for others
+		var leftIndicator string
+		if hasComments {
+			const yellowBlock = "\x1b[38;5;220m▌\x1b[0m"
+			leftIndicator = yellowBlock
+		} else {
+			leftIndicator = " "
 		}
 
-		b.WriteString(style.Render(line))
+		// Build the content (status + path) that will be styled
+		content := fmt.Sprintf("%s %s", status, path)
+
+		// Render based on whether this is selected
+		if i == m.cursor {
+			// For selected line: render indicator first, then styled content spanning to right edge
+			availableWidth := m.width - 1 // -1 for left indicator
+			if availableWidth > 0 {
+				// Truncate content if it's too long, then apply width to span to edge
+				if lipgloss.Width(content) > availableWidth {
+					// Truncate to fit
+					runes := []rune(content)
+					if len(runes) > availableWidth {
+						content = string(runes[:availableWidth])
+					}
+				}
+				// Apply selection style with full width spanning to right edge
+				styledContent := style.Width(availableWidth).Render(content)
+				b.WriteString(leftIndicator)
+				b.WriteString(styledContent)
+			} else {
+				// Fallback if width is too small
+				line := fmt.Sprintf("%s%s", leftIndicator, content)
+				b.WriteString(style.Render(line))
+			}
+		} else {
+			// For non-selected lines: render as before
+			line := fmt.Sprintf("%s%s", leftIndicator, content)
+			if m.width > 0 {
+				style = style.MaxWidth(m.width).Inline(true)
+			}
+			b.WriteString(style.Render(line))
+		}
 		if i < len(m.files)-1 {
 			b.WriteString("\n")
 		}
@@ -186,4 +234,9 @@ func (m *FileListModel) SetSize(width, height int) {
 // SetFocused sets whether this pane is focused
 func (m *FileListModel) SetFocused(focused bool) {
 	m.focused = focused
+}
+
+// SetCommentManager sets the comment manager for checking file comments
+func (m *FileListModel) SetCommentManager(cm *comments.FileManager) {
+	m.commentManager = cm
 }

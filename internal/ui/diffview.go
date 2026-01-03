@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"git.15b.it/eno/critic/internal/comments"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/highlight"
 	"git.15b.it/eno/critic/internal/logger"
@@ -32,6 +33,10 @@ type DiffViewModel struct {
 	totalLines          int           // Total number of lines in rendered diff
 	focused             bool          // Whether this pane is focused
 	navigableLines      []int         // Line numbers that can have cursor (diff lines only)
+	commentManager      *comments.FileManager
+	commentLines        map[int]int   // Maps rendered line number to source line number for comment lines
+	sourceLines         map[int]int   // Maps rendered line number to source line number for all diff lines
+	preserveCursorLine  int           // Source line to restore cursor to after refresh (0 = don't preserve)
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -91,10 +96,47 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 			m.navigableLines = msg.navigableLines
 			if m.ready {
 				m.viewport.SetContent(m.cachedContent)
-				m.viewport.GotoTop()
-				// Reset cursor to first navigable line
-				if len(m.navigableLines) > 0 {
-					m.cursorLine = m.navigableLines[0]
+
+				// Restore cursor position if we're preserving it
+				if m.preserveCursorLine > 0 {
+					// Find the rendered line that corresponds to the source line
+					restored := false
+					for renderedLine, sourceLine := range m.sourceLines {
+						if sourceLine == m.preserveCursorLine {
+							m.cursorLine = renderedLine
+							// Ensure cursor is visible
+							m.ensureCursorVisible()
+							restored = true
+							break
+						}
+					}
+					// If we couldn't restore, try to find first comment line for that source
+					if !restored {
+						for renderedLine, sourceLine := range m.commentLines {
+							if sourceLine == m.preserveCursorLine {
+								m.cursorLine = renderedLine
+								m.ensureCursorVisible()
+								restored = true
+								break
+							}
+						}
+					}
+					// Clear the preserve flag
+					m.preserveCursorLine = 0
+
+					// If we couldn't find the line, just go to top
+					if !restored {
+						m.viewport.GotoTop()
+						if len(m.navigableLines) > 0 {
+							m.cursorLine = m.navigableLines[0]
+						}
+					}
+				} else {
+					// Normal behavior: go to top and reset cursor
+					m.viewport.GotoTop()
+					if len(m.navigableLines) > 0 {
+						m.cursorLine = m.navigableLines[0]
+					}
 				}
 			}
 		}
@@ -161,6 +203,65 @@ func (m *DiffViewModel) SetFile(file *ctypes.FileDiff) tea.Cmd {
 		if m.ready {
 			m.viewport.SetContent(m.cachedContent)
 			m.viewport.GotoTop()
+		}
+	}
+	return nil
+}
+
+// RefreshFile forces a re-render of the current file (used when comments change)
+func (m *DiffViewModel) RefreshFile() tea.Cmd {
+	if m.file == nil {
+		return nil
+	}
+
+	// Save current cursor position (as source line) to restore after refresh
+	currentSourceLine := m.GetSourceLine(m.cursorLine)
+	if currentSourceLine == 0 {
+		// Try to get from comment lines
+		if sourceLine, ok := m.commentLines[m.cursorLine]; ok {
+			currentSourceLine = sourceLine
+		}
+	}
+	m.preserveCursorLine = currentSourceLine
+
+	// Clear cache to force re-render
+	m.cachedFile = nil
+
+	// Re-render with highlighting if enabled
+	if m.highlightingEnabled {
+		return m.renderDiffAsync(m.file)
+	}
+
+	// Otherwise render immediately (non-async path)
+	content, totalLines, navigableLines := m.renderDiff()
+	m.cachedContent = content
+	m.totalLines = totalLines
+	m.navigableLines = navigableLines
+	if m.ready {
+		m.viewport.SetContent(m.cachedContent)
+
+		// Restore cursor position for synchronous render
+		if m.preserveCursorLine > 0 {
+			restored := false
+			for renderedLine, sourceLine := range m.sourceLines {
+				if sourceLine == m.preserveCursorLine {
+					m.cursorLine = renderedLine
+					m.ensureCursorVisible()
+					restored = true
+					break
+				}
+			}
+			if !restored {
+				for renderedLine, sourceLine := range m.commentLines {
+					if sourceLine == m.preserveCursorLine {
+						m.cursorLine = renderedLine
+						m.ensureCursorVisible()
+						restored = true
+						break
+					}
+				}
+			}
+			m.preserveCursorLine = 0
 		}
 	}
 	return nil
@@ -252,6 +353,99 @@ func (m *DiffViewModel) ensureCursorVisible() {
 	}
 }
 
+// ScrollPageDown scrolls down by viewport height minus 3 (but at least 1 row)
+// and positions cursor on the second navigable line in the viewport
+func (m *DiffViewModel) ScrollPageDown() tea.Cmd {
+	if !m.ready || len(m.navigableLines) == 0 {
+		return nil
+	}
+	scrollAmount := m.viewport.Height - 3
+	if scrollAmount < 1 {
+		scrollAmount = 1
+	}
+
+	// Calculate new offset
+	newOffset := m.viewport.YOffset + scrollAmount
+	maxOffset := m.totalLines - m.viewport.Height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if newOffset > maxOffset {
+		newOffset = maxOffset
+	}
+
+	m.viewport.YOffset = newOffset
+
+	// Position cursor on the second navigable line visible in viewport
+	m.positionCursorInViewport(1) // 1 means second line (0-indexed)
+
+	// Refresh to show cursor at new position
+	return m.refreshContent()
+}
+
+// positionCursorInViewport moves cursor to the nth navigable line in the current viewport
+func (m *DiffViewModel) positionCursorInViewport(nth int) {
+	if len(m.navigableLines) == 0 {
+		return
+	}
+
+	viewStart := m.viewport.YOffset
+	viewEnd := viewStart + m.viewport.Height
+
+	// Find navigable lines within the current viewport
+	visibleNavigableLines := []int{}
+	for _, lineNum := range m.navigableLines {
+		if lineNum >= viewStart && lineNum < viewEnd {
+			visibleNavigableLines = append(visibleNavigableLines, lineNum)
+		}
+	}
+
+	if len(visibleNavigableLines) == 0 {
+		// No navigable lines in viewport, just use the first one after viewStart
+		for _, lineNum := range m.navigableLines {
+			if lineNum >= viewStart {
+				m.cursorLine = lineNum
+				return
+			}
+		}
+		// Fallback to last navigable line
+		m.cursorLine = m.navigableLines[len(m.navigableLines)-1]
+		return
+	}
+
+	// Position on the nth visible line (or last if not enough lines)
+	if nth >= len(visibleNavigableLines) {
+		nth = len(visibleNavigableLines) - 1
+	}
+	m.cursorLine = visibleNavigableLines[nth]
+}
+
+// ScrollPageUp scrolls up by viewport height minus 3 (but at least 1 row)
+// and positions cursor on the second navigable line in the viewport
+func (m *DiffViewModel) ScrollPageUp() tea.Cmd {
+	if !m.ready || len(m.navigableLines) == 0 {
+		return nil
+	}
+	scrollAmount := m.viewport.Height - 3
+	if scrollAmount < 1 {
+		scrollAmount = 1
+	}
+
+	// Calculate new offset
+	newOffset := m.viewport.YOffset - scrollAmount
+	if newOffset < 0 {
+		newOffset = 0
+	}
+
+	m.viewport.YOffset = newOffset
+
+	// Position cursor on the second navigable line visible in viewport
+	m.positionCursorInViewport(1) // 1 means second line (0-indexed)
+
+	// Refresh to show cursor at new position
+	return m.refreshContent()
+}
+
 // SetFocused sets whether this pane is focused
 func (m *DiffViewModel) SetFocused(focused bool) {
 	if m.focused != focused {
@@ -264,6 +458,11 @@ func (m *DiffViewModel) SetFocused(focused bool) {
 // GetFile returns the currently displayed file
 func (m *DiffViewModel) GetFile() *ctypes.FileDiff {
 	return m.file
+}
+
+// GetCursorLine returns the current cursor line number
+func (m *DiffViewModel) GetCursorLine() int {
+	return m.cursorLine
 }
 
 // SetSize sets the size of the diff view pane
@@ -291,6 +490,30 @@ func (m *DiffViewModel) SetHighlightingEnabled(enabled bool) {
 	m.cachedFile = nil
 }
 
+// SetCommentManager sets the comment manager for loading comments
+func (m *DiffViewModel) SetCommentManager(cm *comments.FileManager) {
+	m.commentManager = cm
+}
+
+// IsCommentLine returns true if the given line number is a comment line
+// and returns the source line number for that comment
+func (m *DiffViewModel) IsCommentLine(lineNum int) (bool, int) {
+	if m.commentLines == nil {
+		return false, 0
+	}
+	sourceLine, ok := m.commentLines[lineNum]
+	return ok, sourceLine
+}
+
+// GetSourceLine returns the source line number for a rendered line number
+// Returns 0 if the line doesn't map to a source line
+func (m *DiffViewModel) GetSourceLine(renderedLine int) int {
+	if m.sourceLines == nil {
+		return 0
+	}
+	return m.sourceLines[renderedLine]
+}
+
 // renderDiff renders the diff content with syntax highlighting
 // Returns the rendered content, total line count, and navigable line numbers
 func (m *DiffViewModel) renderDiff() (string, int, []int) {
@@ -304,6 +527,24 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	var b strings.Builder
 	lineNum := 0             // Track current line number for cursor highlighting
 	var navigableLines []int // Track which lines can have cursor (diff lines only)
+
+	// Initialize comment and source line tracking
+	m.commentLines = make(map[int]int)
+	m.sourceLines = make(map[int]int)
+
+	// Load comments for this file if comment manager is available
+	var fileComments *ctypes.CriticFile
+	if m.commentManager != nil {
+		// Get the git-relative path
+		gitPath := m.file.NewPath
+		if m.file.IsDeleted {
+			gitPath = m.file.OldPath
+		}
+		// Try to load comments
+		if loaded, err := m.commentManager.LoadComments(gitPath); err == nil {
+			fileComments = loaded
+		}
+	}
 
 	filename := git.GitPathToDisplayPath(m.file.NewPath)
 	if m.file.IsDeleted {
@@ -388,8 +629,29 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 			b.WriteString(lineStr)
 			// Add to navigable lines (only actual diff lines, not headers)
 			navigableLines = append(navigableLines, lineNum)
+			// Track mapping from rendered line to source line
+			if line.NewNum > 0 {
+				m.sourceLines[lineNum] = line.NewNum
+			}
 			lineNum++
 			b.WriteString("\n")
+
+			// Check if there's a comment for this line
+			if fileComments != nil && line.NewNum > 0 {
+				if comment, exists := fileComments.Comments[line.NewNum]; exists && len(comment.Lines) > 0 {
+					// Render up to 6 lines of the comment preview (plus indicator if needed)
+					commentLines := m.renderCommentPreview(comment.Lines, lineNum)
+					for _, commentLine := range commentLines {
+						b.WriteString(commentLine)
+						// Track all comment lines (including indicator) for navigation
+						m.commentLines[lineNum] = line.NewNum
+						// Add to navigable lines so user can select it
+						navigableLines = append(navigableLines, lineNum)
+						lineNum++
+						b.WriteString("\n")
+					}
+				}
+			}
 		}
 
 		// Add spacing between hunks
@@ -528,6 +790,107 @@ func (m *DiffViewModel) highlightFromHunks(file *ctypes.FileDiff, filename strin
 		if i < len(highlightedLines) {
 			result[lineNum] = highlightedLines[i]
 		}
+	}
+
+	return result
+}
+
+// renderCommentPreview renders up to 6 lines of a comment preview with dark text on black background
+// Each line starts with a half-width block character in yellow/gold color
+func (m *DiffViewModel) renderCommentPreview(commentLines []string, startLineNum int) []string {
+	// Limit to 6 lines
+	maxLines := 6
+	totalLines := len(commentLines)
+	linesToRender := totalLines
+	if linesToRender > maxLines {
+		linesToRender = maxLines
+	}
+
+	// Check if we need to add a "more lines" indicator
+	hasMore := totalLines > maxLines
+	resultSize := linesToRender
+	if hasMore {
+		resultSize++ // Add one more for the indicator
+	}
+
+	result := make([]string, resultSize)
+
+	// ANSI color codes
+	const yellowFg = "\x1b[38;5;220m"     // Yellow/gold foreground for block
+	const darkFg = "\x1b[38;5;250m"       // Light gray text
+	const grayFg = "\x1b[38;5;240m"       // Gray text for indicator
+	const darkYellowBg = "\x1b[48;5;58m"  // Dark yellowish background
+	const blackBg = "\x1b[48;5;0m"        // Black background
+	const reset = "\x1b[0m"
+
+	// Half-width block characters
+	const leftHalfBlock = "▌"
+	const rightHalfBlock = "▐"
+
+	for i := 0; i < linesToRender; i++ {
+		// Start with colored half-block + space
+		prefix := yellowFg + leftHalfBlock + reset + " "
+
+		// Combine prefix and comment text
+		content := prefix + commentLines[i]
+
+		// Calculate visible width (accounting for the right block we'll add)
+		visibleWidth := lipgloss.Width(content)
+
+		// Reserve space for the right half-block
+		availableWidth := m.width - 1 // -1 for right half-block
+
+		// Truncate or pad to match viewport width minus the right block
+		var processed string
+		if visibleWidth > availableWidth {
+			processed = truncateANSI(content, availableWidth)
+		} else {
+			padding := strings.Repeat(" ", availableWidth-visibleWidth)
+			processed = content + padding
+		}
+
+		// Add right half-block at the end
+		processed = processed + yellowFg + rightHalfBlock + reset
+
+		// Apply dark yellowish background and light text
+		styled := darkYellowBg + darkFg + processed + reset
+
+		// Apply cursor highlighting if this is the active line
+		currentLineNum := startLineNum + i
+		result[i] = m.renderLineWithCursor(styled, currentLineNum)
+	}
+
+	// Add "more lines" indicator if needed
+	if hasMore {
+		moreCount := totalLines - maxLines
+		indicatorText := fmt.Sprintf("(%d more lines)", moreCount)
+
+		// Start with colored half-block + space
+		prefix := yellowFg + leftHalfBlock + reset + " "
+		content := prefix + indicatorText
+
+		// Calculate visible width
+		visibleWidth := lipgloss.Width(content)
+		availableWidth := m.width - 1 // -1 for right half-block
+
+		// Truncate or pad to match viewport width
+		var processed string
+		if visibleWidth > availableWidth {
+			processed = truncateANSI(content, availableWidth)
+		} else {
+			padding := strings.Repeat(" ", availableWidth-visibleWidth)
+			processed = content + padding
+		}
+
+		// Add right half-block at the end
+		processed = processed + yellowFg + rightHalfBlock + reset
+
+		// Apply black background and gray text for the indicator
+		styled := blackBg + grayFg + processed + reset
+
+		// Apply cursor highlighting if this is the active line
+		currentLineNum := startLineNum + linesToRender
+		result[linesToRender] = m.renderLineWithCursor(styled, currentLineNum)
 	}
 
 	return result
