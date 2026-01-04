@@ -26,7 +26,8 @@
       "Bash(timeout 2 /usr/local/bin/critic:*)",
       "Bash(cat:*)",
       "Bash(python3:*)",
-      "mcp__critic2__get_review_feedback"
+      "mcp__critic2__get_review_feedback",
+      "Bash(git diff:*)"
     ]
   }
 }

@@ -35,6 +35,12 @@ func (m DiffMode) String() string {
 	}
 }
 
+// Whitespace options for git diff. Using -w to ignore all whitespace and
+// --ignore-blank-lines to ignore blank line changes.
+// Other options available: -b (--ignore-space-change), --ignore-space-at-eol,
+// --ignore-cr-at-eol
+var diffWhitespaceOpts = []string{"-w", "--ignore-blank-lines"}
+
 // GetDiff returns the diff for the specified paths and mode.
 // If paths is empty, returns diff for all changed files.
 func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
@@ -57,6 +63,7 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 
 		// Compare merge base to working directory (includes committed, staged, and unstaged changes)
 		args = []string{"diff", base, "--patch", "--no-color"}
+		args = append(args, diffWhitespaceOpts...)
 		if len(paths) > 0 {
 			args = append(args, "--")
 			args = append(args, paths...)
@@ -65,6 +72,7 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 	case DiffToLastCommit:
 		// Show the last commit
 		args = []string{"show", "HEAD", "--patch", "--no-color"}
+		args = append(args, diffWhitespaceOpts...)
 		if len(paths) > 0 {
 			args = append(args, "--")
 			args = append(args, paths...)
@@ -73,6 +81,7 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 	case DiffUnstaged:
 		// Show only unstaged changes
 		args = []string{"diff", "--patch", "--no-color"}
+		args = append(args, diffWhitespaceOpts...)
 		if len(paths) > 0 {
 			args = append(args, "--")
 			args = append(args, paths...)
@@ -116,6 +125,7 @@ func GetDiffBetween(base, target string, paths []string) (*ctypes.Diff, error) {
 		// Compare base to target commit
 		args = []string{"diff", base + ".." + target, "--patch", "--no-color"}
 	}
+	args = append(args, diffWhitespaceOpts...)
 	if len(paths) > 0 {
 		args = append(args, "--")
 		args = append(args, paths...)
