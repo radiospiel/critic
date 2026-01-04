@@ -10,7 +10,13 @@ import (
 
 // Execute runs the CLI application with the given handler
 func Execute(handler func(*app.Args) error) error {
-	return newRootCmd(handler).Execute()
+	rootCmd := newRootCmd(handler)
+
+	// Add subcommands
+	rootCmd.AddCommand(newMCPCmd())
+	rootCmd.AddCommand(newReviewCmd())
+
+	return rootCmd.Execute()
 }
 
 // ParseArgsForTesting parses command-line arguments without running the app
