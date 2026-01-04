@@ -11,7 +11,6 @@
       "Bash(go test:*)",
       "Bash(grep:*)",
       "Bash(tree:*)",
-      "Bash(perl -i -p0e 's/(\\t+t\\.(Fatal|Error)(f?)\\([^)]*\\))\\n(\\t(?!\\}))/\\1\\n\\t}\\n\\4/g' diff_test.go)",
       "Bash(./critic:*)",
       "Bash(timeout 1 ./critic:*)",
       "Bash(git checkout:*)",
@@ -19,7 +18,15 @@
       "Bash(git merge:*)",
       "Bash(echo:*)",
       "Bash(git stash:*)",
-      "Bash(/tmp/critic:*)"
+      "Bash(/tmp/critic:*)",
+      "Bash(make build:*)",
+      "Bash(make:*)",
+      "Bash(claude /doctor)",
+      "Bash(claude doctor:*)",
+      "Bash(timeout 2 /usr/local/bin/critic:*)",
+      "Bash(cat:*)",
+      "Bash(python3:*)",
+      "mcp__critic2__get_review_feedback"
     ]
   }
 }
