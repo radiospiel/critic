@@ -44,18 +44,17 @@ func newRootCmd(handler func(*app.Args) error) *cobra.Command {
 	var extensionsFlag []string
 
 	cmd := &cobra.Command{
-		Use:   "critic [flags] [base1,base2..current] [-- path1 path2 ...]",
+		Use:   "critic [flags] [base1,base2,...] [-- path1 path2 ...]",
 		Short: "Critic - Git diff viewer with side-by-side comparison",
 		Long: `Critic is a terminal-based git diff viewer that shows changes side-by-side.
 
 Syntax:
-  critic [base1,base2,base3..current] [-- path1 path2 path3]
+  critic [base1,base2,base3] [-- path1 path2 path3]
 
 Examples:
   critic                           # Compare against default bases (main/master, origin/<branch>, HEAD)
-  critic main..current             # Compare main branch to working directory
-  critic main,develop..current     # Compare against multiple bases
-  critic HEAD~1..HEAD              # Compare two commits
+  critic main                      # Compare main branch to HEAD
+  critic main,develop              # Compare against multiple bases
   critic -- src tests              # Only show changes in src and tests directories
   critic --extensions=go,rs        # Only show .go and .rs files
 `,
@@ -83,7 +82,6 @@ Examples:
 			parsedArgs := &app.Args{
 				Extensions: ensureSlice(extensionsFlag),
 				Paths:      []string{"."},
-				Current:    "current", // Default to working directory
 			}
 
 			// Get paths after -- separator
@@ -91,7 +89,7 @@ Examples:
 			var baseArg string
 			if argsLenAtDash >= 0 {
 				// There was a -- separator
-				// The base..current arg is before --
+				// The bases arg is before --
 				if argsLenAtDash > 0 {
 					baseArg = args[0]
 				}
@@ -107,11 +105,9 @@ Examples:
 				}
 			}
 
-			// Parse base..current syntax
+			// Parse bases
 			if baseArg != "" {
-				if err := parseBasesCurrent(baseArg, parsedArgs); err != nil {
-					return err
-				}
+				parsedArgs.Bases = strings.Split(baseArg, ",")
 			}
 
 			// Call the command handler
@@ -132,25 +128,3 @@ func ensureSlice(s []string) []string {
 	}
 	return s
 }
-
-// parseBasesCurrent parses the "base1,base2,base3..current" syntax
-func parseBasesCurrent(arg string, result *app.Args) error {
-	parts := strings.Split(arg, "..")
-
-	if len(parts) > 2 {
-		return fmt.Errorf("invalid base..current syntax: too many '..' separators")
-	}
-
-	// Parse bases (before ..)
-	if parts[0] != "" {
-		result.Bases = strings.Split(parts[0], ",")
-	}
-
-	// Parse current (after ..)
-	if len(parts) == 2 && parts[1] != "" {
-		result.Current = parts[1]
-	}
-
-	return nil
-}
-

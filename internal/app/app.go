@@ -6,13 +6,12 @@ import (
 	"os/exec"
 	"strings"
 
-	"git.15b.it/eno/critic/internal/comments"
 	"git.15b.it/eno/critic/internal/config"
-	"git.15b.it/eno/critic/pkg/messaging"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/logger"
 	"git.15b.it/eno/critic/internal/messagedb"
 	"git.15b.it/eno/critic/internal/ui"
+	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -21,7 +20,6 @@ import (
 // Args represents parsed command-line arguments
 type Args struct {
 	Bases      []string // List of base points (e.g., ["main", "origin/main", "HEAD"])
-	Current    string   // Current target (e.g., "current" or a git ref)
 	Paths      []string // Paths to diff
 	Extensions []string // File extensions to include
 }
@@ -96,26 +94,22 @@ func Run(args *Args) error {
 
 // Model represents the main application model
 type Model struct {
-	fileList       ui.FileListModel
-	diffView       ui.DiffViewModel
-	commentEditor  ui.CommentEditor
-	layout         ui.LayoutModel
-	diff           *ctypes.Diff
-	bases          []string              // List of base refs
-	current        string                // Current target ref
-	currentBase    int                   // Index of current base
-	paths          []string              // Paths to diff
-	extensions     []string              // File extensions to include
-	resolver       *git.BaseResolver     // Base resolver with polling
-	watcher        *git.Watcher
-	commentManager *comments.FileManager // Manages comment files
-	messaging      messaging.Messaging      // Messaging interface for conversations
-	err            error
-	width          int
-	height         int
-	ready          bool
-	reloading      bool
-	showHelp       bool // Whether to show help screen
+	fileList      ui.FileListModel
+	diffView      ui.DiffViewModel
+	commentEditor ui.CommentEditor
+	layout        ui.LayoutModel
+	diff          *ctypes.Diff
+	bases         []string          // List of base refs
+	currentBase   int               // Index of current base
+	paths         []string          // Paths to diff
+	extensions    []string          // File extensions to include
+	resolver      *git.BaseResolver // Base resolver with polling
+	messaging     critic.Messaging  // Messaging interface for conversations
+	err           error
+	width         int
+	height        int
+	ready         bool
+	showHelp      bool // Whether to show help screen
 }
 
 // NewModel creates a new application model
@@ -124,27 +118,8 @@ func NewModel(args *Args) Model {
 	diffView := ui.NewDiffViewModel()
 	diffView.SetHighlightingEnabled(true) // Always enable highlighting
 
-	// Only initialize file watcher when diffing against "current"
-	var watcher *git.Watcher
-	if args.Current == "current" {
-		w, err := git.NewWatcher(100) // 100ms debounce
-		if err != nil {
-			logger.Fatal("Failed to create file watcher: %v", err)
-		}
-		logger.Info("NewModel: Watcher created for 'current' mode")
-		watcher = w
-	} else {
-		logger.Info("NewModel: No watcher (diffing against %s, not 'current')", args.Current)
-	}
-
 	fileList := ui.NewFileListModel()
 	fileList.SetFocused(true) // Start with file list focused
-
-	// Initialize comment manager
-	cwd, _ := os.Getwd()
-	commentManager := comments.NewFileManager(cwd, args.Current)
-	fileList.SetCommentManager(commentManager)
-	diffView.SetCommentManager(commentManager)
 
 	// Initialize message database
 	gitRoot, err := git.GetGitRoot()
@@ -159,18 +134,15 @@ func NewModel(args *Args) Model {
 	fileList.SetMessaging(mdb)
 
 	return Model{
-		fileList:       fileList,
-		diffView:       diffView,
-		commentEditor:  ui.NewCommentEditor(),
-		layout:         ui.NewLayoutModel(),
-		bases:          args.Bases,
-		current:        args.Current,
-		currentBase:    0, // Start with first base
-		paths:          args.Paths,
-		extensions:     args.Extensions,
-		watcher:        watcher,
-		commentManager: commentManager,
-		messaging:      mdb,
+		fileList:      fileList,
+		diffView:      diffView,
+		commentEditor: ui.NewCommentEditor(),
+		layout:        ui.NewLayoutModel(),
+		bases:         args.Bases,
+		currentBase:   0, // Start with first base
+		paths:         args.Paths,
+		extensions:    args.Extensions,
+		messaging:     mdb,
 	}
 }
 
@@ -185,19 +157,6 @@ func (m Model) Init() tea.Cmd {
 		initBaseResolverCmd(&m),
 		loadDiffCmd(&m),
 		disableTerminalLineWrap, // This now handles alternate screen + nowrap
-	}
-
-	// Start file watcher if available
-	if m.watcher != nil {
-		logger.Info("Init: Starting file watcher")
-		if err := m.watcher.WatchPaths(m.paths); err == nil {
-			logger.Info("Init: WatchPaths succeeded, starting waitForFileChanges")
-			cmds = append(cmds, waitForFileChanges(m.watcher))
-		} else {
-			logger.Error("Init: WatchPaths failed: %v", err)
-		}
-	} else {
-		logger.Info("Init: No watcher available")
 	}
 
 	return tea.Batch(cmds...)
@@ -265,15 +224,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if isCommentLine {
 						// Cursor is on a comment preview line - edit that comment
 						lineNum = sourceLine
-						// Load the existing comment from file
-						gitPath := activeFile.NewPath
-						if activeFile.IsDeleted {
-							gitPath = activeFile.OldPath
-						}
-						if criticFile, err := m.commentManager.LoadComments(gitPath); err == nil {
-							if comment, exists := criticFile.Comments[lineNum]; exists {
-								// Join all comment lines with newlines
-								existingComment = strings.Join(comment.Lines, "\n")
+						// Load the existing comment from the messaging interface
+						uuid := m.diffView.GetConversationUUIDAtLine(cursorLine)
+						if uuid != "" {
+							if conv, err := m.messaging.GetFullConversation(uuid); err == nil && len(conv.Messages) > 0 {
+								// Get the last message from the conversation
+								lastMsg := conv.Messages[len(conv.Messages)-1]
+								existingComment = lastMsg.Message
 							}
 						}
 					} else {
@@ -361,42 +318,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Error("Update: Diff loading failed: %v", m.err)
 		}
 
-	case fileChangedMsg:
-		// Check if the changed file is currently being viewed
-		activeFile := m.fileList.GetActiveFile()
-		if activeFile != nil {
-			// Get the git-relative path of the currently viewed file
-			currentGitPath := activeFile.NewPath
-			if currentGitPath == "" {
-				currentGitPath = activeFile.OldPath
-			}
-
-			// Convert watcher absolute path to git-relative path
-			changedGitPath := git.AbsPathToGitPath(msg.path)
-
-			logger.Info("Update: File changed: watcher=%q -> git=%q, active=%q", msg.path, changedGitPath, currentGitPath)
-
-			// Compare git-relative paths
-			if changedGitPath != "" && changedGitPath == currentGitPath {
-				logger.Info("Update: MATCH! Changed file is currently viewed, immediately re-rendering")
-				// Immediately re-render the current file
-				cmd := m.diffView.SetFile(activeFile)
-				cmds = append(cmds, cmd)
-			} else {
-				logger.Info("Update: No match - changed file is not currently viewed")
-			}
-		}
-
-		// Also reload the full diff in the background to update file list
-		logger.Info("Update: Reloading full diff in background")
-		m.reloading = true
-		return m, tea.Batch(
-			append(cmds,
-				loadDiffCmd(&m),
-				waitForFileChanges(m.watcher),
-			)...,
-		)
-
 	case baseResolverInitializedMsg:
 		logger.Info("Update: BaseResolver initialized")
 		m.resolver = msg.resolver
@@ -408,9 +329,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, loadDiffCmd(&m)
 
 	case ui.CommentSavedMsg:
-		// Save the comment to file
+		// Save the comment using the messaging interface
 		activeFile := m.fileList.GetActiveFile()
-		if activeFile != nil {
+		if activeFile != nil && msg.Comment != "" {
 			filePath := activeFile.NewPath
 			if filePath == "" {
 				filePath = activeFile.OldPath
@@ -419,70 +340,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Get current git commit for code_version
 			codeVersion := m.getCurrentCodeVersion()
 
-			// Load existing comments
-			criticFile, err := m.commentManager.LoadComments(filePath)
-			if err != nil {
-				logger.Error("Failed to load comments: %v", err)
+			// Get the cursor line to check for existing conversation
+			cursorLine := m.diffView.GetCursorLine()
+			existingUUID := m.diffView.GetConversationUUIDAtLine(cursorLine)
+
+			if existingUUID != "" {
+				// There's an existing conversation - add a reply
+				replyMsg, err := m.messaging.ReplyToConversation(
+					existingUUID,
+					msg.Comment,
+					critic.AuthorHuman,
+				)
+				if err != nil {
+					logger.Error("Failed to create reply: %v", err)
+					return m, nil
+				}
+				logger.Info("Created reply %s to conversation %s", replyMsg.UUID, existingUUID)
 			} else {
-				// Add the comment (create conversation or reply)
-				if msg.Comment != "" {
-					// Check if there's an existing conversation at this line
-					existingBlock := criticFile.Comments[msg.LineNum]
-
-					var conversationUUID string
-
-					if existingBlock != nil && existingBlock.UUID != "" {
-						// There's an existing conversation - add a reply
-						replyMsg, err := m.messaging.ReplyToConversation(
-							existingBlock.UUID,
-							msg.Comment,
-							messaging.AuthorHuman,
-						)
-						if err != nil {
-							logger.Error("Failed to create reply: %v", err)
-							return m, nil
-						}
-						conversationUUID = existingBlock.UUID
-						logger.Info("Created reply %s to conversation %s", replyMsg.UUID, conversationUUID)
-					} else {
-						// No existing conversation - create a new one
-						conversation, err := m.messaging.CreateConversation(
-							messaging.AuthorHuman,
-							msg.Comment,
-							filePath,
-							msg.LineNum,
-							codeVersion,
-						)
-						if err != nil {
-							logger.Error("Failed to create conversation: %v", err)
-							return m, nil
-						}
-						conversationUUID = conversation.UUID
-						logger.Info("Created conversation %s at %s:%d", conversationUUID, filePath, msg.LineNum)
-
-						// Only update the critic file for NEW conversations
-						// For replies, the conversation UUID stays the same
-						criticFile.Comments[msg.LineNum] = &ctypes.CriticBlock{
-							LineNumber: msg.LineNum,
-							Lines:      strings.Split(msg.Comment, "\n"),
-							UUID:       conversationUUID,
-						}
-					}
-				} else {
-					// Empty comment means delete
-					delete(criticFile.Comments, msg.LineNum)
+				// No existing conversation - create a new one
+				conversation, err := m.messaging.CreateConversation(
+					critic.AuthorHuman,
+					msg.Comment,
+					filePath,
+					msg.LineNum,
+					codeVersion,
+				)
+				if err != nil {
+					logger.Error("Failed to create conversation: %v", err)
+					return m, nil
 				}
-
-				// Save the updated comments
-				if err := m.commentManager.SaveComments(criticFile); err != nil {
-					logger.Error("Failed to save comments: %v", err)
-				} else {
-					logger.Info("Comment saved for line %d", msg.LineNum)
-					// Force refresh the diff view to show the new/updated comment inline
-					cmd := m.diffView.RefreshFile()
-					cmds = append(cmds, cmd)
-				}
+				logger.Info("Created conversation %s at %s:%d", conversation.UUID, filePath, msg.LineNum)
 			}
+
+			// Force refresh the diff view to show the new/updated comment inline
+			cmd := m.diffView.RefreshFile()
+			cmds = append(cmds, cmd)
 		}
 
 
@@ -564,10 +456,10 @@ func (m Model) View() string {
 func (m Model) renderStatusBar() string {
 	var parts []string
 
-	// Show current base and target
+	// Show current base
 	if len(m.bases) > 0 {
 		base := m.bases[m.currentBase]
-		parts = append(parts, fmt.Sprintf("[B]ase: %s → %s", base, m.current))
+		parts = append(parts, fmt.Sprintf("[B]ase: %s → HEAD", base))
 	}
 
 	// Show file count
@@ -607,10 +499,6 @@ func renderError(err error) string {
 type diffLoadedMsg struct {
 	diff *ctypes.Diff
 	err  error
-}
-
-type fileChangedMsg struct {
-	path string
 }
 
 type baseResolverInitializedMsg struct {
@@ -668,7 +556,7 @@ func enableTerminalLineWrap() tea.Msg {
 
 func initBaseResolverCmd(m *Model) tea.Cmd {
 	return func() tea.Msg {
-		resolver, err := git.NewBaseResolver(m.bases, m.current, func() {
+		resolver, err := git.NewBaseResolver(m.bases, "HEAD", func() {
 			// This callback is called when bases change
 			// We'll send a message to trigger reload
 			logger.Info("BaseResolver: Bases changed, triggering reload")
@@ -709,20 +597,13 @@ func loadDiffCmd(m *Model) tea.Cmd {
 			baseCommit = resolvedSHA
 		}
 
-		// Resolve target (might be "current" or a git ref)
-		var targetCommit string
-		if m.current == "current" {
-			targetCommit = "current"
-		} else {
-			// Resolve target ref to commit SHA
-			sha, err := git.ResolveRef(m.current)
-			if err != nil {
-				return diffLoadedMsg{diff: nil, err: fmt.Errorf("failed to resolve target %s: %w", m.current, err)}
-			}
-			targetCommit = sha
+		// Always diff against HEAD
+		targetCommit, err := git.ResolveRef("HEAD")
+		if err != nil {
+			return diffLoadedMsg{diff: nil, err: fmt.Errorf("failed to resolve HEAD: %w", err)}
 		}
 
-		logger.Info("loadDiffCmd: Loading diff from %s (%s) to %s (%s)", baseName, baseCommit, m.current, targetCommit)
+		logger.Info("loadDiffCmd: Loading diff from %s (%s) to HEAD (%s)", baseName, baseCommit, targetCommit)
 
 		// Use GetDiffBetween to get diff between specific commits
 		diff, err := git.GetDiffBetween(baseCommit, targetCommit, m.paths)
@@ -753,20 +634,6 @@ func resolveBase(base string) (string, error) {
 	}
 
 	return mergeBase, nil
-}
-
-func waitForFileChanges(watcher *git.Watcher) tea.Cmd {
-	if watcher == nil {
-		logger.Info("waitForFileChanges: No watcher, returning nil")
-		return nil
-	}
-
-	return func() tea.Msg {
-		logger.Info("waitForFileChanges: Waiting for file changes...")
-		change := <-watcher.Changes()
-		logger.Info("waitForFileChanges: File change received for %s, returning fileChangedMsg", change.Path)
-		return fileChangedMsg{path: change.Path}
-	}
 }
 
 // renderHelpOverlay renders the help screen overlay

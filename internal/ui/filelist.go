@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"git.15b.it/eno/critic/internal/comments"
-	"git.15b.it/eno/critic/pkg/messaging"
 	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,16 +14,15 @@ import (
 
 // FileListModel represents the file list pane
 type FileListModel struct {
-	files          []*ctypes.FileDiff
-	cursor         int
-	viewport       viewport.Model
-	width          int
-	height         int
-	ready          bool
-	activeFile     *ctypes.FileDiff
-	focused        bool
-	commentManager *comments.FileManager
-	messaging      messaging.Messaging
+	files      []*ctypes.FileDiff
+	cursor     int
+	viewport   viewport.Model
+	width      int
+	height     int
+	ready      bool
+	activeFile *ctypes.FileDiff
+	focused    bool
+	messaging  critic.Messaging
 }
 
 // NewFileListModel creates a new file list model
@@ -92,28 +90,23 @@ func (m FileListModel) View() string {
 	for i, file := range m.files {
 		style := normalFileStyle
 
-		// Check if file has comments
-		hasComments := false
-		hasUnreadAI := false
-		if m.commentManager != nil {
-			// Use the git-relative path for checking comments
-			gitPath := file.NewPath
-			if file.IsDeleted {
-				gitPath = file.OldPath
-			}
-			hasComments = m.commentManager.HasComments(gitPath)
+		// Get the git-relative path for checking conversations
+		gitPath := file.NewPath
+		if file.IsDeleted {
+			gitPath = file.OldPath
+		}
 
-			// Check for unread AI comments
-			if m.messaging != nil {
-				unreadFiles, err := m.messaging.GetFilesWithUnreadAIMessages()
-				if err == nil {
-					for _, unreadPath := range unreadFiles {
-						if unreadPath == gitPath {
-							hasUnreadAI = true
-							break
-						}
-					}
-				}
+		// Get conversation summary from messaging interface
+		var hasUnreadAI bool
+		var hasUnresolved bool
+		var hasResolved bool
+
+		if m.messaging != nil {
+			summary, err := m.messaging.GetFileConversationSummary(gitPath)
+			if err == nil && summary != nil {
+				hasUnreadAI = summary.HasUnreadAIMessages
+				hasUnresolved = summary.HasUnresolvedComments
+				hasResolved = summary.HasResolvedComments
 			}
 		}
 
@@ -147,17 +140,22 @@ func (m FileListModel) View() string {
 
 		// Add left indicator:
 		// - Red/bright block for files with unread AI comments
-		// - Yellow half-block for files with comments
+		// - Yellow block for files with unresolved comments
+		// - Green block for files with only resolved comments
 		// - Space for files without comments
 		var leftIndicator string
 		if hasUnreadAI {
-			// Red block for unread AI comments (more attention-grabbing)
+			// Red block for unread AI comments (most attention-grabbing)
 			const redBlock = "\x1b[38;5;196m▌\x1b[0m"
 			leftIndicator = redBlock
-		} else if hasComments {
-			// Yellow block for regular comments
+		} else if hasUnresolved {
+			// Yellow block for unresolved comments
 			const yellowBlock = "\x1b[38;5;220m▌\x1b[0m"
 			leftIndicator = yellowBlock
+		} else if hasResolved {
+			// Green block for resolved comments
+			const greenBlock = "\x1b[38;5;34m▌\x1b[0m"
+			leftIndicator = greenBlock
 		} else {
 			leftIndicator = " "
 		}
@@ -260,12 +258,7 @@ func (m *FileListModel) SetFocused(focused bool) {
 	m.focused = focused
 }
 
-// SetCommentManager sets the comment manager for checking file comments
-func (m *FileListModel) SetCommentManager(cm *comments.FileManager) {
-	m.commentManager = cm
-}
-
-// SetMessaging sets the messaging interface for checking unread AI messages
-func (m *FileListModel) SetMessaging(messaging messaging.Messaging) {
+// SetMessaging sets the messaging interface for checking conversation status
+func (m *FileListModel) SetMessaging(messaging critic.Messaging) {
 	m.messaging = messaging
 }

@@ -6,7 +6,7 @@ import (
 
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/messagedb"
-	"git.15b.it/eno/critic/pkg/messaging"
+	"git.15b.it/eno/critic/pkg/critic"
 	"github.com/spf13/cobra"
 )
 
@@ -174,7 +174,7 @@ Example:
 				}
 
 				author := "human"
-				if msg.Author == messaging.AuthorAI {
+				if msg.Author == critic.AuthorAI {
 					author = "ai"
 				}
 
@@ -213,12 +213,12 @@ Examples:
 			message := args[1]
 
 			// Validate author
-			var msgAuthor messaging.Author
+			var msgAuthor critic.Author
 			switch author {
 			case "human":
-				msgAuthor = messaging.AuthorHuman
+				msgAuthor = critic.AuthorHuman
 			case "ai":
-				msgAuthor = messaging.AuthorAI
+				msgAuthor = critic.AuthorAI
 			default:
 				return fmt.Errorf("invalid author: %s (must be 'human' or 'ai')", author)
 			}
