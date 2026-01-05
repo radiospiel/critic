@@ -5,9 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"strings"
 	"testing"
-	"time"
 )
 
 // testServer creates a server with custom io for testing
@@ -22,10 +20,8 @@ func newTestServer() *testServer {
 	output := &bytes.Buffer{}
 
 	s := &Server{
-		reader:          bufio.NewReader(input),
-		writer:          output,
-		reviewerIPC:     NewReviewerIPC("/tmp/test-hitl-" + time.Now().Format("20060102150405") + ".sock"),
-		feedbackTimeout: 100 * time.Millisecond,
+		reader: bufio.NewReader(input),
+		writer: output,
 	}
 
 	return &testServer{
@@ -134,8 +130,8 @@ func TestServerToolsList(t *testing.T) {
 		t.Fatalf("Expected tools array, got %T", result["tools"])
 	}
 
-	if len(tools) != 2 {
-		t.Errorf("Expected 2 tools, got %d", len(tools))
+	if len(tools) != 3 {
+		t.Errorf("Expected 3 tools, got %d", len(tools))
 	}
 
 	// Check tool names
@@ -145,63 +141,16 @@ func TestServerToolsList(t *testing.T) {
 		toolNames[toolMap["name"].(string)] = true
 	}
 
-	if !toolNames["get_review_feedback"] {
-		t.Error("Missing get_review_feedback tool")
-	}
-	if !toolNames["notify_reviewer"] {
-		t.Error("Missing notify_reviewer tool")
-	}
-}
-
-func TestServerNotifyReviewer(t *testing.T) {
-	ts := newTestServer()
-
-	// Start IPC server
-	if err := ts.reviewerIPC.Start(); err != nil {
-		t.Fatalf("Failed to start IPC: %v", err)
-	}
-	defer ts.reviewerIPC.Stop()
-
-	params := CallToolParams{
-		Name: "notify_reviewer",
-		Arguments: map[string]interface{}{
-			"message": "Test notification",
-		},
+	expectedTools := []string{
+		"get_critic_conversations",
+		"get_full_critic_conversation",
+		"reply_to_critic_conversation",
 	}
 
-	err := ts.sendRequest("tools/call", params, 1)
-	if err != nil {
-		t.Fatalf("Failed to send request: %v", err)
-	}
-
-	line, _ := ts.reader.ReadBytes('\n')
-	err = ts.handleMessage(line)
-	if err != nil {
-		t.Fatalf("Failed to handle message: %v", err)
-	}
-
-	resp, err := ts.readResponse()
-	if err != nil {
-		t.Fatalf("Failed to read response: %v", err)
-	}
-
-	if resp.Error != nil {
-		t.Errorf("Unexpected error: %v", resp.Error)
-	}
-
-	result, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		t.Fatalf("Expected map result, got %T", resp.Result)
-	}
-
-	content, ok := result["content"].([]interface{})
-	if !ok || len(content) == 0 {
-		t.Fatalf("Expected content array, got %v", result["content"])
-	}
-
-	firstContent := content[0].(map[string]interface{})
-	if !strings.Contains(firstContent["text"].(string), "notified") {
-		t.Errorf("Expected 'notified' in response, got %s", firstContent["text"])
+	for _, name := range expectedTools {
+		if !toolNames[name] {
+			t.Errorf("Missing %s tool", name)
+		}
 	}
 }
 

@@ -28,6 +28,7 @@ func TestFileManager_SaveAndLoad(t *testing.T) {
 			1: {
 				LineNumber: 1,
 				Lines:      []string{"This is a comment", "on multiple lines"},
+				UUID:       "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			},
 		},
 	}
@@ -102,6 +103,7 @@ func TestFileManager_HasComments(t *testing.T) {
 			0: {
 				LineNumber: 0,
 				Lines:      []string{"A comment"},
+				UUID:       "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			},
 		},
 	}

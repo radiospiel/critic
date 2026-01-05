@@ -27,7 +27,8 @@
       "Bash(cat:*)",
       "Bash(python3:*)",
       "mcp__critic2__get_review_feedback",
-      "Bash(git diff:*)"
+      "Bash(git diff:*)",
+      "mcp__critic2__get_critic_conversations"
     ]
   }
 }

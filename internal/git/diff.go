@@ -9,6 +9,16 @@ import (
 	ctypes "git.15b.it/eno/critic/pkg/types"
 )
 
+// GetGitRoot returns the root directory of the git repository
+func GetGitRoot() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get git root: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // validCommitHash checks if a string is a valid git commit hash (SHA-1 or short form)
 var validCommitHash = regexp.MustCompile(`^[a-f0-9]{6,40}$`)
 

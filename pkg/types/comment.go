@@ -6,6 +6,8 @@ type CriticBlock struct {
 	LineNumber int
 	// Lines contains the comment content (without the CRITIC fence markers)
 	Lines []string
+	// UUID is the unique identifier for this comment (linked to messagedb)
+	UUID string
 }
 
 // CriticFile represents a .critic.md file with embedded comments

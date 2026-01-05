@@ -6,7 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
+	"strings"
+
+	"git.15b.it/eno/critic/pkg/messaging"
+	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/internal/logger"
+	"git.15b.it/eno/critic/internal/messagedb"
 )
 
 const (
@@ -16,43 +21,46 @@ const (
 	ServerVersion = "1.0.0"
 	// ProtocolVersion is the MCP protocol version we support
 	ProtocolVersion = "2024-11-05"
-	// DefaultFeedbackTimeout is the default timeout for waiting for feedback
-	DefaultFeedbackTimeout = 5 * time.Minute
 )
 
 // Server represents the MCP server for HITL interactions
 type Server struct {
-	reader          *bufio.Reader
-	writer          io.Writer
-	reviewerIPC     *ReviewerIPC
-	feedbackTimeout time.Duration
-	initialized     bool
+	reader      *bufio.Reader
+	writer      io.Writer
+	messaging   messaging.Messaging
+	initialized bool
 }
 
 // NewServer creates a new MCP server
-func NewServer(socketPath string) *Server {
+func NewServer() *Server {
+	// Initialize message database
+	gitRoot, err := git.GetGitRoot()
+	if err != nil {
+		logger.Error("Failed to get git root: %v", err)
+		return nil
+	}
+
+	mdb, err := messagedb.New(gitRoot)
+	if err != nil {
+		logger.Error("Failed to initialize message database: %v", err)
+		return nil
+	}
+
 	return &Server{
-		reader:          bufio.NewReader(os.Stdin),
-		writer:          os.Stdout,
-		reviewerIPC:     NewReviewerIPC(socketPath),
-		feedbackTimeout: DefaultFeedbackTimeout,
+		reader:    bufio.NewReader(os.Stdin),
+		writer:    os.Stdout,
+		messaging: mdb,
 	}
 }
 
-// SetFeedbackTimeout sets the timeout for waiting for reviewer feedback
-func (s *Server) SetFeedbackTimeout(timeout time.Duration) {
-	s.feedbackTimeout = timeout
+// SetMessaging sets the messaging interface
+func (s *Server) SetMessaging(messaging messaging.Messaging) {
+	s.messaging = messaging
 }
 
 // Run starts the MCP server and processes messages
 func (s *Server) Run() error {
-	// Start IPC server for reviewer communication
-	if err := s.reviewerIPC.Start(); err != nil {
-		return fmt.Errorf("failed to start reviewer IPC: %w", err)
-	}
-	defer s.reviewerIPC.Stop()
-
-	s.logToStderr("HITL MCP server started, socket: %s", s.reviewerIPC.GetSocketPath())
+	s.logToStderr("HITL MCP server started")
 
 	// Process messages from stdin
 	for {
@@ -126,31 +134,48 @@ func (s *Server) handleInitialize(req Request) error {
 func (s *Server) handleToolsList(req Request) error {
 	tools := []Tool{
 		{
-			Name:        "get_review_feedback",
-			Description: "Wait for and retrieve feedback from the human reviewer. Call this before completing significant changes. The tool will block until the reviewer responds or timeout occurs.",
+			Name:        "get_critic_conversations",
+			Description: "Get a list of conversation UUIDs. Optionally filter by status ('unresolved' or 'resolved'). Use this to check for reviewer feedback.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
-					"summary": {
+					"status": {
 						Type:        "string",
-						Description: "Brief summary of what you've done for the reviewer to review",
+						Description: "Optional filter: 'unresolved' or 'resolved'. If omitted, returns all conversations.",
 					},
 				},
-				Required: []string{"summary"},
 			},
 		},
 		{
-			Name:        "notify_reviewer",
-			Description: "Send a notification to the reviewer without waiting for a response. Use this for status updates or non-blocking communication.",
+			Name:        "get_full_critic_conversation",
+			Description: "Get the complete conversation including all messages and replies. Returns conversation metadata and all messages ordered chronologically.",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
-					"message": {
+					"uuid": {
 						Type:        "string",
-						Description: "The message to send to the reviewer",
+						Description: "The UUID of the conversation to retrieve",
 					},
 				},
-				Required: []string{"message"},
+				Required: []string{"uuid"},
+			},
+		},
+		{
+			Name:        "reply_to_critic_conversation",
+			Description: "Add a reply to an existing conversation. Use this to respond to reviewer feedback.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]Property{
+					"uuid": {
+						Type:        "string",
+						Description: "The UUID of the conversation to reply to",
+					},
+					"message": {
+						Type:        "string",
+						Description: "Your reply message",
+					},
+				},
+				Required: []string{"uuid", "message"},
 			},
 		},
 	}
@@ -174,66 +199,129 @@ func (s *Server) handleToolsCall(req Request) error {
 	s.logToStderr("Tool call: %s", params.Name)
 
 	switch params.Name {
-	case "get_review_feedback":
-		return s.handleGetReviewFeedback(req, params)
-	case "notify_reviewer":
-		return s.handleNotifyReviewer(req, params)
+	case "get_critic_conversations":
+		return s.handleGetCriticConversations(req, params)
+	case "get_full_critic_conversation":
+		return s.handleGetFullCriticConversation(req, params)
+	case "reply_to_critic_conversation":
+		return s.handleReplyToCriticConversation(req, params)
 	default:
 		return s.sendToolError(req.ID, fmt.Sprintf("Unknown tool: %s", params.Name))
 	}
 }
 
-// handleGetReviewFeedback handles the get_review_feedback tool
-func (s *Server) handleGetReviewFeedback(req Request, params CallToolParams) error {
-	summary, _ := params.Arguments["summary"].(string)
-	if summary == "" {
-		return s.sendToolError(req.ID, "summary is required")
+// handleGetCriticConversations handles the get_critic_conversations tool
+func (s *Server) handleGetCriticConversations(req Request, params CallToolParams) error {
+	if s.messaging == nil {
+		s.logToStderr("Messaging not initialized")
+		return s.sendToolResult(req.ID, "[]")
 	}
 
-	s.logToStderr("Awaiting review for: %s", summary)
+	// Get status filter (optional)
+	status, _ := params.Arguments["status"].(string)
+	s.logToStderr("Getting conversations with status filter: %s", status)
 
-	// Notify reviewers that we're waiting
-	s.reviewerIPC.NotifyReviewer(NotificationMessage{
-		Type:    "waiting",
-		Summary: summary,
-	})
-
-	// Wait for feedback
-	msg, err := s.reviewerIPC.WaitForFeedback(s.feedbackTimeout)
+	uuids, err := s.messaging.GetConversations(status)
 	if err != nil {
-		return s.sendToolResult(req.ID, fmt.Sprintf("No feedback received: %v", err))
+		s.logToStderr("Failed to get conversations: %v", err)
+		return s.sendToolError(req.ID, fmt.Sprintf("Error getting conversations: %v", err))
 	}
 
-	// Format response based on message type
-	var responseText string
-	switch msg.Type {
-	case "approved":
-		responseText = "APPROVED: " + msg.Feedback
-	case "rejected":
-		responseText = "REJECTED: " + msg.Feedback
-	default:
-		responseText = msg.Feedback
+	s.logToStderr("Found %d conversations", len(uuids))
+
+	// Format as JSON array
+	result, err := json.Marshal(uuids)
+	if err != nil {
+		return s.sendToolError(req.ID, fmt.Sprintf("Error encoding result: %v", err))
 	}
 
-	return s.sendToolResult(req.ID, responseText)
+	return s.sendToolResult(req.ID, string(result))
 }
 
-// handleNotifyReviewer handles the notify_reviewer tool
-func (s *Server) handleNotifyReviewer(req Request, params CallToolParams) error {
-	message, _ := params.Arguments["message"].(string)
-	if message == "" {
+// handleGetFullCriticConversation handles the get_full_critic_conversation tool
+func (s *Server) handleGetFullCriticConversation(req Request, params CallToolParams) error {
+	if s.messaging == nil {
+		s.logToStderr("Messaging not initialized")
+		return s.sendToolError(req.ID, "Messaging not initialized")
+	}
+
+	uuid, ok := params.Arguments["uuid"].(string)
+	if !ok || uuid == "" {
+		return s.sendToolError(req.ID, "uuid is required")
+	}
+
+	s.logToStderr("Getting full conversation: %s", uuid)
+
+	conversation, err := s.messaging.GetFullConversation(uuid)
+	if err != nil {
+		s.logToStderr("Failed to get conversation: %v", err)
+		return s.sendToolError(req.ID, fmt.Sprintf("Error getting conversation: %v", err))
+	}
+
+	// Format conversation as human-readable text
+	response := s.formatConversation(conversation)
+	s.logToStderr("Returning conversation with %d messages", len(conversation.Messages))
+
+	return s.sendToolResult(req.ID, response)
+}
+
+// handleReplyToCriticConversation handles the reply_to_critic_conversation tool
+func (s *Server) handleReplyToCriticConversation(req Request, params CallToolParams) error {
+	if s.messaging == nil {
+		s.logToStderr("Messaging not initialized")
+		return s.sendToolError(req.ID, "Messaging not initialized")
+	}
+
+	uuid, ok := params.Arguments["uuid"].(string)
+	if !ok || uuid == "" {
+		return s.sendToolError(req.ID, "uuid is required")
+	}
+
+	message, ok := params.Arguments["message"].(string)
+	if !ok || message == "" {
 		return s.sendToolError(req.ID, "message is required")
 	}
 
-	s.logToStderr("Notification: %s", message)
+	s.logToStderr("Adding reply to conversation %s", uuid)
 
-	// Send notification to reviewers
-	s.reviewerIPC.NotifyReviewer(NotificationMessage{
-		Type:    "notification",
-		Summary: message,
-	})
+	reply, err := s.messaging.ReplyToConversation(uuid, message, messaging.AuthorAI)
+	if err != nil {
+		s.logToStderr("Failed to create reply: %v", err)
+		return s.sendToolError(req.ID, fmt.Sprintf("Error creating reply: %v", err))
+	}
 
-	return s.sendToolResult(req.ID, "Reviewer notified")
+	s.logToStderr("Created reply: %s", reply.UUID)
+	return s.sendToolResult(req.ID, fmt.Sprintf("Reply created successfully: %s", reply.UUID))
+}
+
+// formatConversation formats a conversation for display
+func (s *Server) formatConversation(conv *messaging.Conversation) string {
+	var builder strings.Builder
+
+	// Header with metadata
+	builder.WriteString(fmt.Sprintf("Conversation: %s\n", conv.UUID))
+	builder.WriteString(fmt.Sprintf("Status: %s\n", conv.Status))
+	builder.WriteString(fmt.Sprintf("Location: %s:%d\n", conv.FilePath, conv.LineNumber))
+	builder.WriteString(fmt.Sprintf("Code Version: %s\n", conv.CodeVersion))
+	builder.WriteString("\n")
+
+	// Messages
+	for i, msg := range conv.Messages {
+		if i > 0 {
+			builder.WriteString("\n")
+		}
+
+		prefix := "human"
+		if msg.Author == messaging.AuthorAI {
+			prefix = "ai"
+		}
+
+		builder.WriteString(fmt.Sprintf("[%s] %s\n", prefix, msg.CreatedAt.Format("2006-01-02 15:04:05")))
+		builder.WriteString(msg.Message)
+		builder.WriteString("\n")
+	}
+
+	return builder.String()
 }
 
 // sendResult sends a successful result response

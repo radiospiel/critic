@@ -13,15 +13,15 @@ func TestParseCriticFile(t *testing.T) {
 	// Create a temporary test file
 	content := `line 1
 line 2
---- CRITIC 2 lines ------------------------------
+--- CRITIC 2 LINES a1b2c3d4-e5f6-7890-abcd-ef1234567890 ---
 This is a comment
 on two lines
---- CRITIC END ------------------------------
+--- CRITIC END ---
 line 3
 line 4
---- CRITIC 1 line ------------------------------
+--- CRITIC 1 LINES b2c3d4e5-f6a7-8901-bcde-f12345678901 ---
 Single line comment
---- CRITIC END ------------------------------
+--- CRITIC END ---
 line 5
 `
 
@@ -87,6 +87,7 @@ func TestFormatCriticFile(t *testing.T) {
 			1: {
 				LineNumber: 1,
 				Lines:      []string{"Comment for line 2"},
+				UUID:       "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 			},
 		},
 	}
@@ -94,13 +95,13 @@ func TestFormatCriticFile(t *testing.T) {
 	formatted := FormatCriticFile(criticFile)
 
 	// Verify the formatted output contains the comment
-	if !strings.Contains(formatted, "--- CRITIC 1 line ------------------------------") {
+	if !strings.Contains(formatted, "--- CRITIC 1 LINES a1b2c3d4-e5f6-7890-abcd-ef1234567890 ---") {
 		t.Error("Formatted output should contain CRITIC opening fence")
 	}
 	if !strings.Contains(formatted, "Comment for line 2") {
 		t.Error("Formatted output should contain comment text")
 	}
-	if !strings.Contains(formatted, "--- CRITIC END ------------------------------") {
+	if !strings.Contains(formatted, "--- CRITIC END ---") {
 		t.Error("Formatted output should contain CRITIC closing fence")
 	}
 }
