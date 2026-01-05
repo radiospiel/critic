@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	// Pattern for CRITIC block opening fence: --- CRITIC <number> lines ------------------------------
-	criticOpenPattern = regexp.MustCompile(`^---\s+CRITIC\s+(\d+)\s+lines?\s+-+$`)
-	// Pattern for CRITIC block closing fence: --- CRITIC END ------------------------------
-	criticClosePattern = regexp.MustCompile(`^---\s+CRITIC\s+END\s+-+$`)
+	// Pattern for CRITIC block opening fence: --- CRITIC <number> LINES <uuid> ---
+	criticOpenPattern = regexp.MustCompile(`^---\s+CRITIC\s+(\d+)\s+LINES\s+([a-f0-9-]+)\s+---$`)
+	// Pattern for CRITIC block closing fence: --- CRITIC END ---
+	criticClosePattern = regexp.MustCompile(`^---\s+CRITIC\s+END\s+---$`)
 )
 
 // ParseCriticFile parses a .critic.md file and extracts the original content and comments
@@ -41,6 +41,7 @@ func ParseCriticFile(filePath string) (*types.CriticFile, error) {
 		// Check if this is a CRITIC block opening
 		if match := criticOpenPattern.FindStringSubmatch(line); match != nil {
 			numLines, _ := strconv.Atoi(match[1])
+			uuid := match[2]
 
 			// Read the comment lines
 			commentLines := make([]string, 0, numLines)
@@ -64,6 +65,7 @@ func ParseCriticFile(filePath string) (*types.CriticFile, error) {
 			result.Comments[lineNum] = &types.CriticBlock{
 				LineNumber: lineNum,
 				Lines:      commentLines,
+				UUID:       uuid,
 			}
 		} else {
 			// This is an original file line
@@ -80,24 +82,14 @@ func ParseCriticFile(filePath string) (*types.CriticFile, error) {
 }
 
 // FormatCriticFile formats a critic file with embedded comment blocks
+// Format: --- CRITIC <n> LINES <uuid> ---
 func FormatCriticFile(criticFile *types.CriticFile) string {
 	var builder strings.Builder
 
 	for i, line := range criticFile.OriginalLines {
 		// Check if there's a comment at this line
 		if comment, exists := criticFile.Comments[i]; exists {
-			// Write the CRITIC block
-			numLines := len(comment.Lines)
-			lineWord := "line"
-			if numLines != 1 {
-				lineWord = "lines"
-			}
-			builder.WriteString(fmt.Sprintf("--- CRITIC %d %s ------------------------------\n", numLines, lineWord))
-			for _, commentLine := range comment.Lines {
-				builder.WriteString(commentLine)
-				builder.WriteString("\n")
-			}
-			builder.WriteString("--- CRITIC END ------------------------------\n")
+			writeCommentBlock(&builder, comment)
 		}
 
 		// Write the original line
@@ -107,20 +99,26 @@ func FormatCriticFile(criticFile *types.CriticFile) string {
 
 	// Check for comment after the last line
 	if comment, exists := criticFile.Comments[len(criticFile.OriginalLines)]; exists {
-		numLines := len(comment.Lines)
-		lineWord := "line"
-		if numLines != 1 {
-			lineWord = "lines"
-		}
-		builder.WriteString(fmt.Sprintf("--- CRITIC %d %s ------------------------------\n", numLines, lineWord))
-		for _, commentLine := range comment.Lines {
-			builder.WriteString(commentLine)
-			builder.WriteString("\n")
-		}
-		builder.WriteString("--- CRITIC END ------------------------------\n")
+		writeCommentBlock(&builder, comment)
 	}
 
 	return builder.String()
+}
+
+// writeCommentBlock writes a comment block in uppercase format
+func writeCommentBlock(builder *strings.Builder, comment *types.CriticBlock) {
+	numLines := len(comment.Lines)
+
+	// Format: --- CRITIC <n> LINES <uuid> ---
+	builder.WriteString(fmt.Sprintf("--- CRITIC %d LINES %s ---\n", numLines, comment.UUID))
+
+	for _, commentLine := range comment.Lines {
+		builder.WriteString(commentLine)
+		builder.WriteString("\n")
+	}
+
+	// Closing fence: --- CRITIC END ---
+	builder.WriteString("--- CRITIC END ---\n")
 }
 
 // ValidateCriticFile validates that a critic file is well-formed

@@ -14,7 +14,7 @@ func Execute(handler func(*app.Args) error) error {
 
 	// Add subcommands
 	rootCmd.AddCommand(newMCPCmd())
-	rootCmd.AddCommand(newReviewCmd())
+	rootCmd.AddCommand(newConvoCmd())
 
 	return rootCmd.Execute()
 }

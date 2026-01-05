@@ -8,8 +8,10 @@ import (
 
 	"git.15b.it/eno/critic/internal/comments"
 	"git.15b.it/eno/critic/internal/config"
+	"git.15b.it/eno/critic/pkg/messaging"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/logger"
+	"git.15b.it/eno/critic/internal/messagedb"
 	"git.15b.it/eno/critic/internal/ui"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	tea "github.com/charmbracelet/bubbletea"
@@ -107,6 +109,7 @@ type Model struct {
 	resolver       *git.BaseResolver     // Base resolver with polling
 	watcher        *git.Watcher
 	commentManager *comments.FileManager // Manages comment files
+	messaging      messaging.Messaging      // Messaging interface for conversations
 	err            error
 	width          int
 	height         int
@@ -143,6 +146,18 @@ func NewModel(args *Args) Model {
 	fileList.SetCommentManager(commentManager)
 	diffView.SetCommentManager(commentManager)
 
+	// Initialize message database
+	gitRoot, err := git.GetGitRoot()
+	if err != nil {
+		logger.Fatal("Failed to get git root: %v", err)
+	}
+	mdb, err := messagedb.New(gitRoot)
+	if err != nil {
+		logger.Fatal("Failed to initialize message database: %v", err)
+	}
+	diffView.SetMessaging(mdb)
+	fileList.SetMessaging(mdb)
+
 	return Model{
 		fileList:       fileList,
 		diffView:       diffView,
@@ -155,6 +170,7 @@ func NewModel(args *Args) Model {
 		extensions:     args.Extensions,
 		watcher:        watcher,
 		commentManager: commentManager,
+		messaging:      mdb,
 	}
 }
 
@@ -400,16 +416,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				filePath = activeFile.OldPath
 			}
 
+			// Get current git commit for code_version
+			codeVersion := m.getCurrentCodeVersion()
+
 			// Load existing comments
 			criticFile, err := m.commentManager.LoadComments(filePath)
 			if err != nil {
 				logger.Error("Failed to load comments: %v", err)
 			} else {
-				// Update or add the comment
+				// Add the comment (create conversation or reply)
 				if msg.Comment != "" {
-					criticFile.Comments[msg.LineNum] = &ctypes.CriticBlock{
-						LineNumber: msg.LineNum,
-						Lines:      strings.Split(msg.Comment, "\n"),
+					// Check if there's an existing conversation at this line
+					existingBlock := criticFile.Comments[msg.LineNum]
+
+					var conversationUUID string
+
+					if existingBlock != nil && existingBlock.UUID != "" {
+						// There's an existing conversation - add a reply
+						replyMsg, err := m.messaging.ReplyToConversation(
+							existingBlock.UUID,
+							msg.Comment,
+							messaging.AuthorHuman,
+						)
+						if err != nil {
+							logger.Error("Failed to create reply: %v", err)
+							return m, nil
+						}
+						conversationUUID = existingBlock.UUID
+						logger.Info("Created reply %s to conversation %s", replyMsg.UUID, conversationUUID)
+					} else {
+						// No existing conversation - create a new one
+						conversation, err := m.messaging.CreateConversation(
+							messaging.AuthorHuman,
+							msg.Comment,
+							filePath,
+							msg.LineNum,
+							codeVersion,
+						)
+						if err != nil {
+							logger.Error("Failed to create conversation: %v", err)
+							return m, nil
+						}
+						conversationUUID = conversation.UUID
+						logger.Info("Created conversation %s at %s:%d", conversationUUID, filePath, msg.LineNum)
+
+						// Only update the critic file for NEW conversations
+						// For replies, the conversation UUID stays the same
+						criticFile.Comments[msg.LineNum] = &ctypes.CriticBlock{
+							LineNumber: msg.LineNum,
+							Lines:      strings.Split(msg.Comment, "\n"),
+							UUID:       conversationUUID,
+						}
 					}
 				} else {
 					// Empty comment means delete
@@ -776,4 +833,15 @@ func (m Model) renderHelpOverlay(underlay string) string {
 
 	// Overlay on the main view
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, positioned)
+}
+
+// getCurrentCodeVersion returns the current git commit hash as the code version
+func (m *Model) getCurrentCodeVersion() string {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		logger.Warn("Failed to get current commit: %v", err)
+		return "unknown"
+	}
+	return strings.TrimSpace(string(output))
 }

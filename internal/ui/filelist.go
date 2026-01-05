@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"git.15b.it/eno/critic/internal/comments"
+	"git.15b.it/eno/critic/pkg/messaging"
 	"git.15b.it/eno/critic/internal/git"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -23,6 +24,7 @@ type FileListModel struct {
 	activeFile     *ctypes.FileDiff
 	focused        bool
 	commentManager *comments.FileManager
+	messaging      messaging.Messaging
 }
 
 // NewFileListModel creates a new file list model
@@ -92,6 +94,7 @@ func (m FileListModel) View() string {
 
 		// Check if file has comments
 		hasComments := false
+		hasUnreadAI := false
 		if m.commentManager != nil {
 			// Use the git-relative path for checking comments
 			gitPath := file.NewPath
@@ -99,6 +102,19 @@ func (m FileListModel) View() string {
 				gitPath = file.OldPath
 			}
 			hasComments = m.commentManager.HasComments(gitPath)
+
+			// Check for unread AI comments
+			if m.messaging != nil {
+				unreadFiles, err := m.messaging.GetFilesWithUnreadAIMessages()
+				if err == nil {
+					for _, unreadPath := range unreadFiles {
+						if unreadPath == gitPath {
+							hasUnreadAI = true
+							break
+						}
+					}
+				}
+			}
 		}
 
 		// Apply styles based on cursor position
@@ -129,9 +145,17 @@ func (m FileListModel) View() string {
 			path = git.GitPathToDisplayPath(file.OldPath)
 		}
 
-		// Add left indicator: yellow half-block for commented files, space for others
+		// Add left indicator:
+		// - Red/bright block for files with unread AI comments
+		// - Yellow half-block for files with comments
+		// - Space for files without comments
 		var leftIndicator string
-		if hasComments {
+		if hasUnreadAI {
+			// Red block for unread AI comments (more attention-grabbing)
+			const redBlock = "\x1b[38;5;196m▌\x1b[0m"
+			leftIndicator = redBlock
+		} else if hasComments {
+			// Yellow block for regular comments
 			const yellowBlock = "\x1b[38;5;220m▌\x1b[0m"
 			leftIndicator = yellowBlock
 		} else {
@@ -239,4 +263,9 @@ func (m *FileListModel) SetFocused(focused bool) {
 // SetCommentManager sets the comment manager for checking file comments
 func (m *FileListModel) SetCommentManager(cm *comments.FileManager) {
 	m.commentManager = cm
+}
+
+// SetMessaging sets the messaging interface for checking unread AI messages
+func (m *FileListModel) SetMessaging(messaging messaging.Messaging) {
+	m.messaging = messaging
 }

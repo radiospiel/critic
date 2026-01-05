@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"git.15b.it/eno/critic/internal/comments"
+	"git.15b.it/eno/critic/pkg/messaging"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/highlight"
 	"git.15b.it/eno/critic/internal/logger"
@@ -34,7 +35,8 @@ type DiffViewModel struct {
 	focused             bool          // Whether this pane is focused
 	navigableLines      []int         // Line numbers that can have cursor (diff lines only)
 	commentManager      *comments.FileManager
-	commentLines        map[int]int   // Maps rendered line number to source line number for comment lines
+	messaging           messaging.Messaging // Messaging interface for conversations
+	commentLines        map[int]int      // Maps rendered line number to source line number for comment lines
 	sourceLines         map[int]int   // Maps rendered line number to source line number for all diff lines
 	preserveCursorLine  int           // Source line to restore cursor to after refresh (0 = don't preserve)
 }
@@ -82,6 +84,8 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 					m.viewport.GotoBottom()
 					return m.refreshContent()
 				}
+			case "r": // Resolve comment
+				return m.resolveCommentAtCursor()
 			default:
 				// Let viewport handle other keys (page up/down, etc)
 				m.viewport, cmd = m.viewport.Update(msg)
@@ -495,6 +499,11 @@ func (m *DiffViewModel) SetCommentManager(cm *comments.FileManager) {
 	m.commentManager = cm
 }
 
+// SetMessaging sets the messaging interface for conversations
+func (m *DiffViewModel) SetMessaging(messaging messaging.Messaging) {
+	m.messaging = messaging
+}
+
 // IsCommentLine returns true if the given line number is a comment line
 // and returns the source line number for that comment
 func (m *DiffViewModel) IsCommentLine(lineNum int) (bool, int) {
@@ -640,7 +649,7 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 			if fileComments != nil && line.NewNum > 0 {
 				if comment, exists := fileComments.Comments[line.NewNum]; exists && len(comment.Lines) > 0 {
 					// Render up to 6 lines of the comment preview (plus indicator if needed)
-					commentLines := m.renderCommentPreview(comment.Lines, lineNum)
+					commentLines := m.renderCommentPreview(comment, lineNum)
 					for _, commentLine := range commentLines {
 						b.WriteString(commentLine)
 						// Track all comment lines (including indicator) for navigation
@@ -797,10 +806,57 @@ func (m *DiffViewModel) highlightFromHunks(file *ctypes.FileDiff, filename strin
 
 // renderCommentPreview renders up to 6 lines of a comment preview with dark text on black background
 // Each line starts with a half-width block character in yellow/gold color
-func (m *DiffViewModel) renderCommentPreview(commentLines []string, startLineNum int) []string {
+// If the comment has a UUID, it loads the thread from the database and displays replies
+func (m *DiffViewModel) renderCommentPreview(comment *ctypes.CriticBlock, startLineNum int) []string {
+	// Build the complete comment text including replies from the database
+	var allLines []string
+
+	// Start with the original comment lines
+	allLines = append(allLines, comment.Lines...)
+
+	// If we have a UUID and messaging, load the conversation
+	if comment.UUID != "" && m.messaging != nil {
+		conversation, err := m.messaging.GetFullConversation(comment.UUID)
+		if err != nil {
+			logger.Warn("Failed to load conversation for UUID %s: %v", comment.UUID, err)
+		} else if len(conversation.Messages) > 1 {
+			// First message is the root (already displayed), so start from index 1
+			for i := 1; i < len(conversation.Messages); i++ {
+				msg := conversation.Messages[i]
+				prefix := "human>"
+				if msg.Author == messaging.AuthorAI {
+					prefix = "ai>"
+
+					// Mark AI messages as read when they're displayed
+					if msg.IsUnread {
+						if err := m.messaging.MarkAsRead(msg.UUID); err != nil {
+							logger.Warn("Failed to mark AI message as read: %v", err)
+						} else {
+							logger.Debug("Marked AI message %s as read", msg.UUID)
+						}
+					}
+				}
+				// Add each line of the reply with the prefix
+				replyLines := strings.Split(msg.Message, "\n")
+				for _, line := range replyLines {
+					allLines = append(allLines, prefix+" "+line)
+				}
+			}
+
+			// Check if the conversation is resolved
+			if conversation.Status == messaging.StatusResolved {
+				// Prepend "(Resolved)" to the first line
+				if len(allLines) > 0 {
+					// Use italic if possible (ANSI escape: \x1b[3m for italic, \x1b[23m to disable)
+					allLines[0] = "\x1b[3m(Resolved)\x1b[23m " + allLines[0]
+				}
+			}
+		}
+	}
+
 	// Limit to 6 lines
 	maxLines := 6
-	totalLines := len(commentLines)
+	totalLines := len(allLines)
 	linesToRender := totalLines
 	if linesToRender > maxLines {
 		linesToRender = maxLines
@@ -832,7 +888,7 @@ func (m *DiffViewModel) renderCommentPreview(commentLines []string, startLineNum
 		prefix := yellowFg + leftHalfBlock + reset + " "
 
 		// Combine prefix and comment text
-		content := prefix + commentLines[i]
+		content := prefix + allLines[i]
 
 		// Calculate visible width (accounting for the right block we'll add)
 		visibleWidth := lipgloss.Width(content)
@@ -1062,4 +1118,41 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// resolveCommentAtCursor resolves the comment at the current cursor position
+func (m *DiffViewModel) resolveCommentAtCursor() tea.Cmd {
+	// Check if cursor is on a comment line
+	if isComment, sourceLine := m.IsCommentLine(m.cursorLine); isComment {
+		// Load the comments for this file
+		if m.file != nil && m.commentManager != nil && m.messaging != nil {
+			filePath := m.file.NewPath
+			if filePath == "" {
+				filePath = m.file.OldPath
+			}
+
+			criticFile, err := m.commentManager.LoadComments(filePath)
+			if err != nil {
+				logger.Error("Failed to load comments for resolve: %v", err)
+				return nil
+			}
+
+			// Find the comment block for this source line
+			if comment, exists := criticFile.Comments[sourceLine]; exists && comment.UUID != "" {
+				// Mark as resolved in the database
+				err := m.messaging.MarkAsResolved(comment.UUID)
+				if err != nil {
+					logger.Error("Failed to mark conversation as resolved: %v", err)
+					return nil
+				}
+
+				logger.Info("Marked comment %s as resolved", comment.UUID)
+
+				// Refresh the view to show the "(Resolved)" indicator
+				return m.RefreshFile()
+			}
+		}
+	}
+
+	return nil
 }
