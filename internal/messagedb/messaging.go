@@ -3,12 +3,12 @@ package messagedb
 import (
 	"fmt"
 
-	"git.15b.it/eno/critic/pkg/messaging"
 	"git.15b.it/eno/critic/internal/logger"
+	"git.15b.it/eno/critic/pkg/critic"
 )
 
-// Ensure DB implements the messaging.Messaging interface
-var _ messaging.Messaging = (*DB)(nil)
+// Ensure DB implements the critic.Messaging interface
+var _ critic.Messaging = (*DB)(nil)
 
 // GetConversations returns a list of conversation IDs
 // If status is provided, filters by that status (e.g., "unresolved")
@@ -25,7 +25,7 @@ func (db *DB) GetConversations(status string) ([]string, error) {
 			WHERE id = conversation_id
 			ORDER BY file_path, line_number, created_at ASC
 		`
-	} else if status == string(messaging.StatusUnresolved) {
+	} else if status == string(critic.StatusUnresolved) {
 		// Get unresolved conversations
 		query = `
 			SELECT id
@@ -34,7 +34,7 @@ func (db *DB) GetConversations(status string) ([]string, error) {
 			ORDER BY file_path, line_number, created_at ASC
 		`
 		args = []interface{}{string(StatusResolved)}
-	} else if status == string(messaging.StatusResolved) {
+	} else if status == string(critic.StatusResolved) {
 		// Get resolved conversations
 		query = `
 			SELECT id
@@ -68,7 +68,7 @@ func (db *DB) GetConversations(status string) ([]string, error) {
 
 // GetFullConversation returns the complete conversation including all replies
 // Messages are ordered by created_at (root message first, then replies in chronological order)
-func (db *DB) GetFullConversation(conversationID string) (*messaging.Conversation, error) {
+func (db *DB) GetFullConversation(conversationID string) (*critic.Conversation, error) {
 	// Get all messages in the conversation
 	messages, err := db.GetThreadMessages(conversationID)
 	if err != nil {
@@ -82,12 +82,12 @@ func (db *DB) GetFullConversation(conversationID string) (*messaging.Conversatio
 	// First message is the root
 	rootMsg := messages[0]
 
-	// Convert messages to messaging.Message type
-	criticMessages := make([]messaging.Message, len(messages))
+	// Convert messages to critic.Message type
+	criticMessages := make([]critic.Message, len(messages))
 	for i, msg := range messages {
-		criticMessages[i] = messaging.Message{
+		criticMessages[i] = critic.Message{
 			UUID:      msg.ID,
-			Author:    messaging.Author(msg.Author),
+			Author:    critic.Author(msg.Author),
 			Message:   msg.Message,
 			CreatedAt: msg.CreatedAt,
 			UpdatedAt: msg.UpdatedAt,
@@ -95,7 +95,7 @@ func (db *DB) GetFullConversation(conversationID string) (*messaging.Conversatio
 		}
 	}
 
-	conversation := &messaging.Conversation{
+	conversation := &critic.Conversation{
 		UUID:        rootMsg.ID,
 		Status:      convertToCriticStatus(rootMsg.Status),
 		FilePath:    rootMsg.FilePath,
@@ -110,8 +110,83 @@ func (db *DB) GetFullConversation(conversationID string) (*messaging.Conversatio
 	return conversation, nil
 }
 
+// GetConversationsForFile returns all conversations for a specific file
+func (db *DB) GetConversationsForFile(filePath string) ([]*critic.Conversation, error) {
+	// Get all root messages for this file
+	rootMessages, err := db.GetMessagesByFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages by file: %w", err)
+	}
+
+	// Build full conversations for each root message
+	conversations := make([]*critic.Conversation, 0, len(rootMessages))
+	for _, rootMsg := range rootMessages {
+		conv, err := db.GetFullConversation(rootMsg.ID)
+		if err != nil {
+			logger.Warn("Failed to get conversation %s: %v", rootMsg.ID, err)
+			continue
+		}
+		conversations = append(conversations, conv)
+	}
+
+	return conversations, nil
+}
+
+// GetFileConversationSummary returns a summary of conversations for a file
+func (db *DB) GetFileConversationSummary(filePath string) (*critic.FileConversationSummary, error) {
+	summary := &critic.FileConversationSummary{
+		FilePath: filePath,
+	}
+
+	// Query to check for unresolved, resolved, and unread conversations in one go
+	query := `
+		SELECT
+			CASE WHEN status != 'resolved' THEN 1 ELSE 0 END as is_unresolved,
+			CASE WHEN status = 'resolved' THEN 1 ELSE 0 END as is_resolved,
+			CASE WHEN author = 'ai' AND read_status = 'unread' THEN 1 ELSE 0 END as has_unread_ai
+		FROM messages
+		WHERE file_path = ? AND id = conversation_id
+	`
+
+	rows, err := db.db.Query(query, filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query file summary: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var isUnresolved, isResolved, hasUnreadAI int
+		if err := rows.Scan(&isUnresolved, &isResolved, &hasUnreadAI); err != nil {
+			return nil, fmt.Errorf("failed to scan file summary: %w", err)
+		}
+		if isUnresolved == 1 {
+			summary.HasUnresolvedComments = true
+		}
+		if isResolved == 1 {
+			summary.HasResolvedComments = true
+		}
+		if hasUnreadAI == 1 {
+			summary.HasUnreadAIMessages = true
+		}
+	}
+
+	// Also check for unread AI messages in replies (not just root messages)
+	if !summary.HasUnreadAIMessages {
+		unreadQuery := `
+			SELECT COUNT(*) FROM messages
+			WHERE file_path = ? AND author = 'ai' AND read_status = 'unread'
+		`
+		var count int
+		if err := db.db.QueryRow(unreadQuery, filePath).Scan(&count); err == nil && count > 0 {
+			summary.HasUnreadAIMessages = true
+		}
+	}
+
+	return summary, nil
+}
+
 // ReplyToConversation adds a reply to an existing conversation
-func (db *DB) ReplyToConversation(conversationID string, message string, author messaging.Author) (*messaging.Message, error) {
+func (db *DB) ReplyToConversation(conversationID string, message string, author critic.Author) (*critic.Message, error) {
 	// Verify conversation exists
 	rootMsg, err := db.GetMessage(conversationID)
 	if err != nil {
@@ -128,9 +203,9 @@ func (db *DB) ReplyToConversation(conversationID string, message string, author 
 		return nil, fmt.Errorf("failed to create reply: %w", err)
 	}
 
-	criticMsg := &messaging.Message{
+	criticMsg := &critic.Message{
 		UUID:      reply.ID,
-		Author:    messaging.Author(reply.Author),
+		Author:    critic.Author(reply.Author),
 		Message:   reply.Message,
 		CreatedAt: reply.CreatedAt,
 		UpdatedAt: reply.UpdatedAt,
@@ -142,23 +217,23 @@ func (db *DB) ReplyToConversation(conversationID string, message string, author 
 }
 
 // CreateConversation creates a new conversation (root message)
-func (db *DB) CreateConversation(author messaging.Author, message, filePath string, lineNumber int, codeVersion string) (*messaging.Conversation, error) {
+func (db *DB) CreateConversation(author critic.Author, message, filePath string, lineNumber int, codeVersion string) (*critic.Conversation, error) {
 	dbAuthor := Author(author)
 	rootMsg, err := db.CreateMessage(dbAuthor, message, filePath, lineNumber, codeVersion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create conversation: %w", err)
 	}
 
-	conversation := &messaging.Conversation{
+	conversation := &critic.Conversation{
 		UUID:        rootMsg.ID,
 		Status:      convertToCriticStatus(rootMsg.Status),
 		FilePath:    rootMsg.FilePath,
 		LineNumber:  rootMsg.LineNumber,
 		CodeVersion: rootMsg.CodeVersion,
-		Messages: []messaging.Message{
+		Messages: []critic.Message{
 			{
 				UUID:      rootMsg.ID,
-				Author:    messaging.Author(rootMsg.Author),
+				Author:    critic.Author(rootMsg.Author),
 				Message:   rootMsg.Message,
 				CreatedAt: rootMsg.CreatedAt,
 				UpdatedAt: rootMsg.UpdatedAt,
@@ -173,10 +248,10 @@ func (db *DB) CreateConversation(author messaging.Author, message, filePath stri
 	return conversation, nil
 }
 
-// convertToCriticStatus converts messagedb.Status to messaging.ConversationStatus
-func convertToCriticStatus(status Status) messaging.ConversationStatus {
+// convertToCriticStatus converts messagedb.Status to critic.ConversationStatus
+func convertToCriticStatus(status Status) critic.ConversationStatus {
 	if status == StatusResolved {
-		return messaging.StatusResolved
+		return critic.StatusResolved
 	}
-	return messaging.StatusUnresolved
+	return critic.StatusUnresolved
 }

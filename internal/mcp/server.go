@@ -8,10 +8,10 @@ import (
 	"os"
 	"strings"
 
-	"git.15b.it/eno/critic/pkg/messaging"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/logger"
 	"git.15b.it/eno/critic/internal/messagedb"
+	"git.15b.it/eno/critic/pkg/critic"
 )
 
 const (
@@ -27,7 +27,7 @@ const (
 type Server struct {
 	reader      *bufio.Reader
 	writer      io.Writer
-	messaging   messaging.Messaging
+	messaging   critic.Messaging
 	initialized bool
 }
 
@@ -54,7 +54,7 @@ func NewServer() *Server {
 }
 
 // SetMessaging sets the messaging interface
-func (s *Server) SetMessaging(messaging messaging.Messaging) {
+func (s *Server) SetMessaging(messaging critic.Messaging) {
 	s.messaging = messaging
 }
 
@@ -284,7 +284,7 @@ func (s *Server) handleReplyToCriticConversation(req Request, params CallToolPar
 
 	s.logToStderr("Adding reply to conversation %s", uuid)
 
-	reply, err := s.messaging.ReplyToConversation(uuid, message, messaging.AuthorAI)
+	reply, err := s.messaging.ReplyToConversation(uuid, message, critic.AuthorAI)
 	if err != nil {
 		s.logToStderr("Failed to create reply: %v", err)
 		return s.sendToolError(req.ID, fmt.Sprintf("Error creating reply: %v", err))
@@ -295,7 +295,7 @@ func (s *Server) handleReplyToCriticConversation(req Request, params CallToolPar
 }
 
 // formatConversation formats a conversation for display
-func (s *Server) formatConversation(conv *messaging.Conversation) string {
+func (s *Server) formatConversation(conv *critic.Conversation) string {
 	var builder strings.Builder
 
 	// Header with metadata
@@ -312,7 +312,7 @@ func (s *Server) formatConversation(conv *messaging.Conversation) string {
 		}
 
 		prefix := "human"
-		if msg.Author == messaging.AuthorAI {
+		if msg.Author == critic.AuthorAI {
 			prefix = "ai"
 		}
 

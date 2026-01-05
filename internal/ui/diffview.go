@@ -6,11 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"git.15b.it/eno/critic/internal/comments"
-	"git.15b.it/eno/critic/pkg/messaging"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/highlight"
 	"git.15b.it/eno/critic/internal/logger"
+	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -33,12 +32,12 @@ type DiffViewModel struct {
 	cursorLine          int           // Current active line (0-based)
 	totalLines          int           // Total number of lines in rendered diff
 	focused             bool          // Whether this pane is focused
-	navigableLines      []int         // Line numbers that can have cursor (diff lines only)
-	commentManager      *comments.FileManager
-	messaging           messaging.Messaging // Messaging interface for conversations
-	commentLines        map[int]int      // Maps rendered line number to source line number for comment lines
-	sourceLines         map[int]int   // Maps rendered line number to source line number for all diff lines
-	preserveCursorLine  int           // Source line to restore cursor to after refresh (0 = don't preserve)
+	navigableLines           []int // Line numbers that can have cursor (diff lines only)
+	messaging                critic.Messaging
+	commentLines             map[int]int    // Maps rendered line number to source line number for comment lines
+	sourceLines              map[int]int    // Maps rendered line number to source line number for all diff lines
+	preserveCursorLine       int            // Source line to restore cursor to after refresh (0 = don't preserve)
+	lineConversationUUID     map[int]string // Maps rendered line number to conversation UUID
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -494,14 +493,17 @@ func (m *DiffViewModel) SetHighlightingEnabled(enabled bool) {
 	m.cachedFile = nil
 }
 
-// SetCommentManager sets the comment manager for loading comments
-func (m *DiffViewModel) SetCommentManager(cm *comments.FileManager) {
-	m.commentManager = cm
+// SetMessaging sets the messaging interface for conversations
+func (m *DiffViewModel) SetMessaging(messaging critic.Messaging) {
+	m.messaging = messaging
 }
 
-// SetMessaging sets the messaging interface for conversations
-func (m *DiffViewModel) SetMessaging(messaging messaging.Messaging) {
-	m.messaging = messaging
+// GetConversationUUIDAtLine returns the conversation UUID for a rendered line
+func (m *DiffViewModel) GetConversationUUIDAtLine(renderedLine int) string {
+	if m.lineConversationUUID == nil {
+		return ""
+	}
+	return m.lineConversationUUID[renderedLine]
 }
 
 // IsCommentLine returns true if the given line number is a comment line
@@ -537,22 +539,29 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	lineNum := 0             // Track current line number for cursor highlighting
 	var navigableLines []int // Track which lines can have cursor (diff lines only)
 
-	// Initialize comment and source line tracking
+	// Initialize comment, source line, and conversation tracking
 	m.commentLines = make(map[int]int)
 	m.sourceLines = make(map[int]int)
+	m.lineConversationUUID = make(map[int]string)
 
-	// Load comments for this file if comment manager is available
-	var fileComments *ctypes.CriticFile
-	if m.commentManager != nil {
+	// Load conversations for this file from messaging interface
+	var fileConversations []*critic.Conversation
+	if m.messaging != nil {
 		// Get the git-relative path
 		gitPath := m.file.NewPath
 		if m.file.IsDeleted {
 			gitPath = m.file.OldPath
 		}
-		// Try to load comments
-		if loaded, err := m.commentManager.LoadComments(gitPath); err == nil {
-			fileComments = loaded
+		// Try to load conversations
+		if convs, err := m.messaging.GetConversationsForFile(gitPath); err == nil {
+			fileConversations = convs
 		}
+	}
+
+	// Build a map of line number to conversation for quick lookup
+	conversationsByLine := make(map[int]*critic.Conversation)
+	for _, conv := range fileConversations {
+		conversationsByLine[conv.LineNumber] = conv
 	}
 
 	filename := git.GitPathToDisplayPath(m.file.NewPath)
@@ -645,15 +654,16 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 			lineNum++
 			b.WriteString("\n")
 
-			// Check if there's a comment for this line
-			if fileComments != nil && line.NewNum > 0 {
-				if comment, exists := fileComments.Comments[line.NewNum]; exists && len(comment.Lines) > 0 {
-					// Render up to 6 lines of the comment preview (plus indicator if needed)
-					commentLines := m.renderCommentPreview(comment, lineNum)
+			// Check if there's a conversation for this line
+			if line.NewNum > 0 {
+				if conv, exists := conversationsByLine[line.NewNum]; exists {
+					// Render conversation preview
+					commentLines := m.renderConversationPreview(conv, lineNum)
 					for _, commentLine := range commentLines {
 						b.WriteString(commentLine)
-						// Track all comment lines (including indicator) for navigation
+						// Track all comment lines for navigation
 						m.commentLines[lineNum] = line.NewNum
+						m.lineConversationUUID[lineNum] = conv.UUID
 						// Add to navigable lines so user can select it
 						navigableLines = append(navigableLines, lineNum)
 						lineNum++
@@ -804,53 +814,45 @@ func (m *DiffViewModel) highlightFromHunks(file *ctypes.FileDiff, filename strin
 	return result
 }
 
-// renderCommentPreview renders up to 6 lines of a comment preview with dark text on black background
-// Each line starts with a half-width block character in yellow/gold color
-// If the comment has a UUID, it loads the thread from the database and displays replies
-func (m *DiffViewModel) renderCommentPreview(comment *ctypes.CriticBlock, startLineNum int) []string {
-	// Build the complete comment text including replies from the database
+// renderConversationPreview renders a conversation preview with all messages
+func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, startLineNum int) []string {
+	// Build the complete text including all messages
 	var allLines []string
 
-	// Start with the original comment lines
-	allLines = append(allLines, comment.Lines...)
+	for i, msg := range conv.Messages {
+		prefix := "human>"
+		if msg.Author == critic.AuthorAI {
+			prefix = "ai>"
 
-	// If we have a UUID and messaging, load the conversation
-	if comment.UUID != "" && m.messaging != nil {
-		conversation, err := m.messaging.GetFullConversation(comment.UUID)
-		if err != nil {
-			logger.Warn("Failed to load conversation for UUID %s: %v", comment.UUID, err)
-		} else if len(conversation.Messages) > 1 {
-			// First message is the root (already displayed), so start from index 1
-			for i := 1; i < len(conversation.Messages); i++ {
-				msg := conversation.Messages[i]
-				prefix := "human>"
-				if msg.Author == messaging.AuthorAI {
-					prefix = "ai>"
-
-					// Mark AI messages as read when they're displayed
-					if msg.IsUnread {
-						if err := m.messaging.MarkAsRead(msg.UUID); err != nil {
-							logger.Warn("Failed to mark AI message as read: %v", err)
-						} else {
-							logger.Debug("Marked AI message %s as read", msg.UUID)
-						}
-					}
-				}
-				// Add each line of the reply with the prefix
-				replyLines := strings.Split(msg.Message, "\n")
-				for _, line := range replyLines {
-					allLines = append(allLines, prefix+" "+line)
+			// Mark AI messages as read when they're displayed
+			if msg.IsUnread && m.messaging != nil {
+				if err := m.messaging.MarkAsRead(msg.UUID); err != nil {
+					logger.Warn("Failed to mark AI message as read: %v", err)
+				} else {
+					logger.Debug("Marked AI message %s as read", msg.UUID)
 				}
 			}
+		}
 
-			// Check if the conversation is resolved
-			if conversation.Status == messaging.StatusResolved {
-				// Prepend "(Resolved)" to the first line
-				if len(allLines) > 0 {
-					// Use italic if possible (ANSI escape: \x1b[3m for italic, \x1b[23m to disable)
-					allLines[0] = "\x1b[3m(Resolved)\x1b[23m " + allLines[0]
-				}
+		// First message doesn't need prefix if it's human
+		if i == 0 && msg.Author == critic.AuthorHuman {
+			// Add each line of the root message
+			msgLines := strings.Split(msg.Message, "\n")
+			allLines = append(allLines, msgLines...)
+		} else {
+			// Add each line of the reply with the prefix
+			replyLines := strings.Split(msg.Message, "\n")
+			for _, line := range replyLines {
+				allLines = append(allLines, prefix+" "+line)
 			}
+		}
+	}
+
+	// Check if the conversation is resolved
+	if conv.Status == critic.StatusResolved {
+		// Prepend "(Resolved)" to the first line
+		if len(allLines) > 0 {
+			allLines[0] = "\x1b[3m(Resolved)\x1b[23m " + allLines[0]
 		}
 	}
 
@@ -1123,34 +1125,21 @@ func min(a, b int) int {
 // resolveCommentAtCursor resolves the comment at the current cursor position
 func (m *DiffViewModel) resolveCommentAtCursor() tea.Cmd {
 	// Check if cursor is on a comment line
-	if isComment, sourceLine := m.IsCommentLine(m.cursorLine); isComment {
-		// Load the comments for this file
-		if m.file != nil && m.commentManager != nil && m.messaging != nil {
-			filePath := m.file.NewPath
-			if filePath == "" {
-				filePath = m.file.OldPath
-			}
-
-			criticFile, err := m.commentManager.LoadComments(filePath)
+	if isComment, _ := m.IsCommentLine(m.cursorLine); isComment {
+		// Get conversation UUID for this line
+		uuid := m.GetConversationUUIDAtLine(m.cursorLine)
+		if uuid != "" && m.messaging != nil {
+			// Mark as resolved in the database
+			err := m.messaging.MarkAsResolved(uuid)
 			if err != nil {
-				logger.Error("Failed to load comments for resolve: %v", err)
+				logger.Error("Failed to mark conversation as resolved: %v", err)
 				return nil
 			}
 
-			// Find the comment block for this source line
-			if comment, exists := criticFile.Comments[sourceLine]; exists && comment.UUID != "" {
-				// Mark as resolved in the database
-				err := m.messaging.MarkAsResolved(comment.UUID)
-				if err != nil {
-					logger.Error("Failed to mark conversation as resolved: %v", err)
-					return nil
-				}
+			logger.Info("Marked comment %s as resolved", uuid)
 
-				logger.Info("Marked comment %s as resolved", comment.UUID)
-
-				// Refresh the view to show the "(Resolved)" indicator
-				return m.RefreshFile()
-			}
+			// Refresh the view to show the "(Resolved)" indicator
+			return m.RefreshFile()
 		}
 	}
 

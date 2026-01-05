@@ -1,4 +1,4 @@
-package messaging
+package critic
 
 import "time"
 
@@ -40,6 +40,14 @@ type Conversation struct {
 	UpdatedAt   time.Time
 }
 
+// FileConversationSummary contains information about conversations for a specific file
+type FileConversationSummary struct {
+	FilePath              string
+	HasUnresolvedComments bool
+	HasResolvedComments   bool
+	HasUnreadAIMessages   bool
+}
+
 // Messaging defines the interface for managing critic conversations
 type Messaging interface {
 	// GetConversations returns a list of conversation UUIDs
@@ -50,6 +58,13 @@ type Messaging interface {
 	// GetFullConversation returns the complete conversation including all replies
 	// Messages are ordered by created_at (root message first, then replies in chronological order)
 	GetFullConversation(uuid string) (*Conversation, error)
+
+	// GetConversationsForFile returns all conversations for a specific file
+	GetConversationsForFile(filePath string) ([]*Conversation, error)
+
+	// GetFileConversationSummary returns a summary of conversations for a file
+	// This is used for efficient file list rendering
+	GetFileConversationSummary(filePath string) (*FileConversationSummary, error)
 
 	// ReplyToConversation adds a reply to an existing conversation
 	ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error)
