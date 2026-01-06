@@ -1123,9 +1123,9 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	// Add separator line - with hotkeys if cursor is in the block
 	var separatorText string
 	if cursorInBlock {
-		separatorText = "(R)esolve • (Enter) reply"
+		separatorText = "[R]esolve • [Enter] reply"
 		if conv.Status == critic.StatusResolved {
-			separatorText = "(R) unresolve • (Enter) reply"
+			separatorText = "[R] unresolve • [Enter] reply"
 		}
 	}
 	result = append(result, createSeparatorLine(separatorText, currentLine))
