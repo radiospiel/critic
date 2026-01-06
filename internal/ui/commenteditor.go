@@ -3,13 +3,14 @@ package ui
 import (
 	"strings"
 
+	pot "git.15b.it/eno/critic/teapot"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
-// CommentEditor represents the comment editing UI
+// CommentEditor represents the comment editing UI using a teapot Dialog.
 type CommentEditor struct {
+	dialog   *pot.Dialog
 	textarea textarea.Model
 	active   bool
 	lineNum  int
@@ -24,10 +25,51 @@ func NewCommentEditor() CommentEditor {
 	ta.CharLimit = 10000
 	ta.ShowLineNumbers = false
 
+	// Create a wrapper widget for the textarea
+	textWidget := &textareaWidget{textarea: ta}
+
+	dialog := pot.NewDialog(textWidget, "Edit Comment")
+	dialog.SetLabels("Save", "Cancel")
+
 	return CommentEditor{
+		dialog:   dialog,
 		textarea: ta,
 		active:   false,
 	}
+}
+
+// textareaWidget wraps the bubbletea textarea as a teapot Widget
+type textareaWidget struct {
+	pot.BaseWidget
+	textarea textarea.Model
+}
+
+func (t *textareaWidget) Render(buf *pot.SubBuffer) {
+	view := t.textarea.View()
+	lines := strings.Split(view, "\n")
+	for y, line := range lines {
+		if y >= buf.Height() {
+			break
+		}
+		x := 0
+		for _, r := range line {
+			if x >= buf.Width() {
+				break
+			}
+			buf.SetCell(x, y, pot.Cell{Rune: r})
+			x++
+		}
+	}
+}
+
+func (t *textareaWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	// Don't handle Enter or Escape - let the dialog handle those
+	if msg.Type == tea.KeyEnter || msg.Type == tea.KeyEsc {
+		return false, nil
+	}
+	var cmd tea.Cmd
+	t.textarea, cmd = t.textarea.Update(msg)
+	return true, cmd
 }
 
 // Init initializes the comment editor
@@ -41,22 +83,31 @@ func (m *CommentEditor) Update(msg tea.Msg) tea.Cmd {
 		return nil
 	}
 
-	var cmd tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc":
+		switch msg.Type {
+		case tea.KeyEnter:
 			// Save and exit
-			return m.saveComment(true)
+			return m.saveComment()
+
+		case tea.KeyEsc:
+			// Cancel - just close without saving
+			m.Deactivate()
+			return nil
 
 		default:
 			// Pass other keys to textarea
+			var cmd tea.Cmd
 			m.textarea, cmd = m.textarea.Update(msg)
+			// Update the widget's textarea too
+			if tw, ok := m.dialog.Content().(*textareaWidget); ok {
+				tw.textarea = m.textarea
+			}
+			return cmd
 		}
 	}
 
-	return cmd
+	return nil
 }
 
 // View renders the comment editor
@@ -65,26 +116,17 @@ func (m CommentEditor) View() string {
 		return ""
 	}
 
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("205")).
-		Padding(0, 1)
+	// Sync textarea state to widget
+	if tw, ok := m.dialog.Content().(*textareaWidget); ok {
+		tw.textarea = m.textarea
+	}
 
-	helpStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"}).
-		Padding(0, 1)
+	// Create a buffer and render the dialog
+	buf := pot.NewBuffer(m.width, m.height)
+	sub := buf.Sub(buf.Bounds())
+	m.dialog.Render(sub)
 
-	title := titleStyle.Render("Edit Comment")
-	help := helpStyle.Render("Esc: Save & Exit")
-
-	content := m.textarea.View()
-
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		content,
-		help,
-	)
+	return buf.String()
 }
 
 // Activate activates the comment editor for a specific line
@@ -93,6 +135,10 @@ func (m *CommentEditor) Activate(lineNum int, existingComment string) tea.Cmd {
 	m.lineNum = lineNum
 	m.textarea.SetValue(existingComment)
 	m.textarea.Focus()
+	// Sync to widget
+	if tw, ok := m.dialog.Content().(*textareaWidget); ok {
+		tw.textarea = m.textarea
+	}
 	return textarea.Blink
 }
 
@@ -122,9 +168,10 @@ func (m CommentEditor) GetComment() string {
 func (m *CommentEditor) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	// Reserve space for title and help text
+	// Reserve space for title and buttons
 	m.textarea.SetWidth(width - 4)
 	m.textarea.SetHeight(height - 4)
+	m.dialog.SetBounds(pot.NewRect(0, 0, width, height))
 }
 
 // CommentSavedMsg is sent when a comment is saved
@@ -135,19 +182,17 @@ type CommentSavedMsg struct {
 }
 
 // saveComment saves the current comment
-func (m *CommentEditor) saveComment(exit bool) tea.Cmd {
+func (m *CommentEditor) saveComment() tea.Cmd {
 	comment := m.GetComment()
 	lineNum := m.lineNum
 
-	if exit {
-		m.Deactivate()
-	}
+	m.Deactivate()
 
 	return func() tea.Msg {
 		return CommentSavedMsg{
 			LineNum: lineNum,
 			Comment: comment,
-			Exit:    exit,
+			Exit:    true,
 		}
 	}
 }
