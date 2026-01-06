@@ -45,7 +45,7 @@ func NewCommentEditor() CommentEditor {
 
 	dialog := pot.NewDialog(textWidget, "Edit Comment")
 	dialog.SetLabels("Save", "Cancel")
-	dialog.SetBorderFooter("Enter: Save │ Esc: Cancel │ Alt+Enter: Newline")
+	dialog.SetBorderFooter("Enter: Save │ Esc: Cancel │ Ctrl+J/Alt+Enter: Newline")
 
 	return CommentEditor{
 		dialog:   dialog,
@@ -113,7 +113,7 @@ func (m *CommentEditor) Update(msg tea.Msg) tea.Cmd {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter:
-			// Alt+Enter inserts a newline
+			// Alt+Enter (Option+Enter on Mac) inserts a newline
 			if msg.Alt {
 				m.textarea.InsertString("\n")
 				// Update the widget's textarea too
@@ -124,6 +124,14 @@ func (m *CommentEditor) Update(msg tea.Msg) tea.Cmd {
 			}
 			// Plain Enter saves and exits
 			return m.saveComment()
+
+		case tea.KeyCtrlJ:
+			// Ctrl+J also inserts a newline (more reliable across terminals)
+			m.textarea.InsertString("\n")
+			if tw, ok := m.dialog.Content().(*textareaWidget); ok {
+				tw.textarea = m.textarea
+			}
+			return nil
 
 		case tea.KeyEsc:
 			// Cancel - just close without saving
