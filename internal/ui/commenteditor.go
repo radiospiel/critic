@@ -45,7 +45,7 @@ func NewCommentEditor() CommentEditor {
 
 	dialog := pot.NewDialog(textWidget, "Edit Comment")
 	dialog.SetLabels("Save", "Cancel")
-	dialog.SetBorderFooter("Enter: Save │ Esc: Cancel │ Ctrl+J/Alt+Enter: Newline")
+	dialog.SetBorderFooter("Ctrl+S: Save │ Esc: Cancel")
 
 	return CommentEditor{
 		dialog:   dialog,
@@ -89,8 +89,8 @@ func (t *textareaWidget) Render(buf *pot.SubBuffer) {
 }
 
 func (t *textareaWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	// Don't handle Enter or Escape - let the dialog handle those
-	if msg.Type == tea.KeyEnter || msg.Type == tea.KeyEsc {
+	// Don't handle Escape or Ctrl+S - let the dialog/editor handle those
+	if msg.Type == tea.KeyEsc || msg.Type == tea.KeyCtrlS {
 		return false, nil
 	}
 	var cmd tea.Cmd
@@ -112,26 +112,9 @@ func (m *CommentEditor) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyEnter:
-			// Alt+Enter (Option+Enter on Mac) inserts a newline
-			if msg.Alt {
-				m.textarea.InsertString("\n")
-				// Update the widget's textarea too
-				if tw, ok := m.dialog.Content().(*textareaWidget); ok {
-					tw.textarea = m.textarea
-				}
-				return nil
-			}
-			// Plain Enter saves and exits
+		case tea.KeyCtrlS:
+			// Ctrl+S saves and exits
 			return m.saveComment()
-
-		case tea.KeyCtrlJ:
-			// Ctrl+J also inserts a newline (more reliable across terminals)
-			m.textarea.InsertString("\n")
-			if tw, ok := m.dialog.Content().(*textareaWidget); ok {
-				tw.textarea = m.textarea
-			}
-			return nil
 
 		case tea.KeyEsc:
 			// Cancel - just close without saving
