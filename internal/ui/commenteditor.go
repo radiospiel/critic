@@ -6,6 +6,7 @@ import (
 	pot "git.15b.it/eno/critic/teapot"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // CommentEditor represents the comment editing UI using a teapot Dialog.
@@ -24,6 +25,20 @@ func NewCommentEditor() CommentEditor {
 	ta.Placeholder = "Enter your comment here..."
 	ta.CharLimit = 10000
 	ta.ShowLineNumbers = false
+
+	// Configure plain styles - remove cursor line highlighting and prompt indicator
+	plainStyle := lipgloss.NewStyle()
+	ta.FocusedStyle = textarea.Style{
+		Base:             plainStyle,
+		CursorLine:       plainStyle, // No highlight on cursor line
+		CursorLineNumber: plainStyle,
+		EndOfBuffer:      plainStyle,
+		LineNumber:       plainStyle,
+		Placeholder:      plainStyle.Faint(true),
+		Prompt:           plainStyle, // No left indicator
+		Text:             plainStyle,
+	}
+	ta.BlurredStyle = ta.FocusedStyle
 
 	// Create a wrapper widget for the textarea
 	textWidget := &textareaWidget{textarea: ta}
