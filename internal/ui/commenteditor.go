@@ -130,10 +130,10 @@ func (m CommentEditor) View() string {
 		tw.textarea = m.textarea
 	}
 
-	// Create a buffer and render the dialog
+	// Create a buffer and render the dialog using RenderWidget for proper border handling
 	buf := pot.NewBuffer(m.width, m.height)
 	sub := buf.Sub(buf.Bounds())
-	m.dialog.Render(sub)
+	pot.RenderWidget(m.dialog, sub)
 
 	return buf.String()
 }

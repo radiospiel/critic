@@ -46,18 +46,18 @@ func NewDialog(content Widget, title string) *Dialog {
 		cancelLabel: "Cancel",
 		titleStyle: lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("205")),
+			Foreground(lipgloss.Color("220")), // Yellow
 		buttonStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"}),
+			Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#888"}),
 		buttonOKStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("42")),
 		buttonHintStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#666", Dark: "#888"}),
 		borderStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")),
+			Foreground(lipgloss.Color("220")), // Yellow
 	}
 	// Set up border using the new border system
-	border := SingleBorder().WithStyle(d.borderStyle)
+	border := DoubleBorder().WithStyle(d.borderStyle)
 	d.SetBorder(border)
 	d.SetBorderTitle(title)
 	d.updateFooter()
