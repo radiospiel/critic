@@ -46,18 +46,28 @@ type textareaWidget struct {
 
 func (t *textareaWidget) Render(buf *pot.SubBuffer) {
 	view := t.textarea.View()
+	// Strip ANSI escape sequences from textarea output
+	view = pot.StripANSI(view)
 	lines := strings.Split(view, "\n")
-	for y, line := range lines {
-		if y >= buf.Height() {
-			break
+
+	width := buf.Width()
+	height := buf.Height()
+
+	for y := 0; y < height; y++ {
+		// Get line content or empty string if past end
+		var line string
+		if y < len(lines) {
+			line = lines[y]
 		}
-		x := 0
-		for _, r := range line {
-			if x >= buf.Width() {
-				break
+
+		// Render each character, filling to width
+		runes := []rune(line)
+		for x := 0; x < width; x++ {
+			var r rune = ' '
+			if x < len(runes) {
+				r = runes[x]
 			}
 			buf.SetCell(x, y, pot.Cell{Rune: r})
-			x++
 		}
 	}
 }

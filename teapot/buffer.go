@@ -1,10 +1,19 @@
 package teapot
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
+
+// ansiRegex matches ANSI escape sequences
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// StripANSI removes ANSI escape sequences from a string.
+func StripANSI(s string) string {
+	return ansiRegex.ReplaceAllString(s, "")
+}
 
 // Cell represents a single character cell in the terminal buffer.
 // Each cell has a rune and an associated style.
