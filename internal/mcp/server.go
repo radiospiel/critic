@@ -221,13 +221,19 @@ func (s *Server) handleGetCriticConversations(req Request, params CallToolParams
 	status, _ := params.Arguments["status"].(string)
 	s.logToStderr("Getting conversations with status filter: %s", status)
 
-	uuids, err := s.messaging.GetConversations(status)
+	conversations, err := s.messaging.GetConversations(status)
 	if err != nil {
 		s.logToStderr("Failed to get conversations: %v", err)
 		return s.sendToolError(req.ID, fmt.Sprintf("Error getting conversations: %v", err))
 	}
 
-	s.logToStderr("Found %d conversations", len(uuids))
+	s.logToStderr("Found %d conversations", len(conversations))
+
+	// Extract UUIDs for the response
+	uuids := make([]string, len(conversations))
+	for i, conv := range conversations {
+		uuids[i] = conv.UUID
+	}
 
 	// Format as JSON array
 	result, err := json.Marshal(uuids)

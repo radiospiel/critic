@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/highlight"
 	"git.15b.it/eno/critic/internal/logger"
@@ -31,13 +32,14 @@ type DiffViewModel struct {
 	highlightTime       time.Duration // Accumulated syntax highlighting time
 	cursorLine          int           // Current active line (0-based)
 	totalLines          int           // Total number of lines in rendered diff
-	focused             bool          // Whether this pane is focused
-	navigableLines           []int // Line numbers that can have cursor (diff lines only)
-	messaging                critic.Messaging
-	commentLines             map[int]int    // Maps rendered line number to source line number for comment lines
-	sourceLines              map[int]int    // Maps rendered line number to source line number for all diff lines
-	preserveCursorLine       int            // Source line to restore cursor to after refresh (0 = don't preserve)
-	lineConversationUUID     map[int]string // Maps rendered line number to conversation UUID
+	focused              bool                // Whether this pane is focused
+	navigableLines       []int               // Line numbers that can have cursor (diff lines only)
+	messaging            critic.Messaging
+	commentLines         map[int]int         // Maps rendered line number to source line number for comment lines
+	sourceLines          map[int]int         // Maps rendered line number to source line number for all diff lines
+	preserveCursorLine   int                 // Source line to restore cursor to after refresh (0 = don't preserve)
+	lineConversationUUID map[int]string      // Maps rendered line number to conversation UUID
+	gotoBottomOnLoad     bool                // If true, go to bottom after next file load
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -65,11 +67,31 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 				if m.moveCursorUp() {
 					m.ensureCursorVisible()
 					return m.refreshContent()
+				} else if m.isAtTop() {
+					// At top of file, request previous file
+					return func() tea.Msg { return RequestPrevFileMsg{} }
 				}
 			case "down", "j":
 				if m.moveCursorDown() {
 					m.ensureCursorVisible()
 					return m.refreshContent()
+				} else if m.isAtBottom() {
+					// At bottom of file, request next file
+					return func() tea.Msg { return RequestNextFileMsg{} }
+				}
+			case "shift+up":
+				if m.moveCursorUpN(config.ShiftArrowJumpSize) {
+					m.ensureCursorVisible()
+					return m.refreshContent()
+				} else if m.isAtTop() {
+					return func() tea.Msg { return RequestPrevFileMsg{} }
+				}
+			case "shift+down":
+				if m.moveCursorDownN(config.ShiftArrowJumpSize) {
+					m.ensureCursorVisible()
+					return m.refreshContent()
+				} else if m.isAtBottom() {
+					return func() tea.Msg { return RequestNextFileMsg{} }
 				}
 			case "g": // Go to top
 				if len(m.navigableLines) > 0 {
@@ -134,6 +156,13 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 							m.cursorLine = m.navigableLines[0]
 						}
 					}
+				} else if m.gotoBottomOnLoad {
+					// Go to bottom (when navigating from previous file)
+					m.gotoBottomOnLoad = false
+					m.viewport.GotoBottom()
+					if len(m.navigableLines) > 0 {
+						m.cursorLine = m.navigableLines[len(m.navigableLines)-1]
+					}
 				} else {
 					// Normal behavior: go to top and reset cursor
 					m.viewport.GotoTop()
@@ -141,6 +170,9 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 						m.cursorLine = m.navigableLines[0]
 					}
 				}
+
+				// Re-render to show cursor highlighting at the new position
+				m.refreshContent()
 			}
 		}
 	}
@@ -278,6 +310,12 @@ type diffRenderedMsg struct {
 	navigableLines []int
 }
 
+// RequestNextFileMsg is sent when the user scrolls past the last line
+type RequestNextFileMsg struct{}
+
+// RequestPrevFileMsg is sent when the user scrolls before the first line
+type RequestPrevFileMsg struct{}
+
 // renderDiffAsync renders the diff in a background goroutine
 func (m *DiffViewModel) renderDiffAsync(file *ctypes.FileDiff) tea.Cmd {
 	return func() tea.Msg {
@@ -337,6 +375,116 @@ func (m *DiffViewModel) moveCursorDown() bool {
 	return false
 }
 
+// moveCursorUpN moves cursor up by n navigable lines
+func (m *DiffViewModel) moveCursorUpN(n int) bool {
+	if len(m.navigableLines) == 0 {
+		return false
+	}
+	// Find current position in navigable lines
+	currentIdx := -1
+	for i, line := range m.navigableLines {
+		if line == m.cursorLine {
+			currentIdx = i
+			break
+		}
+	}
+	if currentIdx == -1 {
+		// Current line not found, find nearest
+		for i := len(m.navigableLines) - 1; i >= 0; i-- {
+			if m.navigableLines[i] < m.cursorLine {
+				currentIdx = i
+				break
+			}
+		}
+	}
+	if currentIdx <= 0 {
+		// Already at top or not found
+		if len(m.navigableLines) > 0 && m.cursorLine != m.navigableLines[0] {
+			m.cursorLine = m.navigableLines[0]
+			return true
+		}
+		return false
+	}
+	// Move up by n lines
+	newIdx := currentIdx - n
+	if newIdx < 0 {
+		newIdx = 0
+	}
+	m.cursorLine = m.navigableLines[newIdx]
+	return true
+}
+
+// moveCursorDownN moves cursor down by n navigable lines
+func (m *DiffViewModel) moveCursorDownN(n int) bool {
+	if len(m.navigableLines) == 0 {
+		return false
+	}
+	// Find current position in navigable lines
+	currentIdx := -1
+	for i, line := range m.navigableLines {
+		if line == m.cursorLine {
+			currentIdx = i
+			break
+		}
+	}
+	if currentIdx == -1 {
+		// Current line not found, find nearest
+		for i := 0; i < len(m.navigableLines); i++ {
+			if m.navigableLines[i] > m.cursorLine {
+				currentIdx = i - 1
+				break
+			}
+		}
+		if currentIdx == -1 {
+			currentIdx = len(m.navigableLines) - 1
+		}
+	}
+	if currentIdx >= len(m.navigableLines)-1 {
+		// Already at bottom
+		return false
+	}
+	// Move down by n lines
+	newIdx := currentIdx + n
+	if newIdx >= len(m.navigableLines) {
+		newIdx = len(m.navigableLines) - 1
+	}
+	m.cursorLine = m.navigableLines[newIdx]
+	return true
+}
+
+// isAtTop returns true if the cursor is at the first navigable line
+func (m *DiffViewModel) isAtTop() bool {
+	if len(m.navigableLines) == 0 {
+		return true
+	}
+	return m.cursorLine <= m.navigableLines[0]
+}
+
+// isAtBottom returns true if the cursor is at the last navigable line
+func (m *DiffViewModel) isAtBottom() bool {
+	if len(m.navigableLines) == 0 {
+		return true
+	}
+	return m.cursorLine >= m.navigableLines[len(m.navigableLines)-1]
+}
+
+// GotoBottom moves the cursor to the last navigable line and scrolls to bottom
+func (m *DiffViewModel) GotoBottom() tea.Cmd {
+	if len(m.navigableLines) > 0 {
+		m.cursorLine = m.navigableLines[len(m.navigableLines)-1]
+		if m.ready {
+			m.viewport.GotoBottom()
+		}
+		return m.refreshContent()
+	}
+	return nil
+}
+
+// SetGotoBottomOnLoad sets a flag to go to bottom after the next file load
+func (m *DiffViewModel) SetGotoBottomOnLoad() {
+	m.gotoBottomOnLoad = true
+}
+
 // ensureCursorVisible scrolls the viewport to keep cursor visible
 func (m *DiffViewModel) ensureCursorVisible() {
 	if !m.ready {
@@ -358,10 +506,22 @@ func (m *DiffViewModel) ensureCursorVisible() {
 
 // ScrollPageDown scrolls down by viewport height minus 3 (but at least 1 row)
 // and positions cursor on the second navigable line in the viewport
+// If already at the bottom, returns RequestNextFileMsg to load the next file
 func (m *DiffViewModel) ScrollPageDown() tea.Cmd {
 	if !m.ready || len(m.navigableLines) == 0 {
 		return nil
 	}
+
+	// Check if we're already at the bottom
+	maxOffset := m.totalLines - m.viewport.Height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.viewport.YOffset >= maxOffset && m.isAtBottom() {
+		// Already at the bottom, request next file
+		return func() tea.Msg { return RequestNextFileMsg{} }
+	}
+
 	scrollAmount := m.viewport.Height - 3
 	if scrollAmount < 1 {
 		scrollAmount = 1
@@ -369,10 +529,6 @@ func (m *DiffViewModel) ScrollPageDown() tea.Cmd {
 
 	// Calculate new offset
 	newOffset := m.viewport.YOffset + scrollAmount
-	maxOffset := m.totalLines - m.viewport.Height
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
 	if newOffset > maxOffset {
 		newOffset = maxOffset
 	}
@@ -425,10 +581,18 @@ func (m *DiffViewModel) positionCursorInViewport(nth int) {
 
 // ScrollPageUp scrolls up by viewport height minus 3 (but at least 1 row)
 // and positions cursor on the second navigable line in the viewport
+// If already at the top, returns RequestPrevFileMsg to load the previous file
 func (m *DiffViewModel) ScrollPageUp() tea.Cmd {
 	if !m.ready || len(m.navigableLines) == 0 {
 		return nil
 	}
+
+	// Check if we're already at the top
+	if m.viewport.YOffset <= 0 && m.isAtTop() {
+		// Already at the top, request previous file
+		return func() tea.Msg { return RequestPrevFileMsg{} }
+	}
+
 	scrollAmount := m.viewport.Height - 3
 	if scrollAmount < 1 {
 		scrollAmount = 1

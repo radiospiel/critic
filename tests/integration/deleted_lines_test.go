@@ -75,7 +75,7 @@ func TestParseDiff_Empty(t *testing.T) {
 	})
 
 	// Should have 2 deleted lines: the comment and the blank line
-	assert.Length(t, deletedLines, 2, "Expected 2 deleted lines")
+	assert.Equals(t, len(deletedLines), 2, "Expected 2 deleted lines")
 
 	// First deleted line should be the comment
 	assert.Contains(t, deletedLines[0].Content, "compareDiff compares actual and expected",

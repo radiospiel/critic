@@ -73,20 +73,20 @@ Examples:
 			}
 			defer mdb.Close()
 
-			uuids, err := mdb.GetConversations(status)
+			conversations, err := mdb.GetConversations(status)
 			if err != nil {
 				return fmt.Errorf("failed to get conversations: %w", err)
 			}
 
-			if len(uuids) == 0 {
+			if len(conversations) == 0 {
 				fmt.Println("[]")
 				return nil
 			}
 
 			// Fetch full details for each conversation
-			summaries := make([]ConversationSummary, 0, len(uuids))
-			for _, uuid := range uuids {
-				conv, err := mdb.GetFullConversation(uuid)
+			summaries := make([]ConversationSummary, 0, len(conversations))
+			for _, rootConv := range conversations {
+				conv, err := mdb.GetFullConversation(rootConv.UUID)
 				if err != nil {
 					// Skip conversations we can't load
 					continue

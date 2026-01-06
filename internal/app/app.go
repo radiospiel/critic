@@ -328,6 +328,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Info("Update: Received baseChangedMsg, reloading diff")
 		return m, loadDiffCmd(&m)
 
+	case ui.RequestNextFileMsg:
+		// User scrolled past end of diff, load next file
+		if m.fileList.SelectNext() {
+			cmd := m.diffView.SetFile(m.fileList.GetActiveFile())
+			cmds = append(cmds, cmd)
+		}
+
+	case ui.RequestPrevFileMsg:
+		// User scrolled before start of diff, load previous file and go to bottom
+		if m.fileList.SelectPrev() {
+			m.diffView.SetGotoBottomOnLoad()
+			cmd := m.diffView.SetFile(m.fileList.GetActiveFile())
+			cmds = append(cmds, cmd)
+		}
+
 	case ui.CommentSavedMsg:
 		// Save the comment using the messaging interface
 		activeFile := m.fileList.GetActiveFile()
@@ -644,6 +659,7 @@ func (m Model) renderHelpOverlay(underlay string) string {
   NAVIGATION
     Tab           Switch focus between file list and diff view
     ↑/↓           Navigate up/down
+    Shift+↑/↓     Move 10 lines up/down
     PgUp/PgDn     Page up/down in diff view
     Space         Page down in diff view
     Shift+Space   Page up in diff view

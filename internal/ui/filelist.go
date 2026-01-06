@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
@@ -52,6 +53,24 @@ func (m FileListModel) Update(msg tea.Msg) (FileListModel, tea.Cmd) {
 		case "down", "j":
 			if m.cursor < len(m.files)-1 {
 				m.cursor++
+				m.updateActiveFile()
+			}
+
+		case "shift+up":
+			if m.cursor > 0 {
+				m.cursor -= config.ShiftArrowJumpSize
+				if m.cursor < 0 {
+					m.cursor = 0
+				}
+				m.updateActiveFile()
+			}
+
+		case "shift+down":
+			if m.cursor < len(m.files)-1 {
+				m.cursor += config.ShiftArrowJumpSize
+				if m.cursor >= len(m.files) {
+					m.cursor = len(m.files) - 1
+				}
 				m.updateActiveFile()
 			}
 
@@ -230,6 +249,26 @@ func (m *FileListModel) SelectByPath(path string) bool {
 			m.updateActiveFile()
 			return true
 		}
+	}
+	return false
+}
+
+// SelectNext moves to the next file in the list. Returns true if moved.
+func (m *FileListModel) SelectNext() bool {
+	if m.cursor < len(m.files)-1 {
+		m.cursor++
+		m.updateActiveFile()
+		return true
+	}
+	return false
+}
+
+// SelectPrev moves to the previous file in the list. Returns true if moved.
+func (m *FileListModel) SelectPrev() bool {
+	if m.cursor > 0 {
+		m.cursor--
+		m.updateActiveFile()
+		return true
 	}
 	return false
 }

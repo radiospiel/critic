@@ -1,6 +1,10 @@
 package critic
 
-import "time"
+import (
+	"time"
+
+	"github.com/samber/lo"
+)
 
 // Author represents who authored a message
 type Author string
@@ -30,7 +34,7 @@ type Message struct {
 
 // Conversation represents a conversation with its location and all messages
 type Conversation struct {
-	UUID        string             // UUID of the root message
+	UUID        string // UUID of the root message
 	Status      ConversationStatus
 	FilePath    string    // Git-relative path to the file
 	LineNumber  int       // Line number in the file
@@ -50,10 +54,15 @@ type FileConversationSummary struct {
 
 // Messaging defines the interface for managing critic conversations
 type Messaging interface {
-	// GetConversations returns a list of conversation UUIDs
+	// GetConversations returns a list of root-level conversations
 	// If status is provided, filters by that status (e.g., "unresolved")
 	// If status is empty, returns all conversations
-	GetConversations(status string) ([]string, error)
+	// Only returns the root message info, not the full thread
+	GetConversations(status string) ([]Conversation, error)
+
+	// GetConversationsByFile returns all conversations for a specific file
+	// Returns root-level conversations ordered by line number
+	GetConversationsByFile(filePath string) ([]Conversation, error)
 
 	// GetFullConversation returns the complete conversation including all replies
 	// Messages are ordered by created_at (root message first, then replies in chronological order)
@@ -78,9 +87,46 @@ type Messaging interface {
 	// MarkAsRead marks an AI message as read
 	MarkAsRead(messageUUID string) error
 
-	// GetFilesWithUnreadAIMessages returns a list of file paths that have unread AI messages
-	GetFilesWithUnreadAIMessages() ([]string, error)
-
 	// Close closes the messaging system and releases resources
 	Close() error
+}
+
+// GetFilesWithComments returns a list of unique file paths that have conversations
+func GetFilesWithComments(m Messaging) ([]string, error) {
+	conversations, err := m.GetConversations("")
+	if err != nil {
+		return nil, err
+	}
+
+	filePaths := lo.Map(conversations, func(conv Conversation, _ int) string {
+		return conv.FilePath
+	})
+	return lo.Uniq(filePaths), nil
+}
+
+// GetFilesWithUnreadAIMessages returns a list of unique file paths that have unread AI messages
+func GetFilesWithUnreadAIMessages(m Messaging) ([]string, error) {
+	conversations, err := m.GetConversations("")
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: future improvement: this can be optimized with SQL
+	// Get full conversations (skipping any that fail to load)
+	fullConvs := lo.FilterMap(conversations, func(conv Conversation, _ int) (*Conversation, bool) {
+		fullConv, err := m.GetFullConversation(conv.UUID)
+		return fullConv, err == nil
+	})
+
+	// Filter to those with unread AI messages
+	convsWithUnread := lo.Filter(fullConvs, func(conv *Conversation, _ int) bool {
+		return lo.ContainsBy(conv.Messages, func(msg Message) bool {
+			return msg.Author == AuthorAI && msg.IsUnread
+		})
+	})
+
+	filePaths := lo.Map(convsWithUnread, func(conv *Conversation, _ int) string {
+		return conv.FilePath
+	})
+	return lo.Uniq(filePaths), nil
 }

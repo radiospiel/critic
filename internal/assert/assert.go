@@ -175,40 +175,95 @@ func NoError(t testingT, err error, details ...interface{}) {
 	}
 }
 
-// Contains checks if str contains substring and fails if not.
+// Contains checks if a container contains the expected element.
+// For strings: checks if the string contains the substring.
+// For slices/arrays: checks if the slice contains the element.
 // details are optional and can provide additional details about the failed assertion, using a format string and values.
-func Contains(t testingT, str, substr string, details ...interface{}) {
+func Contains(t testingT, container, element interface{}, details ...interface{}) {
 	t.Helper()
-	if !strings.Contains(str, substr) {
-		msg := fmt.Sprintf("assert.Contains(...) failed:\n  String:         %q\n  Should contain: %q", str, substr)
-		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
-	}
-}
 
-// Length checks if the length of the slice/map/string equals expected length.
-// details are optional and can provide additional details about the failed assertion, using a format string and values.
-func Length(t testingT, actual interface{}, expectedLen int, details ...interface{}) {
-	t.Helper()
-	actualLen := getLength(actual)
-	if actualLen != expectedLen {
-		msg := fmt.Sprintf("assert.Length(...) failed:\n  Expected length: %d\n  Actual length:   %d\n  Value: %v", expectedLen, actualLen, actual)
-		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
-	}
-}
+	containerVal := reflect.ValueOf(container)
 
-// Helper function to get length of various types
-func getLength(v interface{}) int {
-	if v == nil {
-		return 0
-	}
+	switch containerVal.Kind() {
+	case reflect.String:
+		// String substring check
+		str := containerVal.String()
+		substr, ok := element.(string)
+		if !ok {
+			msg := fmt.Sprintf("assert.Contains(...) failed:\n  When container is a string, element must also be a string, got %T", element)
+			msg = messageWithDetails(msg, details...)
+			t.Error(msg)
+			return
+		}
+		if !strings.Contains(str, substr) {
+			msg := fmt.Sprintf("assert.Contains(...) failed:\n  String:         %q\n  Should contain: %q", str, substr)
+			msg = messageWithDetails(msg, details...)
+			t.Error(msg)
+		}
 
-	val := reflect.ValueOf(v)
-	switch val.Kind() {
-	case reflect.Slice, reflect.Map, reflect.String, reflect.Array, reflect.Chan:
-		return val.Len()
+	case reflect.Slice, reflect.Array:
+		// Slice/array element check
+		found := false
+		for i := 0; i < containerVal.Len(); i++ {
+			if reflect.DeepEqual(containerVal.Index(i).Interface(), element) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			msg := fmt.Sprintf("assert.Contains(...) failed:\n  Slice:    %v\n  Expected: %v", container, element)
+			msg = messageWithDetails(msg, details...)
+			t.Error(msg)
+		}
+
 	default:
-		panic(fmt.Sprintf("getLength called on unsupported type %T", v))
+		msg := fmt.Sprintf("assert.Contains(...) failed:\n  Unsupported container type: %T (expected string, slice, or array)", container)
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
 	}
 }
+
+// NotContains checks if a container does not contain the expected element.
+// For strings: checks if the string does not contain the substring.
+// For slices/arrays: checks if the slice does not contain the element.
+// details are optional and can provide additional details about the failed assertion, using a format string and values.
+func NotContains(t testingT, container, element interface{}, details ...interface{}) {
+	t.Helper()
+
+	containerVal := reflect.ValueOf(container)
+
+	switch containerVal.Kind() {
+	case reflect.String:
+		// String substring check
+		str := containerVal.String()
+		substr, ok := element.(string)
+		if !ok {
+			msg := fmt.Sprintf("assert.NotContains(...) failed:\n  When container is a string, element must also be a string, got %T", element)
+			msg = messageWithDetails(msg, details...)
+			t.Error(msg)
+			return
+		}
+		if strings.Contains(str, substr) {
+			msg := fmt.Sprintf("assert.NotContains(...) failed:\n  String:             %q\n  Should not contain: %q", str, substr)
+			msg = messageWithDetails(msg, details...)
+			t.Error(msg)
+		}
+
+	case reflect.Slice, reflect.Array:
+		// Slice/array element check
+		for i := 0; i < containerVal.Len(); i++ {
+			if reflect.DeepEqual(containerVal.Index(i).Interface(), element) {
+				msg := fmt.Sprintf("assert.NotContains(...) failed:\n  Slice:            %v\n  Should not contain: %v", container, element)
+				msg = messageWithDetails(msg, details...)
+				t.Error(msg)
+				return
+			}
+		}
+
+	default:
+		msg := fmt.Sprintf("assert.NotContains(...) failed:\n  Unsupported container type: %T (expected string, slice, or array)", container)
+		msg = messageWithDetails(msg, details...)
+		t.Error(msg)
+	}
+}
+
