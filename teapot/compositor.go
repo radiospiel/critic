@@ -86,7 +86,7 @@ func (c *Compositor) Render() string {
 	// Clear and render
 	c.buffer.Clear()
 	sub := c.buffer.Sub(c.buffer.Bounds())
-	c.root.Render(sub)
+	RenderWidget(c.root, sub)
 
 	// TODO: Implement true differential rendering by comparing with prevBuffer
 	// For now, we do full renders but the infrastructure is in place
@@ -96,6 +96,50 @@ func (c *Compositor) Render() string {
 	c.dirty = false
 
 	return c.buffer.String()
+}
+
+// RenderWidget renders a widget with its border (if any) to the given buffer.
+// This is the main rendering function that should be used to render widgets.
+// It handles:
+// 1. Rendering the widget's border (if configured)
+// 2. Rendering the border title and footer
+// 3. Calling the widget's Render method for the content area
+func RenderWidget(w Widget, buf *SubBuffer) {
+	border := w.Border()
+
+	// Render border if configured
+	if border.HasBorder() {
+		RenderBorder(buf, border)
+
+		// Render title and footer
+		if title := w.BorderTitle(); title != "" {
+			RenderBorderTitle(buf, title, border.Style)
+		}
+		if footer := w.BorderFooter(); footer != "" {
+			RenderBorderFooter(buf, footer, border.Style)
+		}
+
+		// Get content bounds for the widget's render
+		contentBounds := Rect{
+			X:      border.LeftWidth(),
+			Y:      border.TopWidth(),
+			Width:  buf.Width() - border.LeftWidth() - border.RightWidth(),
+			Height: buf.Height() - border.TopWidth() - border.BottomWidth(),
+		}
+
+		if contentBounds.Width > 0 && contentBounds.Height > 0 {
+			contentSub := buf.parent.Sub(Rect{
+				X:      buf.offset.X + contentBounds.X,
+				Y:      buf.offset.Y + contentBounds.Y,
+				Width:  contentBounds.Width,
+				Height: contentBounds.Height,
+			})
+			w.Render(contentSub)
+		}
+	} else {
+		// No border, render directly
+		w.Render(buf)
+	}
 }
 
 // View returns the rendered output (for BubbleTea compatibility).

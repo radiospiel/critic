@@ -56,6 +56,12 @@ func NewDialog(content Widget, title string) *Dialog {
 		borderStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("205")),
 	}
+	// Set up border using the new border system
+	border := SingleBorder().WithStyle(d.borderStyle)
+	d.SetBorder(border)
+	d.SetBorderTitle(title)
+	d.updateFooter()
+
 	if content != nil {
 		content.SetParent(d)
 	}
@@ -65,12 +71,20 @@ func NewDialog(content Widget, title string) *Dialog {
 // SetTitle sets the dialog title.
 func (d *Dialog) SetTitle(title string) {
 	d.title = title
+	d.SetBorderTitle(title)
 }
 
 // SetLabels sets the OK and Cancel button labels.
 func (d *Dialog) SetLabels(ok, cancel string) {
 	d.okLabel = ok
 	d.cancelLabel = cancel
+	d.updateFooter()
+}
+
+// updateFooter updates the border footer with button hints.
+func (d *Dialog) updateFooter() {
+	footer := "Enter: " + d.okLabel + " │ Esc: " + d.cancelLabel
+	d.SetBorderFooter(footer)
 }
 
 // OnOK sets the callback for when OK is pressed.
@@ -125,89 +139,18 @@ func (d *Dialog) SetBounds(bounds Rect) {
 		return
 	}
 
-	// Content gets the inner area (inside border, above button row)
-	// Border: 1 on each side, Button row: 1 line
-	contentBounds := Rect{
-		X:      bounds.X + 1,
-		Y:      bounds.Y + 1,
-		Width:  bounds.Width - 2,
-		Height: bounds.Height - 3, // Top border, content, button row, bottom border
-	}
+	// Content gets the inner area (inside border)
+	// The border rendering is handled by RenderWidget
+	contentBounds := d.ContentBounds()
 	d.content.SetBounds(contentBounds)
 }
 
-// Render renders the dialog with a bordered box and centered title.
+// Render renders the dialog content.
+// The border, title, and footer are rendered by RenderWidget.
 func (d *Dialog) Render(buf *SubBuffer) {
-	width := buf.Width()
-	height := buf.Height()
-
-	if width < 4 || height < 3 {
-		return
-	}
-
-	// Draw border
-	// Top-left corner
-	buf.SetCell(0, 0, Cell{Rune: '┌', Style: d.borderStyle})
-	// Top-right corner
-	buf.SetCell(width-1, 0, Cell{Rune: '┐', Style: d.borderStyle})
-	// Bottom-left corner
-	buf.SetCell(0, height-1, Cell{Rune: '└', Style: d.borderStyle})
-	// Bottom-right corner
-	buf.SetCell(width-1, height-1, Cell{Rune: '┘', Style: d.borderStyle})
-
-	// Top and bottom edges
-	for x := 1; x < width-1; x++ {
-		buf.SetCell(x, 0, Cell{Rune: '─', Style: d.borderStyle})
-		buf.SetCell(x, height-1, Cell{Rune: '─', Style: d.borderStyle})
-	}
-
-	// Left and right edges
-	for y := 1; y < height-1; y++ {
-		buf.SetCell(0, y, Cell{Rune: '│', Style: d.borderStyle})
-		buf.SetCell(width-1, y, Cell{Rune: '│', Style: d.borderStyle})
-	}
-
-	// Render title centered on top border
-	if d.title != "" {
-		title := " " + d.title + " "
-		titleRunes := []rune(title)
-		titleX := (width - len(titleRunes)) / 2
-		if titleX < 1 {
-			titleX = 1
-		}
-		for i, r := range titleRunes {
-			x := titleX + i
-			if x >= width-1 {
-				break
-			}
-			buf.SetCell(x, 0, Cell{Rune: r, Style: d.titleStyle})
-		}
-	}
-
-	// Render content
+	// Render content - the buf is already the content area inside the border
 	if d.content != nil {
-		contentSub := buf.parent.Sub(Rect{
-			X:      buf.offset.X + 1,
-			Y:      buf.offset.Y + 1,
-			Width:  width - 2,
-			Height: height - 3,
-		})
-		d.content.Render(contentSub)
-	}
-
-	// Render button hints on the bottom border
-	hint := " Enter: " + d.okLabel + " │ Esc: " + d.cancelLabel + " "
-	hintRunes := []rune(hint)
-	hintX := (width - len(hintRunes)) / 2
-	if hintX < 1 {
-		hintX = 1
-	}
-	for i, r := range hintRunes {
-		x := hintX + i
-		if x >= width-1 {
-			break
-		}
-		buf.SetCell(x, height-1, Cell{Rune: r, Style: d.buttonStyle})
+		RenderWidget(d.content, buf)
 	}
 }
 

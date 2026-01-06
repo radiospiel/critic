@@ -65,7 +65,7 @@ func (s *Stack) SetBounds(bounds Rect) {
 // Render renders all layers from bottom to top.
 func (s *Stack) Render(buf *SubBuffer) {
 	for _, child := range s.children {
-		child.Render(buf)
+		RenderWidget(child, buf)
 	}
 }
 
@@ -295,7 +295,7 @@ func (m *Modal) Render(buf *SubBuffer) {
 		Width:  contentBounds.Width,
 		Height: contentBounds.Height,
 	})
-	m.content.Render(contentSub)
+	RenderWidget(m.content, contentSub)
 }
 
 // HandleKey passes events to the content and always returns true (modal captures all input).

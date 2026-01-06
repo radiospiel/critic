@@ -170,7 +170,7 @@ func (b *BoxLayout) Render(buf *SubBuffer) {
 			Width:  childBounds.Width,
 			Height: childBounds.Height,
 		})
-		child.Render(childSub)
+		RenderWidget(child, childSub)
 	}
 }
 
@@ -383,7 +383,7 @@ func (s *Split) Render(buf *SubBuffer) {
 			Width:  firstBounds.Width,
 			Height: firstBounds.Height,
 		})
-		s.first.Render(firstSub)
+		RenderWidget(s.first, firstSub)
 	}
 
 	if s.second != nil {
@@ -394,7 +394,7 @@ func (s *Split) Render(buf *SubBuffer) {
 			Width:  secondBounds.Width,
 			Height: secondBounds.Height,
 		})
-		s.second.Render(secondSub)
+		RenderWidget(s.second, secondSub)
 	}
 }
 

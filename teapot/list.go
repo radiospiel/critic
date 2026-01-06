@@ -370,7 +370,7 @@ func (s *ScrollView) Render(buf *SubBuffer) {
 	// The content renders to its own buffer, then we blit the visible portion
 	contentBuf := NewBuffer(s.contentSize.Width, s.contentSize.Height)
 	contentSub := contentBuf.Sub(contentBuf.Bounds())
-	s.content.Render(contentSub)
+	RenderWidget(s.content, contentSub)
 
 	// Copy visible portion
 	for y := 0; y < buf.Height(); y++ {

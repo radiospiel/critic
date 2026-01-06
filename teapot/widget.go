@@ -12,6 +12,15 @@ type Widget interface {
 	SetBounds(bounds Rect)
 	Bounds() Rect
 
+	// Borders
+	Border() Border
+	SetBorder(border Border)
+	BorderTitle() string
+	SetBorderTitle(title string)
+	BorderFooter() string
+	SetBorderFooter(footer string)
+	ContentBounds() Rect // Returns bounds inside the border
+
 	// Rendering
 	Render(buf *SubBuffer)
 
@@ -31,11 +40,14 @@ type Widget interface {
 // BaseWidget provides a default implementation of Widget.
 // Embed this in concrete widget types to get sensible defaults.
 type BaseWidget struct {
-	bounds      Rect
-	constraints Constraints
-	focused     bool
-	focusable   bool
-	parent      Widget
+	bounds       Rect
+	constraints  Constraints
+	focused      bool
+	focusable    bool
+	parent       Widget
+	border       Border
+	borderTitle  string
+	borderFooter string
 }
 
 // NewBaseWidget creates a new base widget with default settings.
@@ -114,6 +126,50 @@ func (b *BaseWidget) Parent() Widget {
 // SetParent sets the widget's parent.
 func (b *BaseWidget) SetParent(parent Widget) {
 	b.parent = parent
+}
+
+// Border returns the widget's border configuration.
+func (b *BaseWidget) Border() Border {
+	return b.border
+}
+
+// SetBorder sets the widget's border configuration.
+func (b *BaseWidget) SetBorder(border Border) {
+	b.border = border
+}
+
+// BorderTitle returns the widget's border title.
+func (b *BaseWidget) BorderTitle() string {
+	return b.borderTitle
+}
+
+// SetBorderTitle sets the widget's border title.
+func (b *BaseWidget) SetBorderTitle(title string) {
+	b.borderTitle = title
+}
+
+// BorderFooter returns the widget's border footer.
+func (b *BaseWidget) BorderFooter() string {
+	return b.borderFooter
+}
+
+// SetBorderFooter sets the widget's border footer.
+func (b *BaseWidget) SetBorderFooter(footer string) {
+	b.borderFooter = footer
+}
+
+// ContentBounds returns the bounds inside the border.
+// If no border is set, returns the full bounds.
+func (b *BaseWidget) ContentBounds() Rect {
+	bounds := b.bounds
+	border := b.border
+
+	return Rect{
+		X:      bounds.X + border.LeftWidth(),
+		Y:      bounds.Y + border.TopWidth(),
+		Width:  bounds.Width - border.LeftWidth() - border.RightWidth(),
+		Height: bounds.Height - border.TopWidth() - border.BottomWidth(),
+	}
 }
 
 // ContainerWidget extends BaseWidget with child management.
