@@ -1022,71 +1022,49 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 		}
 	}
 
-	// ANSI color codes
-	const yellowFg = "\x1b[38;5;220m"     // Yellow/gold foreground for block
-	const darkFg = "\x1b[38;5;250m"       // Light gray text
-	const grayFg = "\x1b[38;5;240m"       // Gray text for indicator
-	const darkYellowBg = "\x1b[48;5;58m"  // Dark yellowish background
-	const blackBg = "\x1b[48;5;0m"        // Black background
+	// ANSI color codes - light blue background with black text (like status bar)
+	const lightBlueBg = "\x1b[48;2;107;149;216m" // #6B95D8 - same as status bar
+	const blackFg = "\x1b[38;5;0m"               // Black text
+	const grayFg = "\x1b[38;5;240m"              // Gray text for separator
 	const reset = "\x1b[0m"
 
-	// Half-width block characters
-	const leftHalfBlock = "▌"
-	const rightHalfBlock = "▐"
-
 	// Calculate the total lines including blank lines before/after
-	// Structure: blank line, content lines, blank line, (optional hotkey line)
+	// Structure: content lines, separator line with hotkeys (when selected)
 	totalContentLines := len(allLines)
 	maxLines := 6
 
 	// Calculate total block size to determine if cursor is inside
-	// We need to check if cursor falls within the block range
-	// Block structure: blank + content + blank + (optional hotkey)
-	// First, estimate the block size
 	linesToRender := totalContentLines
 	hasMore := totalContentLines > maxLines
 
-	// Check if cursor is within this comment block
-	// We'll calculate the full block size first
-	blockSize := 1 + linesToRender // blank + content
+	// Block size calculation
+	blockSize := linesToRender
 	if hasMore {
-		blockSize = 1 + maxLines + 1 // blank + truncated content + "more" indicator
+		blockSize = maxLines + 1 // truncated content + "more" indicator
 	}
-	blockSize++ // trailing blank line
+	blockSize++ // separator line
 
-	cursorInBlock := m.focused && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize+1
+	cursorInBlock := m.focused && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize
 
 	// If cursor is in the block, show full content
 	if cursorInBlock {
 		linesToRender = totalContentLines
 		hasMore = false
-		// Recalculate block size for full content
-		blockSize = 1 + linesToRender + 1 + 1 // blank + full content + blank + hotkey line
+		blockSize = linesToRender + 1 // full content + separator
 	} else {
 		if linesToRender > maxLines {
 			linesToRender = maxLines
 		}
 	}
 
-	// Build result: blank line before, content, blank line after, optional hotkey
+	// Build result: content lines, separator with hotkeys
 	var result []string
 
-	// Helper to create a blank line with yellow borders
-	createBlankLine := func(lineNum int) string {
-		prefix := yellowFg + leftHalfBlock + reset + " "
-		availableWidth := m.width - 1
-		padding := strings.Repeat(" ", availableWidth-lipgloss.Width(prefix))
-		processed := prefix + padding + yellowFg + rightHalfBlock + reset
-		styled := darkYellowBg + darkFg + processed + reset
-		return m.renderLineWithCursor(styled, lineNum)
-	}
-
-	// Helper to create a content line
+	// Helper to create a content line (black text on light blue)
 	createContentLine := func(text string, lineNum int) string {
-		prefix := yellowFg + leftHalfBlock + reset + " "
-		content := prefix + text
+		content := " " + text
 		visibleWidth := lipgloss.Width(content)
-		availableWidth := m.width - 1
+		availableWidth := m.width
 
 		var processed string
 		if visibleWidth > availableWidth {
@@ -1095,35 +1073,35 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			padding := strings.Repeat(" ", availableWidth-visibleWidth)
 			processed = content + padding
 		}
-		processed = processed + yellowFg + rightHalfBlock + reset
-		styled := darkYellowBg + darkFg + processed + reset
+		styled := lightBlueBg + blackFg + processed + reset
 		return m.renderLineWithCursor(styled, lineNum)
 	}
 
-	// Helper to create an indicator/info line (darker background)
-	createInfoLine := func(text string, lineNum int) string {
-		prefix := yellowFg + leftHalfBlock + reset + " "
-		content := prefix + text
-		visibleWidth := lipgloss.Width(content)
-		availableWidth := m.width - 1
-
-		var processed string
-		if visibleWidth > availableWidth {
-			processed = truncateANSI(content, availableWidth)
-		} else {
-			padding := strings.Repeat(" ", availableWidth-visibleWidth)
-			processed = content + padding
+	// Helper to create the separator line with optional hotkeys
+	createSeparatorLine := func(text string, lineNum int) string {
+		// Separator is a line of dashes with optional centered text
+		availableWidth := m.width
+		if text == "" {
+			line := strings.Repeat("─", availableWidth)
+			styled := grayFg + line + reset
+			return m.renderLineWithCursor(styled, lineNum)
 		}
-		processed = processed + yellowFg + rightHalfBlock + reset
-		styled := blackBg + grayFg + processed + reset
+		// Center the text in the separator
+		textLen := lipgloss.Width(text)
+		leftDashes := (availableWidth - textLen - 2) / 2
+		rightDashes := availableWidth - textLen - 2 - leftDashes
+		if leftDashes < 0 {
+			leftDashes = 0
+		}
+		if rightDashes < 0 {
+			rightDashes = 0
+		}
+		line := strings.Repeat("─", leftDashes) + " " + text + " " + strings.Repeat("─", rightDashes)
+		styled := grayFg + line + reset
 		return m.renderLineWithCursor(styled, lineNum)
 	}
 
 	currentLine := startLineNum
-
-	// Add blank line before comment
-	result = append(result, createBlankLine(currentLine))
-	currentLine++
 
 	// Add content lines
 	for i := 0; i < linesToRender; i++ {
@@ -1135,22 +1113,19 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	if hasMore {
 		moreCount := totalContentLines - maxLines
 		indicatorText := fmt.Sprintf("(%d more lines)", moreCount)
-		result = append(result, createInfoLine(indicatorText, currentLine))
+		result = append(result, createContentLine(indicatorText, currentLine))
 		currentLine++
 	}
 
-	// Add blank line after comment
-	result = append(result, createBlankLine(currentLine))
-	currentLine++
-
-	// Add hotkey line if cursor is in the block
+	// Add separator line - with hotkeys if cursor is in the block
+	var separatorText string
 	if cursorInBlock {
-		hotkeyText := "(R)esolve • (Enter) reply"
+		separatorText = "(R)esolve • (Enter) reply"
 		if conv.Status == critic.StatusResolved {
-			hotkeyText = "(R) unresolve • (Enter) reply"
+			separatorText = "(R) unresolve • (Enter) reply"
 		}
-		result = append(result, createInfoLine(hotkeyText, currentLine))
 	}
+	result = append(result, createSeparatorLine(separatorText, currentLine))
 
 	return result
 }
