@@ -984,9 +984,9 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	var allLines []string
 
 	for i, msg := range conv.Messages {
-		prefix := "human>"
+		prefix := "👤" // Human emoji
 		if msg.Author == critic.AuthorAI {
-			prefix = "ai>"
+			prefix = "🤖" // Robot/AI emoji
 
 			// Mark AI messages as read when they're displayed
 			if msg.IsUnread && m.messaging != nil {
@@ -998,18 +998,30 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			}
 		}
 
+		// Format timestamp as HH:MM:SS
+		timestamp := msg.CreatedAt.Format("15:04:05")
+
 		// First message doesn't need prefix if it's human
 		if i == 0 && msg.Author == critic.AuthorHuman {
 			// Add each line of the root message
 			msgLines := strings.Split(msg.Message, "\n")
-			for _, line := range msgLines {
-				allLines = append(allLines, renderMarkdown(line))
+			for j, line := range msgLines {
+				if j == 0 {
+					allLines = append(allLines, fmt.Sprintf("[%s] %s", timestamp, renderMarkdown(line)))
+				} else {
+					allLines = append(allLines, "           "+renderMarkdown(line))
+				}
 			}
 		} else {
 			// Add each line of the reply with the prefix
 			replyLines := strings.Split(msg.Message, "\n")
-			for _, line := range replyLines {
-				allLines = append(allLines, prefix+" "+renderMarkdown(line))
+			for j, line := range replyLines {
+				if j == 0 {
+					allLines = append(allLines, fmt.Sprintf("%s [%s] %s", prefix, timestamp, renderMarkdown(line)))
+				} else {
+					// Indent continuation lines
+					allLines = append(allLines, "              "+renderMarkdown(line))
+				}
 			}
 		}
 	}

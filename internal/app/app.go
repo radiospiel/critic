@@ -219,18 +219,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					// Determine the source line number to use
 					var lineNum int
-					existingComment := ""
+					var conv *critic.Conversation
 
 					if isCommentLine {
-						// Cursor is on a comment preview line - edit that comment
+						// Cursor is on a comment preview line - reply to that conversation
 						lineNum = sourceLine
-						// Load the existing comment from the messaging interface
+						// Load the full conversation from the messaging interface
 						uuid := m.diffView.GetConversationUUIDAtLine(cursorLine)
 						if uuid != "" {
-							if conv, err := m.messaging.GetFullConversation(uuid); err == nil && len(conv.Messages) > 0 {
-								// Get the last message from the conversation
-								lastMsg := conv.Messages[len(conv.Messages)-1]
-								existingComment = lastMsg.Message
+							if c, err := m.messaging.GetFullConversation(uuid); err == nil {
+								conv = c
 							}
 						}
 					} else {
@@ -240,9 +238,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							// Can't comment on this line (e.g., header line)
 							return m, nil
 						}
+						// No existing conversation - this will be a new comment
+						conv = nil
 					}
 
-					cmd := m.commentEditor.Activate(lineNum, existingComment)
+					cmd := m.commentEditor.ActivateWithConversation(lineNum, conv)
 					cmds = append(cmds, cmd)
 					return m, tea.Batch(cmds...)
 				}
