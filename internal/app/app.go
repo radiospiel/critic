@@ -278,9 +278,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		rightWidth, rightHeight := m.layout.GetDiffViewSize()
 		m.diffView.SetSize(rightWidth, rightHeight)
 
-		// Update comment editor size
-		editorWidth := msg.Width - 24  // Account for border and padding
-		editorHeight := msg.Height - 10 // Account for border, padding, and other UI elements
+		// Update comment editor size (80% width, centered)
+		editorWidth := msg.Width * 80 / 100
+		editorHeight := msg.Height - 6 // Leave some vertical padding
 		m.commentEditor.SetSize(editorWidth, editorHeight)
 
 		if !m.ready {
@@ -435,29 +435,31 @@ func (m Model) View() string {
 
 	// Overlay comment editor if active
 	if m.commentEditor.IsActive() {
-		// Render comment editor in a centered modal
+		// Render comment editor centered horizontally
 		editorView := m.commentEditor.View()
-		editorStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("205")).
-			Padding(1, 2).
-			Width(m.width - 20).
-			MaxWidth(m.width - 20)
+		editorLines := strings.Split(editorView, "\n")
 
-		styledEditor := editorStyle.Render(editorView)
+		// Calculate horizontal padding for centering (80% width means 10% padding on each side)
+		leftPadding := m.width * 10 / 100
 
-		// Calculate position for centering
+		// Calculate vertical position for centering
 		lines := strings.Split(view, "\n")
-		editorLines := strings.Split(styledEditor, "\n")
 		startLine := (len(lines) - len(editorLines)) / 2
 		if startLine < 0 {
 			startLine = 0
 		}
 
-		// Overlay editor on view
-		for i, line := range editorLines {
-			if startLine+i < len(lines) {
-				lines[startLine+i] = line
+		// Overlay editor on view with horizontal centering
+		for i, editorLine := range editorLines {
+			lineIdx := startLine + i
+			if lineIdx < len(lines) {
+				// Pad the editor line to center it
+				paddedLine := strings.Repeat(" ", leftPadding) + editorLine
+				// Ensure the line fills the width
+				if len([]rune(paddedLine)) < m.width {
+					paddedLine += strings.Repeat(" ", m.width-len([]rune(paddedLine)))
+				}
+				lines[lineIdx] = paddedLine
 			}
 		}
 		return strings.Join(lines, "\n")
