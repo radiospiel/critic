@@ -1002,12 +1002,14 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 		if i == 0 && msg.Author == critic.AuthorHuman {
 			// Add each line of the root message
 			msgLines := strings.Split(msg.Message, "\n")
-			allLines = append(allLines, msgLines...)
+			for _, line := range msgLines {
+				allLines = append(allLines, renderMarkdown(line))
+			}
 		} else {
 			// Add each line of the reply with the prefix
 			replyLines := strings.Split(msg.Message, "\n")
 			for _, line := range replyLines {
-				allLines = append(allLines, prefix+" "+line)
+				allLines = append(allLines, prefix+" "+renderMarkdown(line))
 			}
 		}
 	}
@@ -1019,23 +1021,6 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			allLines[0] = "\x1b[3m(Resolved)\x1b[23m " + allLines[0]
 		}
 	}
-
-	// Limit to 6 lines
-	maxLines := 6
-	totalLines := len(allLines)
-	linesToRender := totalLines
-	if linesToRender > maxLines {
-		linesToRender = maxLines
-	}
-
-	// Check if we need to add a "more lines" indicator
-	hasMore := totalLines > maxLines
-	resultSize := linesToRender
-	if hasMore {
-		resultSize++ // Add one more for the indicator
-	}
-
-	result := make([]string, resultSize)
 
 	// ANSI color codes
 	const yellowFg = "\x1b[38;5;220m"     // Yellow/gold foreground for block
@@ -1049,53 +1034,60 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	const leftHalfBlock = "▌"
 	const rightHalfBlock = "▐"
 
-	for i := 0; i < linesToRender; i++ {
-		// Start with colored half-block + space
-		prefix := yellowFg + leftHalfBlock + reset + " "
+	// Calculate the total lines including blank lines before/after
+	// Structure: blank line, content lines, blank line, (optional hotkey line)
+	totalContentLines := len(allLines)
+	maxLines := 6
 
-		// Combine prefix and comment text
-		content := prefix + allLines[i]
+	// Calculate total block size to determine if cursor is inside
+	// We need to check if cursor falls within the block range
+	// Block structure: blank + content + blank + (optional hotkey)
+	// First, estimate the block size
+	linesToRender := totalContentLines
+	hasMore := totalContentLines > maxLines
 
-		// Calculate visible width (accounting for the right block we'll add)
-		visibleWidth := lipgloss.Width(content)
-
-		// Reserve space for the right half-block
-		availableWidth := m.width - 1 // -1 for right half-block
-
-		// Truncate or pad to match viewport width minus the right block
-		var processed string
-		if visibleWidth > availableWidth {
-			processed = truncateANSI(content, availableWidth)
-		} else {
-			padding := strings.Repeat(" ", availableWidth-visibleWidth)
-			processed = content + padding
-		}
-
-		// Add right half-block at the end
-		processed = processed + yellowFg + rightHalfBlock + reset
-
-		// Apply dark yellowish background and light text
-		styled := darkYellowBg + darkFg + processed + reset
-
-		// Apply cursor highlighting if this is the active line
-		currentLineNum := startLineNum + i
-		result[i] = m.renderLineWithCursor(styled, currentLineNum)
-	}
-
-	// Add "more lines" indicator if needed
+	// Check if cursor is within this comment block
+	// We'll calculate the full block size first
+	blockSize := 1 + linesToRender // blank + content
 	if hasMore {
-		moreCount := totalLines - maxLines
-		indicatorText := fmt.Sprintf("(%d more lines)", moreCount)
+		blockSize = 1 + maxLines + 1 // blank + truncated content + "more" indicator
+	}
+	blockSize++ // trailing blank line
 
-		// Start with colored half-block + space
+	cursorInBlock := m.focused && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize+1
+
+	// If cursor is in the block, show full content
+	if cursorInBlock {
+		linesToRender = totalContentLines
+		hasMore = false
+		// Recalculate block size for full content
+		blockSize = 1 + linesToRender + 1 + 1 // blank + full content + blank + hotkey line
+	} else {
+		if linesToRender > maxLines {
+			linesToRender = maxLines
+		}
+	}
+
+	// Build result: blank line before, content, blank line after, optional hotkey
+	var result []string
+
+	// Helper to create a blank line with yellow borders
+	createBlankLine := func(lineNum int) string {
 		prefix := yellowFg + leftHalfBlock + reset + " "
-		content := prefix + indicatorText
+		availableWidth := m.width - 1
+		padding := strings.Repeat(" ", availableWidth-lipgloss.Width(prefix))
+		processed := prefix + padding + yellowFg + rightHalfBlock + reset
+		styled := darkYellowBg + darkFg + processed + reset
+		return m.renderLineWithCursor(styled, lineNum)
+	}
 
-		// Calculate visible width
+	// Helper to create a content line
+	createContentLine := func(text string, lineNum int) string {
+		prefix := yellowFg + leftHalfBlock + reset + " "
+		content := prefix + text
 		visibleWidth := lipgloss.Width(content)
-		availableWidth := m.width - 1 // -1 for right half-block
+		availableWidth := m.width - 1
 
-		// Truncate or pad to match viewport width
 		var processed string
 		if visibleWidth > availableWidth {
 			processed = truncateANSI(content, availableWidth)
@@ -1103,17 +1095,83 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			padding := strings.Repeat(" ", availableWidth-visibleWidth)
 			processed = content + padding
 		}
-
-		// Add right half-block at the end
 		processed = processed + yellowFg + rightHalfBlock + reset
-
-		// Apply black background and gray text for the indicator
-		styled := blackBg + grayFg + processed + reset
-
-		// Apply cursor highlighting if this is the active line
-		currentLineNum := startLineNum + linesToRender
-		result[linesToRender] = m.renderLineWithCursor(styled, currentLineNum)
+		styled := darkYellowBg + darkFg + processed + reset
+		return m.renderLineWithCursor(styled, lineNum)
 	}
+
+	// Helper to create an indicator/info line (darker background)
+	createInfoLine := func(text string, lineNum int) string {
+		prefix := yellowFg + leftHalfBlock + reset + " "
+		content := prefix + text
+		visibleWidth := lipgloss.Width(content)
+		availableWidth := m.width - 1
+
+		var processed string
+		if visibleWidth > availableWidth {
+			processed = truncateANSI(content, availableWidth)
+		} else {
+			padding := strings.Repeat(" ", availableWidth-visibleWidth)
+			processed = content + padding
+		}
+		processed = processed + yellowFg + rightHalfBlock + reset
+		styled := blackBg + grayFg + processed + reset
+		return m.renderLineWithCursor(styled, lineNum)
+	}
+
+	currentLine := startLineNum
+
+	// Add blank line before comment
+	result = append(result, createBlankLine(currentLine))
+	currentLine++
+
+	// Add content lines
+	for i := 0; i < linesToRender; i++ {
+		result = append(result, createContentLine(allLines[i], currentLine))
+		currentLine++
+	}
+
+	// Add "more lines" indicator if truncated
+	if hasMore {
+		moreCount := totalContentLines - maxLines
+		indicatorText := fmt.Sprintf("(%d more lines)", moreCount)
+		result = append(result, createInfoLine(indicatorText, currentLine))
+		currentLine++
+	}
+
+	// Add blank line after comment
+	result = append(result, createBlankLine(currentLine))
+	currentLine++
+
+	// Add hotkey line if cursor is in the block
+	if cursorInBlock {
+		hotkeyText := "(R)esolve • (Enter) reply"
+		if conv.Status == critic.StatusResolved {
+			hotkeyText = "(R) unresolve • (Enter) reply"
+		}
+		result = append(result, createInfoLine(hotkeyText, currentLine))
+	}
+
+	return result
+}
+
+// renderMarkdown applies simple markdown formatting to text
+// Supports **bold** and _underline_
+func renderMarkdown(text string) string {
+	const bold = "\x1b[1m"
+	const underline = "\x1b[4m"
+	const reset = "\x1b[0m"
+
+	result := text
+
+	// Handle **bold** - replace **text** with bold ANSI
+	boldRegex := regexp.MustCompile(`\*\*([^*]+)\*\*`)
+	result = boldRegex.ReplaceAllString(result, bold+"$1"+reset)
+
+	// Handle _underline_ - replace _text_ with underline ANSI
+	// Use word boundaries to avoid matching variable_names_like_this
+	underlineRegex := regexp.MustCompile(`\b_([^_]+)_\b`)
+	result = underlineRegex.ReplaceAllString(result, underline+"$1"+reset)
 
 	return result
 }
@@ -1286,23 +1344,38 @@ func min(a, b int) int {
 	return b
 }
 
-// resolveCommentAtCursor resolves the comment at the current cursor position
+// resolveCommentAtCursor toggles the resolved status of the comment at the current cursor position
 func (m *DiffViewModel) resolveCommentAtCursor() tea.Cmd {
 	// Check if cursor is on a comment line
 	if isComment, _ := m.IsCommentLine(m.cursorLine); isComment {
 		// Get conversation UUID for this line
 		uuid := m.GetConversationUUIDAtLine(m.cursorLine)
 		if uuid != "" && m.messaging != nil {
-			// Mark as resolved in the database
-			err := m.messaging.MarkAsResolved(uuid)
+			// Get the current conversation to check its status
+			conv, err := m.messaging.GetFullConversation(uuid)
 			if err != nil {
-				logger.Error("Failed to mark conversation as resolved: %v", err)
+				logger.Error("Failed to get conversation: %v", err)
 				return nil
 			}
 
-			logger.Info("Marked comment %s as resolved", uuid)
+			// Toggle the status
+			if conv.Status == critic.StatusResolved {
+				err = m.messaging.MarkAsUnresolved(uuid)
+				if err != nil {
+					logger.Error("Failed to mark conversation as unresolved: %v", err)
+					return nil
+				}
+				logger.Info("Marked comment %s as unresolved", uuid)
+			} else {
+				err = m.messaging.MarkAsResolved(uuid)
+				if err != nil {
+					logger.Error("Failed to mark conversation as resolved: %v", err)
+					return nil
+				}
+				logger.Info("Marked comment %s as resolved", uuid)
+			}
 
-			// Refresh the view to show the "(Resolved)" indicator
+			// Refresh the view to show the updated status
 			return m.RefreshFile()
 		}
 	}
