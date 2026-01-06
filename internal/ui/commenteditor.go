@@ -88,10 +88,10 @@ func (h *conversationHistoryWidget) SetConversation(conv *critic.Conversation) {
 
 	// Build lines from conversation messages
 	for _, msg := range conv.Messages {
-		// Use emojis for author
-		prefix := "👤" // Human
+		// Use text labels for author
+		prefix := "You" // Human
 		if msg.Author == critic.AuthorAI {
-			prefix = "🤖" // AI/Robot
+			prefix = "AI"
 		}
 
 		// Format timestamp as HH:MM:SS
@@ -103,7 +103,7 @@ func (h *conversationHistoryWidget) SetConversation(conv *critic.Conversation) {
 			if i == 0 {
 				h.lines = append(h.lines, fmt.Sprintf("%s [%s] %s", prefix, timestamp, line))
 			} else {
-				// Indent continuation lines
+				// Indent continuation lines (align with message text)
 				h.lines = append(h.lines, "              "+line)
 			}
 		}

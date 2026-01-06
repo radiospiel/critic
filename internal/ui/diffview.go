@@ -984,9 +984,9 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	var allLines []string
 
 	for i, msg := range conv.Messages {
-		prefix := "👤" // Human emoji
+		prefix := "You" // Human
 		if msg.Author == critic.AuthorAI {
-			prefix = "🤖" // Robot/AI emoji
+			prefix = "AI"
 
 			// Mark AI messages as read when they're displayed
 			if msg.IsUnread && m.messaging != nil {
@@ -1019,7 +1019,7 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 				if j == 0 {
 					allLines = append(allLines, fmt.Sprintf("%s [%s] %s", prefix, timestamp, renderMarkdown(line)))
 				} else {
-					// Indent continuation lines
+					// Indent continuation lines (3 for prefix + 1 space + 10 for timestamp + 2 brackets + 1 space = 17)
 					allLines = append(allLines, "              "+renderMarkdown(line))
 				}
 			}
