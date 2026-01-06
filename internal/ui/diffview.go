@@ -998,18 +998,15 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			}
 		}
 
-		// Format timestamp as HH:MM:SS
-		timestamp := msg.CreatedAt.Format("15:04:05")
-
 		// First message doesn't need prefix if it's human
 		if i == 0 && msg.Author == critic.AuthorHuman {
 			// Add each line of the root message
 			msgLines := strings.Split(msg.Message, "\n")
 			for j, line := range msgLines {
 				if j == 0 {
-					allLines = append(allLines, fmt.Sprintf("[%s] %s", timestamp, renderMarkdown(line)))
+					allLines = append(allLines, renderMarkdown(line))
 				} else {
-					allLines = append(allLines, "           "+renderMarkdown(line))
+					allLines = append(allLines, renderMarkdown(line))
 				}
 			}
 		} else {
@@ -1017,10 +1014,11 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			replyLines := strings.Split(msg.Message, "\n")
 			for j, line := range replyLines {
 				if j == 0 {
-					allLines = append(allLines, fmt.Sprintf("%s [%s] %s", prefix, timestamp, renderMarkdown(line)))
+					allLines = append(allLines, fmt.Sprintf("%s: %s", prefix, renderMarkdown(line)))
 				} else {
-					// Indent continuation lines (3 for prefix + 1 space + 10 for timestamp + 2 brackets + 1 space = 17)
-					allLines = append(allLines, "              "+renderMarkdown(line))
+					// Indent continuation lines (align with message text after "You: " or "AI: ")
+					indent := strings.Repeat(" ", len(prefix)+2)
+					allLines = append(allLines, indent+renderMarkdown(line))
 				}
 			}
 		}
