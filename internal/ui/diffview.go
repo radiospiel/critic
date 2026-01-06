@@ -1037,12 +1037,11 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	linesToRender := totalContentLines
 	hasMore := totalContentLines > maxLines
 
-	// Block size calculation
-	blockSize := linesToRender
+	// Block size calculation: separator + content + separator
+	blockSize := 1 + linesToRender + 1 // top separator + content + bottom separator
 	if hasMore {
-		blockSize = maxLines + 1 // truncated content + "more" indicator
+		blockSize = 1 + maxLines + 1 + 1 // top separator + truncated content + "more" indicator + bottom separator
 	}
-	blockSize++ // separator line
 
 	cursorInBlock := m.focused && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize
 
@@ -1050,7 +1049,7 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	if cursorInBlock {
 		linesToRender = totalContentLines
 		hasMore = false
-		blockSize = linesToRender + 1 // full content + separator
+		blockSize = 1 + linesToRender + 1 // top separator + full content + bottom separator
 	} else {
 		if linesToRender > maxLines {
 			linesToRender = maxLines
@@ -1102,6 +1101,10 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	}
 
 	currentLine := startLineNum
+
+	// Add top separator line (plain, no hotkeys)
+	result = append(result, createSeparatorLine("", currentLine))
+	currentLine++
 
 	// Add content lines
 	for i := 0; i < linesToRender; i++ {
