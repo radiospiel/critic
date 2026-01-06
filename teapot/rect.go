@@ -1,8 +1,8 @@
-// Package widget provides a composable widget system for terminal UIs.
+// Package teapot provides a composable widget system for terminal UIs.
 // Inspired by Qt's layout system, widgets form a tree where parent containers
 // manage the layout of their children, and focus/input events flow through
 // the hierarchy.
-package widget
+package teapot
 
 // Rect represents a rectangular area with position and size.
 type Rect struct {

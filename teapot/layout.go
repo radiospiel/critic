@@ -1,4 +1,4 @@
-package widget
+package teapot
 
 import (
 	tea "github.com/charmbracelet/bubbletea"

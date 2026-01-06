@@ -1,0 +1,257 @@
+package ui
+
+import (
+	"fmt"
+
+	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/pkg/critic"
+	ctypes "git.15b.it/eno/critic/pkg/types"
+	pot "git.15b.it/eno/critic/teapot"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// FileItem wraps a FileDiff to implement pot.ListItem
+type FileItem struct {
+	File *ctypes.FileDiff
+}
+
+// FilterValue returns the file path for filtering
+func (f FileItem) FilterValue() string {
+	if f.File.IsDeleted {
+		return f.File.OldPath
+	}
+	return f.File.NewPath
+}
+
+// FileListWidget is a teapot-based file list widget
+type FileListWidget struct {
+	pot.BaseWidget
+	list      *pot.SelectableList[FileItem]
+	messaging critic.Messaging
+	width     int
+	height    int
+}
+
+// NewFileListWidget creates a new file list widget
+func NewFileListWidget() *FileListWidget {
+	w := &FileListWidget{}
+
+	// Create the SelectableList with a custom renderer
+	w.list = pot.NewSelectableList[FileItem](w.renderItem)
+
+	// Configure styles
+	w.list.SetStyles(
+		selectedFileActiveStyle,
+		selectedFileInactiveStyle,
+		normalFileStyle,
+	)
+
+	return w
+}
+
+// renderItem renders a single file item
+func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected bool, focused bool, width int) {
+	file := item.File
+
+	// Get the git-relative path for checking conversations
+	gitPath := file.NewPath
+	if file.IsDeleted {
+		gitPath = file.OldPath
+	}
+
+	// Get conversation summary from messaging interface
+	var hasUnreadAI bool
+	var hasUnresolved bool
+	var hasResolved bool
+
+	if w.messaging != nil {
+		summary, err := w.messaging.GetFileConversationSummary(gitPath)
+		if err == nil && summary != nil {
+			hasUnreadAI = summary.HasUnreadAIMessages
+			hasUnresolved = summary.HasUnresolvedComments
+			hasResolved = summary.HasResolvedComments
+		}
+	}
+
+	// Determine file status symbol
+	var status string
+	if file.IsNew {
+		status = "+"
+	} else if file.IsDeleted {
+		status = "-"
+	} else if file.IsRenamed {
+		status = "→"
+	} else {
+		status = "M"
+	}
+
+	// Get file path to display (convert git-relative to cwd-relative)
+	path := git.GitPathToDisplayPath(file.NewPath)
+	if file.IsDeleted {
+		path = git.GitPathToDisplayPath(file.OldPath)
+	}
+
+	// Determine left indicator color
+	var indicatorStyle lipgloss.Style
+	var indicatorRune rune = ' '
+	if hasUnreadAI {
+		indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // Red
+		indicatorRune = '▌'
+	} else if hasUnresolved {
+		indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220")) // Yellow
+		indicatorRune = '▌'
+	} else if hasResolved {
+		indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("34")) // Green
+		indicatorRune = '▌'
+	}
+
+	// Select style based on selection state
+	var style lipgloss.Style
+	if selected {
+		if focused {
+			style = selectedFileActiveStyle
+		} else {
+			style = selectedFileInactiveStyle
+		}
+	} else {
+		style = normalFileStyle
+	}
+
+	// Render indicator
+	buf.SetCell(0, 0, pot.Cell{Rune: indicatorRune, Style: indicatorStyle})
+
+	// Render content
+	content := fmt.Sprintf("%s %s", status, path)
+	availableWidth := width - 1 // -1 for indicator
+
+	// Truncate if needed
+	runes := []rune(content)
+	if len(runes) > availableWidth {
+		if availableWidth > 1 {
+			runes = append(runes[:availableWidth-1], '…')
+		} else if availableWidth > 0 {
+			runes = runes[:availableWidth]
+		}
+	}
+
+	// Write content
+	for i, r := range runes {
+		buf.SetCell(1+i, 0, pot.Cell{Rune: r, Style: style})
+	}
+
+	// Fill remaining width with style (for selection highlight)
+	if selected {
+		for x := 1 + len(runes); x < width; x++ {
+			buf.SetCell(x, 0, pot.Cell{Rune: ' ', Style: style})
+		}
+	}
+}
+
+// SetFiles updates the file list
+func (w *FileListWidget) SetFiles(files []*ctypes.FileDiff) {
+	items := make([]FileItem, len(files))
+	for i, f := range files {
+		items[i] = FileItem{File: f}
+	}
+	w.list.SetItems(items)
+}
+
+// GetActiveFile returns the currently selected file
+func (w *FileListWidget) GetActiveFile() *ctypes.FileDiff {
+	if item, ok := w.list.Selected(); ok {
+		return item.File
+	}
+	return nil
+}
+
+// SelectByPath selects a file by its path
+func (w *FileListWidget) SelectByPath(path string) bool {
+	return w.list.SelectByPredicate(func(item FileItem) bool {
+		filePath := item.File.NewPath
+		if filePath == "" {
+			filePath = item.File.OldPath
+		}
+		return filePath == path
+	})
+}
+
+// SelectNext moves to the next file
+func (w *FileListWidget) SelectNext() bool {
+	idx := w.list.SelectedIndex()
+	if idx < len(w.list.Items())-1 {
+		w.list.SetSelectedIndex(idx + 1)
+		return true
+	}
+	return false
+}
+
+// SelectPrev moves to the previous file
+func (w *FileListWidget) SelectPrev() bool {
+	idx := w.list.SelectedIndex()
+	if idx > 0 {
+		w.list.SetSelectedIndex(idx - 1)
+		return true
+	}
+	return false
+}
+
+// OnSelect sets a callback for when selection changes
+func (w *FileListWidget) OnSelect(fn func(*ctypes.FileDiff)) {
+	w.list.OnSelect(func(item FileItem) {
+		fn(item.File)
+	})
+}
+
+// SetMessaging sets the messaging interface
+func (w *FileListWidget) SetMessaging(messaging critic.Messaging) {
+	w.messaging = messaging
+}
+
+// SetBounds implements pot.Widget
+func (w *FileListWidget) SetBounds(bounds pot.Rect) {
+	w.BaseWidget.SetBounds(bounds)
+	w.width = bounds.Width
+	w.height = bounds.Height
+	w.list.SetBounds(bounds)
+}
+
+// SetFocused implements pot.Widget
+func (w *FileListWidget) SetFocused(focused bool) {
+	w.BaseWidget.SetFocused(focused)
+	w.list.SetFocused(focused)
+}
+
+// Render implements pot.Widget
+func (w *FileListWidget) Render(buf *pot.SubBuffer) {
+	if len(w.list.Items()) == 0 {
+		style := lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"})
+		buf.SetString(1, 1, "No files changed", style)
+		return
+	}
+	w.list.Render(buf)
+}
+
+// HandleKey implements pot.Widget
+func (w *FileListWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	return w.list.HandleKey(msg)
+}
+
+// Children returns the child widgets
+func (w *FileListWidget) Children() []pot.Widget {
+	return nil
+}
+
+// View returns a string representation (for compatibility with existing code)
+func (w *FileListWidget) View() string {
+	buf := pot.NewBuffer(w.width, w.height)
+	sub := buf.Sub(buf.Bounds())
+	w.Render(sub)
+	return buf.String()
+}
+
+// SetSize sets the size (for compatibility)
+func (w *FileListWidget) SetSize(width, height int) {
+	w.SetBounds(pot.NewRect(0, 0, width, height))
+}

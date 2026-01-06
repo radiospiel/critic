@@ -94,7 +94,7 @@ func Run(args *Args) error {
 
 // Model represents the main application model
 type Model struct {
-	fileList      ui.FileListModel
+	fileList      *ui.FileListWidget
 	diffView      ui.DiffViewModel
 	commentEditor ui.CommentEditor
 	layout        ui.LayoutModel
@@ -118,7 +118,7 @@ func NewModel(args *Args) Model {
 	diffView := ui.NewDiffViewModel()
 	diffView.SetHighlightingEnabled(true) // Always enable highlighting
 
-	fileList := ui.NewFileListModel()
+	fileList := ui.NewFileListWidget()
 	fileList.SetFocused(true) // Start with file list focused
 
 	// Initialize message database
@@ -251,11 +251,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			// Route key messages to focused pane
 			if m.layout.GetFocusedPane() == ui.FileListPane {
-				newFileList, cmd := m.fileList.Update(msg)
-				m.fileList = newFileList
+				prevFile := m.fileList.GetActiveFile()
+				_, cmd := m.fileList.HandleKey(msg)
 				// Update diff view when file selection changes
-				setFileCmd := m.diffView.SetFile(m.fileList.GetActiveFile())
-				cmds = append(cmds, cmd, setFileCmd)
+				if m.fileList.GetActiveFile() != prevFile {
+					setFileCmd := m.diffView.SetFile(m.fileList.GetActiveFile())
+					cmds = append(cmds, cmd, setFileCmd)
+				} else {
+					cmds = append(cmds, cmd)
+				}
 			} else {
 				cmd := m.diffView.Update(msg)
 				cmds = append(cmds, cmd)
