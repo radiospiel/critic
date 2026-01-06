@@ -389,6 +389,28 @@ func (db *DB) MarkAsResolved(conversationID string) error {
 	return nil
 }
 
+// MarkAsUnresolved marks all messages in a conversation as unresolved
+func (db *DB) MarkAsUnresolved(conversationID string) error {
+	preconditions.Check(conversationID != "", "conversationID must not be empty")
+
+	// Update all messages in the conversation
+	// StatusNew is used for unresolved state in the database
+	query := `
+		UPDATE messages
+		SET status = ?, updated_at = ?
+		WHERE conversation_id = ?
+	`
+
+	result, err := db.db.Exec(query, string(StatusNew), time.Now(), conversationID)
+	if err != nil {
+		return fmt.Errorf("failed to mark as unresolved: %w", err)
+	}
+
+	affected, _ := result.RowsAffected()
+	logger.Info("Marked conversation %s (%d messages) as unresolved", conversationID, affected)
+	return nil
+}
+
 // MarkAsRead marks an AI message as read
 func (db *DB) MarkAsRead(id string) error {
 	preconditions.Check(id != "", "id must not be empty")

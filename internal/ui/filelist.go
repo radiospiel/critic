@@ -15,15 +15,16 @@ import (
 
 // FileListModel represents the file list pane
 type FileListModel struct {
-	files      []*ctypes.FileDiff
-	cursor     int
-	viewport   viewport.Model
-	width      int
-	height     int
-	ready      bool
-	activeFile *ctypes.FileDiff
-	focused    bool
-	messaging  critic.Messaging
+	files        []*ctypes.FileDiff
+	cursor       int
+	scrollOffset int // First visible file index
+	viewport     viewport.Model
+	width        int
+	height       int
+	ready        bool
+	activeFile   *ctypes.FileDiff
+	focused      bool
+	messaging    critic.Messaging
 }
 
 // NewFileListModel creates a new file list model
@@ -48,12 +49,14 @@ func (m FileListModel) Update(msg tea.Msg) (FileListModel, tea.Cmd) {
 			if m.cursor > 0 {
 				m.cursor--
 				m.updateActiveFile()
+				m.ensureCursorVisible()
 			}
 
 		case "down", "j":
 			if m.cursor < len(m.files)-1 {
 				m.cursor++
 				m.updateActiveFile()
+				m.ensureCursorVisible()
 			}
 
 		case "shift+up":
@@ -63,6 +66,7 @@ func (m FileListModel) Update(msg tea.Msg) (FileListModel, tea.Cmd) {
 					m.cursor = 0
 				}
 				m.updateActiveFile()
+				m.ensureCursorVisible()
 			}
 
 		case "shift+down":
@@ -72,16 +76,19 @@ func (m FileListModel) Update(msg tea.Msg) (FileListModel, tea.Cmd) {
 					m.cursor = len(m.files) - 1
 				}
 				m.updateActiveFile()
+				m.ensureCursorVisible()
 			}
 
 		case "g": // Go to top
 			m.cursor = 0
 			m.updateActiveFile()
+			m.ensureCursorVisible()
 
 		case "G": // Go to bottom
 			if len(m.files) > 0 {
 				m.cursor = len(m.files) - 1
 				m.updateActiveFile()
+				m.ensureCursorVisible()
 			}
 		}
 
@@ -95,6 +102,21 @@ func (m FileListModel) Update(msg tea.Msg) (FileListModel, tea.Cmd) {
 	return m, nil
 }
 
+// ensureCursorVisible scrolls the view to keep the cursor visible
+func (m *FileListModel) ensureCursorVisible() {
+	if m.height <= 0 {
+		return
+	}
+	// If cursor is above the visible area, scroll up
+	if m.cursor < m.scrollOffset {
+		m.scrollOffset = m.cursor
+	}
+	// If cursor is below the visible area, scroll down
+	if m.cursor >= m.scrollOffset+m.height {
+		m.scrollOffset = m.cursor - m.height + 1
+	}
+}
+
 // View renders the file list
 func (m FileListModel) View() string {
 	if len(m.files) == 0 {
@@ -106,7 +128,15 @@ func (m FileListModel) View() string {
 
 	var b strings.Builder
 
-	for i, file := range m.files {
+	// Calculate visible range based on scrollOffset
+	startIdx := m.scrollOffset
+	endIdx := startIdx + m.height
+	if endIdx > len(m.files) {
+		endIdx = len(m.files)
+	}
+
+	for i := startIdx; i < endIdx; i++ {
+		file := m.files[i]
 		style := normalFileStyle
 
 		// Get the git-relative path for checking conversations
@@ -212,7 +242,7 @@ func (m FileListModel) View() string {
 			}
 			b.WriteString(style.Render(line))
 		}
-		if i < len(m.files)-1 {
+		if i < endIdx-1 {
 			b.WriteString("\n")
 		}
 	}
@@ -230,6 +260,7 @@ func (m *FileListModel) SetFiles(files []*ctypes.FileDiff) {
 		m.cursor = 0
 	}
 	m.updateActiveFile()
+	m.ensureCursorVisible()
 }
 
 // GetActiveFile returns the currently selected file
@@ -247,6 +278,7 @@ func (m *FileListModel) SelectByPath(path string) bool {
 		if filePath == path {
 			m.cursor = i
 			m.updateActiveFile()
+			m.ensureCursorVisible()
 			return true
 		}
 	}
@@ -258,6 +290,7 @@ func (m *FileListModel) SelectNext() bool {
 	if m.cursor < len(m.files)-1 {
 		m.cursor++
 		m.updateActiveFile()
+		m.ensureCursorVisible()
 		return true
 	}
 	return false
@@ -268,6 +301,7 @@ func (m *FileListModel) SelectPrev() bool {
 	if m.cursor > 0 {
 		m.cursor--
 		m.updateActiveFile()
+		m.ensureCursorVisible()
 		return true
 	}
 	return false

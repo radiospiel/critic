@@ -84,6 +84,9 @@ type Messaging interface {
 	// MarkAsResolved marks a conversation as resolved
 	MarkAsResolved(conversationUUID string) error
 
+	// MarkAsUnresolved marks a conversation as unresolved
+	MarkAsUnresolved(conversationUUID string) error
+
 	// MarkAsRead marks an AI message as read
 	MarkAsRead(messageUUID string) error
 
