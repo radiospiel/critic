@@ -1,5 +1,8 @@
 package config
 
+// ShiftArrowJumpSize is the number of lines to jump when using Shift+Up/Down
+const ShiftArrowJumpSize = 10
+
 // DefaultFileExtensions lists the file extensions that are included by default
 // when scanning for files to diff. This includes common code file types and
 // documentation formats.

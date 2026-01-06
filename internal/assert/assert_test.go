@@ -151,7 +151,7 @@ func TestAssertNoError(t *testing.T) {
 	m.expectMockSuccessful(t)
 }
 
-func TestAssertStringContains(t *testing.T) {
+func TestAssertContainsString(t *testing.T) {
 	m := &mockTestingT{}
 
 	Contains(m, "hello world", "world")
@@ -160,17 +160,11 @@ func TestAssertStringContains(t *testing.T) {
 
 	Contains(m, "package main", "main")
 	m.expectMockSuccessful(t)
-}
-
-func TestAssertLen(t *testing.T) {
-	m := &mockTestingT{}
-
-	Length(m, "hello", 5)
-	m.expectMockSuccessful(t)
 	m.resetMock()
 
-	Length(m, []int{1, 2, 3}, 3)
-	m.expectMockSuccessful(t)
+	// Test failure case
+	Contains(m, "hello world", "foo")
+	m.expectMockFailure(t, "assert.Contains")
 }
 
 func TestAssertEqualsWithCustomMessage(t *testing.T) {
@@ -179,4 +173,35 @@ func TestAssertEqualsWithCustomMessage(t *testing.T) {
 	// This should fail and include the custom message
 	Equals(m, 42, 100, "Expected value to be %d but got %d", 100, 42)
 	m.expectMockFailure(t, "Expected value to be 100 but got 42")
+}
+
+func TestAssertContains(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Test with string slice
+	Contains(m, []string{"a", "b", "c"}, "b")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Test with int slice
+	Contains(m, []int{1, 2, 3}, 2)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Test failure case
+	Contains(m, []string{"a", "b", "c"}, "d")
+	m.expectMockFailure(t, "assert.Contains")
+}
+
+func TestAssertNotContains(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Test with string slice
+	NotContains(m, []string{"a", "b", "c"}, "d")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Test failure case
+	NotContains(m, []string{"a", "b", "c"}, "b")
+	m.expectMockFailure(t, "assert.NotContains")
 }

@@ -10,17 +10,17 @@ import (
 // Ensure DB implements the critic.Messaging interface
 var _ critic.Messaging = (*DB)(nil)
 
-// GetConversations returns a list of conversation IDs
+// GetConversations returns a list of root-level conversations
 // If status is provided, filters by that status (e.g., "unresolved")
 // If status is empty, returns all conversations
-func (db *DB) GetConversations(status string) ([]string, error) {
+func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	var query string
 	var args []interface{}
 
 	if status == "" {
 		// Get all root messages (conversations)
 		query = `
-			SELECT id
+			SELECT id, status, file_path, line_number, code_version, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id
 			ORDER BY file_path, line_number, created_at ASC
@@ -28,7 +28,7 @@ func (db *DB) GetConversations(status string) ([]string, error) {
 	} else if status == string(critic.StatusUnresolved) {
 		// Get unresolved conversations
 		query = `
-			SELECT id
+			SELECT id, status, file_path, line_number, code_version, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id AND status != ?
 			ORDER BY file_path, line_number, created_at ASC
@@ -37,7 +37,7 @@ func (db *DB) GetConversations(status string) ([]string, error) {
 	} else if status == string(critic.StatusResolved) {
 		// Get resolved conversations
 		query = `
-			SELECT id
+			SELECT id, status, file_path, line_number, code_version, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id AND status = ?
 			ORDER BY file_path, line_number, created_at ASC
@@ -53,17 +53,50 @@ func (db *DB) GetConversations(status string) ([]string, error) {
 	}
 	defer rows.Close()
 
-	var ids []string
+	var conversations []critic.Conversation
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("failed to scan ID: %w", err)
+		var conv critic.Conversation
+		var status string
+		if err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &conv.CreatedAt, &conv.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan conversation: %w", err)
 		}
-		ids = append(ids, id)
+		conv.Status = convertToCriticStatus(Status(status))
+		conversations = append(conversations, conv)
 	}
 
-	logger.Debug("Found %d conversations (status: %s)", len(ids), status)
-	return ids, nil
+	logger.Debug("Found %d conversations (status: %s)", len(conversations), status)
+	return conversations, nil
+}
+
+// GetConversationsByFile returns all conversations for a specific file
+// Returns root-level conversations ordered by line number
+func (db *DB) GetConversationsByFile(filePath string) ([]critic.Conversation, error) {
+	query := `
+		SELECT id, status, file_path, line_number, code_version, created_at, updated_at
+		FROM messages
+		WHERE id = conversation_id AND file_path = ?
+		ORDER BY line_number, created_at ASC
+	`
+
+	rows, err := db.db.Query(query, filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversations by file: %w", err)
+	}
+	defer rows.Close()
+
+	var conversations []critic.Conversation
+	for rows.Next() {
+		var conv critic.Conversation
+		var status string
+		if err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &conv.CreatedAt, &conv.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan conversation: %w", err)
+		}
+		conv.Status = convertToCriticStatus(Status(status))
+		conversations = append(conversations, conv)
+	}
+
+	logger.Debug("Found %d conversations for file %s", len(conversations), filePath)
+	return conversations, nil
 }
 
 // GetFullConversation returns the complete conversation including all replies
@@ -255,3 +288,4 @@ func convertToCriticStatus(status Status) critic.ConversationStatus {
 	}
 	return critic.StatusUnresolved
 }
+

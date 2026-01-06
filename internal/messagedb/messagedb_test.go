@@ -3,6 +3,8 @@ package messagedb
 import (
 	"os"
 	"testing"
+
+	"git.15b.it/eno/critic/internal/assert"
 )
 
 func setupTestDB(t *testing.T) (*DB, func()) {
@@ -200,19 +202,13 @@ func TestGetUnresolvedRootMessages(t *testing.T) {
 
 	// Get unresolved
 	unresolved, err := db.GetUnresolvedRootMessages()
-	if err != nil {
-		t.Fatalf("failed to get unresolved: %v", err)
-	}
-
-	if len(unresolved) != 2 {
-		t.Fatalf("expected 2 unresolved messages, got %d", len(unresolved))
-	}
+	assert.NoError(t, err, "failed to get unresolved")
+	assert.Equals(t, len(unresolved), 2, "expected 2 unresolved messages")
 
 	// Should be msg1 and msg3 (not msg2 which is resolved)
 	uuids := []string{unresolved[0].ID, unresolved[1].ID}
-	if !contains(uuids, msg1.ID) || !contains(uuids, msg3.ID) {
-		t.Error("expected msg1 and msg3 in unresolved messages")
-	}
+	assert.Contains(t, uuids, msg1.ID, "expected msg1 in unresolved messages")
+	assert.Contains(t, uuids, msg3.ID, "expected msg3 in unresolved messages")
 }
 
 func TestGetMessagesByFile(t *testing.T) {
@@ -344,11 +340,72 @@ func TestUpdateMessageStatus(t *testing.T) {
 	}
 }
 
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
+func TestGetConversationsReturnsOnlyTopLevel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create three root conversations
+	conv1, _ := db.CreateMessage(AuthorHuman, "Conversation 1", "src/main.go", 10, "abc123")
+	conv2, _ := db.CreateMessage(AuthorHuman, "Conversation 2", "src/main.go", 20, "abc123")
+	conv3, _ := db.CreateMessage(AuthorHuman, "Conversation 3", "src/util.go", 5, "abc123")
+
+	// Create replies to conv1 (should NOT appear in GetConversations)
+	db.CreateReply(AuthorAI, "Reply 1 to conv1", conv1.ID)
+	db.CreateReply(AuthorHuman, "Reply 2 to conv1", conv1.ID)
+
+	// Create a reply to conv2
+	db.CreateReply(AuthorAI, "Reply to conv2", conv2.ID)
+
+	// Get all conversations
+	conversations, err := db.GetConversations("")
+	assert.NoError(t, err, "failed to get conversations")
+
+	// Should only return 3 top-level conversations, not the 4 replies
+	assert.Equals(t, len(conversations), 3, "expected 3 conversations")
+
+	// Extract UUIDs for comparison
+	uuids := make([]string, len(conversations))
+	for i, conv := range conversations {
+		uuids[i] = conv.UUID
 	}
-	return false
+
+	// Verify all returned IDs are root conversations
+	assert.Contains(t, uuids, conv1.ID, "expected conv1 in conversations")
+	assert.Contains(t, uuids, conv2.ID, "expected conv2 in conversations")
+	assert.Contains(t, uuids, conv3.ID, "expected conv3 in conversations")
+}
+
+func TestGetConversationsWithStatusFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create conversations
+	conv1, _ := db.CreateMessage(AuthorHuman, "Unresolved 1", "src/main.go", 10, "abc123")
+	conv2, _ := db.CreateMessage(AuthorHuman, "Unresolved 2", "src/main.go", 20, "abc123")
+	conv3, _ := db.CreateMessage(AuthorHuman, "To be resolved", "src/util.go", 5, "abc123")
+
+	// Add replies (should not affect conversation count)
+	db.CreateReply(AuthorAI, "Reply to conv1", conv1.ID)
+	db.CreateReply(AuthorAI, "Reply to conv3", conv3.ID)
+
+	// Mark conv3 as resolved
+	db.MarkAsResolved(conv3.ID)
+
+	// Get unresolved conversations
+	unresolved, err := db.GetConversations("unresolved")
+	assert.NoError(t, err, "failed to get unresolved conversations")
+	assert.Equals(t, len(unresolved), 2, "expected 2 unresolved conversations")
+
+	unresolvedUUIDs := make([]string, len(unresolved))
+	for i, conv := range unresolved {
+		unresolvedUUIDs[i] = conv.UUID
+	}
+	assert.Contains(t, unresolvedUUIDs, conv1.ID, "expected conv1 in unresolved conversations")
+	assert.Contains(t, unresolvedUUIDs, conv2.ID, "expected conv2 in unresolved conversations")
+
+	// Get resolved conversations
+	resolved, err := db.GetConversations("resolved")
+	assert.NoError(t, err, "failed to get resolved conversations")
+	assert.Equals(t, len(resolved), 1, "expected 1 resolved conversation")
+	assert.Equals(t, resolved[0].UUID, conv3.ID, "expected conv3 in resolved conversations")
 }
