@@ -45,6 +45,7 @@ func NewCommentEditor() CommentEditor {
 
 	dialog := pot.NewDialog(textWidget, "Edit Comment")
 	dialog.SetLabels("Save", "Cancel")
+	dialog.SetBorderFooter("Enter: Save │ Esc: Cancel │ Alt+Enter: Newline")
 
 	return CommentEditor{
 		dialog:   dialog,
