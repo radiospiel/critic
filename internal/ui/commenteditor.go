@@ -29,7 +29,7 @@ func NewCommentEditor() CommentEditor {
 	textWidget := &textareaWidget{textarea: ta}
 
 	dialog := pot.NewDialog(textWidget, "Edit Comment")
-	dialog.SetLabels("Save (Alt+Enter: newline)", "Cancel")
+	dialog.SetLabels("Save", "Cancel")
 
 	return CommentEditor{
 		dialog:   dialog,

@@ -125,41 +125,90 @@ func (d *Dialog) SetBounds(bounds Rect) {
 		return
 	}
 
-	// Content gets the inner area (minus title and button row)
-	// Title: 1 line, Buttons: 1 line, padding: 1 line each side
+	// Content gets the inner area (inside border, above button row)
+	// Border: 1 on each side, Button row: 1 line
 	contentBounds := Rect{
-		X:      bounds.X,
-		Y:      bounds.Y + 2, // After title + spacing
-		Width:  bounds.Width,
-		Height: bounds.Height - 4, // Title, spacing, content, buttons
+		X:      bounds.X + 1,
+		Y:      bounds.Y + 1,
+		Width:  bounds.Width - 2,
+		Height: bounds.Height - 3, // Top border, content, button row, bottom border
 	}
 	d.content.SetBounds(contentBounds)
 }
 
-// Render renders the dialog.
+// Render renders the dialog with a bordered box and centered title.
 func (d *Dialog) Render(buf *SubBuffer) {
-	// Render title
-	titleStr := d.titleStyle.Render(d.title)
-	buf.SetString(1, 0, titleStr, lipgloss.NewStyle())
+	width := buf.Width()
+	height := buf.Height()
+
+	if width < 4 || height < 3 {
+		return
+	}
+
+	// Draw border
+	// Top-left corner
+	buf.SetCell(0, 0, Cell{Rune: '┌', Style: d.borderStyle})
+	// Top-right corner
+	buf.SetCell(width-1, 0, Cell{Rune: '┐', Style: d.borderStyle})
+	// Bottom-left corner
+	buf.SetCell(0, height-1, Cell{Rune: '└', Style: d.borderStyle})
+	// Bottom-right corner
+	buf.SetCell(width-1, height-1, Cell{Rune: '┘', Style: d.borderStyle})
+
+	// Top and bottom edges
+	for x := 1; x < width-1; x++ {
+		buf.SetCell(x, 0, Cell{Rune: '─', Style: d.borderStyle})
+		buf.SetCell(x, height-1, Cell{Rune: '─', Style: d.borderStyle})
+	}
+
+	// Left and right edges
+	for y := 1; y < height-1; y++ {
+		buf.SetCell(0, y, Cell{Rune: '│', Style: d.borderStyle})
+		buf.SetCell(width-1, y, Cell{Rune: '│', Style: d.borderStyle})
+	}
+
+	// Render title centered on top border
+	if d.title != "" {
+		title := " " + d.title + " "
+		titleRunes := []rune(title)
+		titleX := (width - len(titleRunes)) / 2
+		if titleX < 1 {
+			titleX = 1
+		}
+		for i, r := range titleRunes {
+			x := titleX + i
+			if x >= width-1 {
+				break
+			}
+			buf.SetCell(x, 0, Cell{Rune: r, Style: d.titleStyle})
+		}
+	}
 
 	// Render content
 	if d.content != nil {
-		contentBounds := d.content.Bounds()
 		contentSub := buf.parent.Sub(Rect{
-			X:      buf.offset.X,
-			Y:      buf.offset.Y + 2,
-			Width:  contentBounds.Width,
-			Height: contentBounds.Height,
+			X:      buf.offset.X + 1,
+			Y:      buf.offset.Y + 1,
+			Width:  width - 2,
+			Height: height - 3,
 		})
 		d.content.Render(contentSub)
 	}
 
-	// Render button hints at bottom
-	buttonY := buf.Height() - 1
-	hint := d.buttonHintStyle.Render("Enter") + d.buttonStyle.Render(": "+d.okLabel+"  ") +
-		d.buttonHintStyle.Render("Esc") + d.buttonStyle.Render(": "+d.cancelLabel)
-
-	buf.SetString(1, buttonY, hint, lipgloss.NewStyle())
+	// Render button hints on the bottom border
+	hint := " Enter: " + d.okLabel + " │ Esc: " + d.cancelLabel + " "
+	hintRunes := []rune(hint)
+	hintX := (width - len(hintRunes)) / 2
+	if hintX < 1 {
+		hintX = 1
+	}
+	for i, r := range hintRunes {
+		x := hintX + i
+		if x >= width-1 {
+			break
+		}
+		buf.SetCell(x, height-1, Cell{Rune: r, Style: d.buttonStyle})
+	}
 }
 
 // HandleKey handles keyboard input.
