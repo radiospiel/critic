@@ -87,7 +87,7 @@ type FileInfo struct {
 ```go
 type DiffDetails struct {
     Path            string
-    Hunks           []*ctypes.Hunk
+    Hunks           []*ctypes.HunkHeader
     OriginalContent string // Full content of original file
     CurrentContent  string // Full content of current file
 }
@@ -133,27 +133,27 @@ type ViewState interface {
     // Returns empty string if no file is selected
     GetSelectedFile() string
 
-    // GetActiveHunkPosition returns the hunk and position that the active line is in
+    // GetActiveHunkPosition returns the header and position that the active line is in
     // Returns nil if no file is selected or no active line
     GetActiveHunkPosition() *HunkPosition
 
     // SetSelectedFile sets the currently selected file
     SetSelectedFile(path string)
 
-    // SetActiveLine sets the active line number (used to determine which hunk)
+    // SetActiveLine sets the active line number (used to determine which header)
     SetActiveLine(lineNum int)
 }
 ```
 
 ### Supporting Types
 
-**HunkPosition** - Position within a hunk:
+**HunkPosition** - Position within a header:
 ```go
 type HunkPosition struct {
-    HunkIndex        int          // Index of the hunk in the file
-    Hunk             *ctypes.Hunk // The hunk itself
-    LineInHunk       int          // Line number within the hunk (0-based)
-    TotalLinesInHunk int          // Total number of lines in the hunk
+    HunkIndex        int          // Index of the header in the file
+    HunkHeader             *ctypes.HunkHeader // The header itself
+    LineInHunk       int          // Line number within the header (0-based)
+    TotalLinesInHunk int          // Total number of lines in the header
 }
 ```
 
@@ -164,7 +164,7 @@ The `DefaultViewState` struct provides a concrete implementation:
 **Key Features:**
 - Tracks currently selected file path
 - Tracks active line number
-- Calculates which hunk contains the active line
+- Calculates which header contains the active line
 - Resets active line when file selection changes
 
 **Construction:**
@@ -221,10 +221,10 @@ viewState.SetSelectedFile("main.go")
 // Set the active line
 viewState.SetActiveLine(42)
 
-// Get the active hunk position
+// Get the active header position
 pos := viewState.GetActiveHunkPosition()
 if pos != nil {
-    fmt.Printf("Line %d is in hunk %d (line %d of %d)\n",
+    fmt.Printf("Line %d is in header %d (line %d of %d)\n",
         42, pos.HunkIndex, pos.LineInHunk, pos.TotalLinesInHunk)
 }
 ```
@@ -268,4 +268,4 @@ if pos != nil {
 - `internal/ui/viewstate.go` - ViewState interface and implementation
 - `internal/ui/viewstate_test.go` - Tests for ViewState
 - `internal/git/diff.go` - Underlying git diff operations
-- `pkg/types/diff.go` - Core diff data types (Diff, FileDiff, Hunk, Line)
+- `pkg/types/diff.go` - Core diff data types (Diff, FileDiff, HunkHeader, Line)

@@ -79,8 +79,8 @@ type Watcher struct {
 - If no paths or `["."]` → include everything
 - Otherwise, check for:
   - Exact match: `gitPath == configuredPath`
-  - Directory match: `configuredPath + "/" is prefix of gitPath`
-  - Trailing slash match: `configuredPath ends with "/" and is prefix of gitPath`
+  - Directory match: `configuredPath + "/" is suffix of gitPath`
+  - Trailing slash match: `configuredPath ends with "/" and is suffix of gitPath`
 
 **Examples:**
 - `critic src/` → includes `src/foo.go`, `src/bar/baz.go`
@@ -261,7 +261,7 @@ Application receives `FileChange` events:
 
 ### Efficient Filtering
 - Git-relative path conversion cached (done once per repo)
-- Simple string prefix checks (O(1) per path)
+- Simple string suffix checks (O(1) per path)
 - Early exit on match
 
 ### Efficient Debouncing

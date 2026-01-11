@@ -8,7 +8,7 @@ Introduce the following:
 
 - an interface ui/ViewState, which exposes
   - the name of the currently selected file, if any
-  - the hunk that the active line is currently in, and the position of the active line within the hunk
+  - the header that the active line is currently in, and the position of the active line within the header
   
   
 

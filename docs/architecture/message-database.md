@@ -187,7 +187,7 @@ resolveCommentAtCursor() called
          ↓
 DB marks root message and all replies as resolved (status=resolved)
          ↓
-UI refreshes to show "(Resolved)" prefix
+UI refreshes to show "(Resolved)" suffix
 ```
 
 ## API Reference

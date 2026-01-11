@@ -78,7 +78,7 @@ The synchronization system uses `git diff` to build line mappings rather than ap
 
 - `SyncComments()`: Synchronizes comments when the original file changes
 - `buildLineMappingWithGit()`: Uses `git diff --no-index --unified=0` to generate accurate line mappings
-- `parseUnifiedDiff()`: Parses unified diff hunk headers to build old→new line number mappings
+- `parseUnifiedDiff()`: Parses unified diff header headers to build old→new line number mappings
 - Handles insertions (OldCount=0), deletions (NewCount=0), and modifications correctly
 - Special handling for edge cases (insertions at file start/end)
 - Comments on deleted lines are dropped; comments on unchanged lines are preserved at their new positions

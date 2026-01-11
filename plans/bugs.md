@@ -22,6 +22,6 @@ Root cause: internal/ui/diffview.go:445 was using HEAD to get old file content f
 highlighting. HEAD is only the old version for unstaged diffs. In "Last Commit" mode, HEAD
 is the NEW version (HEAD~1 is old), causing deleted lines to show new file content.
 
-Fix: Always use hunk-based reconstruction for old version syntax highlighting, which correctly
+Fix: Always use header-based reconstruction for old version syntax highlighting, which correctly
 rebuilds the old file from diff hunks regardless of diff mode (unstaged, last commit, or
 merge-base).
