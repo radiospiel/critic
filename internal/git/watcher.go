@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"git.15b.it/eno/critic/internal/logger"
+	"git.15b.it/eno/critic/simple-go/logger"
 	"github.com/fsnotify/fsnotify"
 	"github.com/samber/lo"
 )

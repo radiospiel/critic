@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"git.15b.it/eno/critic/internal/logger"
-	"git.15b.it/eno/critic/internal/preconditions"
+	"git.15b.it/eno/critic/simple-go/logger"
+	"git.15b.it/eno/critic/simple-go/preconditions"
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/samber/lo"

@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"git.15b.it/eno/critic/internal/assert"
+	"git.15b.it/eno/critic/simple-go/assert"
 	"git.15b.it/eno/critic/internal/git"
-	"git.15b.it/eno/critic/internal/must"
+	"git.15b.it/eno/critic/simple-go/must"
 )
 
 func TestLineDisplacement(t *testing.T) {

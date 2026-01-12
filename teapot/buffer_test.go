@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
-	"git.15b.it/eno/critic/internal/assert"
+	"git.15b.it/eno/critic/simple-go/assert"
 )
 
 func TestBufferBasics(t *testing.T) {

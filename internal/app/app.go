@@ -8,7 +8,7 @@ import (
 
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
-	"git.15b.it/eno/critic/internal/logger"
+	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/internal/messagedb"
 	"git.15b.it/eno/critic/internal/ui"
 	"git.15b.it/eno/critic/pkg/critic"

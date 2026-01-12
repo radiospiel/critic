@@ -9,7 +9,7 @@ import (
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/highlight"
-	"git.15b.it/eno/critic/internal/logger"
+	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"github.com/alecthomas/chroma/v2"

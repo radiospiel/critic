@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"git.15b.it/eno/critic/internal/app"
-	"git.15b.it/eno/critic/internal/assert"
+	"git.15b.it/eno/critic/simple-go/assert"
 )
 
 func TestParse(t *testing.T) {

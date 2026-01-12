@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"git.15b.it/eno/critic/internal/must"
-	"git.15b.it/eno/critic/internal/preconditions"
-	"git.15b.it/eno/critic/internal/utils"
+	"git.15b.it/eno/critic/simple-go/must"
+	"git.15b.it/eno/critic/simple-go/preconditions"
+	"git.15b.it/eno/critic/simple-go/utils"
 	"github.com/samber/lo"
 )
 

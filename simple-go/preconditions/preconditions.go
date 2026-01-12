@@ -3,7 +3,7 @@ package preconditions
 import (
 	"fmt"
 
-	"git.15b.it/eno/critic/internal/logger"
+	"git.15b.it/eno/critic/simple-go/logger"
 )
 
 // Check ensures that a condition is true.
