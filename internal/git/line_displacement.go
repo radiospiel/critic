@@ -71,38 +71,6 @@ func (ld LineDisplacement) String() string {
 	return buf.String()
 }
 
-func bytesToString(b []byte) string {
-	var buf strings.Builder
-	buf.Write(b)
-	return buf.String()
-}
-
-func stringToBytes(s string) []byte {
-	b := make([]byte, len(s))
-	copy(b, s)
-	return b
-}
-
-func cdump(s string) string {
-	bytes := stringToBytes(s)
-	xbytes := lo.Map(bytes, func(b byte, _ int) string {
-		if b >= 0x20 && b <= 0x7e {
-			return fmt.Sprintf("%c ", b)
-		} else {
-			return fmt.Sprintf(". ")
-		}
-	})
-	return strings.Join(xbytes, " ")
-}
-
-func xdump(s string) string {
-	bytes := stringToBytes(s)
-	xbytes := lo.Map(bytes, func(b byte, _ int) string {
-		return fmt.Sprintf("%X", b)
-	})
-	return strings.Join(xbytes, " ")
-}
-
 /*
 
 Note on diff parsing:
