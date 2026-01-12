@@ -45,10 +45,11 @@ type Message struct {
 	Status         Status
 	ReadStatus     ReadStatus
 	Message        string
-	FilePath       string    // File this message is attached to (git-relative path)
-	LineNumber     int       // Line number in the file
-	ConversationID string    // ID of the root message in the conversation
-	CodeVersion    string    // Git commit or version identifier
+	FilePath       string // File this message is attached to (git-relative path)
+	Lineno         int    // Line number in the file
+	ConversationID string // ID of the root message in the conversation
+	Commit         string // Git commit SHA1
+	Context        string // Code context around the commented line
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
@@ -102,11 +103,11 @@ func (db *DB) Close() error {
 }
 
 // CreateMessage creates a new root message (not a reply)
-func (db *DB) CreateMessage(author Author, message, filePath string, lineNumber int, codeVersion string) (*Message, error) {
+func (db *DB) CreateMessage(author Author, message, filePath string, lineno int, commit string, context string) (*Message, error) {
 	preconditions.Check(author == AuthorHuman || author == AuthorAI, "invalid author: %s", author)
 	preconditions.Check(message != "", "message must not be empty")
 	preconditions.Check(filePath != "", "filePath must not be empty")
-	preconditions.Check(lineNumber > 0, "lineNumber must be positive: %d", lineNumber)
+	preconditions.Check(lineno > 0, "lineno must be positive: %d", lineno)
 
 	id := uuid.Must(uuid.NewV7()).String()
 	msg := &Message{
@@ -116,9 +117,10 @@ func (db *DB) CreateMessage(author Author, message, filePath string, lineNumber 
 		ReadStatus:     lo.Ternary(author == AuthorAI, ReadStatusUnread, ReadStatusRead),
 		Message:        message,
 		FilePath:       filePath,
-		LineNumber:     lineNumber,
+		Lineno:         lineno,
 		ConversationID: id, // Root message points to itself
-		CodeVersion:    codeVersion,
+		Commit:         commit,
+		Context:        context,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
@@ -128,7 +130,7 @@ func (db *DB) CreateMessage(author Author, message, filePath string, lineNumber 
 		return nil, fmt.Errorf("failed to create message: %w", err)
 	}
 
-	logger.Info("Created %s message %s for %s:%d", author, msg.ID, filePath, lineNumber)
+	logger.Info("Created %s message %s for %s:%d", author, msg.ID, filePath, lineno)
 	return msg, nil
 }
 
@@ -154,9 +156,10 @@ func (db *DB) CreateReply(author Author, message, conversationID string) (*Messa
 		ReadStatus:     lo.Ternary(author == AuthorAI, ReadStatusUnread, ReadStatusRead),
 		Message:        message,
 		FilePath:       root.FilePath,
-		LineNumber:     root.LineNumber,
+		Lineno:         root.Lineno,
 		ConversationID: conversationID,
-		CodeVersion:    root.CodeVersion,
+		Commit:         root.Commit,
+		Context:        root.Context,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
@@ -174,9 +177,9 @@ func (db *DB) CreateReply(author Author, message, conversationID string) (*Messa
 func (db *DB) insertMessage(msg *Message) error {
 	query := `
 		INSERT INTO messages (
-			id, author, status, read_status, message, file_path, line_number,
-			conversation_id, code_version, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			id, author, status, read_status, message, file_path, lineno,
+			conversation_id, sha1, context, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := db.db.Exec(query,
@@ -186,9 +189,10 @@ func (db *DB) insertMessage(msg *Message) error {
 		string(msg.ReadStatus),
 		msg.Message,
 		msg.FilePath,
-		msg.LineNumber,
+		msg.Lineno,
 		msg.ConversationID,
-		msg.CodeVersion,
+		msg.Commit,
+		msg.Context,
 		msg.CreatedAt,
 		msg.UpdatedAt,
 	)
@@ -201,8 +205,8 @@ func (db *DB) GetMessage(id string) (*Message, error) {
 	preconditions.Check(id != "", "id must not be empty")
 
 	query := `
-		SELECT id, author, status, read_status, message, file_path, line_number,
-		       conversation_id, code_version, created_at, updated_at
+		SELECT id, author, status, read_status, message, file_path, lineno,
+		       conversation_id, sha1, context, created_at, updated_at
 		FROM messages
 		WHERE id = ?
 	`
@@ -216,9 +220,10 @@ func (db *DB) GetMessage(id string) (*Message, error) {
 		&msg.ReadStatus,
 		&msg.Message,
 		&msg.FilePath,
-		&msg.LineNumber,
+		&msg.Lineno,
 		&msg.ConversationID,
-		&msg.CodeVersion,
+		&msg.Commit,
+		&msg.Context,
 		&msg.CreatedAt,
 		&msg.UpdatedAt,
 	)
@@ -239,8 +244,8 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 
 	// Get all messages with the same conversation_id
 	query := `
-		SELECT id, author, status, read_status, message, file_path, line_number,
-		       conversation_id, code_version, created_at, updated_at
+		SELECT id, author, status, read_status, message, file_path, lineno,
+		       conversation_id, sha1, context, created_at, updated_at
 		FROM messages
 		WHERE conversation_id = ?
 		ORDER BY created_at ASC
@@ -263,9 +268,10 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 			&msg.ReadStatus,
 			&msg.Message,
 			&msg.FilePath,
-			&msg.LineNumber,
+			&msg.Lineno,
 			&msg.ConversationID,
-			&msg.CodeVersion,
+			&msg.Commit,
+			&msg.Context,
 			&msg.CreatedAt,
 			&msg.UpdatedAt,
 		)
@@ -282,11 +288,11 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 // GetUnresolvedRootMessages retrieves all unresolved root messages (not replies)
 func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
 	query := `
-		SELECT id, author, status, read_status, message, file_path, line_number,
-		       conversation_id, code_version, created_at, updated_at
+		SELECT id, author, status, read_status, message, file_path, lineno,
+		       conversation_id, sha1, context, created_at, updated_at
 		FROM messages
 		WHERE status != ? AND id = conversation_id
-		ORDER BY file_path, line_number, created_at ASC
+		ORDER BY file_path, lineno, created_at ASC
 	`
 
 	rows, err := db.db.Query(query, string(StatusResolved))
@@ -306,9 +312,10 @@ func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
 			&msg.ReadStatus,
 			&msg.Message,
 			&msg.FilePath,
-			&msg.LineNumber,
+			&msg.Lineno,
 			&msg.ConversationID,
-			&msg.CodeVersion,
+			&msg.Commit,
+			&msg.Context,
 			&msg.CreatedAt,
 			&msg.UpdatedAt,
 		)
@@ -328,11 +335,11 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 	preconditions.Check(filePath != "", "filePath must not be empty")
 
 	query := `
-		SELECT id, author, status, read_status, message, file_path, line_number,
-		       conversation_id, code_version, created_at, updated_at
+		SELECT id, author, status, read_status, message, file_path, lineno,
+		       conversation_id, sha1, context, created_at, updated_at
 		FROM messages
 		WHERE file_path = ? AND id = conversation_id
-		ORDER BY line_number, created_at ASC
+		ORDER BY lineno, created_at ASC
 	`
 
 	rows, err := db.db.Query(query, filePath)
@@ -352,9 +359,10 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 			&msg.ReadStatus,
 			&msg.Message,
 			&msg.FilePath,
-			&msg.LineNumber,
+			&msg.Lineno,
 			&msg.ConversationID,
-			&msg.CodeVersion,
+			&msg.Commit,
+			&msg.Context,
 			&msg.CreatedAt,
 			&msg.UpdatedAt,
 		)
@@ -504,11 +512,11 @@ func (db *DB) UpdateMessage(id string, newMessage string) error {
 // UpsertMessage creates a new message or updates an existing one
 // If existingID is provided and exists, updates that message
 // Otherwise, creates a new message with a new ID
-func (db *DB) UpsertMessage(author Author, message, filePath string, lineNumber int, codeVersion string, existingID string) (*Message, error) {
+func (db *DB) UpsertMessage(author Author, message, filePath string, lineno int, commit string, context string, existingID string) (*Message, error) {
 	preconditions.Check(author == AuthorHuman || author == AuthorAI, "invalid author: %s", author)
 	preconditions.Check(message != "", "message must not be empty")
 	preconditions.Check(filePath != "", "filePath must not be empty")
-	preconditions.Check(lineNumber > 0, "lineNumber must be positive: %d", lineNumber)
+	preconditions.Check(lineno > 0, "lineno must be positive: %d", lineno)
 
 	// If ID provided, try to update existing message
 	if existingID != "" {
@@ -528,5 +536,5 @@ func (db *DB) UpsertMessage(author Author, message, filePath string, lineNumber 
 	}
 
 	// Create new message
-	return db.CreateMessage(author, message, filePath, lineNumber, codeVersion)
+	return db.CreateMessage(author, message, filePath, lineno, commit, context)
 }

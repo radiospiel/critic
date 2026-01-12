@@ -36,7 +36,9 @@ type LineDisplacementBlock struct {
 }
 
 type LineDisplacement struct {
-	blocks []LineDisplacementBlock
+	blocks   []LineDisplacementBlock
+	ref1SHA1 string // SHA1 of the "old" commit
+	ref2SHA1 string // SHA1 of the "new" commit
 }
 
 func (m ld_mode) String() string {
@@ -367,11 +369,20 @@ func processBlocks(blocks []LineDisplacementBlock) []LineDisplacementBlock {
 
 // BuildLineDisplacement builds a LineDisplacement for translating line numbers between refs
 func BuildLineDisplacement(path string, ref1 string, ref2 string) (LineDisplacement, error) {
+	// Resolve refs to SHA1s
+	ref1SHA1 := revParse(ref1)
+	ref2SHA1 := revParse(ref2)
+
 	output := getColoredDiff(path, ref1, ref2)
 	blocks := parseDiffToBlocks(output)
 	blocks = processBlocks(blocks)
-	blocks = populateBlockContent(blocks, path, ref1)
-	return LineDisplacement{blocks: blocks}, nil
+	blocks = populateBlockContent(blocks, path, ref1SHA1)
+
+	return LineDisplacement{
+		blocks:   blocks,
+		ref1SHA1: ref1SHA1,
+		ref2SHA1: ref2SHA1,
+	}, nil
 }
 
 // Translate takes a line number from ref1 and returns the corresponding line number in ref2.
@@ -428,6 +439,7 @@ type hunkHeader struct {
 }
 
 var hunkHeaderPattern = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
+var sha1Pattern = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 
 func parseHunkHeader(lineBytes []byte) *hunkHeader {
 	line := string(lineBytes)
@@ -488,4 +500,17 @@ func populateBlockContent(blocks []LineDisplacementBlock, path string, ref strin
 		block.txtWithContext = readLinesFromGitShow(path, ref, startLine, endLine)
 	}
 	return blocks
+}
+
+// revParse converts a git ref (branch name, tag, commit SHA1) to a full SHA1 commit hash.
+// If the input is already a SHA1, it returns it as-is.
+func revParse(ref string) string {
+	// Check if it's already a 40-character hex string (SHA1)
+	if len(ref) == 40 && sha1Pattern.MatchString(ref) {
+		return ref
+	}
+
+	// Use git rev-parse to get the SHA1
+	output := must.Exec("git", "rev-parse", ref)
+	return string(output)
 }
