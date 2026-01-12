@@ -59,20 +59,7 @@ where the input is nil
 - `CriticFile`: Represents a file with original content and associated comments
 - `CommentUpdate`: Represents a change to comments for a file
 
-#### Parser (`internal/comments/parser.go`)
-
-- `ParseCriticFile()`: Parses a `.critic.md` file and extracts comments
-- `FormatCriticFile()`: Formats a critic file with embedded comment blocks
-- `ValidateCriticFile()`: Validates that a critic file is well-formed
-
-#### File Manager (`internal/comments/filemanager.go`)
-
-- `LoadComments()`: Loads comments from a `.critic.md` file
-- `SaveComments()`: Saves comments to `.critic.md` and `.critic.original` files
-- `HasComments()`: Checks if a file has comments
-- `DeleteComments()`: Removes comment files
-
-#### Diff Synchronization (`internal/comments/diffsync.go`)
+#### Diff Synchronization
 
 The synchronization system uses `git diff` to build line mappings rather than applying patches directly, because CRITIC comment blocks embedded in the file break the context matching required by `git apply`.
 
@@ -100,20 +87,6 @@ The comment system is integrated into the main application (`internal/app/app.go
 2. `Enter` key activates the comment editor when in diff view
 3. Comment save/cancel messages trigger file operations
 4. Comment editor is rendered as an overlay when active
-
-## Testing
-
-Tests are located in `internal/comments/*_test.go`:
-
-- **Parser tests**: Verify CRITIC block parsing and formatting
-- **File manager tests**: Verify save/load/delete operations
-- **Integration tests**: End-to-end workflow verification
-
-Run tests with:
-
-```bash
-go test ./internal/comments/...
-```
 
 ## Future Enhancements
 
