@@ -4,6 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
+
+	"git.15b.it/eno/critic/internal/logger"
+	"github.com/samber/lo"
 )
 
 // Must panics if err is not nil.
@@ -42,12 +47,28 @@ func WriteFile(filename string, content any) {
 	}
 }
 
+func escapeIfNecessary(s string, _ int) string {
+	// TODO: make me better
+	if strings.ContainsAny(s, "\"' \t\n\r") {
+		return "'" + s + "'"
+	}
+	return s
+}
+
 // Exec executes a command, panicking on error.
 func Exec(name string, args ...string) []byte {
+	stringified := lo.Map(args, escapeIfNecessary)
+	logger.Info("%s %s", name, strings.Join(stringified, " "))
+
 	cmd := exec.Command(name, args...)
 	output, err := cmd.Output()
+
 	if err != nil {
-		panic(fmt.Sprintf("Exec(%s %v) failed: %v", name, args, err))
+		msg := fmt.Sprintf("in %s: Exec(%s %v) failed: %v", Getwd(), name, args, err)
+		if err, ok := err.(*exec.ExitError); ok {
+			msg = msg + "\nerrout: " + string(err.Stderr)
+		}
+		panic(msg)
 	}
 	return output
 }
@@ -73,4 +94,28 @@ func OpenFile(name string, flag int, perm os.FileMode) *os.File {
 		panic(fmt.Sprintf("OpenFile(%s) failed: %v", name, err))
 	}
 	return f
+}
+
+// Getwd() returns the current working dir
+func Getwd() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(fmt.Sprintf("Getwd() failed: %v", err))
+	}
+	return wd
+}
+
+func Chdir(dir string) {
+	err := os.Chdir(dir)
+	if err != nil {
+		logger.Fatal("in %s: %v", Getwd(), err)
+	}
+}
+
+func ParseInt(str string, base int) int64 {
+	val, err := strconv.ParseInt(str, base, 64)
+	if err != nil {
+		logger.Fatal("cannot parseInt %s: %v", str, err)
+	}
+	return val
 }

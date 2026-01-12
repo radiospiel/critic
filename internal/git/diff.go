@@ -26,7 +26,7 @@ var validCommitHash = regexp.MustCompile(`^[a-f0-9]{6,40}$`)
 type DiffMode int
 
 const (
-	DiffToMergeBase DiffMode = iota // Diff from merge base to working directory
+	DiffToMergeBase  DiffMode = iota // Diff from merge base to working directory
 	DiffToLastCommit                 // Diff of last commit (HEAD~1..HEAD)
 	DiffUnstaged                     // Diff of unstaged changes only
 )

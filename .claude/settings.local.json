@@ -33,7 +33,11 @@
       "Bash(sqlite3:*)",
       "Bash(git rebase:*)",
       "Bash(GIT_EDITOR=true git rebase:*)",
-      "Bash(git -c core.editor=true rebase --continue)"
+      "Bash(git -c core.editor=true rebase --continue)",
+      "Bash(go mod tidy:*)",
+      "Bash(go clean:*)",
+      "Bash(go mod download:*)",
+      "Bash(go list:*)"
     ]
   }
 }

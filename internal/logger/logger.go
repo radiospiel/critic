@@ -1,17 +1,17 @@
 package logger
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
-
-	"git.15b.it/eno/critic/internal/must"
 )
 
 // Level represents a log level
 type Level int
 
+const enableStdoutLog = false
 const (
 	DEBUG Level = iota
 	INFO
@@ -24,7 +24,12 @@ var (
 	logger *log.Logger
 	once   sync.Once
 	level  Level = INFO // default log level
+	prefix string
 )
+
+func SetPrefix(s string) {
+	prefix = s
+}
 
 // ensureLogger initializes the logger if not already set
 func ensureLogger() {
@@ -41,7 +46,11 @@ func ensureLogger() {
 
 // newFileLogger creates a new file-based logger
 func newFileLogger(path string) *log.Logger {
-	f := must.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(fmt.Sprintf("OpenFile(%s) failed: %s", path, err))
+	}
+
 	return log.New(f, "", log.LstdFlags|log.Lmicroseconds)
 }
 
@@ -67,20 +76,18 @@ func SetLevel(l Level) {
 
 // Package-level convenience functions
 
-// Log writes a log message
-func Log(format string, v ...interface{}) {
-	ensureLogger()
-	logger.Printf(format, v...)
-}
-
-// Logf is an alias for Log
-func Logf(format string, v ...interface{}) {
-	Log(format, v...)
-}
-
 // Printf writes a log message (compatibility)
 func Printf(format string, v ...interface{}) {
-	Log(format, v...)
+	ensureLogger()
+	logger.Printf(format, v...)
+	if enableStdoutLog {
+		if prefix != "" {
+			v = append([]interface{}{prefix}, v...)
+			fmt.Printf("%s "+format+"\n", v...)
+		} else {
+			fmt.Printf(format+"\n", v...)
+		}
+	}
 }
 
 // Error writes an error log message
@@ -88,8 +95,7 @@ func Error(format string, v ...interface{}) {
 	if level > ERROR {
 		return
 	}
-	ensureLogger()
-	logger.Printf("ERROR: "+format, v...)
+	Printf("ERROR: "+format, v...)
 }
 
 // Warn writes a warning log message
@@ -97,14 +103,12 @@ func Warn(format string, v ...interface{}) {
 	if level > WARN {
 		return
 	}
-	ensureLogger()
-	logger.Printf("WARN: "+format, v...)
+	Printf("WARN: "+format, v...)
 }
 
 // Fatal writes a fatal error log message and exits
 func Fatal(format string, v ...interface{}) {
-	ensureLogger()
-	logger.Printf("FATAL: "+format, v...)
+	Printf("FATAL: "+format, v...)
 	os.Exit(1)
 }
 
@@ -113,8 +117,7 @@ func Info(format string, v ...interface{}) {
 	if level > INFO {
 		return
 	}
-	ensureLogger()
-	logger.Printf("INFO: "+format, v...)
+	Printf("INFO: "+format, v...)
 }
 
 // Debug writes a debug log message
@@ -122,18 +125,5 @@ func Debug(format string, v ...interface{}) {
 	if level > DEBUG {
 		return
 	}
-	ensureLogger()
-	logger.Printf("DEBUG: "+format, v...)
-}
-
-// Println writes a log message with newline
-func Println(v ...interface{}) {
-	ensureLogger()
-	logger.Println(v...)
-}
-
-// Print writes a log message
-func Print(v ...interface{}) {
-	ensureLogger()
-	logger.Print(v...)
+	Printf("DEBUG: "+format, v...)
 }
