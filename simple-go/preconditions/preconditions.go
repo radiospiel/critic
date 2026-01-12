@@ -23,3 +23,9 @@ func Check(condition bool, format string, args ...interface{}) {
 		panic(msg)
 	}
 }
+
+func Fail(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	logger.Error("Precondition failed: %s", msg)
+	panic(msg)
+}
