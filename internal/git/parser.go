@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"git.15b.it/eno/critic/internal/must"
+	"git.15b.it/eno/critic/simple-go/must"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 )
 

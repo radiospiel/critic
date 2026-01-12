@@ -3,7 +3,7 @@ package teapot
 import (
 	"testing"
 
-	"git.15b.it/eno/critic/internal/assert"
+	"git.15b.it/eno/critic/simple-go/assert"
 )
 
 // mockWidget is a simple widget for testing layouts

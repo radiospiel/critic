@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"git.15b.it/eno/critic/internal/assert"
+	"git.15b.it/eno/critic/simple-go/assert"
 )
 
 func setupTestDB(t *testing.T) (*DB, func()) {

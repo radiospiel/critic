@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"git.15b.it/eno/critic/internal/assert"
+	"git.15b.it/eno/critic/simple-go/assert"
 )
 
 func TestCompositorResize(t *testing.T) {

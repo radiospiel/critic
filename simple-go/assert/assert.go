@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	"git.15b.it/eno/critic/internal/preconditions"
+	"git.15b.it/eno/critic/simple-go/preconditions"
 )
 
 // testingT is an interface that abstracts the testing.T API.

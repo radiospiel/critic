@@ -3,9 +3,9 @@ package critic_integration
 import (
 	"testing"
 
-	"git.15b.it/eno/critic/internal/assert"
+	"git.15b.it/eno/critic/simple-go/assert"
 	"git.15b.it/eno/critic/internal/git"
-	"git.15b.it/eno/critic/internal/must"
+	"git.15b.it/eno/critic/simple-go/must"
 )
 
 func TestGetFileContent_FromGit(t *testing.T) {

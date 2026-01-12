@@ -5,7 +5,7 @@ import (
 
 	ctypes "git.15b.it/eno/critic/pkg/types"
 
-	"git.15b.it/eno/critic/internal/assert"
+	"git.15b.it/eno/critic/simple-go/assert"
 )
 
 func TestParseDiff_Empty(t *testing.T) {
