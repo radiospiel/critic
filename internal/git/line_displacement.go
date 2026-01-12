@@ -27,11 +27,12 @@ const (
 )
 
 type LineDisplacementBlock struct {
-	mode         ld_mode
-	numOfLInes   int
-	firstOldLine int
-	firstNewLine int
-	txtHash      string
+	mode           ld_mode
+	numOfLInes     int
+	firstOldLine   int
+	firstNewLine   int
+	txtHash        string
+	txtWithContext string
 }
 
 type LineDisplacement struct {
@@ -69,38 +70,6 @@ func (ld LineDisplacement) String() string {
 	}
 	buf.WriteString("}")
 	return buf.String()
-}
-
-func bytesToString(b []byte) string {
-	var buf strings.Builder
-	buf.Write(b)
-	return buf.String()
-}
-
-func stringToBytes(s string) []byte {
-	b := make([]byte, len(s))
-	copy(b, s)
-	return b
-}
-
-func cdump(s string) string {
-	bytes := stringToBytes(s)
-	xbytes := lo.Map(bytes, func(b byte, _ int) string {
-		if b >= 0x20 && b <= 0x7e {
-			return fmt.Sprintf("%c ", b)
-		} else {
-			return fmt.Sprintf(". ")
-		}
-	})
-	return strings.Join(xbytes, " ")
-}
-
-func xdump(s string) string {
-	bytes := stringToBytes(s)
-	xbytes := lo.Map(bytes, func(b byte, _ int) string {
-		return fmt.Sprintf("%X", b)
-	})
-	return strings.Join(xbytes, " ")
 }
 
 /*
@@ -401,6 +370,7 @@ func BuildLineDisplacement(path string, ref1 string, ref2 string) (LineDisplacem
 	output := getColoredDiff(path, ref1, ref2)
 	blocks := parseDiffToBlocks(output)
 	blocks = processBlocks(blocks)
+	blocks = populateBlockContent(blocks, path, ref1)
 	return LineDisplacement{blocks: blocks}, nil
 }
 
@@ -483,4 +453,39 @@ func parseHunkHeader(lineBytes []byte) *hunkHeader {
 		header.NewCount = 1
 	}
 	return &header
+}
+
+// contextLines is the number of context lines to include before and after a block
+const contextLines = 3
+
+// readLinesFromGitShow reads a range of lines from a file at a specific git ref.
+// It reads from startLine to endLine (inclusive) using git show.
+func readLinesFromGitShow(path string, ref string, startLine int, endLine int) string {
+	if startLine < 1 {
+		startLine = 1
+	}
+
+	// Use sed to extract only the relevant lines from git show output
+	// sed -n 'start,endp' prints lines from start to end (inclusive)
+	output := must.Exec("bash", "-c",
+		fmt.Sprintf("git show %s:%s | sed -n '%d,%dp'", ref, path, startLine, endLine))
+	return string(output)
+}
+
+// populateBlockContent reads the content for each block from the git repository
+// and stores it in the block's txtWithContext field. For blocks with firstOldLine set,
+// it reads from (firstOldLine - contextLines) to (firstOldLine + numOfLines + contextLines).
+func populateBlockContent(blocks []LineDisplacementBlock, path string, ref string) []LineDisplacementBlock {
+	for i := range blocks {
+		block := &blocks[i]
+		if block.firstOldLine == 0 {
+			continue
+		}
+
+		startLine := block.firstOldLine - contextLines
+		endLine := block.firstOldLine + block.numOfLInes + contextLines
+
+		block.txtWithContext = readLinesFromGitShow(path, ref, startLine, endLine)
+	}
+	return blocks
 }
