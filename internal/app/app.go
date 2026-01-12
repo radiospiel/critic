@@ -377,12 +377,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				logger.Info("Created reply %s to conversation %s", replyMsg.UUID, existingUUID)
 			} else {
 				// No existing conversation - create a new one
+				// TODO: Get context from LineDisplacement based on line type (deleted/added/unchanged)
 				conversation, err := m.messaging.CreateConversation(
 					critic.AuthorHuman,
 					msg.Comment,
 					filePath,
 					msg.LineNum,
 					codeVersion,
+					"", // context - TODO: populate from LineDisplacement
 				)
 				if err != nil {
 					logger.Error("Failed to create conversation: %v", err)

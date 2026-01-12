@@ -7,10 +7,10 @@ import (
 	"git.15b.it/eno/critic/simple-go/logger"
 )
 
-const currentSchemaVersion = "1"
+const currentSchemaVersion = "2"
 
-// schema_v1 defines the initial database schema
-var schema_v1 = `
+// schema_v2 defines the v2 database schema with renamed columns and context
+var schema_v2 = `
 	-- Settings table for metadata
 	CREATE TABLE IF NOT EXISTS settings (
 		key TEXT PRIMARY KEY,
@@ -25,9 +25,10 @@ var schema_v1 = `
 		read_status TEXT NOT NULL DEFAULT 'read' CHECK(read_status IN ('unread', 'read')),
 		message TEXT NOT NULL,
 		file_path TEXT NOT NULL,
-		line_number INTEGER NOT NULL,
+		lineno INTEGER NOT NULL,
 		conversation_id TEXT NOT NULL,
-		code_version TEXT NOT NULL,
+		sha1 TEXT NOT NULL,
+		context TEXT,
 		created_at TIMESTAMP NOT NULL,
 		updated_at TIMESTAMP NOT NULL,
 		FOREIGN KEY (conversation_id) REFERENCES messages(id) ON DELETE CASCADE
@@ -55,7 +56,7 @@ func (db *DB) initSchema() error {
 
 	// Check schema version
 	if version != currentSchemaVersion {
-		return fmt.Errorf("schema version mismatch: database is at version %s, expected %s", version, currentSchemaVersion)
+		return fmt.Errorf("schema version mismatch: database is at version %s, expected %s. Please delete .critic.db to start fresh.", version, currentSchemaVersion)
 	}
 
 	logger.Debug("Database schema version %s is current", version)
@@ -64,8 +65,8 @@ func (db *DB) initSchema() error {
 
 // createInitialSchema creates all tables and initial data
 func (db *DB) createInitialSchema() error {
-	// Create tables using schema v1
-	_, err := db.db.Exec(schema_v1)
+	// Create tables using schema v2
+	_, err := db.db.Exec(schema_v2)
 	if err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}

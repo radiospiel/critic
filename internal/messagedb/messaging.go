@@ -3,8 +3,8 @@ package messagedb
 import (
 	"fmt"
 
-	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/pkg/critic"
+	"git.15b.it/eno/critic/simple-go/logger"
 )
 
 // Ensure DB implements the critic.Messaging interface
@@ -20,27 +20,27 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	if status == "" {
 		// Get all root messages (conversations)
 		query = `
-			SELECT id, status, file_path, line_number, code_version, created_at, updated_at
+			SELECT id, status, file_path, lineno, sha1, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id
-			ORDER BY file_path, line_number, created_at ASC
+			ORDER BY file_path, lineno, created_at ASC
 		`
 	} else if status == string(critic.StatusUnresolved) {
 		// Get unresolved conversations
 		query = `
-			SELECT id, status, file_path, line_number, code_version, created_at, updated_at
+			SELECT id, status, file_path, lineno, sha1, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id AND status != ?
-			ORDER BY file_path, line_number, created_at ASC
+			ORDER BY file_path, lineno, created_at ASC
 		`
 		args = []interface{}{string(StatusResolved)}
 	} else if status == string(critic.StatusResolved) {
 		// Get resolved conversations
 		query = `
-			SELECT id, status, file_path, line_number, code_version, created_at, updated_at
+			SELECT id, status, file_path, lineno, sha1, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id AND status = ?
-			ORDER BY file_path, line_number, created_at ASC
+			ORDER BY file_path, lineno, created_at ASC
 		`
 		args = []interface{}{string(StatusResolved)}
 	} else {
@@ -72,10 +72,10 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 // Returns root-level conversations ordered by line number
 func (db *DB) GetConversationsByFile(filePath string) ([]critic.Conversation, error) {
 	query := `
-		SELECT id, status, file_path, line_number, code_version, created_at, updated_at
+		SELECT id, status, file_path, lineno, sha1, created_at, updated_at
 		FROM messages
 		WHERE id = conversation_id AND file_path = ?
-		ORDER BY line_number, created_at ASC
+		ORDER BY lineno, created_at ASC
 	`
 
 	rows, err := db.db.Query(query, filePath)
@@ -132,8 +132,8 @@ func (db *DB) GetFullConversation(conversationID string) (*critic.Conversation, 
 		UUID:        rootMsg.ID,
 		Status:      convertToCriticStatus(rootMsg.Status),
 		FilePath:    rootMsg.FilePath,
-		LineNumber:  rootMsg.LineNumber,
-		CodeVersion: rootMsg.CodeVersion,
+		LineNumber:  rootMsg.Lineno,
+		CodeVersion: rootMsg.Commit,
 		Messages:    criticMessages,
 		CreatedAt:   rootMsg.CreatedAt,
 		UpdatedAt:   rootMsg.UpdatedAt,
@@ -250,9 +250,9 @@ func (db *DB) ReplyToConversation(conversationID string, message string, author 
 }
 
 // CreateConversation creates a new conversation (root message)
-func (db *DB) CreateConversation(author critic.Author, message, filePath string, lineNumber int, codeVersion string) (*critic.Conversation, error) {
+func (db *DB) CreateConversation(author critic.Author, message, filePath string, lineNumber int, codeVersion string, context string) (*critic.Conversation, error) {
 	dbAuthor := Author(author)
-	rootMsg, err := db.CreateMessage(dbAuthor, message, filePath, lineNumber, codeVersion)
+	rootMsg, err := db.CreateMessage(dbAuthor, message, filePath, lineNumber, codeVersion, context)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create conversation: %w", err)
 	}
@@ -261,8 +261,8 @@ func (db *DB) CreateConversation(author critic.Author, message, filePath string,
 		UUID:        rootMsg.ID,
 		Status:      convertToCriticStatus(rootMsg.Status),
 		FilePath:    rootMsg.FilePath,
-		LineNumber:  rootMsg.LineNumber,
-		CodeVersion: rootMsg.CodeVersion,
+		LineNumber:  rootMsg.Lineno,
+		CodeVersion: rootMsg.Commit,
 		Messages: []critic.Message{
 			{
 				UUID:      rootMsg.ID,
@@ -288,4 +288,3 @@ func convertToCriticStatus(status Status) critic.ConversationStatus {
 	}
 	return critic.StatusUnresolved
 }
-

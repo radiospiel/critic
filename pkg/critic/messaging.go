@@ -79,7 +79,7 @@ type Messaging interface {
 	ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error)
 
 	// CreateConversation creates a new conversation (root message)
-	CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string) (*Conversation, error)
+	CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error)
 
 	// MarkAsResolved marks a conversation as resolved
 	MarkAsResolved(conversationUUID string) error

@@ -33,7 +33,7 @@ func TestCreateMessage(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	msg, err := db.CreateMessage(AuthorHuman, "Test comment", "src/main.go", 42, "abc123")
+	msg, err := db.CreateMessage(AuthorHuman, "Test comment", "src/main.go", 42, "abc123", "context")
 	if err != nil {
 		t.Fatalf("failed to create message: %v", err)
 	}
@@ -56,8 +56,8 @@ func TestCreateMessage(t *testing.T) {
 	if msg.FilePath != "src/main.go" {
 		t.Errorf("expected file_path to be 'src/main.go', got %s", msg.FilePath)
 	}
-	if msg.LineNumber != 42 {
-		t.Errorf("expected line_number to be 42, got %d", msg.LineNumber)
+	if msg.Lineno != 42 {
+		t.Errorf("expected line_number to be 42, got %d", msg.Lineno)
 	}
 	if msg.ConversationID != msg.ID {
 		t.Errorf("expected conversation_id to equal id for root message, got %s", msg.ConversationID)
@@ -68,7 +68,7 @@ func TestCreateAIMessage(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	msg, err := db.CreateMessage(AuthorAI, "AI response", "src/main.go", 42, "abc123")
+	msg, err := db.CreateMessage(AuthorAI, "AI response", "src/main.go", 42, "abc123", "content")
 	if err != nil {
 		t.Fatalf("failed to create AI message: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestCreateReply(t *testing.T) {
 	defer cleanup()
 
 	// Create parent message
-	parent, err := db.CreateMessage(AuthorHuman, "Parent comment", "src/main.go", 42, "abc123")
+	parent, err := db.CreateMessage(AuthorHuman, "Parent comment", "src/main.go", 42, "abc123", "conent")
 	if err != nil {
 		t.Fatalf("failed to create parent message: %v", err)
 	}
@@ -103,8 +103,8 @@ func TestCreateReply(t *testing.T) {
 	if reply.FilePath != parent.FilePath {
 		t.Errorf("expected file_path to match parent (%s), got %s", parent.FilePath, reply.FilePath)
 	}
-	if reply.LineNumber != parent.LineNumber {
-		t.Errorf("expected line_number to match parent (%d), got %d", parent.LineNumber, reply.LineNumber)
+	if reply.Lineno != parent.Lineno {
+		t.Errorf("expected line_number to match parent (%d), got %d", parent.Lineno, reply.Lineno)
 	}
 }
 
@@ -112,7 +112,7 @@ func TestGetMessage(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	created, err := db.CreateMessage(AuthorHuman, "Test comment", "src/main.go", 42, "abc123")
+	created, err := db.CreateMessage(AuthorHuman, "Test comment", "src/main.go", 42, "abc123", "content")
 	if err != nil {
 		t.Fatalf("failed to create message: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestGetThreadMessages(t *testing.T) {
 	defer cleanup()
 
 	// Create parent message
-	parent, err := db.CreateMessage(AuthorHuman, "Parent comment", "src/main.go", 42, "abc123")
+	parent, err := db.CreateMessage(AuthorHuman, "Parent comment", "src/main.go", 42, "abc123", "content")
 	if err != nil {
 		t.Fatalf("failed to create parent: %v", err)
 	}
@@ -190,9 +190,9 @@ func TestGetUnresolvedRootMessages(t *testing.T) {
 	defer cleanup()
 
 	// Create some messages
-	msg1, _ := db.CreateMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123")
-	msg2, _ := db.CreateMessage(AuthorHuman, "Comment 2", "src/main.go", 20, "abc123")
-	msg3, _ := db.CreateMessage(AuthorHuman, "Comment 3", "src/util.go", 5, "abc123")
+	msg1, _ := db.CreateMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123", "content")
+	msg2, _ := db.CreateMessage(AuthorHuman, "Comment 2", "src/main.go", 20, "abc123", "content")
+	msg3, _ := db.CreateMessage(AuthorHuman, "Comment 3", "src/util.go", 5, "abc123", "content")
 
 	// Create a reply (should not appear in root messages)
 	db.CreateReply(AuthorAI, "Reply to msg1", msg1.ID)
@@ -216,9 +216,9 @@ func TestGetMessagesByFile(t *testing.T) {
 	defer cleanup()
 
 	// Create messages in different files
-	msg1, _ := db.CreateMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123")
-	msg2, _ := db.CreateMessage(AuthorHuman, "Comment 2", "src/main.go", 20, "abc123")
-	db.CreateMessage(AuthorHuman, "Comment 3", "src/util.go", 5, "abc123")
+	msg1, _ := db.CreateMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123", "content")
+	msg2, _ := db.CreateMessage(AuthorHuman, "Comment 2", "src/main.go", 20, "abc123", "content")
+	db.CreateMessage(AuthorHuman, "Comment 3", "src/util.go", 5, "abc123", "content")
 
 	// Create a reply (should not appear)
 	db.CreateReply(AuthorAI, "Reply", msg1.ID)
@@ -247,7 +247,7 @@ func TestMarkAsResolved(t *testing.T) {
 	defer cleanup()
 
 	// Create parent and replies
-	parent, _ := db.CreateMessage(AuthorHuman, "Parent", "src/main.go", 10, "abc123")
+	parent, _ := db.CreateMessage(AuthorHuman, "Parent", "src/main.go", 10, "abc123", "content")
 	reply, _ := db.CreateReply(AuthorAI, "Reply", parent.ID)
 
 	// Mark as resolved
@@ -274,7 +274,7 @@ func TestMarkAsRead(t *testing.T) {
 	defer cleanup()
 
 	// Create AI message (should be unread by default)
-	msg, _ := db.CreateMessage(AuthorAI, "AI comment", "src/main.go", 10, "abc123")
+	msg, _ := db.CreateMessage(AuthorAI, "AI comment", "src/main.go", 10, "abc123", "content")
 
 	if msg.ReadStatus != ReadStatusUnread {
 		t.Fatalf("expected AI message to be unread initially, got %s", msg.ReadStatus)
@@ -298,12 +298,12 @@ func TestGetFilesWithUnreadAIMessages(t *testing.T) {
 	defer cleanup()
 
 	// Create some AI messages
-	db.CreateMessage(AuthorAI, "AI comment 1", "src/main.go", 10, "abc123")
-	msg2, _ := db.CreateMessage(AuthorAI, "AI comment 2", "src/util.go", 20, "abc123")
-	db.CreateMessage(AuthorAI, "AI comment 3", "src/main.go", 30, "abc123")
+	db.CreateMessage(AuthorAI, "AI comment 1", "src/main.go", 10, "abc123", "content")
+	msg2, _ := db.CreateMessage(AuthorAI, "AI comment 2", "src/util.go", 20, "abc123", "content")
+	db.CreateMessage(AuthorAI, "AI comment 3", "src/main.go", 30, "abc123", "content")
 
 	// Create human message (should not affect result)
-	db.CreateMessage(AuthorHuman, "Human comment", "src/test.go", 5, "abc123")
+	db.CreateMessage(AuthorHuman, "Human comment", "src/test.go", 5, "abc123", "content")
 
 	// Mark one as read
 	db.MarkAsRead(msg2.ID)
@@ -327,7 +327,7 @@ func TestUpdateMessageStatus(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	msg, _ := db.CreateMessage(AuthorHuman, "Comment", "src/main.go", 10, "abc123")
+	msg, _ := db.CreateMessage(AuthorHuman, "Comment", "src/main.go", 10, "abc123", "content")
 
 	err := db.UpdateMessageStatus(msg.ID, StatusDelivered)
 	if err != nil {
@@ -345,9 +345,9 @@ func TestGetConversationsReturnsOnlyTopLevel(t *testing.T) {
 	defer cleanup()
 
 	// Create three root conversations
-	conv1, _ := db.CreateMessage(AuthorHuman, "Conversation 1", "src/main.go", 10, "abc123")
-	conv2, _ := db.CreateMessage(AuthorHuman, "Conversation 2", "src/main.go", 20, "abc123")
-	conv3, _ := db.CreateMessage(AuthorHuman, "Conversation 3", "src/util.go", 5, "abc123")
+	conv1, _ := db.CreateMessage(AuthorHuman, "Conversation 1", "src/main.go", 10, "abc123", "content")
+	conv2, _ := db.CreateMessage(AuthorHuman, "Conversation 2", "src/main.go", 20, "abc123", "content")
+	conv3, _ := db.CreateMessage(AuthorHuman, "Conversation 3", "src/util.go", 5, "abc123", "content")
 
 	// Create replies to conv1 (should NOT appear in GetConversations)
 	db.CreateReply(AuthorAI, "Reply 1 to conv1", conv1.ID)
@@ -380,9 +380,9 @@ func TestGetConversationsWithStatusFilter(t *testing.T) {
 	defer cleanup()
 
 	// Create conversations
-	conv1, _ := db.CreateMessage(AuthorHuman, "Unresolved 1", "src/main.go", 10, "abc123")
-	conv2, _ := db.CreateMessage(AuthorHuman, "Unresolved 2", "src/main.go", 20, "abc123")
-	conv3, _ := db.CreateMessage(AuthorHuman, "To be resolved", "src/util.go", 5, "abc123")
+	conv1, _ := db.CreateMessage(AuthorHuman, "Unresolved 1", "src/main.go", 10, "abc123", "content")
+	conv2, _ := db.CreateMessage(AuthorHuman, "Unresolved 2", "src/main.go", 20, "abc123", "content")
+	conv3, _ := db.CreateMessage(AuthorHuman, "To be resolved", "src/util.go", 5, "abc123", "content")
 
 	// Add replies (should not affect conversation count)
 	db.CreateReply(AuthorAI, "Reply to conv1", conv1.ID)
