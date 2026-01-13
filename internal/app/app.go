@@ -8,14 +8,38 @@ import (
 
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
-	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/internal/messagedb"
 	"git.15b.it/eno/critic/internal/ui"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
+	"git.15b.it/eno/critic/simple-go/logger"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// FilterMode represents the current file/hunk filter mode
+type FilterMode int
+
+const (
+	// FilterModeNone shows all files and hunks (default)
+	FilterModeNone FilterMode = iota
+	// FilterModeWithComments shows only files with comments, and only hunks with comments
+	FilterModeWithComments
+	// FilterModeWithUnresolved shows only files with unresolved comments, and only hunks with unresolved comments
+	FilterModeWithUnresolved
+)
+
+// String returns a display name for the filter mode
+func (m FilterMode) String() string {
+	switch m {
+	case FilterModeWithComments:
+		return "With Comments"
+	case FilterModeWithUnresolved:
+		return "Unresolved Only"
+	default:
+		return "All"
+	}
+}
 
 // Args represents parsed command-line arguments
 type Args struct {
@@ -105,6 +129,7 @@ type Model struct {
 	extensions    []string          // File extensions to include
 	resolver      *git.BaseResolver // Base resolver with polling
 	messaging     critic.Messaging  // Messaging interface for conversations
+	filterMode    FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
 	err           error
 	width         int
 	height        int
@@ -190,6 +215,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentBase = (m.currentBase + 1) % len(m.bases)
 			logger.Info("Update: Switching to base %d: %s", m.currentBase, m.bases[m.currentBase])
 			return m, loadDiffCmd(&m)
+
+		case "F":
+			// Cycle through filter modes
+			m.filterMode = (m.filterMode + 1) % 3
+			logger.Info("Update: Switching to filter mode %d: %s", m.filterMode, m.filterMode.String())
+			// Re-apply filter to file list and update diff view
+			m.applyFilterMode()
+			cmd := m.diffView.SetFile(m.fileList.GetActiveFile())
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
 
 		case " ": // Space - page down diff view regardless of focus
 			// Scroll by height - 3 (but at least 1 row) and position cursor on second line
@@ -297,23 +332,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		if m.diff != nil {
 			logger.Info("Update: Diff loaded with %d files", len(m.diff.Files))
-			// Remember currently selected file path
-			var currentPath string
-			if activeFile := m.fileList.GetActiveFile(); activeFile != nil {
-				currentPath = activeFile.NewPath
-				if currentPath == "" {
-					currentPath = activeFile.OldPath
-				}
-			}
 
-			// Update file list with new diff
-			m.fileList.SetFiles(m.diff.Files)
-
-			// Try to restore selection to the same file
-			if currentPath != "" {
-				logger.Info("Update: Restoring selection to %s", currentPath)
-				m.fileList.SelectByPath(currentPath)
-			}
+			// Apply filter mode (this handles file selection and filtering)
+			m.applyFilterMode()
 
 			// Update diff view with (potentially) new content
 			cmd := m.diffView.SetFile(m.fileList.GetActiveFile())
@@ -398,7 +419,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd := m.diffView.RefreshFile()
 			cmds = append(cmds, cmd)
 		}
-
 
 	default:
 		// Route other messages to diff view (like diffRenderedMsg)
@@ -486,9 +506,17 @@ func (m Model) renderStatusBar() string {
 		parts = append(parts, fmt.Sprintf("[B]ase: %s → HEAD", base))
 	}
 
-	// Show file count
+	// Show filter mode
+	parts = append(parts, fmt.Sprintf("[F]ilter: %s", m.filterMode.String()))
+
+	// Show file count (filtered count if filtering)
 	if m.diff != nil {
-		parts = append(parts, fmt.Sprintf("Files: %d", len(m.diff.Files)))
+		filteredFiles := m.filterFiles(m.diff.Files)
+		if m.filterMode == FilterModeNone {
+			parts = append(parts, fmt.Sprintf("Files: %d", len(m.diff.Files)))
+		} else {
+			parts = append(parts, fmt.Sprintf("Files: %d/%d", len(filteredFiles), len(m.diff.Files)))
+		}
 	}
 
 	// Show help hint
@@ -687,6 +715,9 @@ func (m Model) renderHelpOverlay(underlay string) string {
   BASE SWITCHING
     b/B           Switch to next/previous base
 
+  FILTERING
+    F             Cycle filter mode (All → With Comments → Unresolved Only)
+
   OTHER
     r             Reload diff
     ?             Toggle this help screen
@@ -725,6 +756,72 @@ func (m Model) renderHelpOverlay(underlay string) string {
 
 	// Overlay on the main view
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, positioned)
+}
+
+// applyFilterMode filters the file list based on the current filter mode
+func (m *Model) applyFilterMode() {
+	if m.diff == nil {
+		return
+	}
+
+	// Filter files based on the current mode
+	filteredFiles := m.filterFiles(m.diff.Files)
+
+	// Remember currently selected file path
+	var currentPath string
+	if activeFile := m.fileList.GetActiveFile(); activeFile != nil {
+		currentPath = activeFile.NewPath
+		if currentPath == "" {
+			currentPath = activeFile.OldPath
+		}
+	}
+
+	// Update file list with filtered files
+	m.fileList.SetFiles(filteredFiles)
+
+	// Try to restore selection to the same file
+	if currentPath != "" {
+		m.fileList.SelectByPath(currentPath)
+	}
+
+	// Update the diff view's filter mode
+	m.diffView.SetFilterMode(ui.FilterMode(m.filterMode))
+}
+
+// filterFiles returns files that match the current filter mode
+func (m *Model) filterFiles(files []*ctypes.FileDiff) []*ctypes.FileDiff {
+	if m.filterMode == FilterModeNone {
+		return files
+	}
+
+	var filtered []*ctypes.FileDiff
+	for _, file := range files {
+		gitPath := file.NewPath
+		if file.IsDeleted {
+			gitPath = file.OldPath
+		}
+
+		// Get conversation summary for this file
+		summary, err := m.messaging.GetFileConversationSummary(gitPath)
+		if err != nil {
+			continue
+		}
+
+		switch m.filterMode {
+		case FilterModeWithComments:
+			// Include if file has any comments (resolved or unresolved)
+			if summary.HasUnresolvedComments || summary.HasResolvedComments {
+				filtered = append(filtered, file)
+			}
+		case FilterModeWithUnresolved:
+			// Include only if file has unresolved comments
+			if summary.HasUnresolvedComments {
+				filtered = append(filtered, file)
+			}
+		}
+	}
+
+	return filtered
 }
 
 // getCurrentCodeVersion returns the current git commit hash as the code version
