@@ -19,30 +19,19 @@ The MCP server communicates with Claude Code via stdio using JSON-RPC 2.0 protoc
 
 ## Configuration
 
-Add to your Claude Code MCP settings:
+Use the Claude CLI to add the MCP server:
 
-**Global** (`~/.claude/settings.json`):
-```json
-{
-  "mcpServers": {
-    "critic": {
-      "command": "critic",
-      "args": ["mcp"]
-    }
-  }
-}
+```bash
+# Add critic as an MCP server (use full path to the binary)
+claude mcp add critic -- /path/to/critic mcp
+
+# Verify it was added
+claude mcp list
 ```
 
-**Project** (`.claude/settings.json`):
-```json
-{
-  "mcpServers": {
-    "critic": {
-      "command": "/path/to/critic",
-      "args": ["mcp"]
-    }
-  }
-}
+To remove the server:
+```bash
+claude mcp remove critic
 ```
 
 ## Tools

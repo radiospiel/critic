@@ -33,30 +33,19 @@ critic
 
 ## MCP Server Configuration
 
-To use Critic with Claude Code for human-in-the-loop reviews, add to your MCP settings:
+To use Critic with Claude Code for human-in-the-loop reviews, add the MCP server using the Claude CLI:
 
-**Global settings** (`~/.claude/settings.json`):
-```json
-{
-  "mcpServers": {
-    "critic": {
-      "command": "critic",
-      "args": ["mcp"]
-    }
-  }
-}
+```bash
+# Add critic as an MCP server (use full path to the binary)
+claude mcp add critic -- /path/to/critic mcp
+
+# Verify it was added
+claude mcp list
 ```
 
-**Project settings** (`.claude/settings.json` in repo):
-```json
-{
-  "mcpServers": {
-    "critic": {
-      "command": "/path/to/critic",
-      "args": ["mcp"]
-    }
-  }
-}
+To remove the server:
+```bash
+claude mcp remove critic
 ```
 
 ## Prompting Claude to Use Critic
