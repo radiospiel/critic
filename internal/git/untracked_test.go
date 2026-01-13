@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"git.15b.it/eno/critic/simple-go/assert"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 )
 
@@ -12,9 +13,7 @@ func TestGetUntrackedFiles(t *testing.T) {
 	// This test requires a git repository
 	// We'll test with the current repo
 	files, err := GetUntrackedFiles([]string{"."}, []string{"go"})
-	if err != nil {
-		t.Fatalf("GetUntrackedFiles() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	// We can't assert specific files, but we can check the structure
 	for _, file := range files {
@@ -27,9 +26,7 @@ func TestGetUntrackedFiles(t *testing.T) {
 func TestGetUntrackedFiles_NoExtensionFilter(t *testing.T) {
 	// Test with no extension filtering
 	files, err := GetUntrackedFiles([]string{"."}, nil)
-	if err != nil {
-		t.Fatalf("GetUntrackedFiles() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Should return all untracked files
 	// Can't assert specific count, but should not error
@@ -43,90 +40,52 @@ func TestCreateUntrackedFileDiff(t *testing.T) {
 	content := "package main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n"
 
 	err := os.WriteFile(testFile, []byte(content), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	assert.NoError(t, err, "Failed to create test file")
 
 	fileDiff, err := createUntrackedFileDiff(testFile)
-	if err != nil {
-		t.Fatalf("createUntrackedFileDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Verify basic structure
-	if fileDiff.OldPath != "" {
-		t.Errorf("createUntrackedFileDiff() OldPath = %q, want empty", fileDiff.OldPath)
-	}
-	if fileDiff.NewPath != testFile {
-		t.Errorf("createUntrackedFileDiff() NewPath = %q, want %q", fileDiff.NewPath, testFile)
-	}
-	if !fileDiff.IsNew {
-		t.Error("createUntrackedFileDiff() IsNew = false, want true")
-	}
-	if fileDiff.IsDeleted {
-		t.Error("createUntrackedFileDiff() IsDeleted = true, want false")
-	}
+	assert.Equals(t, fileDiff.OldPath, "", "OldPath should be empty")
+	assert.Equals(t, fileDiff.NewPath, testFile)
+	assert.True(t, fileDiff.IsNew, "IsNew should be true")
+	assert.False(t, fileDiff.IsDeleted, "IsDeleted should be false")
 
 	// Verify hunk structure
-	if len(fileDiff.Hunks) != 1 {
-		t.Fatalf("createUntrackedFileDiff() got %d hunks, want 1", len(fileDiff.Hunks))
-	}
+	assert.Equals(t, len(fileDiff.Hunks), 1, "expected 1 hunk")
 
 	hunk := fileDiff.Hunks[0]
-	if hunk.OldStart != 0 || hunk.OldLines != 0 {
-		t.Errorf("createUntrackedFileDiff() hunk old range = %d,%d, want 0,0", hunk.OldStart, hunk.OldLines)
-	}
-	if hunk.NewStart != 1 {
-		t.Errorf("createUntrackedFileDiff() hunk NewStart = %d, want 1", hunk.NewStart)
-	}
+	assert.Equals(t, hunk.OldStart, 0)
+	assert.Equals(t, hunk.OldLines, 0)
+	assert.Equals(t, hunk.NewStart, 1)
 
 	// Verify all lines are additions
 	for i, line := range hunk.Lines {
-		if line.Type != ctypes.LineAdded {
-			t.Errorf("createUntrackedFileDiff() line %d type = %v, want LineAdded", i, line.Type)
-		}
-		if line.OldNum != 0 {
-			t.Errorf("createUntrackedFileDiff() line %d OldNum = %d, want 0", i, line.OldNum)
-		}
-		if line.NewNum != i+1 {
-			t.Errorf("createUntrackedFileDiff() line %d NewNum = %d, want %d", i, line.NewNum, i+1)
-		}
+		assert.Equals(t, line.Type, ctypes.LineAdded, "line %d should be LineAdded", i)
+		assert.Equals(t, line.OldNum, 0, "line %d OldNum should be 0", i)
+		assert.Equals(t, line.NewNum, i+1, "line %d NewNum should be %d", i, i+1)
 	}
 
 	// Verify content is preserved
 	expectedLines := []string{"package main", "", "func main() {", "\tprintln(\"hello\")", "}", ""}
-	if len(hunk.Lines) != len(expectedLines) {
-		t.Errorf("createUntrackedFileDiff() got %d lines, want %d", len(hunk.Lines), len(expectedLines))
-	} else {
-		for i, expected := range expectedLines {
-			if hunk.Lines[i].Content != expected {
-				t.Errorf("createUntrackedFileDiff() line %d content = %q, want %q", i, hunk.Lines[i].Content, expected)
-			}
-		}
+	assert.Equals(t, len(hunk.Lines), len(expectedLines), "line count mismatch")
+	for i, expected := range expectedLines {
+		assert.Equals(t, hunk.Lines[i].Content, expected, "line %d content mismatch", i)
 	}
 }
 
 func TestGetUntrackedDiff(t *testing.T) {
 	// Test with current directory
 	diff, err := GetUntrackedDiff([]string{"."}, []string{"go"})
-	if err != nil {
-		t.Fatalf("GetUntrackedDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Verify structure
-	if diff == nil {
-		t.Fatal("GetUntrackedDiff() returned nil diff")
-	}
-	if diff.Files == nil {
-		t.Fatal("GetUntrackedDiff() returned diff with nil Files")
-	}
+	assert.NotNil(t, diff, "diff should not be nil")
+	assert.NotNil(t, diff.Files, "diff.Files should not be nil")
 
 	// Verify all files are marked as new
 	for _, file := range diff.Files {
-		if !file.IsNew {
-			t.Errorf("GetUntrackedDiff() file %s IsNew = false, want true", file.NewPath)
-		}
-		if file.IsDeleted {
-			t.Errorf("GetUntrackedDiff() file %s IsDeleted = true, want false", file.NewPath)
-		}
+		assert.True(t, file.IsNew, "file %s IsNew should be true", file.NewPath)
+		assert.False(t, file.IsDeleted, "file %s IsDeleted should be false", file.NewPath)
 	}
 }

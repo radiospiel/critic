@@ -2,6 +2,8 @@ package ui
 
 import (
 	"testing"
+
+	"git.15b.it/eno/critic/simple-go/assert"
 )
 
 func TestStripBackgroundCodes(t *testing.T) {
@@ -40,9 +42,7 @@ func TestStripBackgroundCodes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := stripBackgroundCodes(tt.input)
-			if got != tt.want {
-				t.Errorf("stripBackgroundCodes() = %q, want %q", got, tt.want)
-			}
+			assert.Equals(t, got, tt.want, "stripBackgroundCodes()")
 		})
 	}
 }

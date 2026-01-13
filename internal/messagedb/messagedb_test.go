@@ -11,9 +11,7 @@ func setupTestDB(t *testing.T) (*DB, func()) {
 	t.Helper()
 
 	tmpDir, err := os.MkdirTemp("", "critic-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
+	assert.NoError(t, err, "failed to create temp dir")
 
 	db, err := New(tmpDir)
 	if err != nil {
@@ -34,34 +32,16 @@ func TestCreateMessage(t *testing.T) {
 	defer cleanup()
 
 	msg, err := db.CreateMessage(AuthorHuman, "Test comment", "src/main.go", 42, "abc123", "context")
-	if err != nil {
-		t.Fatalf("failed to create message: %v", err)
-	}
+	assert.NoError(t, err, "failed to create message")
 
-	if msg.ID == "" {
-		t.Error("expected ID to be set")
-	}
-	if msg.Author != AuthorHuman {
-		t.Errorf("expected author to be %s, got %s", AuthorHuman, msg.Author)
-	}
-	if msg.Status != StatusNew {
-		t.Errorf("expected status to be %s, got %s", StatusNew, msg.Status)
-	}
-	if msg.ReadStatus != ReadStatusRead {
-		t.Errorf("expected read_status to be %s for human message, got %s", ReadStatusRead, msg.ReadStatus)
-	}
-	if msg.Message != "Test comment" {
-		t.Errorf("expected message to be 'Test comment', got %s", msg.Message)
-	}
-	if msg.FilePath != "src/main.go" {
-		t.Errorf("expected file_path to be 'src/main.go', got %s", msg.FilePath)
-	}
-	if msg.Lineno != 42 {
-		t.Errorf("expected line_number to be 42, got %d", msg.Lineno)
-	}
-	if msg.ConversationID != msg.ID {
-		t.Errorf("expected conversation_id to equal id for root message, got %s", msg.ConversationID)
-	}
+	assert.NotEquals(t, msg.ID, "", "expected ID to be set")
+	assert.Equals(t, msg.Author, AuthorHuman)
+	assert.Equals(t, msg.Status, StatusNew)
+	assert.Equals(t, msg.ReadStatus, ReadStatusRead, "expected read_status to be read for human message")
+	assert.Equals(t, msg.Message, "Test comment")
+	assert.Equals(t, msg.FilePath, "src/main.go")
+	assert.Equals(t, msg.Lineno, 42)
+	assert.Equals(t, msg.ConversationID, msg.ID, "expected conversation_id to equal id for root message")
 }
 
 func TestCreateAIMessage(t *testing.T) {
@@ -69,16 +49,9 @@ func TestCreateAIMessage(t *testing.T) {
 	defer cleanup()
 
 	msg, err := db.CreateMessage(AuthorAI, "AI response", "src/main.go", 42, "abc123", "content")
-	if err != nil {
-		t.Fatalf("failed to create AI message: %v", err)
-	}
-
-	if msg.Author != AuthorAI {
-		t.Errorf("expected author to be %s, got %s", AuthorAI, msg.Author)
-	}
-	if msg.ReadStatus != ReadStatusUnread {
-		t.Errorf("expected read_status to be %s for AI message, got %s", ReadStatusUnread, msg.ReadStatus)
-	}
+	assert.NoError(t, err, "failed to create AI message")
+	assert.Equals(t, msg.Author, AuthorAI)
+	assert.Equals(t, msg.ReadStatus, ReadStatusUnread, "expected read_status to be unread for AI message")
 }
 
 func TestCreateReply(t *testing.T) {
@@ -87,25 +60,15 @@ func TestCreateReply(t *testing.T) {
 
 	// Create parent message
 	parent, err := db.CreateMessage(AuthorHuman, "Parent comment", "src/main.go", 42, "abc123", "conent")
-	if err != nil {
-		t.Fatalf("failed to create parent message: %v", err)
-	}
+	assert.NoError(t, err, "failed to create parent message")
 
 	// Create reply
 	reply, err := db.CreateReply(AuthorAI, "AI reply", parent.ID)
-	if err != nil {
-		t.Fatalf("failed to create reply: %v", err)
-	}
+	assert.NoError(t, err, "failed to create reply")
 
-	if reply.ConversationID != parent.ID {
-		t.Errorf("expected conversation_id to be %s, got %s", parent.ID, reply.ConversationID)
-	}
-	if reply.FilePath != parent.FilePath {
-		t.Errorf("expected file_path to match parent (%s), got %s", parent.FilePath, reply.FilePath)
-	}
-	if reply.Lineno != parent.Lineno {
-		t.Errorf("expected line_number to match parent (%d), got %d", parent.Lineno, reply.Lineno)
-	}
+	assert.Equals(t, reply.ConversationID, parent.ID)
+	assert.Equals(t, reply.FilePath, parent.FilePath)
+	assert.Equals(t, reply.Lineno, parent.Lineno)
 }
 
 func TestGetMessage(t *testing.T) {
@@ -113,33 +76,18 @@ func TestGetMessage(t *testing.T) {
 	defer cleanup()
 
 	created, err := db.CreateMessage(AuthorHuman, "Test comment", "src/main.go", 42, "abc123", "content")
-	if err != nil {
-		t.Fatalf("failed to create message: %v", err)
-	}
+	assert.NoError(t, err, "failed to create message")
 
 	retrieved, err := db.GetMessage(created.ID)
-	if err != nil {
-		t.Fatalf("failed to get message: %v", err)
-	}
-
-	if retrieved == nil {
-		t.Fatal("expected message to be found")
-	}
-	if retrieved.ID != created.ID {
-		t.Errorf("expected ID to be %s, got %s", created.ID, retrieved.ID)
-	}
-	if retrieved.Message != created.Message {
-		t.Errorf("expected message to be %s, got %s", created.Message, retrieved.Message)
-	}
+	assert.NoError(t, err, "failed to get message")
+	assert.NotNil(t, retrieved, "expected message to be found")
+	assert.Equals(t, retrieved.ID, created.ID)
+	assert.Equals(t, retrieved.Message, created.Message)
 
 	// Test non-existent message
 	notFound, err := db.GetMessage("non-existent-id")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if notFound != nil {
-		t.Error("expected nil for non-existent message")
-	}
+	assert.NoError(t, err)
+	assert.Nil(t, notFound, "expected nil for non-existent message")
 }
 
 func TestGetThreadMessages(t *testing.T) {
@@ -148,41 +96,24 @@ func TestGetThreadMessages(t *testing.T) {
 
 	// Create parent message
 	parent, err := db.CreateMessage(AuthorHuman, "Parent comment", "src/main.go", 42, "abc123", "content")
-	if err != nil {
-		t.Fatalf("failed to create parent: %v", err)
-	}
+	assert.NoError(t, err, "failed to create parent")
 
 	// Create replies
 	reply1, err := db.CreateReply(AuthorAI, "AI reply 1", parent.ID)
-	if err != nil {
-		t.Fatalf("failed to create reply 1: %v", err)
-	}
+	assert.NoError(t, err, "failed to create reply 1")
 
 	reply2, err := db.CreateReply(AuthorHuman, "Human reply 2", parent.ID)
-	if err != nil {
-		t.Fatalf("failed to create reply 2: %v", err)
-	}
+	assert.NoError(t, err, "failed to create reply 2")
 
 	// Get thread
 	thread, err := db.GetThreadMessages(parent.ID)
-	if err != nil {
-		t.Fatalf("failed to get thread: %v", err)
-	}
-
-	if len(thread) != 3 {
-		t.Fatalf("expected 3 messages in thread, got %d", len(thread))
-	}
+	assert.NoError(t, err, "failed to get thread")
+	assert.Equals(t, len(thread), 3, "expected 3 messages in thread")
 
 	// Check order (should be by created_at)
-	if thread[0].ID != parent.ID {
-		t.Error("expected first message to be parent")
-	}
-	if thread[1].ID != reply1.ID {
-		t.Error("expected second message to be reply1")
-	}
-	if thread[2].ID != reply2.ID {
-		t.Error("expected third message to be reply2")
-	}
+	assert.Equals(t, thread[0].ID, parent.ID, "expected first message to be parent")
+	assert.Equals(t, thread[1].ID, reply1.ID, "expected second message to be reply1")
+	assert.Equals(t, thread[2].ID, reply2.ID, "expected third message to be reply2")
 }
 
 func TestGetUnresolvedRootMessages(t *testing.T) {
@@ -225,21 +156,12 @@ func TestGetMessagesByFile(t *testing.T) {
 
 	// Get messages for src/main.go
 	messages, err := db.GetMessagesByFile("src/main.go")
-	if err != nil {
-		t.Fatalf("failed to get messages by file: %v", err)
-	}
-
-	if len(messages) != 2 {
-		t.Fatalf("expected 2 messages for src/main.go, got %d", len(messages))
-	}
+	assert.NoError(t, err, "failed to get messages by file")
+	assert.Equals(t, len(messages), 2, "expected 2 messages for src/main.go")
 
 	// Should be ordered by line number
-	if messages[0].ID != msg1.ID {
-		t.Error("expected msg1 to be first (line 10)")
-	}
-	if messages[1].ID != msg2.ID {
-		t.Error("expected msg2 to be second (line 20)")
-	}
+	assert.Equals(t, messages[0].ID, msg1.ID, "expected msg1 to be first (line 10)")
+	assert.Equals(t, messages[1].ID, msg2.ID, "expected msg2 to be second (line 20)")
 }
 
 func TestMarkAsResolved(t *testing.T) {
@@ -252,21 +174,15 @@ func TestMarkAsResolved(t *testing.T) {
 
 	// Mark as resolved
 	err := db.MarkAsResolved(parent.ID)
-	if err != nil {
-		t.Fatalf("failed to mark as resolved: %v", err)
-	}
+	assert.NoError(t, err, "failed to mark as resolved")
 
 	// Check parent
 	parentAfter, _ := db.GetMessage(parent.ID)
-	if parentAfter.Status != StatusResolved {
-		t.Errorf("expected parent status to be %s, got %s", StatusResolved, parentAfter.Status)
-	}
+	assert.Equals(t, parentAfter.Status, StatusResolved)
 
 	// Check reply (should also be resolved)
 	replyAfter, _ := db.GetMessage(reply.ID)
-	if replyAfter.Status != StatusResolved {
-		t.Errorf("expected reply status to be %s, got %s", StatusResolved, replyAfter.Status)
-	}
+	assert.Equals(t, replyAfter.Status, StatusResolved)
 }
 
 func TestMarkAsRead(t *testing.T) {
@@ -275,22 +191,15 @@ func TestMarkAsRead(t *testing.T) {
 
 	// Create AI message (should be unread by default)
 	msg, _ := db.CreateMessage(AuthorAI, "AI comment", "src/main.go", 10, "abc123", "content")
-
-	if msg.ReadStatus != ReadStatusUnread {
-		t.Fatalf("expected AI message to be unread initially, got %s", msg.ReadStatus)
-	}
+	assert.Equals(t, msg.ReadStatus, ReadStatusUnread, "expected AI message to be unread initially")
 
 	// Mark as read
 	err := db.MarkAsRead(msg.ID)
-	if err != nil {
-		t.Fatalf("failed to mark as read: %v", err)
-	}
+	assert.NoError(t, err, "failed to mark as read")
 
 	// Check status
 	msgAfter, _ := db.GetMessage(msg.ID)
-	if msgAfter.ReadStatus != ReadStatusRead {
-		t.Errorf("expected read_status to be %s, got %s", ReadStatusRead, msgAfter.ReadStatus)
-	}
+	assert.Equals(t, msgAfter.ReadStatus, ReadStatusRead)
 }
 
 func TestGetFilesWithUnreadAIMessages(t *testing.T) {
@@ -310,17 +219,11 @@ func TestGetFilesWithUnreadAIMessages(t *testing.T) {
 
 	// Get files with unread
 	files, err := db.GetFilesWithUnreadAIMessages()
-	if err != nil {
-		t.Fatalf("failed to get files with unread: %v", err)
-	}
+	assert.NoError(t, err, "failed to get files with unread")
 
 	// Should only have src/main.go (src/util.go was marked as read, src/test.go is human)
-	if len(files) != 1 {
-		t.Fatalf("expected 1 file with unread messages, got %d: %v", len(files), files)
-	}
-	if files[0] != "src/main.go" {
-		t.Errorf("expected src/main.go, got %s", files[0])
-	}
+	assert.Equals(t, len(files), 1, "expected 1 file with unread messages")
+	assert.Equals(t, files[0], "src/main.go")
 }
 
 func TestUpdateMessageStatus(t *testing.T) {
@@ -330,14 +233,10 @@ func TestUpdateMessageStatus(t *testing.T) {
 	msg, _ := db.CreateMessage(AuthorHuman, "Comment", "src/main.go", 10, "abc123", "content")
 
 	err := db.UpdateMessageStatus(msg.ID, StatusDelivered)
-	if err != nil {
-		t.Fatalf("failed to update status: %v", err)
-	}
+	assert.NoError(t, err, "failed to update status")
 
 	msgAfter, _ := db.GetMessage(msg.ID)
-	if msgAfter.Status != StatusDelivered {
-		t.Errorf("expected status to be %s, got %s", StatusDelivered, msgAfter.Status)
-	}
+	assert.Equals(t, msgAfter.Status, StatusDelivered)
 }
 
 func TestGetConversationsReturnsOnlyTopLevel(t *testing.T) {

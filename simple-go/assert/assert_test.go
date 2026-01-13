@@ -15,7 +15,7 @@ type mockTestingT struct {
 
 func (m *mockTestingT) Helper() {}
 
-func (m *mockTestingT) Error(args ...interface{}) {
+func (m *mockTestingT) Fatal(args ...interface{}) {
 	m.failed = true
 	m.errorMsg = fmt.Sprint(args...)
 }
@@ -56,6 +56,11 @@ func TestAssertEquals(t *testing.T) {
 
 	Equals(m, true, true)
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	Equals(m, 42, 100)
+	m.expectMockFailure(t, "assert.Equals")
 }
 
 func TestAssertNotEquals(t *testing.T) {
@@ -83,6 +88,11 @@ func TestAssertTrue(t *testing.T) {
 
 	True(m, 1 == 1, "1 should equal 1")
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	True(m, false)
+	m.expectMockFailure(t, "assert.True")
 }
 
 func TestAssertFalse(t *testing.T) {
@@ -94,6 +104,11 @@ func TestAssertFalse(t *testing.T) {
 
 	False(m, 1 == 2, "1 should not equal 2")
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	False(m, true)
+	m.expectMockFailure(t, "assert.False")
 }
 
 func TestAssertNil(t *testing.T) {
@@ -106,6 +121,11 @@ func TestAssertNil(t *testing.T) {
 
 	Nil(m, nilPtr, "nil pointer should be nil")
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	Nil(m, "not nil")
+	m.expectMockFailure(t, "assert.Nil")
 }
 
 func TestAssertNotNil(t *testing.T) {
@@ -118,6 +138,11 @@ func TestAssertNotNil(t *testing.T) {
 
 	NotNil(m, "string", "string should not be nil")
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	NotNil(m, nil)
+	m.expectMockFailure(t, "assert.NotNil")
 }
 
 func TestAssertError(t *testing.T) {
@@ -149,6 +174,11 @@ func TestAssertNoError(t *testing.T) {
 
 	NoError(m, nil)
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	NoError(m, errors.New("some error"))
+	m.expectMockFailure(t, "assert.NoError")
 }
 
 func TestAssertContainsString(t *testing.T) {

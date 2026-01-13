@@ -44,9 +44,7 @@ func TestGetFileContent_FromWorkingDirectory(t *testing.T) {
 
 func mustGetFileContent(t *testing.T, path string, revision string) string {
 	content, err := git.GetFileContent(path, revision)
-	if err != nil {
-		t.Fatalf("git.GetFileContent(%v, %v) error = %v", path, revision, err)
-	}
+	assert.NoError(t, err, "git.GetFileContent(%v, %v)", path, revision)
 	return content
 }
 
@@ -70,21 +68,15 @@ func TestGetFileContent_DifferentRevisions(t *testing.T) {
 
 	// Test HEAD (should be version 3)
 	content := mustGetFileContent(t, "history.txt", "HEAD")
-	if content != content3 {
-		t.Errorf("git.GetFileContent(HEAD) = %q, want %q", content, content3)
-	}
+	assert.Equals(t, content, content3, "git.GetFileContent(HEAD)")
 
 	// Test HEAD~1 (should be version 2)
 	content = mustGetFileContent(t, "history.txt", "HEAD~1")
-	if content != content2 {
-		t.Errorf("git.GetFileContent(HEAD~1) = %q, want %q", content, content2)
-	}
+	assert.Equals(t, content, content2, "git.GetFileContent(HEAD~1)")
 
 	// Test HEAD~2 (should be version 1)
 	content = mustGetFileContent(t, "history.txt", "HEAD~2")
-	if content != content1 {
-		t.Errorf("git.GetFileContent(HEAD~2) = %q, want %q", content, content1)
-	}
+	assert.Equals(t, content, content1, "git.GetFileContent(HEAD~2)")
 }
 
 func TestGetFileContent_SpecificCommitHash(t *testing.T) {
@@ -187,7 +179,5 @@ func TestGetFileContent_EmptyFile(t *testing.T) {
 
 	// Get empty file content
 	content := mustGetFileContent(t, "empty.txt", "HEAD")
-	if content != "" {
-		t.Errorf("git.GetFileContent() = %q, want empty string", content)
-	}
+	assert.Equals(t, content, "", "git.GetFileContent() for empty file")
 }

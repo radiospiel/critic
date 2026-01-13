@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"testing"
+
+	"git.15b.it/eno/critic/simple-go/assert"
 )
 
 // testServer creates a server with custom io for testing
@@ -66,73 +68,43 @@ func TestServerInitialize(t *testing.T) {
 		ProtocolVersion: "2024-11-05",
 		ClientInfo:      ClientInfo{Name: "test", Version: "1.0"},
 	}, 1)
-	if err != nil {
-		t.Fatalf("Failed to send request: %v", err)
-	}
+	assert.NoError(t, err, "Failed to send request")
 
 	// Process the request
 	line, _ := ts.reader.ReadBytes('\n')
 	err = ts.handleMessage(line)
-	if err != nil {
-		t.Fatalf("Failed to handle message: %v", err)
-	}
+	assert.NoError(t, err, "Failed to handle message")
 
 	// Read response
 	resp, err := ts.readResponse()
-	if err != nil {
-		t.Fatalf("Failed to read response: %v", err)
-	}
-
-	if resp.Error != nil {
-		t.Errorf("Unexpected error: %v", resp.Error)
-	}
+	assert.NoError(t, err, "Failed to read response")
+	assert.Nil(t, resp.Error, "Unexpected error: %v", resp.Error)
 
 	result, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		t.Fatalf("Expected map result, got %T", resp.Result)
-	}
-
-	if result["protocolVersion"] != ProtocolVersion {
-		t.Errorf("Expected protocol version %s, got %v", ProtocolVersion, result["protocolVersion"])
-	}
+	assert.True(t, ok, "Expected map result, got %T", resp.Result)
+	assert.Equals(t, result["protocolVersion"], ProtocolVersion)
 }
 
 func TestServerToolsList(t *testing.T) {
 	ts := newTestServer()
 
 	err := ts.sendRequest("tools/list", nil, 1)
-	if err != nil {
-		t.Fatalf("Failed to send request: %v", err)
-	}
+	assert.NoError(t, err, "Failed to send request")
 
 	line, _ := ts.reader.ReadBytes('\n')
 	err = ts.handleMessage(line)
-	if err != nil {
-		t.Fatalf("Failed to handle message: %v", err)
-	}
+	assert.NoError(t, err, "Failed to handle message")
 
 	resp, err := ts.readResponse()
-	if err != nil {
-		t.Fatalf("Failed to read response: %v", err)
-	}
-
-	if resp.Error != nil {
-		t.Errorf("Unexpected error: %v", resp.Error)
-	}
+	assert.NoError(t, err, "Failed to read response")
+	assert.Nil(t, resp.Error, "Unexpected error: %v", resp.Error)
 
 	result, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		t.Fatalf("Expected map result, got %T", resp.Result)
-	}
+	assert.True(t, ok, "Expected map result, got %T", resp.Result)
 
 	tools, ok := result["tools"].([]interface{})
-	if !ok {
-		t.Fatalf("Expected tools array, got %T", result["tools"])
-	}
-
-	if len(tools) != 3 {
-		t.Errorf("Expected 3 tools, got %d", len(tools))
-	}
+	assert.True(t, ok, "Expected tools array, got %T", result["tools"])
+	assert.Equals(t, len(tools), 3, "Expected 3 tools")
 
 	// Check tool names
 	toolNames := make(map[string]bool)
@@ -148,9 +120,7 @@ func TestServerToolsList(t *testing.T) {
 	}
 
 	for _, name := range expectedTools {
-		if !toolNames[name] {
-			t.Errorf("Missing %s tool", name)
-		}
+		assert.True(t, toolNames[name], "Missing %s tool", name)
 	}
 }
 
@@ -158,52 +128,31 @@ func TestServerUnknownMethod(t *testing.T) {
 	ts := newTestServer()
 
 	err := ts.sendRequest("unknown/method", nil, 1)
-	if err != nil {
-		t.Fatalf("Failed to send request: %v", err)
-	}
+	assert.NoError(t, err, "Failed to send request")
 
 	line, _ := ts.reader.ReadBytes('\n')
 	err = ts.handleMessage(line)
-	if err != nil {
-		t.Fatalf("Failed to handle message: %v", err)
-	}
+	assert.NoError(t, err, "Failed to handle message")
 
 	resp, err := ts.readResponse()
-	if err != nil {
-		t.Fatalf("Failed to read response: %v", err)
-	}
-
-	if resp.Error == nil {
-		t.Error("Expected error for unknown method")
-	}
-
-	if resp.Error.Code != MethodNotFound {
-		t.Errorf("Expected MethodNotFound error code, got %d", resp.Error.Code)
-	}
+	assert.NoError(t, err, "Failed to read response")
+	assert.NotNil(t, resp.Error, "Expected error for unknown method")
+	assert.Equals(t, resp.Error.Code, MethodNotFound, "Expected MethodNotFound error code")
 }
 
 func TestServerPing(t *testing.T) {
 	ts := newTestServer()
 
 	err := ts.sendRequest("ping", nil, 1)
-	if err != nil {
-		t.Fatalf("Failed to send request: %v", err)
-	}
+	assert.NoError(t, err, "Failed to send request")
 
 	line, _ := ts.reader.ReadBytes('\n')
 	err = ts.handleMessage(line)
-	if err != nil {
-		t.Fatalf("Failed to handle message: %v", err)
-	}
+	assert.NoError(t, err, "Failed to handle message")
 
 	resp, err := ts.readResponse()
-	if err != nil {
-		t.Fatalf("Failed to read response: %v", err)
-	}
-
-	if resp.Error != nil {
-		t.Errorf("Unexpected error: %v", resp.Error)
-	}
+	assert.NoError(t, err, "Failed to read response")
+	assert.Nil(t, resp.Error, "Unexpected error: %v", resp.Error)
 }
 
 func TestInvalidJSON(t *testing.T) {
@@ -223,7 +172,7 @@ func TestInvalidJSON(t *testing.T) {
 		t.Fatalf("Failed to read response: %v", err)
 	}
 
-	if resp != nil && resp.Error == nil {
-		t.Error("Expected error for invalid JSON")
+	if resp != nil {
+		assert.NotNil(t, resp.Error, "Expected error for invalid JSON")
 	}
 }

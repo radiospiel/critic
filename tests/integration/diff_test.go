@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/samber/lo"
-	"git.15b.it/eno/critic/simple-go/assert"
 	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/simple-go/assert"
 	"git.15b.it/eno/critic/simple-go/must"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 )
@@ -26,29 +26,15 @@ func TestGetDiff_UnstagedMode(t *testing.T) {
 	// Modify the file (unstaged)
 	must.WriteFile("test.go", "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n")
 
-
 	// Get unstaged diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
-
-	if diff == nil {
-		t.Fatal("git.GetDiff() returned nil")
-	}
-
-	if len(diff.Files) != 1 {
-		t.Fatalf("Expected 1 file in diff, got %d", len(diff.Files))
-	}
+	assert.NoError(t, err)
+	assert.NotNil(t, diff)
+	assert.Equals(t, len(diff.Files), 1, "expected 1 file in diff")
 
 	file := diff.Files[0]
-	if file.NewPath != "test.go" {
-		t.Errorf("File path = %q, want test.go", file.NewPath)
-	}
-
-	if len(file.Hunks) == 0 {
-		t.Fatal("Expected at least one hunk")
-	}
+	assert.Equals(t, file.NewPath, "test.go")
+	assert.True(t, len(file.Hunks) > 0, "Expected at least one hunk")
 
 	// Verify we have added lines using lo
 	allLines := lo.FlatMap(file.Hunks, func(hunk *ctypes.Hunk, _ int) []*ctypes.Line {
@@ -72,21 +58,11 @@ func TestGetDiff_LastCommitMode(t *testing.T) {
 	must.WriteFile("test.go", "package main\n\nfunc test() {}\n")
 	CommitFile(t, "test.go")
 
-
 	// Get last commit diff
 	diff, err := git.GetDiff([]string{}, git.DiffToLastCommit)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
-
-	if diff == nil {
-		t.Fatal("git.GetDiff() returned nil")
-	}
-
-	// Should show the file added in last commit
-	if len(diff.Files) == 0 {
-		t.Fatal("Expected files in last commit diff")
-	}
+	assert.NoError(t, err)
+	assert.NotNil(t, diff)
+	assert.True(t, len(diff.Files) > 0, "Expected files in last commit diff")
 
 	// Find test.go in the diff
 	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
@@ -115,21 +91,11 @@ func TestGetDiff_MergeBaseMode(t *testing.T) {
 	CommitFile(t, "feature.go")
 	must.WriteFile("initial.go", "package main\n\n// Modified\n")
 
-
 	// Get diff from merge base
 	diff, err := git.GetDiff([]string{}, git.DiffToMergeBase)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
-
-	if diff == nil {
-		t.Fatal("git.GetDiff() returned nil")
-	}
-
-	// Should show both committed and uncommitted changes
-	if len(diff.Files) < 1 {
-		t.Fatal("Expected at least 1 file in merge base diff")
-	}
+	assert.NoError(t, err)
+	assert.NotNil(t, diff)
+	assert.True(t, len(diff.Files) >= 1, "Expected at least 1 file in merge base diff")
 
 	// Should include the new file
 	foundNew := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
@@ -150,16 +116,10 @@ func TestGetDiff_EmptyDiff(t *testing.T) {
 	must.WriteFile("test.go", "package main\n")
 	CommitFile(t, "test.go")
 
-
 	// Get unstaged diff (should be empty)
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
-
-	if len(diff.Files) != 0 {
-		t.Errorf("Expected no files in diff, got %d", len(diff.Files))
-	}
+	assert.NoError(t, err)
+	assert.Equals(t, len(diff.Files), 0, "Expected no files in diff")
 }
 
 func TestGetDiff_PathFiltering(t *testing.T) {
@@ -178,20 +138,11 @@ func TestGetDiff_PathFiltering(t *testing.T) {
 	must.WriteFile("file2.go", "package test\n\n// Modified\n")
 	must.WriteFile("file3.go", "package other\n\n// Modified\n")
 
-
 	// Get diff for only file1.go
 	diff, err := git.GetDiff([]string{"file1.go"}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
-
-	if len(diff.Files) != 1 {
-		t.Fatalf("Expected 1 file in diff, got %d", len(diff.Files))
-	}
-
-	if diff.Files[0].NewPath != "file1.go" {
-		t.Errorf("Expected file1.go, got %s", diff.Files[0].NewPath)
-	}
+	assert.NoError(t, err)
+	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
+	assert.Equals(t, diff.Files[0].NewPath, "file1.go")
 }
 
 func TestGetDiff_MultipleFiles(t *testing.T) {
@@ -207,16 +158,10 @@ func TestGetDiff_MultipleFiles(t *testing.T) {
 	must.WriteFile("file1.go", "package main\n\nimport \"fmt\"\n")
 	must.WriteFile("file2.go", "package test\n\nimport \"testing\"\n")
 
-
 	// Get unstaged diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
-
-	if len(diff.Files) != 2 {
-		t.Errorf("Expected 2 files in diff, got %d", len(diff.Files))
-	}
+	assert.NoError(t, err)
+	assert.Equals(t, len(diff.Files), 2, "Expected 2 files in diff")
 
 	// Verify both files are in diff
 	hasFile1 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
@@ -246,9 +191,7 @@ func TestGetDiff_NewFile(t *testing.T) {
 	exec.Command("git", "branch", "-M", "main").Run()
 
 	diff, err := git.GetDiff([]string{}, git.DiffToMergeBase)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Should show the new file
 	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
@@ -271,12 +214,9 @@ func TestGetDiff_DeletedFile(t *testing.T) {
 	// Delete one file
 	must.Remove("delete.go")
 
-
 	// Get unstaged diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Should show the deleted file
 	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
@@ -302,20 +242,11 @@ func TestGetDiff_FileInSubdirectory(t *testing.T) {
 	// Modify the file
 	must.WriteFile(filePath, "package pkg\n\n// Modified\n")
 
-
 	// Get diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
-
-	if len(diff.Files) != 1 {
-		t.Fatalf("Expected 1 file in diff, got %d", len(diff.Files))
-	}
-
-	if diff.Files[0].NewPath != "src/pkg/module.go" {
-		t.Errorf("Expected src/pkg/module.go, got %s", diff.Files[0].NewPath)
-	}
+	assert.NoError(t, err)
+	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
+	assert.Equals(t, diff.Files[0].NewPath, "src/pkg/module.go")
 }
 
 func TestGetDiff_MultiplePathsFilter(t *testing.T) {
@@ -334,16 +265,10 @@ func TestGetDiff_MultiplePathsFilter(t *testing.T) {
 	must.WriteFile("file2.go", "package test\n\n// Modified\n")
 	must.WriteFile("file3.go", "package other\n\n// Modified\n")
 
-
 	// Get diff for file1.go and file2.go only
 	diff, err := git.GetDiff([]string{"file1.go", "file2.go"}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
-
-	if len(diff.Files) != 2 {
-		t.Fatalf("Expected 2 files in diff, got %d", len(diff.Files))
-	}
+	assert.NoError(t, err)
+	assert.Equals(t, len(diff.Files), 2, "Expected 2 files in diff")
 
 	// Verify file3.go is not included
 	hasFile3 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
@@ -374,21 +299,11 @@ func TestGetDiff_LargeFile(t *testing.T) {
 	}
 	must.WriteFile("large.go", modifiedContent)
 
-
 	// Get diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
-
-	if len(diff.Files) != 1 {
-		t.Fatalf("Expected 1 file in diff, got %d", len(diff.Files))
-	}
-
-	// Should have hunks
-	if len(diff.Files[0].Hunks) == 0 {
-		t.Error("Expected hunks in large file diff")
-	}
+	assert.NoError(t, err)
+	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
+	assert.True(t, len(diff.Files[0].Hunks) > 0, "Expected hunks in large file diff")
 }
 
 func TestDiffMode_String(t *testing.T) {
@@ -404,10 +319,7 @@ func TestDiffMode_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
-			actual := tt.mode.String()
-			if actual != tt.expected {
-				t.Errorf("DiffMode.String() = %q, want %q", actual, tt.expected)
-			}
+			assert.Equals(t, tt.mode.String(), tt.expected)
 		})
 	}
 }
@@ -424,16 +336,10 @@ func TestGetDiff_WithContextLines(t *testing.T) {
 	modified := "line 1\nline 2\nline 3\nMODIFIED\nline 5\nline 6\nline 7\n"
 	must.WriteFile("context.txt", modified)
 
-
 	// Get diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("git.GetDiff() error = %v", err)
-	}
-
-	if len(diff.Files) != 1 {
-		t.Fatalf("Expected 1 file in diff, got %d", len(diff.Files))
-	}
+	assert.NoError(t, err)
+	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
 
 	hunk := diff.Files[0].Hunks[0]
 
@@ -468,14 +374,8 @@ func TestGetDiff_AmbiguousFilename(t *testing.T) {
 	// Get diff for the specific file
 	// This should work correctly with "--" separator
 	diff, err := git.GetDiff([]string{"HEAD"}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("GetDiff failed: %v", err)
-	}
-
-	// Verify we got a diff for the file
-	if len(diff.Files) == 0 {
-		t.Fatal("Expected diff for file 'HEAD', got empty diff")
-	}
+	assert.NoError(t, err)
+	assert.True(t, len(diff.Files) > 0, "Expected diff for file 'HEAD', got empty diff")
 
 	// Verify the diff is for the file "HEAD", not a git reference
 	foundFile := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {

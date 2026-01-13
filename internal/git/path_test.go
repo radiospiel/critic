@@ -3,6 +3,8 @@ package git
 import (
 	"path/filepath"
 	"testing"
+
+	"git.15b.it/eno/critic/simple-go/assert"
 )
 
 func TestAbsPathToGitPath(t *testing.T) {
@@ -17,9 +19,7 @@ func TestAbsPathToGitPath(t *testing.T) {
 	gitPath := AbsPathToGitPath(absPath)
 
 	expected := "docs/CLI.md"
-	if gitPath != expected {
-		t.Errorf("AbsPathToGitPath(%q) = %q, want %q", absPath, gitPath, expected)
-	}
+	assert.Equals(t, gitPath, expected, "AbsPathToGitPath(%q)", absPath)
 
 	t.Logf("Git root: %s", gitRoot)
 	t.Logf("Abs path: %s", absPath)
