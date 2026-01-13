@@ -9,37 +9,50 @@ import (
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/highlight"
-	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
+	"git.15b.it/eno/critic/simple-go/logger"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
+// FilterMode represents the current file/hunk filter mode
+type FilterMode int
+
+const (
+	// FilterModeNone shows all files and hunks (default)
+	FilterModeNone FilterMode = iota
+	// FilterModeWithComments shows only files with comments, and only hunks with comments
+	FilterModeWithComments
+	// FilterModeWithUnresolved shows only files with unresolved comments, and only hunks with unresolved comments
+	FilterModeWithUnresolved
+)
+
 // DiffViewModel represents the diff viewer pane
 type DiffViewModel struct {
-	file                *ctypes.FileDiff
-	viewport            viewport.Model
-	width               int
-	height              int
-	ready               bool
-	highlighter         *highlight.Highlighter
-	cachedContent       string
-	cachedFile          *ctypes.FileDiff
-	highlightingEnabled bool
-	highlightTime       time.Duration // Accumulated syntax highlighting time
-	cursorLine          int           // Current active line (0-based)
-	totalLines          int           // Total number of lines in rendered diff
-	focused              bool                // Whether this pane is focused
-	navigableLines       []int               // Line numbers that can have cursor (diff lines only)
+	file                 *ctypes.FileDiff
+	viewport             viewport.Model
+	width                int
+	height               int
+	ready                bool
+	highlighter          *highlight.Highlighter
+	cachedContent        string
+	cachedFile           *ctypes.FileDiff
+	highlightingEnabled  bool
+	highlightTime        time.Duration // Accumulated syntax highlighting time
+	cursorLine           int           // Current active line (0-based)
+	totalLines           int           // Total number of lines in rendered diff
+	focused              bool          // Whether this pane is focused
+	navigableLines       []int         // Line numbers that can have cursor (diff lines only)
 	messaging            critic.Messaging
-	commentLines         map[int]int         // Maps rendered line number to source line number for comment lines
-	sourceLines          map[int]int         // Maps rendered line number to source line number for all diff lines
-	preserveCursorLine   int                 // Source line to restore cursor to after refresh (0 = don't preserve)
-	lineConversationUUID map[int]string      // Maps rendered line number to conversation UUID
-	gotoBottomOnLoad     bool                // If true, go to bottom after next file load
+	commentLines         map[int]int    // Maps rendered line number to source line number for comment lines
+	sourceLines          map[int]int    // Maps rendered line number to source line number for all diff lines
+	preserveCursorLine   int            // Source line to restore cursor to after refresh (0 = don't preserve)
+	lineConversationUUID map[int]string // Maps rendered line number to conversation UUID
+	gotoBottomOnLoad     bool           // If true, go to bottom after next file load
+	filterMode           FilterMode     // Current filter mode for hunk filtering
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -662,6 +675,53 @@ func (m *DiffViewModel) SetMessaging(messaging critic.Messaging) {
 	m.messaging = messaging
 }
 
+// SetFilterMode sets the filter mode for hunk filtering
+func (m *DiffViewModel) SetFilterMode(mode FilterMode) {
+	if m.filterMode != mode {
+		m.filterMode = mode
+		// Clear cache to force re-render with new filter
+		m.cachedFile = nil
+	}
+}
+
+// filterHunks filters hunks based on the current filter mode
+func (m *DiffViewModel) filterHunks(hunks []*ctypes.Hunk, conversationsByLine map[int]*critic.Conversation) []*ctypes.Hunk {
+	// If no filter, return all hunks
+	if m.filterMode == FilterModeNone {
+		return hunks
+	}
+
+	var filtered []*ctypes.Hunk
+	for _, hunk := range hunks {
+		if m.hunkMatchesFilter(hunk, conversationsByLine) {
+			filtered = append(filtered, hunk)
+		}
+	}
+
+	return filtered
+}
+
+// hunkMatchesFilter checks if a hunk should be included based on the current filter mode
+func (m *DiffViewModel) hunkMatchesFilter(hunk *ctypes.Hunk, conversationsByLine map[int]*critic.Conversation) bool {
+	for _, line := range hunk.Lines {
+		if line.NewNum > 0 {
+			if conv, exists := conversationsByLine[line.NewNum]; exists {
+				switch m.filterMode {
+				case FilterModeWithComments:
+					// Any comment matches
+					return true
+				case FilterModeWithUnresolved:
+					// Only unresolved comments match
+					if conv.Status != critic.StatusResolved {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 // GetConversationUUIDAtLine returns the conversation UUID for a rendered line
 func (m *DiffViewModel) GetConversationUUIDAtLine(renderedLine int) string {
 	if m.lineConversationUUID == nil {
@@ -753,9 +813,9 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	b.WriteString("\n")
 
 	// Highlight files with appropriate background styles
-	var oldFileDeleted map[int]string  // old file with deleted background
-	var newFileAdded map[int]string    // new file with added background
-	var newFileContext map[int]string  // new file with context background
+	var oldFileDeleted map[int]string // old file with deleted background
+	var newFileAdded map[int]string   // new file with added background
+	var newFileContext map[int]string // new file with context background
 
 	if m.highlightingEnabled {
 		hlStart := time.Now()
@@ -765,8 +825,11 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		m.highlightTime += time.Since(hlStart)
 	}
 
+	// Filter hunks based on filter mode
+	hunksToRender := m.filterHunks(m.file.Hunks, conversationsByLine)
+
 	// Render each hunk
-	for hunkIdx, hunk := range m.file.Hunks {
+	for hunkIdx, hunk := range hunksToRender {
 		// Render hunk header
 		hunkHeader := fmt.Sprintf("@@ -%d,%d +%d,%d @@", hunk.OldStart, hunk.OldLines, hunk.NewStart, hunk.NewLines)
 		if hunk.Header != "" {
@@ -838,7 +901,7 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		}
 
 		// Add spacing between hunks
-		if hunkIdx < len(m.file.Hunks)-1 {
+		if hunkIdx < len(hunksToRender)-1 {
 			b.WriteString(m.renderLineWithCursor(m.truncateToWidth(""), lineNum))
 			lineNum++
 			b.WriteString("\n")
@@ -1223,7 +1286,7 @@ func (m *DiffViewModel) truncateToWidth(line string) string {
 		// Pad to full width - need to preserve the last background color for padding
 		// Extract the last background color from the line (if any)
 		lastBg := extractLastBackground(line)
-		padding := strings.Repeat(" ", m.width - visibleWidth)
+		padding := strings.Repeat(" ", m.width-visibleWidth)
 		if lastBg != "" {
 			// Apply the background color to padding spaces
 			return line + lastBg + padding + "\x1b[0m"
@@ -1258,7 +1321,7 @@ func (m *DiffViewModel) ensureFullLineBackground(line string, lineType ctypes.Li
 
 	padding := ""
 	if visibleWidth < m.width {
-		padding = strings.Repeat(" ", m.width - visibleWidth)
+		padding = strings.Repeat(" ", m.width-visibleWidth)
 	}
 
 	// Wrap entire line with background: bg + content + padding + reset
