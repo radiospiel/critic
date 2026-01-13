@@ -3,6 +3,7 @@ package io
 import (
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -121,27 +122,77 @@ func TestSectionPipe_TakeZero(t *testing.T) {
 }
 
 func TestSectionPipe_LargeInput(t *testing.T) {
-	// Test with a large number of lines to ensure draining works
-	pipe := NewSectionPipe(5, 3)
-	pr, pw := pipe.Pipe()
+	// Test with ~1MB of base64 encoded random data piped through SectionPipe
+	// base64 output has 76 chars per line + newline = 77 bytes per line
+	// 1024768 bytes / 77 ≈ 13308 lines
 
-	go func() {
-		defer pw.Close()
-		for i := 1; i <= 1000; i++ {
-			pw.Write([]byte("line content\n"))
+	t.Run("lines 5 to 10", func(t *testing.T) {
+		// Capture lines 5-10 (skip 4, take 6)
+		pipe := NewSectionPipe(4, 6)
+		pr, pw := pipe.Pipe()
+
+		cmd := exec.Command("bash", "-c", "base64 /dev/urandom | head -c 1024768")
+		cmd.Stdout = pw
+
+		go func() {
+			defer pw.Close()
+			cmd.Run()
+		}()
+
+		output, err := io.ReadAll(pr)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-	}()
 
-	output, err := io.ReadAll(pr)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+		lines := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
+		if len(lines) != 6 {
+			t.Errorf("expected 6 lines, got %d", len(lines))
+		}
 
-	// Should have exactly 3 lines
-	lines := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
-	if len(lines) != 3 {
-		t.Errorf("expected 3 lines, got %d", len(lines))
-	}
+		// Each line should be base64 encoded (76 chars typically)
+		for i, line := range lines {
+			if len(line) == 0 {
+				t.Errorf("line %d is empty", i)
+			}
+			if len(line) > 77 {
+				t.Errorf("line %d unexpectedly long: %d chars", i, len(line))
+			}
+		}
+	})
+
+	t.Run("lines 10000 to 10005", func(t *testing.T) {
+		// Capture lines 10000-10005 (skip 9999, take 6)
+		pipe := NewSectionPipe(9999, 6)
+		pr, pw := pipe.Pipe()
+
+		cmd := exec.Command("bash", "-c", "base64 /dev/urandom | head -c 1024768")
+		cmd.Stdout = pw
+
+		go func() {
+			defer pw.Close()
+			cmd.Run()
+		}()
+
+		output, err := io.ReadAll(pr)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		lines := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
+		if len(lines) != 6 {
+			t.Errorf("expected 6 lines, got %d", len(lines))
+		}
+
+		// Each line should be base64 encoded (76 chars typically)
+		for i, line := range lines {
+			if len(line) == 0 {
+				t.Errorf("line %d is empty", i)
+			}
+			if len(line) > 77 {
+				t.Errorf("line %d unexpectedly long: %d chars", i, len(line))
+			}
+		}
+	})
 }
 
 func TestSectionPipe_MultipleWrites(t *testing.T) {
