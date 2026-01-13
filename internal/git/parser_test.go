@@ -10,9 +10,7 @@ import (
 
 func TestParseDiff_Empty(t *testing.T) {
 	actual, err := ParseDiff("")
-	if err != nil {
-		t.Fatalf("ParseDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	expected := &ctypes.Diff{
 		Files: []*ctypes.FileDiff{},
@@ -32,9 +30,7 @@ func TestParseDiff_SingleFile(t *testing.T) {
  func main() {`
 
 	actual, err := ParseDiff(input)
-	if err != nil {
-		t.Fatalf("ParseDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	expected := &ctypes.Diff{
 		Files: []*ctypes.FileDiff{
@@ -78,9 +74,7 @@ diff --git a/file2.go b/file2.go
 +another new`
 
 	actual, err := ParseDiff(input)
-	if err != nil {
-		t.Fatalf("ParseDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	expected := &ctypes.Diff{
 		Files: []*ctypes.FileDiff{
@@ -136,9 +130,7 @@ func TestParseDiff_MultipleHunks(t *testing.T) {
 +line eleven`
 
 	actual, err := ParseDiff(input)
-	if err != nil {
-		t.Fatalf("ParseDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	expected := &ctypes.Diff{
 		Files: []*ctypes.FileDiff{
@@ -189,9 +181,7 @@ new file mode 100644
 +func main() {}`
 
 	actual, err := ParseDiff(input)
-	if err != nil {
-		t.Fatalf("ParseDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	expected := &ctypes.Diff{
 		Files: []*ctypes.FileDiff{
@@ -231,9 +221,7 @@ deleted file mode 100644
 -func main() {}`
 
 	actual, err := ParseDiff(input)
-	if err != nil {
-		t.Fatalf("ParseDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	expected := &ctypes.Diff{
 		Files: []*ctypes.FileDiff{
@@ -272,9 +260,7 @@ rename to new.go
  package main`
 
 	actual, err := ParseDiff(input)
-	if err != nil {
-		t.Fatalf("ParseDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	expected := &ctypes.Diff{
 		Files: []*ctypes.FileDiff{
@@ -305,9 +291,7 @@ func TestParseDiff_BinaryFile(t *testing.T) {
 Binary files a/image.png and b/image.png differ`
 
 	actual, err := ParseDiff(input)
-	if err != nil {
-		t.Fatalf("ParseDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	expected := &ctypes.Diff{
 		Files: []*ctypes.FileDiff{
@@ -336,9 +320,7 @@ func TestParseDiff_LineNumbers(t *testing.T) {
  line 8`
 
 	actual, err := ParseDiff(input)
-	if err != nil {
-		t.Fatalf("ParseDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	expected := &ctypes.Diff{
 		Files: []*ctypes.FileDiff{
@@ -378,9 +360,7 @@ new mode 100755
  #!/bin/bash`
 
 	actual, err := ParseDiff(input)
-	if err != nil {
-		t.Fatalf("ParseDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	expected := &ctypes.Diff{
 		Files: []*ctypes.FileDiff{
@@ -448,14 +428,9 @@ func TestSplitLines(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := splitLines(tt.input)
-			if len(got) != len(tt.want) {
-				t.Errorf("splitLines() length = %d, want %d", len(got), len(tt.want))
-				return
-			}
+			assert.Equals(t, len(got), len(tt.want), "splitLines() length mismatch")
 			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Errorf("splitLines()[%d] = %q, want %q", i, got[i], tt.want[i])
-				}
+				assert.Equals(t, got[i], tt.want[i], "splitLines()[%d] mismatch", i)
 			}
 		})
 	}

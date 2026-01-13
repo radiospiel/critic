@@ -1,6 +1,10 @@
 package types
 
-import "testing"
+import (
+	"testing"
+
+	"git.15b.it/eno/critic/simple-go/assert"
+)
 
 func TestLineType_String(t *testing.T) {
 	tests := []struct {
@@ -32,10 +36,7 @@ func TestLineType_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.lineType.String()
-			if got != tt.want {
-				t.Errorf("LineType.String() = %q, want %q", got, tt.want)
-			}
+			assert.Equals(t, tt.lineType.String(), tt.want)
 		})
 	}
 }
@@ -45,12 +46,8 @@ func TestStructCreation(t *testing.T) {
 	diff := &Diff{
 		Files: []*FileDiff{},
 	}
-	if diff == nil {
-		t.Error("Failed to create Diff")
-	}
-	if diff.Files == nil {
-		t.Error("Diff.Files should not be nil")
-	}
+	assert.NotNil(t, diff, "Failed to create Diff")
+	assert.NotNil(t, diff.Files, "Diff.Files should not be nil")
 
 	// Test FileDiff creation
 	fileDiff := &FileDiff{
@@ -59,12 +56,8 @@ func TestStructCreation(t *testing.T) {
 		IsRenamed: true,
 		Hunks:     []*Hunk{},
 	}
-	if fileDiff.OldPath != "old.go" {
-		t.Errorf("FileDiff.OldPath = %q, want %q", fileDiff.OldPath, "old.go")
-	}
-	if !fileDiff.IsRenamed {
-		t.Error("FileDiff.IsRenamed should be true")
-	}
+	assert.Equals(t, fileDiff.OldPath, "old.go")
+	assert.True(t, fileDiff.IsRenamed, "FileDiff.IsRenamed should be true")
 
 	// Test Hunk creation
 	hunk := &Hunk{
@@ -75,9 +68,7 @@ func TestStructCreation(t *testing.T) {
 		Header:   "func main() {",
 		Lines:    []*Line{},
 	}
-	if hunk.OldStart != 10 {
-		t.Errorf("Hunk.OldStart = %d, want %d", hunk.OldStart, 10)
-	}
+	assert.Equals(t, hunk.OldStart, 10)
 
 	// Test Line creation
 	line := &Line{
@@ -86,10 +77,6 @@ func TestStructCreation(t *testing.T) {
 		OldNum:  0,
 		NewNum:  16,
 	}
-	if line.Type != LineAdded {
-		t.Errorf("Line.Type = %v, want %v", line.Type, LineAdded)
-	}
-	if line.OldNum != 0 {
-		t.Errorf("Line.OldNum = %d, want %d for added line", line.OldNum, 0)
-	}
+	assert.Equals(t, line.Type, LineAdded)
+	assert.Equals(t, line.OldNum, 0, "OldNum should be 0 for added line")
 }

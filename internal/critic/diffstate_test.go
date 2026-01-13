@@ -3,6 +3,7 @@ package critic
 import (
 	"testing"
 
+	"git.15b.it/eno/critic/simple-go/assert"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 )
 
@@ -19,9 +20,7 @@ func TestFileState_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
-			if got := tt.state.String(); got != tt.want {
-				t.Errorf("FileState.String() = %v, want %v", got, tt.want)
-			}
+			assert.Equals(t, tt.state.String(), tt.want)
 		})
 	}
 }
@@ -37,8 +36,8 @@ func TestGitDiffState_GetFiles(t *testing.T) {
 					IsNew:   true,
 				},
 				{
-					OldPath: "deleted.go",
-					NewPath: "deleted.go",
+					OldPath:   "deleted.go",
+					NewPath:   "deleted.go",
 					IsDeleted: true,
 				},
 				{
@@ -50,39 +49,25 @@ func TestGitDiffState_GetFiles(t *testing.T) {
 	}
 
 	files := state.GetFiles()
-	if len(files) != 3 {
-		t.Errorf("GetFiles() returned %d files, want 3", len(files))
-	}
+	assert.Equals(t, len(files), 3, "expected 3 files")
 
 	// Check first file (created)
-	if files[0].Path != "test.go" {
-		t.Errorf("First file path = %v, want test.go", files[0].Path)
-	}
-	if files[0].State != FileCreated {
-		t.Errorf("First file state = %v, want FileCreated", files[0].State)
-	}
+	assert.Equals(t, files[0].Path, "test.go")
+	assert.Equals(t, files[0].State, FileCreated)
 
 	// Check second file (deleted)
-	if files[1].Path != "deleted.go" {
-		t.Errorf("Second file path = %v, want deleted.go", files[1].Path)
-	}
-	if files[1].State != FileDeleted {
-		t.Errorf("Second file state = %v, want FileDeleted", files[1].State)
-	}
+	assert.Equals(t, files[1].Path, "deleted.go")
+	assert.Equals(t, files[1].State, FileDeleted)
 
 	// Check third file (changed)
-	if files[2].Path != "modified.go" {
-		t.Errorf("Third file path = %v, want modified.go", files[2].Path)
-	}
-	if files[2].State != FileChanged {
-		t.Errorf("Third file state = %v, want FileChanged", files[2].State)
-	}
+	assert.Equals(t, files[2].Path, "modified.go")
+	assert.Equals(t, files[2].State, FileChanged)
 }
 
 func TestGitDiffState_OnChange(t *testing.T) {
 	state := &GitDiffState{
-		diff:         &ctypes.Diff{},
-		callbacks:    make(map[int]OnChangeCallback),
+		diff:           &ctypes.Diff{},
+		callbacks:      make(map[int]OnChangeCallback),
 		nextCallbackID: 0,
 	}
 
@@ -93,22 +78,14 @@ func TestGitDiffState_OnChange(t *testing.T) {
 
 	// Register callback
 	unregister := state.OnChange(callback)
-
-	if len(state.callbacks) != 1 {
-		t.Errorf("Expected 1 callback, got %d", len(state.callbacks))
-	}
+	assert.Equals(t, len(state.callbacks), 1, "Expected 1 callback")
 
 	// Unregister callback
 	unregister()
-
-	if len(state.callbacks) != 0 {
-		t.Errorf("Expected 0 callbacks after unregister, got %d", len(state.callbacks))
-	}
+	assert.Equals(t, len(state.callbacks), 0, "Expected 0 callbacks after unregister")
 
 	// Callback should not have been called yet
-	if called {
-		t.Error("Callback was called unexpectedly")
-	}
+	assert.False(t, called, "Callback was called unexpectedly")
 }
 
 func TestFilesEqual(t *testing.T) {
@@ -139,11 +116,6 @@ func TestFilesEqual(t *testing.T) {
 		},
 	}
 
-	if !filesEqual(file1, file2) {
-		t.Error("filesEqual() returned false for identical files")
-	}
-
-	if filesEqual(file1, file3) {
-		t.Error("filesEqual() returned true for different files")
-	}
+	assert.True(t, filesEqual(file1, file2), "filesEqual() returned false for identical files")
+	assert.False(t, filesEqual(file1, file3), "filesEqual() returned true for different files")
 }

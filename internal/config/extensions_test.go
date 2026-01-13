@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"testing"
+
+	"git.15b.it/eno/critic/simple-go/assert"
+)
 
 func TestHasExtension(t *testing.T) {
 	tests := []struct {
@@ -74,32 +78,18 @@ func TestHasExtension(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := HasExtension(tt.path, tt.extensions)
-			if got != tt.want {
-				t.Errorf("HasExtension(%q, %v) = %v, want %v",
-					tt.path, tt.extensions, got, tt.want)
-			}
+			assert.Equals(t, got, tt.want, "HasExtension(%q, %v)", tt.path, tt.extensions)
 		})
 	}
 }
 
 func TestDefaultFileExtensions(t *testing.T) {
 	// Verify that DefaultFileExtensions is not empty
-	if len(DefaultFileExtensions) == 0 {
-		t.Error("DefaultFileExtensions should not be empty")
-	}
+	assert.True(t, len(DefaultFileExtensions) > 0, "DefaultFileExtensions should not be empty")
 
 	// Verify some common extensions are present
 	requiredExtensions := []string{"go", "rs", "py", "js", "md"}
 	for _, ext := range requiredExtensions {
-		found := false
-		for _, def := range DefaultFileExtensions {
-			if def == ext {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("DefaultFileExtensions missing required extension: %s", ext)
-		}
+		assert.Contains(t, DefaultFileExtensions, ext, "DefaultFileExtensions missing required extension: %s", ext)
 	}
 }

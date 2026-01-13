@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/samber/lo"
-	"git.15b.it/eno/critic/simple-go/assert"
 	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/simple-go/assert"
 	"git.15b.it/eno/critic/simple-go/must"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 )
@@ -28,23 +28,13 @@ func TestGitWorkflow_UnstagedChanges(t *testing.T) {
 
 	// Get unstaged diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("GetDiff() error = %v", err)
-	}
-
-	if diff == nil {
-		t.Fatal("GetDiff() returned nil")
-	}
-
+	assert.NoError(t, err)
+	assert.NotNil(t, diff)
 	assert.Equals(t, len(diff.Files), 1)
 
 	file := diff.Files[0]
-
 	assert.Equals(t, file.NewPath, "test.go")
-
-	if len(file.Hunks) == 0 {
-		t.Fatal("Expected at least one hunk")
-	}
+	assert.True(t, len(file.Hunks) > 0, "Expected at least one hunk")
 
 	// Verify we have added lines using lo
 	allLines := lo.FlatMap(file.Hunks, func(hunk *ctypes.Hunk, _ int) []*ctypes.Line {
@@ -70,18 +60,9 @@ func TestGitWorkflow_LastCommit(t *testing.T) {
 
 	// Get last commit diff
 	diff, err := git.GetDiff([]string{}, git.DiffToLastCommit)
-	if err != nil {
-		t.Fatalf("GetDiff() error = %v", err)
-	}
-
-	if diff == nil {
-		t.Fatal("GetDiff() returned nil")
-	}
-
-	// Should show the file added in last commit
-	if len(diff.Files) == 0 {
-		t.Fatal("Expected files in last commit diff")
-	}
+	assert.NoError(t, err)
+	assert.NotNil(t, diff)
+	assert.True(t, len(diff.Files) > 0, "Expected files in last commit diff")
 
 	// Find test.go in the diff
 	_, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
@@ -100,10 +81,7 @@ func TestGitWorkflow_EmptyDiff(t *testing.T) {
 
 	// Get unstaged diff (should be empty)
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("GetDiff() error = %v", err)
-	}
-
+	assert.NoError(t, err)
 	assert.Equals(t, len(diff.Files), 0)
 }
 
@@ -121,9 +99,7 @@ func TestGitWorkflow_NewFile(t *testing.T) {
 	// Get diff (should show staged changes when comparing to HEAD)
 	// Note: This tests the merge base mode which includes staged changes
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("GetDiff() error = %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Unstaged mode won't show staged files, so this is expected to be empty
 	// This validates that DiffUnstaged works correctly
@@ -147,13 +123,8 @@ func TestGitWorkflow_MultipleFiles(t *testing.T) {
 
 	// Get unstaged diff
 	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("GetDiff() error = %v", err)
-	}
-
-	if len(diff.Files) != 2 {
-		t.Errorf("Expected 2 files in diff, got %d", len(diff.Files))
-	}
+	assert.NoError(t, err)
+	assert.Equals(t, len(diff.Files), 2, "Expected 2 files in diff")
 
 	// Verify both files are in diff
 	hasFile1 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
@@ -185,17 +156,13 @@ func TestGitWorkflow_GetCurrentBranch(t *testing.T) {
 func TestGitWorkflow_IsGitRepo(t *testing.T) {
 	SetupGitRepo(t)
 
-	if !git.IsGitRepo() {
-		t.Error("IsGitRepo() should return true for git repository")
-	}
+	assert.True(t, git.IsGitRepo(), "IsGitRepo() should return true for git repository")
 
 	// Test non-git directory
 	tmpDir := t.TempDir()
 	os.Chdir(tmpDir)
 
-	if git.IsGitRepo() {
-		t.Error("IsGitRepo() should return false for non-git directory")
-	}
+	assert.False(t, git.IsGitRepo(), "IsGitRepo() should return false for non-git directory")
 }
 
 func TestGitWorkflow_PathFiltering(t *testing.T) {
@@ -216,17 +183,9 @@ func TestGitWorkflow_PathFiltering(t *testing.T) {
 
 	// Get diff for only file1.go
 	diff, err := git.GetDiff([]string{"file1.go"}, git.DiffUnstaged)
-	if err != nil {
-		t.Fatalf("GetDiff() error = %v", err)
-	}
-
-	if len(diff.Files) != 1 {
-		t.Fatalf("Expected 1 file in diff, got %d", len(diff.Files))
-	}
-
-	if diff.Files[0].NewPath != "file1.go" {
-		t.Errorf("Expected file1.go, got %s", diff.Files[0].NewPath)
-	}
+	assert.NoError(t, err)
+	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
+	assert.Equals(t, diff.Files[0].NewPath, "file1.go")
 }
 
 func TestGitWorkflow_MergeBaseWithMainBranch(t *testing.T) {
@@ -250,18 +209,9 @@ func TestGitWorkflow_MergeBaseWithMainBranch(t *testing.T) {
 	mergeBase := must.Must2(git.GetMergeBase())
 
 	mergeBase, err := git.GetMergeBase()
-	if err != nil {
-		t.Fatalf("GetMergeBase() error = %v", err)
-	}
-
-	if mergeBase == "" {
-		t.Error("GetMergeBase() returned empty string")
-	}
-
-	// Verify it found a valid commit hash (at least 7 chars)
-	if len(mergeBase) < 7 {
-		t.Errorf("GetMergeBase() = %q, expected valid commit hash", mergeBase)
-	}
+	assert.NoError(t, err)
+	assert.NotEquals(t, mergeBase, "", "GetMergeBase() should not return empty string")
+	assert.True(t, len(mergeBase) >= 7, "GetMergeBase() should return valid commit hash")
 
 	// Verify the merge base is a valid commit
 	output := must.Exec("git", "cat-file", "-t", mergeBase)
@@ -291,9 +241,7 @@ func TestGitWorkflow_MergeBaseFallbackToMaster(t *testing.T) {
 	mergeBase := must.Must2(git.GetMergeBase())
 
 	// Verify it found a valid commit hash
-	if len(mergeBase) < 7 {
-		t.Errorf("GetMergeBase() = %q, expected valid commit hash", mergeBase)
-	}
+	assert.True(t, len(mergeBase) >= 7, "GetMergeBase() should return valid commit hash")
 
 	// Verify current branch is "feature"
 	currentBranch := must.Must2(git.GetCurrentBranch())

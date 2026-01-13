@@ -5,17 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"git.15b.it/eno/critic/simple-go/assert"
 )
 
 func TestNewHighlighter(t *testing.T) {
 	h := NewHighlighter()
-	if h == nil {
-		t.Fatal("NewHighlighter() returned nil")
-	}
-
-	if h.formatter == nil {
-		t.Error("Highlighter formatter is nil")
-	}
+	assert.NotNil(t, h, "NewHighlighter() returned nil")
+	assert.NotNil(t, h.formatter, "Highlighter formatter is nil")
 }
 
 func TestHighlight_Go(t *testing.T) {
@@ -29,19 +26,13 @@ func main() {
 }`
 
 	result, err := h.Highlight(code, "test.go")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
 	// Result should contain ANSI codes (indicated by ESC character)
-	if !strings.Contains(result, "\x1b[") {
-		t.Error("Highlight() should add ANSI color codes")
-	}
+	assert.True(t, strings.Contains(result, "\x1b["), "Highlight() should add ANSI color codes")
 
 	// Result should still contain the original text
-	if !strings.Contains(result, "package") || !strings.Contains(result, "main") {
-		t.Error("Highlight() should preserve original text")
-	}
+	assert.True(t, strings.Contains(result, "package") && strings.Contains(result, "main"), "Highlight() should preserve original text")
 }
 
 func TestHighlight_JavaScript(t *testing.T) {
@@ -51,17 +42,10 @@ func TestHighlight_JavaScript(t *testing.T) {
 }`
 
 	result, err := h.Highlight(code, "test.js")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
-	if !strings.Contains(result, "\x1b[") {
-		t.Error("Highlight() should add ANSI color codes for JavaScript")
-	}
-
-	if !strings.Contains(result, "function") || !strings.Contains(result, "console") {
-		t.Error("Highlight() should preserve JavaScript code")
-	}
+	assert.True(t, strings.Contains(result, "\x1b["), "Highlight() should add ANSI color codes for JavaScript")
+	assert.True(t, strings.Contains(result, "function") && strings.Contains(result, "console"), "Highlight() should preserve JavaScript code")
 }
 
 func TestHighlight_Python(t *testing.T) {
@@ -70,17 +54,10 @@ func TestHighlight_Python(t *testing.T) {
     print("world")`
 
 	result, err := h.Highlight(code, "test.py")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
-	if !strings.Contains(result, "\x1b[") {
-		t.Error("Highlight() should add ANSI color codes for Python")
-	}
-
-	if !strings.Contains(result, "def") || !strings.Contains(result, "print") {
-		t.Error("Highlight() should preserve Python code")
-	}
+	assert.True(t, strings.Contains(result, "\x1b["), "Highlight() should add ANSI color codes for Python")
+	assert.True(t, strings.Contains(result, "def") && strings.Contains(result, "print"), "Highlight() should preserve Python code")
 }
 
 func TestHighlight_UnknownExtension(t *testing.T) {
@@ -88,28 +65,20 @@ func TestHighlight_UnknownExtension(t *testing.T) {
 	code := "some plain text without syntax"
 
 	result, err := h.Highlight(code, "test.unknown")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
 	// Should return code as-is or with minimal highlighting
-	if !strings.Contains(result, "plain text") {
-		t.Error("Highlight() should preserve text for unknown extensions")
-	}
+	assert.True(t, strings.Contains(result, "plain text"), "Highlight() should preserve text for unknown extensions")
 }
 
 func TestHighlight_EmptyCode(t *testing.T) {
 	h := NewHighlighter()
 
 	result, err := h.Highlight("", "test.go")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
 	// Empty code should return empty or minimal result
-	if len(result) > 10 {
-		t.Errorf("Highlight() for empty code returned %d chars, expected minimal output", len(result))
-	}
+	assert.True(t, len(result) <= 10, "Highlight() for empty code returned %d chars, expected minimal output", len(result))
 }
 
 func TestHighlightLine(t *testing.T) {
@@ -119,19 +88,13 @@ func TestHighlightLine(t *testing.T) {
 	result := h.HighlightLine(line, "test.go")
 
 	// Should have ANSI codes
-	if !strings.Contains(result, "\x1b[") {
-		t.Error("HighlightLine() should add ANSI color codes")
-	}
+	assert.True(t, strings.Contains(result, "\x1b["), "HighlightLine() should add ANSI color codes")
 
 	// Should not have trailing newline
-	if strings.HasSuffix(result, "\n") {
-		t.Error("HighlightLine() should not have trailing newline")
-	}
+	assert.False(t, strings.HasSuffix(result, "\n"), "HighlightLine() should not have trailing newline")
 
 	// Should preserve content
-	if !strings.Contains(result, "import") {
-		t.Error("HighlightLine() should preserve content")
-	}
+	assert.True(t, strings.Contains(result, "import"), "HighlightLine() should preserve content")
 }
 
 func TestHighlightLines_Multiple(t *testing.T) {
@@ -148,9 +111,7 @@ func TestHighlightLines_Multiple(t *testing.T) {
 	result := h.HighlightLines(lines, "test.go")
 
 	// Should return same number of lines
-	if len(result) != len(lines) {
-		t.Fatalf("HighlightLines() returned %d lines, want %d", len(result), len(lines))
-	}
+	assert.Equals(t, len(result), len(lines), "HighlightLines() returned %d lines, want %d", len(result), len(lines))
 
 	// Verify we got results (some might be empty lines which is OK)
 	nonEmptyCount := 0
@@ -159,9 +120,7 @@ func TestHighlightLines_Multiple(t *testing.T) {
 			nonEmptyCount++
 		}
 	}
-	if nonEmptyCount == 0 {
-		t.Error("HighlightLines() should return some non-empty results")
-	}
+	assert.True(t, nonEmptyCount > 0, "HighlightLines() should return some non-empty results")
 }
 
 func TestHighlightLines_Empty(t *testing.T) {
@@ -170,9 +129,7 @@ func TestHighlightLines_Empty(t *testing.T) {
 
 	result := h.HighlightLines(lines, "test.go")
 
-	if len(result) != 0 {
-		t.Errorf("HighlightLines() for empty input returned %d lines, want 0", len(result))
-	}
+	assert.Equals(t, len(result), 0, "HighlightLines() for empty input")
 }
 
 func TestHighlightLines_SingleLine(t *testing.T) {
@@ -181,13 +138,8 @@ func TestHighlightLines_SingleLine(t *testing.T) {
 
 	result := h.HighlightLines(lines, "test.go")
 
-	if len(result) != 1 {
-		t.Fatalf("HighlightLines() returned %d lines, want 1", len(result))
-	}
-
-	if !strings.Contains(result[0], "package") {
-		t.Error("HighlightLines() should preserve content")
-	}
+	assert.Equals(t, len(result), 1, "HighlightLines() returned %d lines, want 1", len(result))
+	assert.True(t, strings.Contains(result[0], "package"), "HighlightLines() should preserve content")
 }
 
 func TestGetLexer(t *testing.T) {
@@ -214,11 +166,10 @@ func TestGetLexer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
 			lexer := h.getLexer(tt.filename)
-			if tt.wantNil && lexer != nil {
-				t.Errorf("getLexer(%q) = %v, want nil", tt.filename, lexer)
-			}
-			if !tt.wantNil && lexer == nil {
-				t.Errorf("getLexer(%q) = nil, want non-nil", tt.filename)
+			if tt.wantNil {
+				assert.Nil(t, lexer, "getLexer(%q) should be nil", tt.filename)
+			} else {
+				assert.NotNil(t, lexer, "getLexer(%q) should not be nil", tt.filename)
 			}
 		})
 	}
@@ -242,11 +193,10 @@ func TestGetLanguage(t *testing.T) {
 		t.Run(tt.filename, func(t *testing.T) {
 			got := GetLanguage(tt.filename)
 			// Language names may vary slightly, so just check it's not empty for known types
-			if tt.want != "text" && got == "" {
-				t.Errorf("GetLanguage(%q) = %q, want non-empty", tt.filename, got)
-			}
-			if tt.want == "text" && got != "text" {
-				t.Errorf("GetLanguage(%q) = %q, want %q", tt.filename, got, tt.want)
+			if tt.want != "text" {
+				assert.NotEquals(t, got, "", "GetLanguage(%q) should be non-empty", tt.filename)
+			} else {
+				assert.Equals(t, got, "text", "GetLanguage(%q)", tt.filename)
 			}
 		})
 	}
@@ -259,15 +209,11 @@ line2
 line3`
 
 	result, err := h.Highlight(code, "test.txt")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
 	// Should preserve all three lines
 	lines := strings.Split(strings.TrimSpace(result), "\n")
-	if len(lines) != 3 {
-		t.Errorf("Highlight() returned %d lines, want 3", len(lines))
-	}
+	assert.Equals(t, len(lines), 3, "Highlight() should return 3 lines")
 }
 
 func TestHighlightLines_Performance(t *testing.T) {
@@ -281,9 +227,7 @@ func TestHighlightLines_Performance(t *testing.T) {
 
 	result := h.HighlightLines(lines, "test.go")
 
-	if len(result) != len(lines) {
-		t.Errorf("HighlightLines() for %d lines returned %d lines", len(lines), len(result))
-	}
+	assert.Equals(t, len(result), len(lines), "HighlightLines() for %d lines", len(lines))
 }
 
 func TestHighlightLines_ErrorRecovery(t *testing.T) {
@@ -296,17 +240,13 @@ func TestHighlightLines_ErrorRecovery(t *testing.T) {
 	result := h.HighlightLines(lines, "test.go")
 
 	// Should always return same number of lines
-	if len(result) != len(lines) {
-		t.Errorf("HighlightLines() should return same line count on any condition")
-	}
+	assert.Equals(t, len(result), len(lines), "HighlightLines() should return same line count on any condition")
 }
 
 func TestCustomStyle(t *testing.T) {
 	// Verify that the highlighter is initialized with a formatter
 	h := NewHighlighter()
-	if h.formatter == nil {
-		t.Error("Highlighter should have a formatter initialized")
-	}
+	assert.NotNil(t, h.formatter, "Highlighter should have a formatter initialized")
 }
 
 func TestTabWidth(t *testing.T) {
@@ -329,9 +269,7 @@ func TestTabWidth(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.language, func(t *testing.T) {
 			got := TabWidth(tt.language)
-			if got != tt.want {
-				t.Errorf("TabWidth(%q) = %d, want %d", tt.language, got, tt.want)
-			}
+			assert.Equals(t, got, tt.want, "TabWidth(%q)", tt.language)
 		})
 	}
 }
@@ -408,9 +346,7 @@ func TestExpandTabs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := expandTabs(tt.code, tt.tabWidth)
-			if got != tt.want {
-				t.Errorf("expandTabs() = %q, want %q", got, tt.want)
-			}
+			assert.Equals(t, got, tt.want, "expandTabs()")
 		})
 	}
 }
@@ -421,22 +357,14 @@ func TestHighlight_ExpandsTabsBeforeHighlighting(t *testing.T) {
 	// Go code with tabs (should expand to 4 spaces)
 	goCode := "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}"
 	result, err := h.Highlight(goCode, "test.go")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
 	// Result should not contain tab characters
-	if strings.Contains(result, "\t") {
-		t.Error("Highlight() result contains tab characters, should be expanded to spaces")
-	}
+	assert.False(t, strings.Contains(result, "\t"), "Highlight() result should not contain tab characters")
 
 	// Verify content is present (check separately due to ANSI codes)
-	if !strings.Contains(result, "fmt") {
-		t.Error("Highlight() should preserve 'fmt'")
-	}
-	if !strings.Contains(result, "Println") {
-		t.Error("Highlight() should preserve 'Println'")
-	}
+	assert.True(t, strings.Contains(result, "fmt"), "Highlight() should preserve 'fmt'")
+	assert.True(t, strings.Contains(result, "Println"), "Highlight() should preserve 'Println'")
 }
 
 func TestHighlight_WithEmoji(t *testing.T) {
@@ -444,14 +372,10 @@ func TestHighlight_WithEmoji(t *testing.T) {
 	code := "// Comment with emoji: 🎨 🚀 ✨\npackage main"
 
 	result, err := h.Highlight(code, "test.go")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
 	// Emoji should be preserved
-	if !strings.Contains(result, "🎨") || !strings.Contains(result, "🚀") || !strings.Contains(result, "✨") {
-		t.Error("Highlight() should preserve emoji characters")
-	}
+	assert.True(t, strings.Contains(result, "🎨") && strings.Contains(result, "🚀") && strings.Contains(result, "✨"), "Highlight() should preserve emoji characters")
 }
 
 func TestHighlight_WithUmlautsAndSpecialChars(t *testing.T) {
@@ -459,16 +383,12 @@ func TestHighlight_WithUmlautsAndSpecialChars(t *testing.T) {
 	code := "# Kommentar mit Umlauten: äöü ÄÖÜ ß\nclass Grüße"
 
 	result, err := h.Highlight(code, "test.rb")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
 	// German umlauts and special characters should be preserved
 	specialChars := []string{"ä", "ö", "ü", "Ä", "Ö", "Ü", "ß", "ü"}
 	for _, char := range specialChars {
-		if !strings.Contains(result, char) {
-			t.Errorf("Highlight() should preserve character %q", char)
-		}
+		assert.True(t, strings.Contains(result, char), "Highlight() should preserve character %q", char)
 	}
 }
 
@@ -509,14 +429,10 @@ func TestHighlight_WithNonASCII(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := h.Highlight(tt.code, tt.filename)
-			if err != nil {
-				t.Fatalf("Highlight() error = %v", err)
-			}
+			assert.NoError(t, err, "Highlight()")
 
 			for _, char := range tt.chars {
-				if !strings.Contains(result, char) {
-					t.Errorf("Highlight() should preserve character %q", char)
-				}
+				assert.True(t, strings.Contains(result, char), "Highlight() should preserve character %q", char)
 			}
 		})
 	}
@@ -527,9 +443,7 @@ func TestHighlight_RealWorldGoFile(t *testing.T) {
 
 	// Read the real Go test file with tabs
 	content, err := os.ReadFile(filepath.Join("testdata", "sample.go"))
-	if err != nil {
-		t.Fatalf("Failed to read testdata/sample.go: %v", err)
-	}
+	assert.NoError(t, err, "Failed to read testdata/sample.go")
 
 	code := string(content)
 
@@ -539,36 +453,20 @@ func TestHighlight_RealWorldGoFile(t *testing.T) {
 	}
 
 	result, err := h.Highlight(code, "sample.go")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
 	// Result should not contain tabs
-	if strings.Contains(result, "\t") {
-		t.Error("Highlight() result contains tab characters, should be expanded")
-	}
+	assert.False(t, strings.Contains(result, "\t"), "Highlight() result should not contain tab characters")
 
 	// Should preserve special characters from the file
-	if !strings.Contains(result, "äöü") {
-		t.Error("Highlight() should preserve German umlauts from test file")
-	}
-	if !strings.Contains(result, "🎨") {
-		t.Error("Highlight() should preserve emoji from test file")
-	}
+	assert.True(t, strings.Contains(result, "äöü"), "Highlight() should preserve German umlauts from test file")
+	assert.True(t, strings.Contains(result, "🎨"), "Highlight() should preserve emoji from test file")
 
 	// Verify essential content is present (check separately due to ANSI codes)
-	if !strings.Contains(result, "func") {
-		t.Error("Highlight() should preserve 'func' keyword")
-	}
-	if !strings.Contains(result, "main") {
-		t.Error("Highlight() should preserve 'main' function name")
-	}
-	if !strings.Contains(result, "fmt") {
-		t.Error("Highlight() should preserve 'fmt' package")
-	}
-	if !strings.Contains(result, "Println") {
-		t.Error("Highlight() should preserve 'Println' method")
-	}
+	assert.True(t, strings.Contains(result, "func"), "Highlight() should preserve 'func' keyword")
+	assert.True(t, strings.Contains(result, "main"), "Highlight() should preserve 'main' function name")
+	assert.True(t, strings.Contains(result, "fmt"), "Highlight() should preserve 'fmt' package")
+	assert.True(t, strings.Contains(result, "Println"), "Highlight() should preserve 'Println' method")
 }
 
 func TestHighlight_RealWorldRubyFile(t *testing.T) {
@@ -576,9 +474,7 @@ func TestHighlight_RealWorldRubyFile(t *testing.T) {
 
 	// Read the real Ruby test file with tabs
 	content, err := os.ReadFile(filepath.Join("testdata", "sample.rb"))
-	if err != nil {
-		t.Fatalf("Failed to read testdata/sample.rb: %v", err)
-	}
+	assert.NoError(t, err, "Failed to read testdata/sample.rb")
 
 	code := string(content)
 
@@ -588,34 +484,20 @@ func TestHighlight_RealWorldRubyFile(t *testing.T) {
 	}
 
 	result, err := h.Highlight(code, "sample.rb")
-	if err != nil {
-		t.Fatalf("Highlight() error = %v", err)
-	}
+	assert.NoError(t, err, "Highlight()")
 
 	// Result should not contain tabs
-	if strings.Contains(result, "\t") {
-		t.Error("Highlight() result contains tab characters, should be expanded")
-	}
+	assert.False(t, strings.Contains(result, "\t"), "Highlight() result should not contain tab characters")
 
 	// Should preserve special characters from the file
 	specialChars := []string{"äöü", "ß", "🚀"}
 	for _, char := range specialChars {
-		if !strings.Contains(result, char) {
-			t.Errorf("Highlight() should preserve %q from test file", char)
-		}
+		assert.True(t, strings.Contains(result, char), "Highlight() should preserve %q from test file", char)
 	}
 
 	// Verify essential content is present (check separately due to ANSI codes)
-	if !strings.Contains(result, "class") {
-		t.Error("Highlight() should preserve 'class' keyword")
-	}
-	if !strings.Contains(result, "Greeter") {
-		t.Error("Highlight() should preserve 'Greeter' class name")
-	}
-	if !strings.Contains(result, "def") {
-		t.Error("Highlight() should preserve 'def' keyword")
-	}
-	if !strings.Contains(result, "initialize") {
-		t.Error("Highlight() should preserve 'initialize' method")
-	}
+	assert.True(t, strings.Contains(result, "class"), "Highlight() should preserve 'class' keyword")
+	assert.True(t, strings.Contains(result, "Greeter"), "Highlight() should preserve 'Greeter' class name")
+	assert.True(t, strings.Contains(result, "def"), "Highlight() should preserve 'def' keyword")
+	assert.True(t, strings.Contains(result, "initialize"), "Highlight() should preserve 'initialize' method")
 }
