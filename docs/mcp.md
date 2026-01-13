@@ -1,6 +1,6 @@
-# HITL MCP Server
+# MCP Server
 
-Human-in-the-Loop MCP server for Claude Code integration. This enables Claude Code to request feedback from a human reviewer during code changes.
+Model Context Protocol server for Claude Code integration. This enables Claude to interact with code review comments stored in Critic's database.
 
 ## Architecture
 
@@ -8,29 +8,20 @@ Human-in-the-Loop MCP server for Claude Code integration. This enables Claude Co
 ┌─────────────────┐     stdio/JSON-RPC    ┌─────────────────┐
 │  Claude Code    │◄────────────────────►│  critic mcp     │
 └─────────────────┘                       └────────┬────────┘
-                                                   │ Unix socket
+                                                   │
                                           ┌────────▼────────┐
-                                          │ critic review   │
-                                          │ (or nc -U ...)  │
+                                          │   .critic.db    │
+                                          │   (SQLite)      │
                                           └─────────────────┘
 ```
 
-The MCP server communicates with Claude Code via stdio using JSON-RPC 2.0 protocol, and with the human reviewer via a Unix socket.
-
-## Files
-
-| File | Description |
-|------|-------------|
-| `internal/mcp/types.go` | MCP protocol types (JSON-RPC 2.0, tool definitions) |
-| `internal/mcp/server.go` | Main MCP server with stdio transport |
-| `internal/mcp/ipc.go` | Unix socket IPC for reviewer communication |
-| `internal/cli/mcp.go` | `critic mcp` subcommand |
-| `internal/cli/review.go` | `critic review` subcommand |
+The MCP server communicates with Claude Code via stdio using JSON-RPC 2.0 protocol. It reads and writes conversations from the SQLite database at the git repository root.
 
 ## Configuration
 
-Add to your Claude Code MCP settings (`.claude/settings.json` or via Claude Code settings):
+Add to your Claude Code MCP settings:
 
+**Global** (`~/.claude/settings.json`):
 ```json
 {
   "mcpServers": {
@@ -42,119 +33,87 @@ Add to your Claude Code MCP settings (`.claude/settings.json` or via Claude Code
 }
 ```
 
-### Server Options
-
-```
-critic mcp [flags]
-
-Flags:
-  -s, --socket string      Unix socket path (default "/tmp/critic-hitl.sock")
-  -t, --timeout duration   Feedback timeout (default 5m0s)
+**Project** (`.claude/settings.json`):
+```json
+{
+  "mcpServers": {
+    "critic": {
+      "command": "/path/to/critic",
+      "args": ["mcp"]
+    }
+  }
+}
 ```
 
 ## Tools
 
-### get_review_feedback
+### get_critic_conversations
 
-Blocks and waits for feedback from the human reviewer. Call this before completing significant changes.
+Returns a list of conversation UUIDs. Use this to discover reviewer feedback.
 
-**Input Schema:**
+**Input:**
 ```json
 {
-  "type": "object",
-  "properties": {
-    "summary": {
-      "type": "string",
-      "description": "Brief summary of what you've done for the reviewer"
-    }
-  },
-  "required": ["summary"]
+  "status": "unresolved"  // Optional: "unresolved" or "resolved"
 }
 ```
 
-**Behavior:**
-- Notifies connected reviewers that feedback is requested
-- Blocks until feedback is received or timeout (default 5 minutes)
-- Returns the feedback text, prefixed with "APPROVED:" or "REJECTED:" if applicable
+**Output:** JSON array of UUIDs
+```json
+["550e8400-e29b-41d4-a716-446655440000", "6ba7b810-9dad-11d1-80b4-00c04fd430c8"]
+```
 
-### notify_reviewer
+### get_full_critic_conversation
 
-Sends a notification to the reviewer without waiting for a response. Use for status updates.
+Returns the complete conversation with all messages.
 
-**Input Schema:**
+**Input:**
 ```json
 {
-  "type": "object",
-  "properties": {
-    "message": {
-      "type": "string",
-      "description": "The message to send to the reviewer"
-    }
-  },
-  "required": ["message"]
+  "uuid": "550e8400-e29b-41d4-a716-446655440000"  // Required
 }
 ```
 
-## Sending Feedback
+**Output:** Formatted conversation
+```
+Conversation: 550e8400-e29b-41d4-a716-446655440000
+Status: new
+Location: main.go:42
+Code Version: abc123def
 
-### Using the review command
+[human] 2025-01-13 10:30:00
+This function needs error handling for the nil case.
 
-```bash
-# Plain feedback
-critic review "Looks good, but add error handling to the API call"
-
-# Approve the changes
-critic review --approve "LGTM, ship it!"
-
-# Reject the changes
-critic review --reject "Please refactor this to use the existing helper"
-
-# Read from stdin
-echo "Your feedback" | critic review
+[ai] 2025-01-13 10:35:00
+I've added a nil check at line 45.
 ```
 
-### Using netcat
+### reply_to_critic_conversation
 
-```bash
-# Plain text (treated as feedback)
-echo "Your feedback message" | nc -U /tmp/critic-hitl.sock
+Adds a reply to an existing conversation.
 
-# JSON format for structured messages
-echo '{"type":"approved","feedback":"LGTM"}' | nc -U /tmp/critic-hitl.sock
-echo '{"type":"rejected","feedback":"Needs work"}' | nc -U /tmp/critic-hitl.sock
+**Input:**
+```json
+{
+  "uuid": "550e8400-e29b-41d4-a716-446655440000",  // Required
+  "message": "I've addressed this by adding error handling."  // Required
+}
 ```
 
-## Message Types
+**Output:** Confirmation with reply UUID
 
-### Reviewer to Server
+## Workflow
 
-| Type | Description |
-|------|-------------|
-| `feedback` | General feedback (default for plain text) |
-| `approved` | Approval with optional comment |
-| `rejected` | Rejection with reason |
+1. Human adds comment in Critic TUI (stored in `.critic.db`)
+2. Claude calls `get_critic_conversations` with `status: "unresolved"`
+3. Claude calls `get_full_critic_conversation` for each UUID
+4. Claude addresses feedback and calls `reply_to_critic_conversation`
+5. Human reviews reply in Critic TUI
+6. Human resolves conversation when satisfied
 
-### Server to Reviewer
+## Prompting Claude
 
-| Type | Description |
-|------|-------------|
-| `waiting` | Claude is waiting for feedback |
-| `notification` | Status update from Claude |
-
-## Example Workflow
-
-1. Claude Code calls `get_review_feedback` with a summary of changes
-2. MCP server notifies connected reviewers and blocks
-3. Reviewer examines the changes and sends feedback:
-   ```bash
-   critic review --approve "Looks good, but consider adding a test"
-   ```
-4. MCP server returns feedback to Claude Code
-5. Claude addresses feedback and may call `get_review_feedback` again
-
-## Prompting Claude to Use HITL
-
-Add to your `CLAUDE.md` or system prompt:
+Add to your `CLAUDE.md`:
 
 ```markdown
 Before completing any significant code changes, call get_review_feedback with
@@ -164,9 +123,9 @@ Address any feedback in subsequent iterations.
 
 ## Protocol Details
 
-The MCP server implements the Model Context Protocol (MCP) version 2024-11-05 over stdio using JSON-RPC 2.0.
+The server implements MCP protocol version 2024-11-05 over stdio using JSON-RPC 2.0.
 
-### Supported Methods
+**Supported methods:**
 
 | Method | Description |
 |--------|-------------|
@@ -175,3 +134,9 @@ The MCP server implements the Model Context Protocol (MCP) version 2024-11-05 ov
 | `tools/list` | List available tools |
 | `tools/call` | Call a tool |
 | `ping` | Health check |
+
+## Related Documentation
+
+- [Summary](summary.md) - Project overview
+- [Architecture](architecture.md) - Database schema and interfaces
+- [Installation](installation.md) - Setup and configuration
