@@ -274,120 +274,74 @@ func NotContains(t testingT, container, element interface{}, details ...interfac
 	}
 }
 
-// Len checks if the length of a container (slice, array, map, string, or channel) equals the expected length.
-// details are optional and can provide additional details about the failed assertion, using a format string and values.
-func Len(t testingT, container interface{}, expected int, details ...interface{}) {
-	t.Helper()
-	length, ok := getLen(container)
-	if !ok {
-		msg := fmt.Sprintf("assert.Len(...) failed:\n  Unsupported type: %T (expected slice, array, map, string, or channel)", container)
-		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
-		return
-	}
-	if length != expected {
-		msg := fmt.Sprintf("assert.Len(...) failed:\n  Expected length: %d\n  Actual length:   %d\n  Container:       %v", expected, length, container)
-		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
-	}
-}
-
-// getLen returns the length of a container and whether the operation is supported.
-func getLen(container interface{}) (int, bool) {
-	containerVal := reflect.ValueOf(container)
-	switch containerVal.Kind() {
-	case reflect.Slice, reflect.Array, reflect.Map, reflect.String, reflect.Chan:
-		return containerVal.Len(), true
-	default:
-		return 0, false
-	}
-}
-
 // ============================================================================
 // Fatal variants - These use t.Fatal() instead of t.Error() to stop test
 // execution immediately on failure. Use these when subsequent assertions
 // would fail or panic if this check fails (e.g., nil checks before method calls).
 // ============================================================================
 
-// EqualsF is like Equals but calls t.Fatal on failure.
-func EqualsF(t fatalT, actual any, expected any, details ...interface{}) {
+// EqualsFatal is like Equals but calls t.Fatal on failure.
+func EqualsFatal(t fatalT, actual any, expected any, details ...interface{}) {
 	t.Helper()
 	if !isEqual(actual, expected) {
-		msg := fmt.Sprintf("assert.EqualsF(...) failed:\n  Expected: %v\n  Actual:   %v", expected, actual)
+		msg := fmt.Sprintf("assert.EqualsFatal(...) failed:\n  Expected: %v\n  Actual:   %v", expected, actual)
 		msg = messageWithDetails(msg, details...)
 		t.Fatal(msg)
 	}
 }
 
-// TrueF is like True but calls t.Fatal on failure.
-func TrueF(t fatalT, condition bool, details ...interface{}) {
+// TrueFatal is like True but calls t.Fatal on failure.
+func TrueFatal(t fatalT, condition bool, details ...interface{}) {
 	t.Helper()
 	if !condition {
-		msg := "assert.TrueF(...) failed"
+		msg := "assert.TrueFatal(...) failed"
 		msg = messageWithDetails(msg, details...)
 		t.Fatal(msg)
 	}
 }
 
-// FalseF is like False but calls t.Fatal on failure.
-func FalseF(t fatalT, condition bool, details ...interface{}) {
+// FalseFatal is like False but calls t.Fatal on failure.
+func FalseFatal(t fatalT, condition bool, details ...interface{}) {
 	t.Helper()
 	if condition {
-		msg := "assert.FalseF(...) failed"
+		msg := "assert.FalseFatal(...) failed"
 		msg = messageWithDetails(msg, details...)
 		t.Fatal(msg)
 	}
 }
 
-// NilF is like Nil but calls t.Fatal on failure.
-func NilF(t fatalT, value interface{}, details ...interface{}) {
+// NilFatal is like Nil but calls t.Fatal on failure.
+func NilFatal(t fatalT, value interface{}, details ...interface{}) {
 	t.Helper()
 	if !isNil(value) {
-		msg := fmt.Sprintf("assert.NilF(...) failed:\n  Expected: nil\n  Actual:   %v", value)
+		msg := fmt.Sprintf("assert.NilFatal(...) failed:\n  Expected: nil\n  Actual:   %v", value)
 		msg = messageWithDetails(msg, details...)
 		t.Fatal(msg)
 	}
 }
 
-// NotNilF is like NotNil but calls t.Fatal on failure.
-func NotNilF(t fatalT, value interface{}, details ...interface{}) {
+// NotNilFatal is like NotNil but calls t.Fatal on failure.
+func NotNilFatal(t fatalT, value interface{}, details ...interface{}) {
 	t.Helper()
 	if isNil(value) {
-		msg := "assert.NotNilF(...) failed:\n  Expected: not nil\n  Actual:   nil"
+		msg := "assert.NotNilFatal(...) failed:\n  Expected: not nil\n  Actual:   nil"
 		msg = messageWithDetails(msg, details...)
 		t.Fatal(msg)
 	}
 }
 
-// NoErrorF is like NoError but calls t.Fatal on failure.
-func NoErrorF(t fatalT, err error, details ...interface{}) {
+// NoErrorFatal is like NoError but calls t.Fatal on failure.
+func NoErrorFatal(t fatalT, err error, details ...interface{}) {
 	t.Helper()
 	if err != nil {
-		msg := fmt.Sprintf("assert.NoErrorF(...) failed:\n  Expected no error\n  Got:      %v", err)
+		msg := fmt.Sprintf("assert.NoErrorFatal(...) failed:\n  Expected no error\n  Got:      %v", err)
 		msg = messageWithDetails(msg, details...)
 		t.Fatal(msg)
 	}
 }
 
-// LenF is like Len but calls t.Fatal on failure.
-func LenF(t fatalT, container interface{}, expected int, details ...interface{}) {
-	t.Helper()
-	length, ok := getLen(container)
-	if !ok {
-		msg := fmt.Sprintf("assert.LenF(...) failed:\n  Unsupported type: %T (expected slice, array, map, string, or channel)", container)
-		msg = messageWithDetails(msg, details...)
-		t.Fatal(msg)
-		return
-	}
-	if length != expected {
-		msg := fmt.Sprintf("assert.LenF(...) failed:\n  Expected length: %d\n  Actual length:   %d\n  Container:       %v", expected, length, container)
-		msg = messageWithDetails(msg, details...)
-		t.Fatal(msg)
-	}
-}
-
-// ContainsF is like Contains but calls t.Fatal on failure.
-func ContainsF(t fatalT, container, element interface{}, details ...interface{}) {
+// ContainsFatal is like Contains but calls t.Fatal on failure.
+func ContainsFatal(t fatalT, container, element interface{}, details ...interface{}) {
 	t.Helper()
 
 	containerVal := reflect.ValueOf(container)
@@ -397,13 +351,13 @@ func ContainsF(t fatalT, container, element interface{}, details ...interface{})
 		str := containerVal.String()
 		substr, ok := element.(string)
 		if !ok {
-			msg := fmt.Sprintf("assert.ContainsF(...) failed:\n  When container is a string, element must also be a string, got %T", element)
+			msg := fmt.Sprintf("assert.ContainsFatal(...) failed:\n  When container is a string, element must also be a string, got %T", element)
 			msg = messageWithDetails(msg, details...)
 			t.Fatal(msg)
 			return
 		}
 		if !strings.Contains(str, substr) {
-			msg := fmt.Sprintf("assert.ContainsF(...) failed:\n  String:         %q\n  Should contain: %q", str, substr)
+			msg := fmt.Sprintf("assert.ContainsFatal(...) failed:\n  String:         %q\n  Should contain: %q", str, substr)
 			msg = messageWithDetails(msg, details...)
 			t.Fatal(msg)
 		}
@@ -417,13 +371,13 @@ func ContainsF(t fatalT, container, element interface{}, details ...interface{})
 			}
 		}
 		if !found {
-			msg := fmt.Sprintf("assert.ContainsF(...) failed:\n  Slice:    %v\n  Expected: %v", container, element)
+			msg := fmt.Sprintf("assert.ContainsFatal(...) failed:\n  Slice:    %v\n  Expected: %v", container, element)
 			msg = messageWithDetails(msg, details...)
 			t.Fatal(msg)
 		}
 
 	default:
-		msg := fmt.Sprintf("assert.ContainsF(...) failed:\n  Unsupported container type: %T (expected string, slice, or array)", container)
+		msg := fmt.Sprintf("assert.ContainsFatal(...) failed:\n  Unsupported container type: %T (expected string, slice, or array)", container)
 		msg = messageWithDetails(msg, details...)
 		t.Fatal(msg)
 	}
