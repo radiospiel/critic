@@ -53,6 +53,7 @@ type DiffViewModel struct {
 	lineConversationUUID map[int]string // Maps rendered line number to conversation UUID
 	gotoBottomOnLoad     bool           // If true, go to bottom after next file load
 	filterMode           FilterMode     // Current filter mode for hunk filtering
+	animationTicker      *AnimationTicker // Animation ticker for conversation states
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -675,6 +676,11 @@ func (m *DiffViewModel) SetMessaging(messaging critic.Messaging) {
 	m.messaging = messaging
 }
 
+// SetAnimationTicker sets the animation ticker for conversation state animations
+func (m *DiffViewModel) SetAnimationTicker(ticker *AnimationTicker) {
+	m.animationTicker = ticker
+}
+
 // SetFilterMode sets the filter mode for hunk filtering
 func (m *DiffViewModel) SetFilterMode(mode FilterMode) {
 	if m.filterMode != mode {
@@ -1143,11 +1149,23 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	// Build result: content lines, separator with hotkeys
 	var result []string
 
-	// Helper to create a content line (black text on light blue)
+	// Get animation state for this conversation
+	animState := GetConversationAnimationState(conv)
+	var animPrefix string
+	if m.animationTicker != nil && animState != NoAnimation {
+		animPrefix = m.animationTicker.GetFrame(animState, true) // 10-char long animation
+	} else {
+		animPrefix = "          " // 10 spaces when no animation
+	}
+
+	// Animation prefix width
+	const animPrefixWidth = 10
+
+	// Helper to create a content line (black text on light blue) with animation prefix
 	createContentLine := func(text string, lineNum int) string {
 		content := " " + text
 		visibleWidth := lipgloss.Width(content)
-		availableWidth := m.width
+		availableWidth := m.width - animPrefixWidth
 
 		var processed string
 		if visibleWidth > availableWidth {
@@ -1156,17 +1174,17 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			padding := strings.Repeat(" ", availableWidth-visibleWidth)
 			processed = content + padding
 		}
-		styled := lightBlueBg + blackFg + processed + reset
+		styled := animPrefix + lightBlueBg + blackFg + processed + reset
 		return m.renderLineWithCursor(styled, lineNum)
 	}
 
 	// Helper to create the separator line with optional hotkeys
 	createSeparatorLine := func(text string, lineNum int) string {
 		// Separator is a line of dashes with optional centered text
-		availableWidth := m.width
+		availableWidth := m.width - animPrefixWidth
 		if text == "" {
 			line := strings.Repeat("─", availableWidth)
-			styled := grayFg + line + reset
+			styled := animPrefix + grayFg + line + reset
 			return m.renderLineWithCursor(styled, lineNum)
 		}
 		// Center the text in the separator
@@ -1180,7 +1198,7 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			rightDashes = 0
 		}
 		line := strings.Repeat("─", leftDashes) + " " + text + " " + strings.Repeat("─", rightDashes)
-		styled := grayFg + line + reset
+		styled := animPrefix + grayFg + line + reset
 		return m.renderLineWithCursor(styled, lineNum)
 	}
 

@@ -43,6 +43,7 @@ type Conversation struct {
 	Messages    []Message // Root message + all replies, ordered by created_at
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	ReadByAI    bool // Whether the AI has read this conversation via MCP
 }
 
 // FileConversationSummary contains information about conversations for a specific file
@@ -90,6 +91,9 @@ type Messaging interface {
 
 	// MarkAsRead marks an AI message as read
 	MarkAsRead(messageUUID string) error
+
+	// MarkAsReadByAI marks a conversation as having been read by the AI
+	MarkAsReadByAI(conversationUUID string) error
 
 	// Close closes the messaging system and releases resources
 	Close() error

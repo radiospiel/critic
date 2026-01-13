@@ -44,6 +44,7 @@ type Message struct {
 	Author         Author
 	Status         Status
 	ReadStatus     ReadStatus
+	ReadByAI       bool   // Whether the AI has read this conversation via MCP
 	Message        string
 	FilePath       string // File this message is attached to (git-relative path)
 	Lineno         int    // Line number in the file
@@ -177,9 +178,9 @@ func (db *DB) CreateReply(author Author, message, conversationID string) (*Messa
 func (db *DB) insertMessage(msg *Message) error {
 	query := `
 		INSERT INTO messages (
-			id, author, status, read_status, message, file_path, lineno,
+			id, author, status, read_status, read_by_ai, message, file_path, lineno,
 			conversation_id, sha1, context, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := db.db.Exec(query,
@@ -187,6 +188,7 @@ func (db *DB) insertMessage(msg *Message) error {
 		string(msg.Author),
 		string(msg.Status),
 		string(msg.ReadStatus),
+		lo.Ternary(msg.ReadByAI, 1, 0),
 		msg.Message,
 		msg.FilePath,
 		msg.Lineno,
@@ -205,19 +207,21 @@ func (db *DB) GetMessage(id string) (*Message, error) {
 	preconditions.Check(id != "", "id must not be empty")
 
 	query := `
-		SELECT id, author, status, read_status, message, file_path, lineno,
+		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
 		       conversation_id, sha1, context, created_at, updated_at
 		FROM messages
 		WHERE id = ?
 	`
 
 	var msg Message
+	var readByAI int
 
 	err := db.db.QueryRow(query, id).Scan(
 		&msg.ID,
 		&msg.Author,
 		&msg.Status,
 		&msg.ReadStatus,
+		&readByAI,
 		&msg.Message,
 		&msg.FilePath,
 		&msg.Lineno,
@@ -235,6 +239,7 @@ func (db *DB) GetMessage(id string) (*Message, error) {
 		return nil, fmt.Errorf("failed to get message: %w", err)
 	}
 
+	msg.ReadByAI = readByAI != 0
 	return &msg, nil
 }
 
@@ -244,7 +249,7 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 
 	// Get all messages with the same conversation_id
 	query := `
-		SELECT id, author, status, read_status, message, file_path, lineno,
+		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
 		       conversation_id, sha1, context, created_at, updated_at
 		FROM messages
 		WHERE conversation_id = ?
@@ -260,12 +265,14 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 	var messages []*Message
 	for rows.Next() {
 		var msg Message
+		var readByAI int
 
 		err := rows.Scan(
 			&msg.ID,
 			&msg.Author,
 			&msg.Status,
 			&msg.ReadStatus,
+			&readByAI,
 			&msg.Message,
 			&msg.FilePath,
 			&msg.Lineno,
@@ -279,6 +286,7 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
 
+		msg.ReadByAI = readByAI != 0
 		messages = append(messages, &msg)
 	}
 
@@ -288,7 +296,7 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 // GetUnresolvedRootMessages retrieves all unresolved root messages (not replies)
 func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
 	query := `
-		SELECT id, author, status, read_status, message, file_path, lineno,
+		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
 		       conversation_id, sha1, context, created_at, updated_at
 		FROM messages
 		WHERE status != ? AND id = conversation_id
@@ -304,12 +312,14 @@ func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
 	var messages []*Message
 	for rows.Next() {
 		var msg Message
+		var readByAI int
 
 		err := rows.Scan(
 			&msg.ID,
 			&msg.Author,
 			&msg.Status,
 			&msg.ReadStatus,
+			&readByAI,
 			&msg.Message,
 			&msg.FilePath,
 			&msg.Lineno,
@@ -323,6 +333,7 @@ func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
 
+		msg.ReadByAI = readByAI != 0
 		messages = append(messages, &msg)
 	}
 
@@ -335,7 +346,7 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 	preconditions.Check(filePath != "", "filePath must not be empty")
 
 	query := `
-		SELECT id, author, status, read_status, message, file_path, lineno,
+		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
 		       conversation_id, sha1, context, created_at, updated_at
 		FROM messages
 		WHERE file_path = ? AND id = conversation_id
@@ -351,12 +362,14 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 	var messages []*Message
 	for rows.Next() {
 		var msg Message
+		var readByAI int
 
 		err := rows.Scan(
 			&msg.ID,
 			&msg.Author,
 			&msg.Status,
 			&msg.ReadStatus,
+			&readByAI,
 			&msg.Message,
 			&msg.FilePath,
 			&msg.Lineno,
@@ -370,6 +383,7 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
 
+		msg.ReadByAI = readByAI != 0
 		messages = append(messages, &msg)
 	}
 
@@ -435,6 +449,26 @@ func (db *DB) MarkAsRead(id string) error {
 	}
 
 	logger.Debug("Marked AI message %s as read", id)
+	return nil
+}
+
+// MarkAsReadByAI marks a conversation as having been read by the AI
+func (db *DB) MarkAsReadByAI(conversationID string) error {
+	preconditions.Check(conversationID != "", "conversationID must not be empty")
+
+	query := `
+		UPDATE messages
+		SET read_by_ai = 1, updated_at = ?
+		WHERE conversation_id = ?
+	`
+
+	result, err := db.db.Exec(query, time.Now(), conversationID)
+	if err != nil {
+		return fmt.Errorf("failed to mark as read by AI: %w", err)
+	}
+
+	affected, _ := result.RowsAffected()
+	logger.Info("Marked conversation %s (%d messages) as read by AI", conversationID, affected)
 	return nil
 }
 

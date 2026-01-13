@@ -27,12 +27,13 @@ func (f FileItem) FilterValue() string {
 // FileListWidget is a teapot-based file list widget
 type FileListWidget struct {
 	pot.BaseWidget
-	list       *pot.SelectableList[FileItem]
-	messaging  critic.Messaging
-	width      int
-	height     int
-	filterMode int // 0 = all, 1 = with comments, 2 = unresolved only
-	totalFiles int // Total files before filtering (for "No files match filter" message)
+	list            *pot.SelectableList[FileItem]
+	messaging       critic.Messaging
+	animationTicker *AnimationTicker
+	width           int
+	height          int
+	filterMode      int // 0 = all, 1 = with comments, 2 = unresolved only
+	totalFiles      int // Total files before filtering (for "No files match filter" message)
 }
 
 // NewFileListWidget creates a new file list widget
@@ -66,6 +67,7 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 	var hasUnreadAI bool
 	var hasUnresolved bool
 	var hasResolved bool
+	var fileAnimSummary FileAnimationSummary
 
 	if w.messaging != nil {
 		summary, err := w.messaging.GetFileConversationSummary(gitPath)
@@ -73,6 +75,11 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 			hasUnreadAI = summary.HasUnreadAIMessages
 			hasUnresolved = summary.HasUnresolvedComments
 			hasResolved = summary.HasResolvedComments
+		}
+
+		// Get animation state for this file's conversations
+		if hasUnresolved {
+			fileAnimSummary = w.getFileAnimationSummary(gitPath)
 		}
 	}
 
@@ -94,10 +101,20 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 		path = git.GitPathToDisplayPath(file.OldPath)
 	}
 
-	// Determine left indicator color
+	// Determine left indicator - animation takes priority
 	var indicatorStyle lipgloss.Style
 	var indicatorRune rune = ' '
-	if hasUnreadAI {
+	animState := GetFileAnimationState(fileAnimSummary)
+
+	if animState != NoAnimation && w.animationTicker != nil {
+		// Use animation character
+		animFrame := w.animationTicker.GetFrame(animState, false)
+		if len(animFrame) > 0 {
+			indicatorRune = []rune(animFrame)[0]
+		}
+		// Use yellow for animation indicators
+		indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+	} else if hasUnreadAI {
 		indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // Red
 		indicatorRune = '▌'
 	} else if hasUnresolved {
@@ -148,6 +165,36 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 			buf.SetCell(x, 0, pot.Cell{Rune: ' ', Style: style})
 		}
 	}
+}
+
+// getFileAnimationSummary calculates the animation summary for a file
+func (w *FileListWidget) getFileAnimationSummary(gitPath string) FileAnimationSummary {
+	summary := FileAnimationSummary{}
+	if w.messaging == nil {
+		return summary
+	}
+
+	convs, err := w.messaging.GetConversationsForFile(gitPath)
+	if err != nil {
+		return summary
+	}
+
+	for _, conv := range convs {
+		state := GetConversationAnimationState(conv)
+		switch state {
+		case ThinkingAnimation:
+			summary.HasThinking = true
+		case LookHereAnimation:
+			summary.HasLookHere = true
+		}
+
+		// Early exit if both are true
+		if summary.HasThinking && summary.HasLookHere {
+			return summary
+		}
+	}
+
+	return summary
 }
 
 // SetFiles updates the file list
@@ -208,6 +255,11 @@ func (w *FileListWidget) OnSelect(fn func(*ctypes.FileDiff)) {
 // SetMessaging sets the messaging interface
 func (w *FileListWidget) SetMessaging(messaging critic.Messaging) {
 	w.messaging = messaging
+}
+
+// SetAnimationTicker sets the animation ticker for conversation state animations
+func (w *FileListWidget) SetAnimationTicker(ticker *AnimationTicker) {
+	w.animationTicker = ticker
 }
 
 // SetFilterMode sets the current filter mode and total files count
