@@ -19,8 +19,8 @@ func TestPipeInto_BasicFiltering(t *testing.T) {
 }
 
 func TestPipeInto_Lines(t *testing.T) {
-	// Extract lines 2-4 using line-based API
-	pipe := sio.NewSectionPipeLines(2, 4)
+	// Extract lines 2-4 (skip 1, take 3)
+	pipe := sio.NewSectionPipe(1, 3)
 	output := PipeInto(pipe, "printf", "line 1\nline 2\nline 3\nline 4\nline 5\n")
 
 	expected := "line 2\nline 3\nline 4\n"
@@ -70,8 +70,8 @@ func TestPipeInto_LargeOutput(t *testing.T) {
 }
 
 func TestPipeInto_FirstLine(t *testing.T) {
-	// Get just the first line
-	pipe := sio.NewSectionPipeLines(1, 1)
+	// Get just the first line (skip 0, take 1)
+	pipe := sio.NewSectionPipe(0, 1)
 	output := PipeInto(pipe, "printf", "first\nsecond\nthird\n")
 
 	expected := "first\n"
@@ -81,8 +81,8 @@ func TestPipeInto_FirstLine(t *testing.T) {
 }
 
 func TestPipeInto_CommandWithArgs(t *testing.T) {
-	// Test with a command that takes arguments
-	pipe := sio.NewSectionPipeLines(1, 3)
+	// Test with a command that takes arguments (skip 0, take 3)
+	pipe := sio.NewSectionPipe(0, 3)
 	output := PipeInto(pipe, "seq", "10", "20")
 
 	// Should get lines 10, 11, 12
@@ -112,4 +112,34 @@ func TestPipeInto_Panics_OnCommandFailure(t *testing.T) {
 	pipe := sio.NewSectionPipe(0, 10)
 	// This command should fail (non-existent command)
 	PipeInto(pipe, "nonexistent_command_12345")
+}
+
+func TestPipeInto_LargeBinaryData(t *testing.T) {
+	// Generate ~1MB of base64 encoded random data and pipe through SectionPipe
+	// This tests that the parallel exec/read works correctly with large binary data
+	// and doesn't block due to pipe buffer limits.
+	//
+	// base64 output has 76 chars per line + newline = 77 bytes per line
+	// 1024768 bytes / 77 ≈ 13308 lines
+	pipe := sio.NewSectionPipe(100, 1000)
+
+	// Generate large binary data: base64 /dev/urandom | head -c 1024768
+	output := PipeInto(pipe, "bash", "-c", "base64 /dev/urandom | head -c 1024768")
+
+	// Should have exactly 1000 lines
+	lines := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
+	if len(lines) != 1000 {
+		t.Errorf("expected 1000 lines, got %d", len(lines))
+	}
+
+	// Each line should be base64 encoded (76 chars typically, last line may be shorter)
+	for i, line := range lines[:10] { // Check first 10 lines
+		if len(line) == 0 {
+			t.Errorf("line %d is empty", i)
+		}
+		// base64 lines are typically 76 chars
+		if len(line) > 77 {
+			t.Errorf("line %d unexpectedly long: %d chars", i, len(line))
+		}
+	}
 }

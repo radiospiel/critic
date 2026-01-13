@@ -27,26 +27,6 @@ func NewSectionPipe(skip, take int) *SectionPipe {
 	}
 }
 
-// NewSectionPipeLines creates a SectionPipe that extracts lines from
-// startLine to endLine (1-indexed, inclusive). This is equivalent to
-// `sed -n 'startLine,endLinep'`.
-//
-// Example: NewSectionPipeLines(5, 10) extracts lines 5 through 10.
-func NewSectionPipeLines(startLine, endLine int) *SectionPipe {
-	if startLine < 1 {
-		startLine = 1
-	}
-	skip := startLine - 1
-	take := endLine - startLine + 1
-	if take < 0 {
-		take = 0
-	}
-	return &SectionPipe{
-		skip: skip,
-		take: take,
-	}
-}
-
 // Pipe creates and returns a connected PipeReader and PipeWriter.
 // Data written to the PipeWriter is filtered (lines are skipped/taken
 // according to the SectionPipe configuration) and the filtered output

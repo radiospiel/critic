@@ -17,39 +17,6 @@ func TestNewSectionPipe(t *testing.T) {
 	}
 }
 
-func TestNewSectionPipeLines(t *testing.T) {
-	// Lines 5-10 means skip 4, take 6
-	pipe := NewSectionPipeLines(5, 10)
-	if pipe.skip != 4 {
-		t.Errorf("expected skip=4, got %d", pipe.skip)
-	}
-	if pipe.take != 6 {
-		t.Errorf("expected take=6, got %d", pipe.take)
-	}
-}
-
-func TestNewSectionPipeLines_StartLineLessThanOne(t *testing.T) {
-	// Start line 0 should be treated as 1
-	pipe := NewSectionPipeLines(0, 5)
-	if pipe.skip != 0 {
-		t.Errorf("expected skip=0, got %d", pipe.skip)
-	}
-	if pipe.take != 5 {
-		t.Errorf("expected take=5, got %d", pipe.take)
-	}
-}
-
-func TestNewSectionPipeLines_EndBeforeStart(t *testing.T) {
-	// End before start should result in take=0
-	pipe := NewSectionPipeLines(10, 5)
-	if pipe.skip != 9 {
-		t.Errorf("expected skip=9, got %d", pipe.skip)
-	}
-	if pipe.take != 0 {
-		t.Errorf("expected take=0, got %d", pipe.take)
-	}
-}
-
 func TestSectionPipe_BasicFiltering(t *testing.T) {
 	// Create a pipe that skips 2 lines and takes 3 lines
 	pipe := NewSectionPipe(2, 3)
@@ -74,8 +41,8 @@ func TestSectionPipe_BasicFiltering(t *testing.T) {
 }
 
 func TestSectionPipe_Lines(t *testing.T) {
-	// Create a pipe that extracts lines 3-5 (1-indexed, inclusive)
-	pipe := NewSectionPipeLines(3, 5)
+	// Create a pipe that extracts lines 3-5 (skip 2, take 3)
+	pipe := NewSectionPipe(2, 3)
 	pr, pw := pipe.Pipe()
 
 	// Write test data

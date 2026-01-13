@@ -479,7 +479,10 @@ func readLinesFromGitShow(path string, ref string, startLine int, endLine int) s
 	}
 
 	// Use SectionPipe to extract only the relevant lines from git show output
-	pipe := sio.NewSectionPipeLines(startLine, endLine)
+	// skip = startLine - 1, take = endLine - startLine + 1
+	skip := startLine - 1
+	take := endLine - startLine + 1
+	pipe := sio.NewSectionPipe(skip, take)
 	output := must.PipeInto(pipe, "git", "show", ref+":"+path)
 	return string(output)
 }
