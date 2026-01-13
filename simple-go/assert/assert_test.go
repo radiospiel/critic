@@ -9,14 +9,21 @@ import (
 
 // mockTestingT is a minimal mock of testing.T for testing assert functions
 type mockTestingT struct {
-	failed   bool
-	errorMsg string
+	failed     bool
+	fatalCalled bool
+	errorMsg   string
 }
 
 func (m *mockTestingT) Helper() {}
 
 func (m *mockTestingT) Error(args ...interface{}) {
 	m.failed = true
+	m.errorMsg = fmt.Sprint(args...)
+}
+
+func (m *mockTestingT) Fatal(args ...interface{}) {
+	m.failed = true
+	m.fatalCalled = true
 	m.errorMsg = fmt.Sprint(args...)
 }
 
@@ -37,8 +44,19 @@ func (m *mockTestingT) expectMockFailure(t *testing.T, expectedSubstring string)
 	}
 }
 
+func (m *mockTestingT) expectMockFatal(t *testing.T, expectedSubstring string) {
+	t.Helper()
+	if !m.fatalCalled {
+		t.Error("Expected Fatal to be called, but it wasn't")
+	}
+	if expectedSubstring != "" && !strings.Contains(m.errorMsg, expectedSubstring) {
+		t.Errorf("Expected error message to contain %q, got: %s", expectedSubstring, m.errorMsg)
+	}
+}
+
 func (m *mockTestingT) resetMock() {
 	m.failed = false
+	m.fatalCalled = false
 	m.errorMsg = ""
 }
 
@@ -204,4 +222,150 @@ func TestAssertNotContains(t *testing.T) {
 	// Test failure case
 	NotContains(m, []string{"a", "b", "c"}, "b")
 	m.expectMockFailure(t, "assert.NotContains")
+}
+
+func TestAssertLen(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Test with slice
+	Len(m, []int{1, 2, 3}, 3)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Test with empty slice
+	Len(m, []string{}, 0)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Test with string
+	Len(m, "hello", 5)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Test with map
+	Len(m, map[string]int{"a": 1, "b": 2}, 2)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Test failure case - wrong length
+	Len(m, []int{1, 2, 3}, 5)
+	m.expectMockFailure(t, "assert.Len")
+	m.resetMock()
+
+	// Test failure case - unsupported type
+	Len(m, 42, 1)
+	m.expectMockFailure(t, "Unsupported type")
+}
+
+// ============================================================================
+// Fatal variant tests
+// ============================================================================
+
+func TestAssertEqualsF(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Should pass
+	EqualsF(m, 42, 42)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should fail with Fatal
+	EqualsF(m, 42, 100)
+	m.expectMockFatal(t, "assert.EqualsF")
+}
+
+func TestAssertTrueF(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Should pass
+	TrueF(m, true)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should fail with Fatal
+	TrueF(m, false)
+	m.expectMockFatal(t, "assert.TrueF")
+}
+
+func TestAssertFalseF(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Should pass
+	FalseF(m, false)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should fail with Fatal
+	FalseF(m, true)
+	m.expectMockFatal(t, "assert.FalseF")
+}
+
+func TestAssertNilF(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Should pass
+	NilF(m, nil)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should fail with Fatal
+	NilF(m, "not nil")
+	m.expectMockFatal(t, "assert.NilF")
+}
+
+func TestAssertNotNilF(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Should pass
+	NotNilF(m, "not nil")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should fail with Fatal
+	NotNilF(m, nil)
+	m.expectMockFatal(t, "assert.NotNilF")
+}
+
+func TestAssertNoErrorF(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Should pass
+	NoErrorF(m, nil)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should fail with Fatal
+	NoErrorF(m, errors.New("some error"))
+	m.expectMockFatal(t, "assert.NoErrorF")
+}
+
+func TestAssertLenF(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Should pass
+	LenF(m, []int{1, 2, 3}, 3)
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should fail with Fatal
+	LenF(m, []int{1, 2, 3}, 5)
+	m.expectMockFatal(t, "assert.LenF")
+}
+
+func TestAssertContainsF(t *testing.T) {
+	m := &mockTestingT{}
+
+	// Should pass with string
+	ContainsF(m, "hello world", "world")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should pass with slice
+	ContainsF(m, []string{"a", "b", "c"}, "b")
+	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// Should fail with Fatal
+	ContainsF(m, "hello", "world")
+	m.expectMockFatal(t, "assert.ContainsF")
 }
