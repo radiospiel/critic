@@ -210,6 +210,15 @@ func (s *Server) handleToolsCall(req Request) error {
 	}
 }
 
+// ConversationSummary represents a summary of a conversation for the MCP list response
+type ConversationSummary struct {
+	UUID       string `json:"uuid"`
+	Status     string `json:"status"`
+	FilePath   string `json:"file_path"`
+	LineNumber int    `json:"line_number"`
+	Context    string `json:"context,omitempty"`
+}
+
 // handleGetCriticConversations handles the get_critic_conversations tool
 func (s *Server) handleGetCriticConversations(req Request, params CallToolParams) error {
 	if s.messaging == nil {
@@ -229,14 +238,20 @@ func (s *Server) handleGetCriticConversations(req Request, params CallToolParams
 
 	s.logToStderr("Found %d conversations", len(conversations))
 
-	// Extract UUIDs for the response
-	uuids := make([]string, len(conversations))
+	// Build summaries with context
+	summaries := make([]ConversationSummary, len(conversations))
 	for i, conv := range conversations {
-		uuids[i] = conv.UUID
+		summaries[i] = ConversationSummary{
+			UUID:       conv.UUID,
+			Status:     string(conv.Status),
+			FilePath:   conv.FilePath,
+			LineNumber: conv.LineNumber,
+			Context:    conv.Context,
+		}
 	}
 
 	// Format as JSON array
-	result, err := json.Marshal(uuids)
+	result, err := json.Marshal(summaries)
 	if err != nil {
 		return s.sendToolError(req.ID, fmt.Sprintf("Error encoding result: %v", err))
 	}
@@ -309,6 +324,18 @@ func (s *Server) formatConversation(conv *critic.Conversation) string {
 	builder.WriteString(fmt.Sprintf("Status: %s\n", conv.Status))
 	builder.WriteString(fmt.Sprintf("Location: %s:%d\n", conv.FilePath, conv.LineNumber))
 	builder.WriteString(fmt.Sprintf("Code Version: %s\n", conv.CodeVersion))
+
+	// Context (code around the commented line)
+	if conv.Context != "" {
+		builder.WriteString("\nCode Context:\n")
+		builder.WriteString("```\n")
+		builder.WriteString(conv.Context)
+		if !strings.HasSuffix(conv.Context, "\n") {
+			builder.WriteString("\n")
+		}
+		builder.WriteString("```\n")
+	}
+
 	builder.WriteString("\n")
 
 	// Messages

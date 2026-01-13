@@ -16,6 +16,9 @@ type ConversationSummary struct {
 	MessagePreview string `json:"message_preview"`
 	Status         string `json:"status"`
 	Author         string `json:"author"`
+	FilePath       string `json:"file_path"`
+	LineNumber     int    `json:"line_number"`
+	Context        string `json:"context,omitempty"`
 }
 
 // ReplyResponse represents the response from creating a reply
@@ -110,6 +113,9 @@ Examples:
 					MessagePreview: messagePreview,
 					Status:         string(conv.Status),
 					Author:         string(firstMsg.Author),
+					FilePath:       conv.FilePath,
+					LineNumber:     conv.LineNumber,
+					Context:        conv.Context,
 				})
 			}
 
@@ -166,6 +172,18 @@ Example:
 			fmt.Printf("Code Version: %s\n", conversation.CodeVersion)
 			fmt.Printf("Created: %s\n", conversation.CreatedAt.Format("2006-01-02 15:04:05"))
 			fmt.Printf("Updated: %s\n", conversation.UpdatedAt.Format("2006-01-02 15:04:05"))
+
+			// Show code context if available
+			if conversation.Context != "" {
+				fmt.Println("\nCode Context:")
+				fmt.Println("```")
+				fmt.Print(conversation.Context)
+				if len(conversation.Context) > 0 && conversation.Context[len(conversation.Context)-1] != '\n' {
+					fmt.Println()
+				}
+				fmt.Println("```")
+			}
+
 			fmt.Println()
 
 			for i, msg := range conversation.Messages {

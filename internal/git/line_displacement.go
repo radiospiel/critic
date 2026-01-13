@@ -502,6 +502,33 @@ func populateBlockContent(blocks []LineDisplacementBlock, path string, ref strin
 	return blocks
 }
 
+// GetLineContext returns the context around a specific line in a file.
+// It reads contextLines lines before and after the specified line from the given git ref.
+// If ref is empty, it reads from the working directory using the filesystem.
+func GetLineContext(path string, lineNum int, ref string) string {
+	startLine := lineNum - contextLines
+	endLine := lineNum + contextLines
+
+	if ref == "" {
+		// Read from working directory
+		return readLinesFromWorkingDir(path, startLine, endLine)
+	}
+	return readLinesFromGitShow(path, ref, startLine, endLine)
+}
+
+// readLinesFromWorkingDir reads a range of lines from a file in the working directory.
+// It reads from startLine to endLine (inclusive).
+func readLinesFromWorkingDir(path string, startLine int, endLine int) string {
+	if startLine < 1 {
+		startLine = 1
+	}
+
+	// Use sed to extract only the relevant lines from the file
+	output := must.Exec("bash", "-c",
+		fmt.Sprintf("sed -n '%d,%dp' %q", startLine, endLine, path))
+	return string(output)
+}
+
 // revParse converts a git ref (branch name, tag, commit SHA1) to a full SHA1 commit hash.
 // If the input is already a SHA1, it returns it as-is.
 func revParse(ref string) string {
