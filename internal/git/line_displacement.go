@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	sio "git.15b.it/eno/critic/simple-go/io"
 	"git.15b.it/eno/critic/simple-go/must"
 	"git.15b.it/eno/critic/simple-go/preconditions"
 	"git.15b.it/eno/critic/simple-go/utils"
@@ -477,10 +478,12 @@ func readLinesFromGitShow(path string, ref string, startLine int, endLine int) s
 		startLine = 1
 	}
 
-	// Use sed to extract only the relevant lines from git show output
-	// sed -n 'start,endp' prints lines from start to end (inclusive)
-	output := must.Exec("bash", "-c",
-		fmt.Sprintf("git show %s:%s | sed -n '%d,%dp'", ref, path, startLine, endLine))
+	// Use SectionPipe to extract only the relevant lines from git show output
+	// skip = startLine - 1, take = endLine - startLine + 1
+	skip := startLine - 1
+	take := endLine - startLine + 1
+	pipe := sio.NewSectionPipe(skip, take)
+	output := must.PipeInto(pipe, "git", "show", ref+":"+path)
 	return string(output)
 }
 
@@ -519,14 +522,12 @@ func GetLineContext(path string, lineNum int, ref string) string {
 // readLinesFromWorkingDir reads a range of lines from a file in the working directory.
 // It reads from startLine to endLine (inclusive).
 func readLinesFromWorkingDir(path string, startLine int, endLine int) string {
-	if startLine < 1 {
-		startLine = 1
+	// Use ReadFileLines to extract only the relevant lines from the file
+	output, err := sio.ReadFileLines(path, startLine, endLine)
+	if err != nil {
+		panic(fmt.Sprintf("readLinesFromWorkingDir(%s, %d, %d): %v", path, startLine, endLine, err))
 	}
-
-	// Use sed to extract only the relevant lines from the file
-	output := must.Exec("bash", "-c",
-		fmt.Sprintf("sed -n '%d,%dp' %q", startLine, endLine, path))
-	return string(output)
+	return output
 }
 
 // revParse converts a git ref (branch name, tag, commit SHA1) to a full SHA1 commit hash.
