@@ -29,6 +29,29 @@ type ReplyResponse struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// MessageResponse represents a message in a conversation for JSON output
+type MessageResponse struct {
+	UUID      string `json:"uuid"`
+	Author    string `json:"author"`
+	Message   string `json:"message"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	IsUnread  bool   `json:"is_unread"`
+}
+
+// ConversationResponse represents a full conversation for JSON output
+type ConversationResponse struct {
+	UUID        string            `json:"uuid"`
+	Status      string            `json:"status"`
+	FilePath    string            `json:"file_path"`
+	LineNumber  int               `json:"line_number"`
+	CodeVersion string            `json:"code_version"`
+	Context     string            `json:"context"`
+	CreatedAt   string            `json:"created_at"`
+	UpdatedAt   string            `json:"updated_at"`
+	Messages    []MessageResponse `json:"messages"`
+}
+
 // newConvoCmd creates the convo parent command
 func newConvoCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -140,7 +163,7 @@ func newConvoShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show <uuid>",
 		Short: "Show a complete conversation",
-		Long: `Display a complete conversation including all messages and replies.
+		Long: `Display a complete conversation including all messages and replies as JSON.
 
 Example:
   critic convo show a1b2c3d4-e5f6-7890-abcd-ef1234567890
@@ -165,46 +188,37 @@ Example:
 				return fmt.Errorf("failed to get conversation: %w", err)
 			}
 
-			// Format and display
-			fmt.Printf("Conversation: %s\n", conversation.UUID)
-			fmt.Printf("Status: %s\n", conversation.Status)
-			fmt.Printf("Location: %s:%d\n", conversation.FilePath, conversation.LineNumber)
-			fmt.Printf("Code Version: %s\n", conversation.CodeVersion)
-			fmt.Printf("Created: %s\n", conversation.CreatedAt.Format("2006-01-02 15:04:05"))
-			fmt.Printf("Updated: %s\n", conversation.UpdatedAt.Format("2006-01-02 15:04:05"))
-
-			// Show code context if available
-			if conversation.Context != "" {
-				fmt.Println("\nCode Context:")
-				fmt.Println("```")
-				fmt.Print(conversation.Context)
-				if len(conversation.Context) > 0 && conversation.Context[len(conversation.Context)-1] != '\n' {
-					fmt.Println()
-				}
-				fmt.Println("```")
+			// Build message responses
+			messages := make([]MessageResponse, 0, len(conversation.Messages))
+			for _, msg := range conversation.Messages {
+				messages = append(messages, MessageResponse{
+					UUID:      msg.UUID,
+					Author:    string(msg.Author),
+					Message:   msg.Message,
+					CreatedAt: msg.CreatedAt.Format("2006-01-02 15:04:05"),
+					UpdatedAt: msg.UpdatedAt.Format("2006-01-02 15:04:05"),
+					IsUnread:  msg.IsUnread,
+				})
 			}
 
-			fmt.Println()
-
-			for i, msg := range conversation.Messages {
-				if i > 0 {
-					fmt.Println("---")
-				}
-
-				author := "human"
-				if msg.Author == critic.AuthorAI {
-					author = "ai"
-				}
-
-				unreadIndicator := ""
-				if msg.IsUnread {
-					unreadIndicator = " [UNREAD]"
-				}
-
-				fmt.Printf("[%s]%s %s (UUID: %s)\n", author, unreadIndicator, msg.CreatedAt.Format("2006-01-02 15:04:05"), msg.UUID)
-				fmt.Println(msg.Message)
+			response := ConversationResponse{
+				UUID:        conversation.UUID,
+				Status:      string(conversation.Status),
+				FilePath:    conversation.FilePath,
+				LineNumber:  conversation.LineNumber,
+				CodeVersion: conversation.CodeVersion,
+				Context:     conversation.Context,
+				CreatedAt:   conversation.CreatedAt.Format("2006-01-02 15:04:05"),
+				UpdatedAt:   conversation.UpdatedAt.Format("2006-01-02 15:04:05"),
+				Messages:    messages,
 			}
 
+			output, err := json.MarshalIndent(response, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal response: %w", err)
+			}
+
+			fmt.Println(string(output))
 			return nil
 		},
 	}
