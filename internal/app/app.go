@@ -118,23 +118,25 @@ func Run(args *Args) error {
 
 // Model represents the main application model
 type Model struct {
-	fileList      *ui.FileListWidget
-	diffView      ui.DiffViewModel
-	commentEditor ui.CommentEditor
-	layout        ui.LayoutModel
-	diff          *ctypes.Diff
-	bases         []string          // List of base refs
-	currentBase   int               // Index of current base
-	paths         []string          // Paths to diff
-	extensions    []string          // File extensions to include
-	resolver      *git.BaseResolver // Base resolver with polling
-	messaging     critic.Messaging  // Messaging interface for conversations
-	filterMode    FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
-	err           error
-	width         int
-	height        int
-	ready         bool
-	showHelp      bool // Whether to show help screen
+	fileList        *ui.FileListWidget
+	diffView        ui.DiffViewModel
+	commentEditor   ui.CommentEditor
+	layout          ui.LayoutModel
+	diff            *ctypes.Diff
+	bases           []string          // List of base refs
+	currentBase     int               // Index of current base
+	paths           []string          // Paths to diff
+	extensions      []string          // File extensions to include
+	resolver        *git.BaseResolver // Base resolver with polling
+	messaging       critic.Messaging  // Messaging interface for conversations
+	filterMode      FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
+	animationTicker *ui.AnimationTicker // Animation ticker for conversation states
+	globalAnimState ui.GlobalAnimationSummary // Global animation state for status bar
+	err             error
+	width           int
+	height          int
+	ready           bool
+	showHelp        bool // Whether to show help screen
 }
 
 // NewModel creates a new application model
@@ -155,19 +157,26 @@ func NewModel(args *Args) Model {
 	if err != nil {
 		logger.Fatal("Failed to initialize message database: %v", err)
 	}
+
+	// Create animation ticker
+	animTicker := ui.NewAnimationTicker()
+
 	diffView.SetMessaging(mdb)
+	diffView.SetAnimationTicker(animTicker)
 	fileList.SetMessaging(mdb)
+	fileList.SetAnimationTicker(animTicker)
 
 	return Model{
-		fileList:      fileList,
-		diffView:      diffView,
-		commentEditor: ui.NewCommentEditor(),
-		layout:        ui.NewLayoutModel(),
-		bases:         args.Bases,
-		currentBase:   0, // Start with first base
-		paths:         args.Paths,
-		extensions:    args.Extensions,
-		messaging:     mdb,
+		fileList:        fileList,
+		diffView:        diffView,
+		commentEditor:   ui.NewCommentEditor(),
+		layout:          ui.NewLayoutModel(),
+		bases:           args.Bases,
+		currentBase:     0, // Start with first base
+		paths:           args.Paths,
+		extensions:      args.Extensions,
+		messaging:       mdb,
+		animationTicker: animTicker,
 	}
 }
 
@@ -181,7 +190,8 @@ func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		initBaseResolverCmd(&m),
 		loadDiffCmd(&m),
-		disableTerminalLineWrap, // This now handles alternate screen + nowrap
+		disableTerminalLineWrap,        // This now handles alternate screen + nowrap
+		ui.StartAnimationTicker(),      // Start animation ticker
 	}
 
 	return tea.Batch(cmds...)
@@ -420,6 +430,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
+	case ui.AnimationTickMsg:
+		// Advance animation frame
+		m.animationTicker.Tick()
+		// Update global animation state based on conversations
+		m.updateGlobalAnimationState()
+		// Continue the ticker
+		cmds = append(cmds, ui.StartAnimationTicker())
+
 	default:
 		// Route other messages to diff view (like diffRenderedMsg)
 		cmd := m.diffView.Update(msg)
@@ -500,6 +518,13 @@ func (m Model) View() string {
 func (m Model) renderStatusBar() string {
 	var parts []string
 
+	// Show animation indicator if there are conversations needing attention
+	animState := ui.GetGlobalAnimationState(m.globalAnimState)
+	if animState != ui.NoAnimation {
+		animFrame := m.animationTicker.GetFrame(animState, false)
+		parts = append(parts, animFrame)
+	}
+
 	// Show current base
 	if len(m.bases) > 0 {
 		base := m.bases[m.currentBase]
@@ -535,6 +560,45 @@ func (m Model) renderStatusBar() string {
 		MaxWidth(m.width).
 		Inline(true).
 		Render(status)
+}
+
+// updateGlobalAnimationState updates the global animation state based on all conversations
+func (m *Model) updateGlobalAnimationState() {
+	m.globalAnimState = ui.GlobalAnimationSummary{
+		HasThinking:  false,
+		HasLookHere:  false,
+	}
+
+	if m.messaging == nil {
+		return
+	}
+
+	// Get all unresolved conversations
+	conversations, err := m.messaging.GetConversations(string(critic.StatusUnresolved))
+	if err != nil {
+		return
+	}
+
+	for _, conv := range conversations {
+		// Get the full conversation to check ReadByAI and last message
+		fullConv, err := m.messaging.GetFullConversation(conv.UUID)
+		if err != nil {
+			continue
+		}
+
+		state := ui.GetConversationAnimationState(fullConv)
+		switch state {
+		case ui.ThinkingAnimation:
+			m.globalAnimState.HasThinking = true
+		case ui.LookHereAnimation:
+			m.globalAnimState.HasLookHere = true
+		}
+
+		// Early exit if both are already true
+		if m.globalAnimState.HasThinking && m.globalAnimState.HasLookHere {
+			return
+		}
+	}
 }
 
 // renderError renders an error message

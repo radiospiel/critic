@@ -146,6 +146,7 @@ func (db *DB) GetFullConversation(conversationID string) (*critic.Conversation, 
 		Messages:    criticMessages,
 		CreatedAt:   rootMsg.CreatedAt,
 		UpdatedAt:   rootMsg.UpdatedAt,
+		ReadByAI:    rootMsg.ReadByAI,
 	}
 
 	logger.Debug("Retrieved conversation %s with %d messages", conversationID, len(criticMessages))

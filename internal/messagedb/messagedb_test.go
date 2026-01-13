@@ -308,3 +308,67 @@ func TestGetConversationsWithStatusFilter(t *testing.T) {
 	assert.Equals(t, len(resolved), 1, "expected 1 resolved conversation")
 	assert.Equals(t, resolved[0].UUID, conv3.ID, "expected conv3 in resolved conversations")
 }
+
+func TestMarkAsReadByAI(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create parent message and replies
+	parent, err := db.CreateMessage(AuthorHuman, "Parent comment", "src/main.go", 10, "abc123", "content")
+	assert.NoError(t, err, "failed to create parent")
+	assert.False(t, parent.ReadByAI, "expected ReadByAI to be false initially")
+
+	// Create replies
+	reply1, err := db.CreateReply(AuthorAI, "AI reply", parent.ID)
+	assert.NoError(t, err, "failed to create reply1")
+
+	reply2, err := db.CreateReply(AuthorHuman, "Human reply", parent.ID)
+	assert.NoError(t, err, "failed to create reply2")
+
+	// Mark conversation as read by AI
+	err = db.MarkAsReadByAI(parent.ID)
+	assert.NoError(t, err, "failed to mark as read by AI")
+
+	// Verify all messages in conversation are marked
+	parentAfter, _ := db.GetMessage(parent.ID)
+	assert.True(t, parentAfter.ReadByAI, "expected parent to be marked as read by AI")
+
+	reply1After, _ := db.GetMessage(reply1.ID)
+	assert.True(t, reply1After.ReadByAI, "expected reply1 to be marked as read by AI")
+
+	reply2After, _ := db.GetMessage(reply2.ID)
+	assert.True(t, reply2After.ReadByAI, "expected reply2 to be marked as read by AI")
+}
+
+func TestReadByAIFieldInGetThreadMessages(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create conversation
+	parent, _ := db.CreateMessage(AuthorHuman, "Parent", "src/main.go", 10, "abc123", "content")
+	db.CreateReply(AuthorAI, "Reply", parent.ID)
+
+	// Mark as read by AI
+	db.MarkAsReadByAI(parent.ID)
+
+	// Get thread messages and verify ReadByAI field
+	thread, err := db.GetThreadMessages(parent.ID)
+	assert.NoError(t, err, "failed to get thread messages")
+	assert.Equals(t, len(thread), 2, "expected 2 messages in thread")
+
+	for _, msg := range thread {
+		assert.True(t, msg.ReadByAI, "expected message %s to be marked as read by AI", msg.ID)
+	}
+}
+
+func TestReadByAIFieldDefaultsFalse(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create message
+	msg, _ := db.CreateMessage(AuthorHuman, "Comment", "src/main.go", 10, "abc123", "content")
+
+	// Verify ReadByAI defaults to false
+	retrieved, _ := db.GetMessage(msg.ID)
+	assert.False(t, retrieved.ReadByAI, "expected ReadByAI to default to false")
+}

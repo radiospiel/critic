@@ -308,6 +308,12 @@ func (s *Server) handleGetFullCriticConversation(req Request, params CallToolPar
 		return s.sendToolError(req.ID, fmt.Sprintf("Error getting conversation: %v", err))
 	}
 
+	// Mark the conversation as read by AI
+	if err := s.messaging.MarkAsReadByAI(uuid); err != nil {
+		s.logToStderr("Failed to mark conversation as read by AI: %v", err)
+		// Don't fail the request, just log the error
+	}
+
 	// Convert to JSON response format
 	messages := make([]MessageResponse, len(conversation.Messages))
 	for i, msg := range conversation.Messages {
