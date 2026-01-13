@@ -698,6 +698,9 @@ func (m *DiffViewModel) filterHunks(hunks []*ctypes.Hunk, conversationsByLine ma
 		}
 	}
 
+	logger.Info("filterHunks: mode=%d, hunks=%d->%d, conversations=%d",
+		m.filterMode, len(hunks), len(filtered), len(conversationsByLine))
+
 	return filtered
 }
 
@@ -827,6 +830,14 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 
 	// Filter hunks based on filter mode
 	hunksToRender := m.filterHunks(m.file.Hunks, conversationsByLine)
+
+	// Show message if all hunks were filtered out
+	if len(hunksToRender) == 0 && len(m.file.Hunks) > 0 && m.filterMode != FilterModeNone {
+		msg := "No hunks match filter (press f to show all)"
+		b.WriteString(m.renderLineWithCursor(m.truncateToWidth(hunkHeaderStyle.Render(msg)), lineNum))
+		lineNum++
+		b.WriteString("\n")
+	}
 
 	// Render each hunk
 	for hunkIdx, hunk := range hunksToRender {

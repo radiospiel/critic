@@ -27,10 +27,12 @@ func (f FileItem) FilterValue() string {
 // FileListWidget is a teapot-based file list widget
 type FileListWidget struct {
 	pot.BaseWidget
-	list      *pot.SelectableList[FileItem]
-	messaging critic.Messaging
-	width     int
-	height    int
+	list       *pot.SelectableList[FileItem]
+	messaging  critic.Messaging
+	width      int
+	height     int
+	filterMode int // 0 = all, 1 = with comments, 2 = unresolved only
+	totalFiles int // Total files before filtering (for "No files match filter" message)
 }
 
 // NewFileListWidget creates a new file list widget
@@ -208,6 +210,13 @@ func (w *FileListWidget) SetMessaging(messaging critic.Messaging) {
 	w.messaging = messaging
 }
 
+// SetFilterMode sets the current filter mode and total files count
+// filterMode: 0 = all, 1 = with comments, 2 = unresolved only
+func (w *FileListWidget) SetFilterMode(filterMode int, totalFiles int) {
+	w.filterMode = filterMode
+	w.totalFiles = totalFiles
+}
+
 // SetBounds implements pot.Widget
 func (w *FileListWidget) SetBounds(bounds pot.Rect) {
 	w.BaseWidget.SetBounds(bounds)
@@ -227,7 +236,15 @@ func (w *FileListWidget) Render(buf *pot.SubBuffer) {
 	if len(w.list.Items()) == 0 {
 		style := lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"})
-		buf.SetString(1, 1, "No files changed", style)
+		// Show appropriate message based on filter mode
+		var msg string
+		if w.filterMode > 0 && w.totalFiles > 0 {
+			// Files exist but none match the current filter
+			msg = "No files match filter (press f to show all)"
+		} else {
+			msg = "No files changed"
+		}
+		buf.SetString(1, 1, msg, style)
 		return
 	}
 	w.list.Render(buf)
