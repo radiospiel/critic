@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"git.15b.it/eno/critic/internal/git"
-	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/internal/messagedb"
 	"git.15b.it/eno/critic/pkg/critic"
+	"git.15b.it/eno/critic/simple-go/logger"
 )
 
 const (
@@ -219,6 +218,36 @@ type ConversationSummary struct {
 	Context    string `json:"context,omitempty"`
 }
 
+// MessageResponse represents a message in JSON format for MCP responses
+type MessageResponse struct {
+	UUID      string `json:"uuid"`
+	Author    string `json:"author"`
+	Message   string `json:"message"`
+	CreatedAt string `json:"created_at"`
+	IsUnread  bool   `json:"is_unread,omitempty"`
+}
+
+// ConversationResponse represents a full conversation in JSON format for MCP responses
+type ConversationResponse struct {
+	UUID        string            `json:"uuid"`
+	Status      string            `json:"status"`
+	FilePath    string            `json:"file_path"`
+	LineNumber  int               `json:"line_number"`
+	CodeVersion string            `json:"code_version"`
+	Context     string            `json:"context,omitempty"`
+	Messages    []MessageResponse `json:"messages"`
+	CreatedAt   string            `json:"created_at"`
+	UpdatedAt   string            `json:"updated_at"`
+}
+
+// ReplyResponse represents the result of creating a reply
+type ReplyResponse struct {
+	Success   bool   `json:"success"`
+	UUID      string `json:"uuid"`
+	Author    string `json:"author"`
+	CreatedAt string `json:"created_at"`
+}
+
 // handleGetCriticConversations handles the get_critic_conversations tool
 func (s *Server) handleGetCriticConversations(req Request, params CallToolParams) error {
 	if s.messaging == nil {
@@ -279,11 +308,37 @@ func (s *Server) handleGetFullCriticConversation(req Request, params CallToolPar
 		return s.sendToolError(req.ID, fmt.Sprintf("Error getting conversation: %v", err))
 	}
 
-	// Format conversation as human-readable text
-	response := s.formatConversation(conversation)
-	s.logToStderr("Returning conversation with %d messages", len(conversation.Messages))
+	// Convert to JSON response format
+	messages := make([]MessageResponse, len(conversation.Messages))
+	for i, msg := range conversation.Messages {
+		messages[i] = MessageResponse{
+			UUID:      msg.UUID,
+			Author:    string(msg.Author),
+			Message:   msg.Message,
+			CreatedAt: msg.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			IsUnread:  msg.IsUnread,
+		}
+	}
 
-	return s.sendToolResult(req.ID, response)
+	response := ConversationResponse{
+		UUID:        conversation.UUID,
+		Status:      string(conversation.Status),
+		FilePath:    conversation.FilePath,
+		LineNumber:  conversation.LineNumber,
+		CodeVersion: conversation.CodeVersion,
+		Context:     conversation.Context,
+		Messages:    messages,
+		CreatedAt:   conversation.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:   conversation.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	result, err := json.Marshal(response)
+	if err != nil {
+		return s.sendToolError(req.ID, fmt.Sprintf("Error encoding result: %v", err))
+	}
+
+	s.logToStderr("Returning conversation with %d messages", len(conversation.Messages))
+	return s.sendToolResult(req.ID, string(result))
 }
 
 // handleReplyToCriticConversation handles the reply_to_critic_conversation tool
@@ -311,50 +366,20 @@ func (s *Server) handleReplyToCriticConversation(req Request, params CallToolPar
 		return s.sendToolError(req.ID, fmt.Sprintf("Error creating reply: %v", err))
 	}
 
+	response := ReplyResponse{
+		Success:   true,
+		UUID:      reply.UUID,
+		Author:    string(reply.Author),
+		CreatedAt: reply.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	result, err := json.Marshal(response)
+	if err != nil {
+		return s.sendToolError(req.ID, fmt.Sprintf("Error encoding result: %v", err))
+	}
+
 	s.logToStderr("Created reply: %s", reply.UUID)
-	return s.sendToolResult(req.ID, fmt.Sprintf("Reply created successfully: %s", reply.UUID))
-}
-
-// formatConversation formats a conversation for display
-func (s *Server) formatConversation(conv *critic.Conversation) string {
-	var builder strings.Builder
-
-	// Header with metadata
-	builder.WriteString(fmt.Sprintf("Conversation: %s\n", conv.UUID))
-	builder.WriteString(fmt.Sprintf("Status: %s\n", conv.Status))
-	builder.WriteString(fmt.Sprintf("Location: %s:%d\n", conv.FilePath, conv.LineNumber))
-	builder.WriteString(fmt.Sprintf("Code Version: %s\n", conv.CodeVersion))
-
-	// Context (code around the commented line)
-	if conv.Context != "" {
-		builder.WriteString("\nCode Context:\n")
-		builder.WriteString("```\n")
-		builder.WriteString(conv.Context)
-		if !strings.HasSuffix(conv.Context, "\n") {
-			builder.WriteString("\n")
-		}
-		builder.WriteString("```\n")
-	}
-
-	builder.WriteString("\n")
-
-	// Messages
-	for i, msg := range conv.Messages {
-		if i > 0 {
-			builder.WriteString("\n")
-		}
-
-		prefix := "human"
-		if msg.Author == critic.AuthorAI {
-			prefix = "ai"
-		}
-
-		builder.WriteString(fmt.Sprintf("[%s] %s\n", prefix, msg.CreatedAt.Format("2006-01-02 15:04:05")))
-		builder.WriteString(msg.Message)
-		builder.WriteString("\n")
-	}
-
-	return builder.String()
+	return s.sendToolResult(req.ID, string(result))
 }
 
 // sendResult sends a successful result response
