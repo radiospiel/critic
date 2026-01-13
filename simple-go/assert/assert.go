@@ -14,15 +14,11 @@ import (
 // (the standard Go test runner) and mock implementations for testing the
 // assert package itself. Since *testing.T implements these methods, callers
 // can pass *testing.T directly to functions accepting testingT.
+//
+// All assert functions use Fatal to stop test execution on failure,
+// consistent with other assertion packages.
 type testingT interface {
 	Helper()
-	Error(args ...interface{})
-}
-
-// fatalT extends testingT with Fatal method for assertions that should
-// stop test execution immediately on failure.
-type fatalT interface {
-	testingT
 	Fatal(args ...interface{})
 }
 
@@ -35,7 +31,7 @@ func Equals(t testingT, actual any, expected any, details ...interface{}) {
 	if !isEqual(actual, expected) {
 		msg := fmt.Sprintf("assert.Equals(...) failed:\n  Expected: %v\n  Actual:   %v", expected, actual)
 		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
+		t.Fatal(msg)
 	}
 }
 
@@ -46,7 +42,7 @@ func NotEquals[T comparable](t testingT, actual, expected T, details ...interfac
 	if isEqual(actual, expected) {
 		msg := fmt.Sprintf("assert.NotEquals(...) failed:\n  Expected not to equal: %v\n  Actual:                %v", expected, actual)
 		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
+		t.Fatal(msg)
 	}
 }
 
@@ -99,7 +95,7 @@ func True(t testingT, condition bool, details ...interface{}) {
 	if !condition {
 		msg := "assert.True(...) failed"
 		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
+		t.Fatal(msg)
 	}
 }
 
@@ -110,7 +106,7 @@ func False(t testingT, condition bool, details ...interface{}) {
 	if condition {
 		msg := "assert.False(...) failed"
 		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
+		t.Fatal(msg)
 	}
 }
 
@@ -121,7 +117,7 @@ func Nil(t testingT, value interface{}, details ...interface{}) {
 	if !isNil(value) {
 		msg := fmt.Sprintf("assert.Nil(...) failed:\n  Expected: nil\n  Actual:   %v", value)
 		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
+		t.Fatal(msg)
 	}
 }
 
@@ -132,7 +128,7 @@ func NotNil(t testingT, value interface{}, details ...interface{}) {
 	if isNil(value) {
 		msg := "assert.NotNil(...) failed:\n  Expected: not nil\n  Actual:   nil"
 		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
+		t.Fatal(msg)
 	}
 }
 
@@ -168,7 +164,7 @@ func Error(t testingT, err error, expectedError string, details ...interface{}) 
 	}
 
 	msg = messageWithDetails(msg, details...)
-	t.Error(msg)
+	t.Fatal(msg)
 }
 
 // NoError checks if err is nil and fails if it's not.
@@ -178,7 +174,7 @@ func NoError(t testingT, err error, details ...interface{}) {
 	if err != nil {
 		msg := fmt.Sprintf("assert.NoError(...) failed:\n  Expected no error\n  Got:      %v", err)
 		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
+		t.Fatal(msg)
 	}
 }
 
@@ -199,13 +195,13 @@ func Contains(t testingT, container, element interface{}, details ...interface{}
 		if !ok {
 			msg := fmt.Sprintf("assert.Contains(...) failed:\n  When container is a string, element must also be a string, got %T", element)
 			msg = messageWithDetails(msg, details...)
-			t.Error(msg)
+			t.Fatal(msg)
 			return
 		}
 		if !strings.Contains(str, substr) {
 			msg := fmt.Sprintf("assert.Contains(...) failed:\n  String:         %q\n  Should contain: %q", str, substr)
 			msg = messageWithDetails(msg, details...)
-			t.Error(msg)
+			t.Fatal(msg)
 		}
 
 	case reflect.Slice, reflect.Array:
@@ -220,13 +216,13 @@ func Contains(t testingT, container, element interface{}, details ...interface{}
 		if !found {
 			msg := fmt.Sprintf("assert.Contains(...) failed:\n  Slice:    %v\n  Expected: %v", container, element)
 			msg = messageWithDetails(msg, details...)
-			t.Error(msg)
+			t.Fatal(msg)
 		}
 
 	default:
 		msg := fmt.Sprintf("assert.Contains(...) failed:\n  Unsupported container type: %T (expected string, slice, or array)", container)
 		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
+		t.Fatal(msg)
 	}
 }
 
@@ -247,13 +243,13 @@ func NotContains(t testingT, container, element interface{}, details ...interfac
 		if !ok {
 			msg := fmt.Sprintf("assert.NotContains(...) failed:\n  When container is a string, element must also be a string, got %T", element)
 			msg = messageWithDetails(msg, details...)
-			t.Error(msg)
+			t.Fatal(msg)
 			return
 		}
 		if strings.Contains(str, substr) {
 			msg := fmt.Sprintf("assert.NotContains(...) failed:\n  String:             %q\n  Should not contain: %q", str, substr)
 			msg = messageWithDetails(msg, details...)
-			t.Error(msg)
+			t.Fatal(msg)
 		}
 
 	case reflect.Slice, reflect.Array:
@@ -262,7 +258,7 @@ func NotContains(t testingT, container, element interface{}, details ...interfac
 			if reflect.DeepEqual(containerVal.Index(i).Interface(), element) {
 				msg := fmt.Sprintf("assert.NotContains(...) failed:\n  Slice:            %v\n  Should not contain: %v", container, element)
 				msg = messageWithDetails(msg, details...)
-				t.Error(msg)
+				t.Fatal(msg)
 				return
 			}
 		}
@@ -270,116 +266,6 @@ func NotContains(t testingT, container, element interface{}, details ...interfac
 	default:
 		msg := fmt.Sprintf("assert.NotContains(...) failed:\n  Unsupported container type: %T (expected string, slice, or array)", container)
 		msg = messageWithDetails(msg, details...)
-		t.Error(msg)
-	}
-}
-
-// ============================================================================
-// Fatal variants - These use t.Fatal() instead of t.Error() to stop test
-// execution immediately on failure. Use these when subsequent assertions
-// would fail or panic if this check fails (e.g., nil checks before method calls).
-// ============================================================================
-
-// EqualsFatal is like Equals but calls t.Fatal on failure.
-func EqualsFatal(t fatalT, actual any, expected any, details ...interface{}) {
-	t.Helper()
-	if !isEqual(actual, expected) {
-		msg := fmt.Sprintf("assert.EqualsFatal(...) failed:\n  Expected: %v\n  Actual:   %v", expected, actual)
-		msg = messageWithDetails(msg, details...)
 		t.Fatal(msg)
 	}
 }
-
-// TrueFatal is like True but calls t.Fatal on failure.
-func TrueFatal(t fatalT, condition bool, details ...interface{}) {
-	t.Helper()
-	if !condition {
-		msg := "assert.TrueFatal(...) failed"
-		msg = messageWithDetails(msg, details...)
-		t.Fatal(msg)
-	}
-}
-
-// FalseFatal is like False but calls t.Fatal on failure.
-func FalseFatal(t fatalT, condition bool, details ...interface{}) {
-	t.Helper()
-	if condition {
-		msg := "assert.FalseFatal(...) failed"
-		msg = messageWithDetails(msg, details...)
-		t.Fatal(msg)
-	}
-}
-
-// NilFatal is like Nil but calls t.Fatal on failure.
-func NilFatal(t fatalT, value interface{}, details ...interface{}) {
-	t.Helper()
-	if !isNil(value) {
-		msg := fmt.Sprintf("assert.NilFatal(...) failed:\n  Expected: nil\n  Actual:   %v", value)
-		msg = messageWithDetails(msg, details...)
-		t.Fatal(msg)
-	}
-}
-
-// NotNilFatal is like NotNil but calls t.Fatal on failure.
-func NotNilFatal(t fatalT, value interface{}, details ...interface{}) {
-	t.Helper()
-	if isNil(value) {
-		msg := "assert.NotNilFatal(...) failed:\n  Expected: not nil\n  Actual:   nil"
-		msg = messageWithDetails(msg, details...)
-		t.Fatal(msg)
-	}
-}
-
-// NoErrorFatal is like NoError but calls t.Fatal on failure.
-func NoErrorFatal(t fatalT, err error, details ...interface{}) {
-	t.Helper()
-	if err != nil {
-		msg := fmt.Sprintf("assert.NoErrorFatal(...) failed:\n  Expected no error\n  Got:      %v", err)
-		msg = messageWithDetails(msg, details...)
-		t.Fatal(msg)
-	}
-}
-
-// ContainsFatal is like Contains but calls t.Fatal on failure.
-func ContainsFatal(t fatalT, container, element interface{}, details ...interface{}) {
-	t.Helper()
-
-	containerVal := reflect.ValueOf(container)
-
-	switch containerVal.Kind() {
-	case reflect.String:
-		str := containerVal.String()
-		substr, ok := element.(string)
-		if !ok {
-			msg := fmt.Sprintf("assert.ContainsFatal(...) failed:\n  When container is a string, element must also be a string, got %T", element)
-			msg = messageWithDetails(msg, details...)
-			t.Fatal(msg)
-			return
-		}
-		if !strings.Contains(str, substr) {
-			msg := fmt.Sprintf("assert.ContainsFatal(...) failed:\n  String:         %q\n  Should contain: %q", str, substr)
-			msg = messageWithDetails(msg, details...)
-			t.Fatal(msg)
-		}
-
-	case reflect.Slice, reflect.Array:
-		found := false
-		for i := 0; i < containerVal.Len(); i++ {
-			if reflect.DeepEqual(containerVal.Index(i).Interface(), element) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			msg := fmt.Sprintf("assert.ContainsFatal(...) failed:\n  Slice:    %v\n  Expected: %v", container, element)
-			msg = messageWithDetails(msg, details...)
-			t.Fatal(msg)
-		}
-
-	default:
-		msg := fmt.Sprintf("assert.ContainsFatal(...) failed:\n  Unsupported container type: %T (expected string, slice, or array)", container)
-		msg = messageWithDetails(msg, details...)
-		t.Fatal(msg)
-	}
-}
-

@@ -9,21 +9,14 @@ import (
 
 // mockTestingT is a minimal mock of testing.T for testing assert functions
 type mockTestingT struct {
-	failed     bool
-	fatalCalled bool
-	errorMsg   string
+	failed   bool
+	errorMsg string
 }
 
 func (m *mockTestingT) Helper() {}
 
-func (m *mockTestingT) Error(args ...interface{}) {
-	m.failed = true
-	m.errorMsg = fmt.Sprint(args...)
-}
-
 func (m *mockTestingT) Fatal(args ...interface{}) {
 	m.failed = true
-	m.fatalCalled = true
 	m.errorMsg = fmt.Sprint(args...)
 }
 
@@ -44,19 +37,8 @@ func (m *mockTestingT) expectMockFailure(t *testing.T, expectedSubstring string)
 	}
 }
 
-func (m *mockTestingT) expectMockFatal(t *testing.T, expectedSubstring string) {
-	t.Helper()
-	if !m.fatalCalled {
-		t.Error("Expected Fatal to be called, but it wasn't")
-	}
-	if expectedSubstring != "" && !strings.Contains(m.errorMsg, expectedSubstring) {
-		t.Errorf("Expected error message to contain %q, got: %s", expectedSubstring, m.errorMsg)
-	}
-}
-
 func (m *mockTestingT) resetMock() {
 	m.failed = false
-	m.fatalCalled = false
 	m.errorMsg = ""
 }
 
@@ -74,6 +56,11 @@ func TestAssertEquals(t *testing.T) {
 
 	Equals(m, true, true)
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	Equals(m, 42, 100)
+	m.expectMockFailure(t, "assert.Equals")
 }
 
 func TestAssertNotEquals(t *testing.T) {
@@ -101,6 +88,11 @@ func TestAssertTrue(t *testing.T) {
 
 	True(m, 1 == 1, "1 should equal 1")
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	True(m, false)
+	m.expectMockFailure(t, "assert.True")
 }
 
 func TestAssertFalse(t *testing.T) {
@@ -112,6 +104,11 @@ func TestAssertFalse(t *testing.T) {
 
 	False(m, 1 == 2, "1 should not equal 2")
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	False(m, true)
+	m.expectMockFailure(t, "assert.False")
 }
 
 func TestAssertNil(t *testing.T) {
@@ -124,6 +121,11 @@ func TestAssertNil(t *testing.T) {
 
 	Nil(m, nilPtr, "nil pointer should be nil")
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	Nil(m, "not nil")
+	m.expectMockFailure(t, "assert.Nil")
 }
 
 func TestAssertNotNil(t *testing.T) {
@@ -136,6 +138,11 @@ func TestAssertNotNil(t *testing.T) {
 
 	NotNil(m, "string", "string should not be nil")
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	NotNil(m, nil)
+	m.expectMockFailure(t, "assert.NotNil")
 }
 
 func TestAssertError(t *testing.T) {
@@ -167,6 +174,11 @@ func TestAssertNoError(t *testing.T) {
 
 	NoError(m, nil)
 	m.expectMockSuccessful(t)
+	m.resetMock()
+
+	// This should fail
+	NoError(m, errors.New("some error"))
+	m.expectMockFailure(t, "assert.NoError")
 }
 
 func TestAssertContainsString(t *testing.T) {
@@ -222,104 +234,4 @@ func TestAssertNotContains(t *testing.T) {
 	// Test failure case
 	NotContains(m, []string{"a", "b", "c"}, "b")
 	m.expectMockFailure(t, "assert.NotContains")
-}
-
-// ============================================================================
-// Fatal variant tests
-// ============================================================================
-
-func TestAssertEqualsFatal(t *testing.T) {
-	m := &mockTestingT{}
-
-	// Should pass
-	EqualsFatal(m, 42, 42)
-	m.expectMockSuccessful(t)
-	m.resetMock()
-
-	// Should fail with Fatal
-	EqualsFatal(m, 42, 100)
-	m.expectMockFatal(t, "assert.EqualsFatal")
-}
-
-func TestAssertTrueFatal(t *testing.T) {
-	m := &mockTestingT{}
-
-	// Should pass
-	TrueFatal(m, true)
-	m.expectMockSuccessful(t)
-	m.resetMock()
-
-	// Should fail with Fatal
-	TrueFatal(m, false)
-	m.expectMockFatal(t, "assert.TrueFatal")
-}
-
-func TestAssertFalseFatal(t *testing.T) {
-	m := &mockTestingT{}
-
-	// Should pass
-	FalseFatal(m, false)
-	m.expectMockSuccessful(t)
-	m.resetMock()
-
-	// Should fail with Fatal
-	FalseFatal(m, true)
-	m.expectMockFatal(t, "assert.FalseFatal")
-}
-
-func TestAssertNilFatal(t *testing.T) {
-	m := &mockTestingT{}
-
-	// Should pass
-	NilFatal(m, nil)
-	m.expectMockSuccessful(t)
-	m.resetMock()
-
-	// Should fail with Fatal
-	NilFatal(m, "not nil")
-	m.expectMockFatal(t, "assert.NilFatal")
-}
-
-func TestAssertNotNilFatal(t *testing.T) {
-	m := &mockTestingT{}
-
-	// Should pass
-	NotNilFatal(m, "not nil")
-	m.expectMockSuccessful(t)
-	m.resetMock()
-
-	// Should fail with Fatal
-	NotNilFatal(m, nil)
-	m.expectMockFatal(t, "assert.NotNilFatal")
-}
-
-func TestAssertNoErrorFatal(t *testing.T) {
-	m := &mockTestingT{}
-
-	// Should pass
-	NoErrorFatal(m, nil)
-	m.expectMockSuccessful(t)
-	m.resetMock()
-
-	// Should fail with Fatal
-	NoErrorFatal(m, errors.New("some error"))
-	m.expectMockFatal(t, "assert.NoErrorFatal")
-}
-
-func TestAssertContainsFatal(t *testing.T) {
-	m := &mockTestingT{}
-
-	// Should pass with string
-	ContainsFatal(m, "hello world", "world")
-	m.expectMockSuccessful(t)
-	m.resetMock()
-
-	// Should pass with slice
-	ContainsFatal(m, []string{"a", "b", "c"}, "b")
-	m.expectMockSuccessful(t)
-	m.resetMock()
-
-	// Should fail with Fatal
-	ContainsFatal(m, "hello", "world")
-	m.expectMockFatal(t, "assert.ContainsFatal")
 }
