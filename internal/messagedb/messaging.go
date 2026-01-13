@@ -20,7 +20,7 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	if status == "" {
 		// Get all root messages (conversations)
 		query = `
-			SELECT id, status, file_path, lineno, sha1, created_at, updated_at
+			SELECT id, status, file_path, lineno, sha1, context, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id
 			ORDER BY file_path, lineno, created_at ASC
@@ -28,7 +28,7 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	} else if status == string(critic.StatusUnresolved) {
 		// Get unresolved conversations
 		query = `
-			SELECT id, status, file_path, lineno, sha1, created_at, updated_at
+			SELECT id, status, file_path, lineno, sha1, context, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id AND status != ?
 			ORDER BY file_path, lineno, created_at ASC
@@ -37,7 +37,7 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	} else if status == string(critic.StatusResolved) {
 		// Get resolved conversations
 		query = `
-			SELECT id, status, file_path, lineno, sha1, created_at, updated_at
+			SELECT id, status, file_path, lineno, sha1, context, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id AND status = ?
 			ORDER BY file_path, lineno, created_at ASC
@@ -57,10 +57,14 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	for rows.Next() {
 		var conv critic.Conversation
 		var status string
-		if err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &conv.CreatedAt, &conv.UpdatedAt); err != nil {
+		var context *string
+		if err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &context, &conv.CreatedAt, &conv.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan conversation: %w", err)
 		}
 		conv.Status = convertToCriticStatus(Status(status))
+		if context != nil {
+			conv.Context = *context
+		}
 		conversations = append(conversations, conv)
 	}
 
@@ -72,7 +76,7 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 // Returns root-level conversations ordered by line number
 func (db *DB) GetConversationsByFile(filePath string) ([]critic.Conversation, error) {
 	query := `
-		SELECT id, status, file_path, lineno, sha1, created_at, updated_at
+		SELECT id, status, file_path, lineno, sha1, context, created_at, updated_at
 		FROM messages
 		WHERE id = conversation_id AND file_path = ?
 		ORDER BY lineno, created_at ASC
@@ -88,10 +92,14 @@ func (db *DB) GetConversationsByFile(filePath string) ([]critic.Conversation, er
 	for rows.Next() {
 		var conv critic.Conversation
 		var status string
-		if err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &conv.CreatedAt, &conv.UpdatedAt); err != nil {
+		var context *string
+		if err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &context, &conv.CreatedAt, &conv.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan conversation: %w", err)
 		}
 		conv.Status = convertToCriticStatus(Status(status))
+		if context != nil {
+			conv.Context = *context
+		}
 		conversations = append(conversations, conv)
 	}
 
@@ -134,6 +142,7 @@ func (db *DB) GetFullConversation(conversationID string) (*critic.Conversation, 
 		FilePath:    rootMsg.FilePath,
 		LineNumber:  rootMsg.Lineno,
 		CodeVersion: rootMsg.Commit,
+		Context:     rootMsg.Context,
 		Messages:    criticMessages,
 		CreatedAt:   rootMsg.CreatedAt,
 		UpdatedAt:   rootMsg.UpdatedAt,
@@ -263,6 +272,7 @@ func (db *DB) CreateConversation(author critic.Author, message, filePath string,
 		FilePath:    rootMsg.FilePath,
 		LineNumber:  rootMsg.Lineno,
 		CodeVersion: rootMsg.Commit,
+		Context:     rootMsg.Context,
 		Messages: []critic.Message{
 			{
 				UUID:      rootMsg.ID,

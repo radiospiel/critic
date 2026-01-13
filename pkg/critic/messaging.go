@@ -39,6 +39,7 @@ type Conversation struct {
 	FilePath    string    // Git-relative path to the file
 	LineNumber  int       // Line number in the file
 	CodeVersion string    // Git commit or version identifier
+	Context     string    // Code context around the commented line
 	Messages    []Message // Root message + all replies, ordered by created_at
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
