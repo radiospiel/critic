@@ -250,12 +250,16 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 		}
 		separatorLine := animFrame + " " + strings.Repeat("-", dashCount)
 		runes := []rune(separatorLine)
+		sepStyle := separatorStyle
+		if selected {
+			sepStyle = sepStyle.Reverse(true)
+		}
 		for x := 0; x < width; x++ {
 			var r rune = ' '
 			if x < len(runes) {
 				r = runes[x]
 			}
-			buf.SetCell(x, y, teapot.Cell{Rune: r, Style: separatorStyle})
+			buf.SetCell(x, y, teapot.Cell{Rune: r, Style: sepStyle})
 		}
 		y++
 	}
@@ -347,12 +351,16 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 		}
 
 		runes := []rune(bottomLine)
+		bottomSepStyle := separatorStyle
+		if selected {
+			bottomSepStyle = bottomSepStyle.Reverse(true)
+		}
 		for x := 0; x < width; x++ {
 			var r rune = '-'
 			if x < len(runes) {
 				r = runes[x]
 			}
-			buf.SetCell(x, y, teapot.Cell{Rune: r, Style: separatorStyle})
+			buf.SetCell(x, y, teapot.Cell{Rune: r, Style: bottomSepStyle})
 		}
 	}
 }
