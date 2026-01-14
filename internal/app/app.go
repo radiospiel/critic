@@ -132,6 +132,7 @@ type Model struct {
 	filterMode      FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
 	animationTicker *ui.AnimationTicker // Animation ticker for conversation states
 	globalAnimState ui.GlobalAnimationSummary // Global animation state for status bar
+	tickCount       int                       // Debug: count of animation ticks
 	err             error
 	width           int
 	height          int
@@ -435,6 +436,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.animationTicker.Tick()
 		// Update global animation state based on conversations
 		m.updateGlobalAnimationState()
+		// Debug: increment tick counter
+		m.tickCount++
+		// Refresh diff view content to update snake animation in separators
+		// (uses cached syntax highlighting, so relatively fast)
+		m.diffView.RefreshContentForAnimation()
 		// Continue the ticker
 		cmds = append(cmds, ui.StartAnimationTicker())
 
@@ -517,6 +523,10 @@ func (m Model) View() string {
 // renderStatusBar renders the bottom status bar
 func (m Model) renderStatusBar() string {
 	var parts []string
+
+	// Debug: show tick count and current animation frame
+	thinkFrame := m.animationTicker.GetFrame(ui.ThinkingAnimation, false)
+	parts = append(parts, fmt.Sprintf("T:%d F:%s", m.tickCount, thinkFrame))
 
 	// Show current base
 	if len(m.bases) > 0 {

@@ -359,6 +359,21 @@ func (m *DiffViewModel) refreshContent() tea.Cmd {
 	return nil
 }
 
+// RefreshContentForAnimation re-renders the diff content for animation updates.
+// This is lighter than RefreshFile as it uses cached syntax highlighting.
+func (m *DiffViewModel) RefreshContentForAnimation() {
+	if m.file == nil {
+		return
+	}
+	content, totalLines, navigableLines := m.renderDiff()
+	m.cachedContent = content
+	m.totalLines = totalLines
+	m.navigableLines = navigableLines
+	if m.ready {
+		m.viewport.SetContent(m.cachedContent)
+	}
+}
+
 // moveCursorUp moves cursor to previous navigable line
 func (m *DiffViewModel) moveCursorUp() bool {
 	if len(m.navigableLines) == 0 {
