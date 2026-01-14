@@ -893,9 +893,8 @@ func (m *DiffViewModel) calculateContentHeight(conversationsByLine map[int]*crit
 			height++ // Line
 			if line.NewNum > 0 {
 				if conv, exists := conversationsByLine[line.NewNum]; exists {
-					// Comment widget height: separator + content + separator
-					commentWidget := NewCommentWidget(conv, m.animationTicker)
-					height += commentWidget.Constraints().EffectivePreferredHeight()
+					// Comment height: separator + content + separator
+					height += calculateCommentHeight(conv)
 				}
 			}
 		}
@@ -931,8 +930,7 @@ func (m *DiffViewModel) buildLineMappingsFromWidget(conversationsByLine map[int]
 			// Check for comment
 			if line.NewNum > 0 {
 				if conv, exists := conversationsByLine[line.NewNum]; exists {
-					commentWidget := NewCommentWidget(conv, m.animationTicker)
-					commentHeight := commentWidget.Constraints().EffectivePreferredHeight()
+					commentHeight := calculateCommentHeight(conv)
 
 					// Track all comment lines
 					for i := 0; i < commentHeight; i++ {
@@ -955,21 +953,12 @@ func (m *DiffViewModel) buildLineMappingsFromWidget(conversationsByLine map[int]
 
 // updateWidgetSelection updates the widget's selection based on cursorLine
 func (m *DiffViewModel) updateWidgetSelection() {
-	if m.diffWidget == nil || len(m.diffWidget.selectableItems) == 0 {
+	if m.diffWidget == nil {
 		return
 	}
 
-	// Find which selectable item corresponds to cursorLine
-	targetIdx := m.findSelectableItemForLine(m.cursorLine)
-	if targetIdx >= 0 && targetIdx < len(m.diffWidget.selectableItems) {
-		// Clear previous selection
-		for _, item := range m.diffWidget.selectableItems {
-			item.SetSelected(false)
-		}
-		// Set new selection
-		m.diffWidget.selectableItems[targetIdx].SetSelected(true)
-		m.diffWidget.selectedIndex = targetIdx
-	}
+	// Update the widget's selected row to match cursor position
+	m.diffWidget.SetSelectedRow(m.cursorLine)
 }
 
 // findSelectableItemForLine finds the selectable item index for a given line number
@@ -995,8 +984,7 @@ func (m *DiffViewModel) findSelectableItemForLine(lineNum int) int {
 
 			if line.NewNum > 0 {
 				if conv, exists := conversationsByLine[line.NewNum]; exists {
-					commentWidget := NewCommentWidget(conv, m.animationTicker)
-					commentHeight := commentWidget.Constraints().EffectivePreferredHeight()
+					commentHeight := calculateCommentHeight(conv)
 
 					// Check if lineNum falls within comment
 					if lineNum >= currentLine && lineNum < currentLine+commentHeight {

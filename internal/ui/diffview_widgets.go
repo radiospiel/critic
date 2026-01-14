@@ -7,88 +7,188 @@ import (
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/teapot"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-// DiffLineWidget displays a single diff line with line number, indicator, and content.
-type DiffLineWidget struct {
+// HunkWidget renders a complete hunk: header + lines + inline comments.
+// This is the primary building block of the diff view.
+type HunkWidget struct {
 	teapot.BaseWidget
-	line               *ctypes.Line
-	highlightedContent string
-	lineType           ctypes.LineType
-	selected           bool // Whether this line is selected (cursor on it)
-	sourceLine         int  // Source line number for comment association
+	hunk            *ctypes.Hunk
+	conversationMap map[int]*critic.Conversation
+	highlightedOld  map[int]string // Pre-highlighted content for deleted lines
+	highlightedNew  map[int]string // Pre-highlighted content for added lines
+	highlightedCtx  map[int]string // Pre-highlighted content for context lines
+	animationTicker *AnimationTicker
+	selectedRow     int  // Which row within this hunk is selected (-1 = none)
+	startRow        int  // Global row number where this hunk starts (for selection mapping)
 }
 
-// NewDiffLineWidget creates a new diff line widget.
-func NewDiffLineWidget(line *ctypes.Line, highlightedContent string) *DiffLineWidget {
-	w := &DiffLineWidget{
-		BaseWidget:         teapot.NewBaseWidget(),
-		line:               line,
-		highlightedContent: highlightedContent,
-		lineType:           line.Type,
+// NewHunkWidget creates a new hunk widget.
+func NewHunkWidget(
+	hunk *ctypes.Hunk,
+	conversationMap map[int]*critic.Conversation,
+	highlightedOld, highlightedNew, highlightedCtx map[int]string,
+	ticker *AnimationTicker,
+) *HunkWidget {
+	w := &HunkWidget{
+		BaseWidget:      teapot.NewBaseWidget(),
+		hunk:            hunk,
+		conversationMap: conversationMap,
+		highlightedOld:  highlightedOld,
+		highlightedNew:  highlightedNew,
+		highlightedCtx:  highlightedCtx,
+		animationTicker: ticker,
+		selectedRow:     -1,
 	}
-	w.SetFocusable(true)
-	// Set constraints - a single line widget has fixed height of 1
-	w.SetConstraints(teapot.DefaultConstraints().WithMinSize(1, 1).WithPreferredSize(0, 1))
+	w.SetFocusable(false)
 
-	// Track source line number
-	if line.NewNum > 0 {
-		w.sourceLine = line.NewNum
-	} else {
-		w.sourceLine = line.OldNum
-	}
+	// Calculate height: 1 (header) + lines + comments
+	height := w.calculateHeight()
+	w.SetConstraints(teapot.DefaultConstraints().WithMinSize(1, height).WithPreferredSize(0, height))
 	return w
 }
 
-// SetSelected sets whether this line is selected.
-func (w *DiffLineWidget) SetSelected(selected bool) {
-	w.selected = selected
+// calculateHeight returns the total height of this hunk.
+func (w *HunkWidget) calculateHeight() int {
+	height := 1 // Hunk header
+	for _, line := range w.hunk.Lines {
+		height++ // Line
+		if line.NewNum > 0 {
+			if conv, exists := w.conversationMap[line.NewNum]; exists {
+				height += calculateCommentHeight(conv)
+			}
+		}
+	}
+	return height
 }
 
-// Selected returns whether this line is selected.
-func (w *DiffLineWidget) Selected() bool {
-	return w.selected
+// calculateCommentHeight returns the height needed for a comment.
+func calculateCommentHeight(conv *critic.Conversation) int {
+	// separator + content lines + separator
+	contentLines := 0
+	for _, msg := range conv.Messages {
+		contentLines += len(strings.Split(msg.Message, "\n"))
+	}
+	return 1 + contentLines + 1
 }
 
-// SourceLine returns the source line number.
-func (w *DiffLineWidget) SourceLine() int {
-	return w.sourceLine
+// SetSelectedRow sets which row within this hunk is selected.
+func (w *HunkWidget) SetSelectedRow(row int) {
+	w.selectedRow = row
 }
 
-// Line returns the underlying diff line.
-func (w *DiffLineWidget) Line() *ctypes.Line {
-	return w.line
+// SetStartRow sets the global row number where this hunk starts.
+func (w *HunkWidget) SetStartRow(row int) {
+	w.startRow = row
 }
 
-// Render renders the diff line to the buffer.
-func (w *DiffLineWidget) Render(buf *teapot.SubBuffer) {
+// Hunk returns the underlying hunk.
+func (w *HunkWidget) Hunk() *ctypes.Hunk {
+	return w.hunk
+}
+
+// Render renders the hunk to the buffer.
+func (w *HunkWidget) Render(buf *teapot.SubBuffer) {
 	width := buf.Width()
 	if width <= 0 {
 		return
 	}
 
-	// Build line number prefix: " 123 + "
-	var lineNum int
-	var indicator string
-	switch w.lineType {
+	y := 0
+
+	// Render hunk header
+	header := fmt.Sprintf("@@ -%d,%d +%d,%d @@", w.hunk.OldStart, w.hunk.OldLines, w.hunk.NewStart, w.hunk.NewLines)
+	if w.hunk.Header != "" {
+		header += " " + w.hunk.Header
+	}
+	w.renderHeaderLine(buf, y, header, width)
+	y++
+
+	// Render each line and its comment (if any)
+	for _, line := range w.hunk.Lines {
+		// Get highlighted content
+		highlighted := w.getHighlightedContent(line)
+
+		// Render the diff line
+		isSelected := (y == w.selectedRow)
+		w.renderDiffLine(buf, y, line, highlighted, width, isSelected)
+		y++
+
+		// Render comment if exists
+		if line.NewNum > 0 {
+			if conv, exists := w.conversationMap[line.NewNum]; exists {
+				commentHeight := calculateCommentHeight(conv)
+				// Check if any row in comment is selected
+				commentSelected := w.selectedRow >= y && w.selectedRow < y+commentHeight
+				w.renderComment(buf, y, conv, width, commentHeight, commentSelected)
+				y += commentHeight
+			}
+		}
+	}
+}
+
+// getHighlightedContent returns the highlighted content for a line.
+func (w *HunkWidget) getHighlightedContent(line *ctypes.Line) string {
+	switch line.Type {
 	case ctypes.LineAdded:
-		lineNum = w.line.NewNum
-		indicator = "+"
+		if hl, ok := w.highlightedNew[line.NewNum]; ok {
+			return hl
+		}
 	case ctypes.LineDeleted:
-		lineNum = w.line.OldNum
-		indicator = "-"
+		if hl, ok := w.highlightedOld[line.OldNum]; ok {
+			return hl
+		}
 	case ctypes.LineContext:
-		lineNum = w.line.NewNum
-		indicator = " "
+		if hl, ok := w.highlightedCtx[line.NewNum]; ok {
+			return hl
+		}
+	}
+	return line.Content
+}
+
+// renderHeaderLine renders the hunk header line.
+func (w *HunkWidget) renderHeaderLine(buf *teapot.SubBuffer, y int, header string, width int) {
+	if y >= buf.Height() {
+		return
+	}
+	runes := []rune(header)
+	for x := 0; x < width; x++ {
+		var cell teapot.Cell
+		if x < len(runes) {
+			cell = teapot.Cell{Rune: runes[x], Style: hunkHeaderStyle}
+		} else {
+			cell = teapot.Cell{Rune: ' ', Style: hunkHeaderStyle}
+		}
+		buf.SetCell(x, y, cell)
+	}
+}
+
+// renderDiffLine renders a single diff line.
+func (w *HunkWidget) renderDiffLine(buf *teapot.SubBuffer, y int, line *ctypes.Line, highlighted string, width int, selected bool) {
+	if y >= buf.Height() {
+		return
 	}
 
+	// Build line number prefix
+	var lineNum int
+	var indicator string
+	switch line.Type {
+	case ctypes.LineAdded:
+		lineNum = line.NewNum
+		indicator = "+"
+	case ctypes.LineDeleted:
+		lineNum = line.OldNum
+		indicator = "-"
+	case ctypes.LineContext:
+		lineNum = line.NewNum
+		indicator = " "
+	}
 	prefix := fmt.Sprintf("%4d %s ", lineNum, indicator)
 
-	// Get background color for this line type
+	// Get background color
 	var bgColor lipgloss.Color
-	switch w.lineType {
+	switch line.Type {
 	case ctypes.LineAdded:
 		bgColor = lipgloss.Color("22") // Dark green
 	case ctypes.LineDeleted:
@@ -98,127 +198,31 @@ func (w *DiffLineWidget) Render(buf *teapot.SubBuffer) {
 	}
 
 	style := lipgloss.NewStyle().Background(bgColor)
-	if w.selected {
+	if selected {
 		style = style.Reverse(true)
 	}
 
-	// Render prefix and content
-	content := prefix + w.highlightedContent
-
-	// Parse ANSI and render cell by cell
+	// Render prefix + content
+	content := prefix + highlighted
 	cells := teapot.ParseANSILine(content)
 	for x := 0; x < width; x++ {
 		var cell teapot.Cell
 		if x < len(cells) {
 			cell = cells[x]
-			// Apply background and selection
 			cell.Style = cell.Style.Background(bgColor)
-			if w.selected {
+			if selected {
 				cell.Style = cell.Style.Reverse(true)
 			}
 		} else {
-			// Padding
 			cell = teapot.Cell{Rune: ' ', Style: style}
 		}
-		buf.SetCell(x, 0, cell)
+		buf.SetCell(x, y, cell)
 	}
 }
 
-// HandleKey handles key events (no-op for line widgets, handled by parent).
-func (w *DiffLineWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	return false, nil
-}
-
-// CommentWidget displays an inline conversation preview.
-type CommentWidget struct {
-	teapot.BaseWidget
-	conversation    *critic.Conversation
-	selected        bool
-	animationTicker *AnimationTicker
-	sourceLine      int      // Source line this comment is attached to
-	contentLines    []string // Cached content lines
-}
-
-// NewCommentWidget creates a new comment widget for a conversation.
-func NewCommentWidget(conv *critic.Conversation, ticker *AnimationTicker) *CommentWidget {
-	w := &CommentWidget{
-		BaseWidget:      teapot.NewBaseWidget(),
-		conversation:    conv,
-		animationTicker: ticker,
-		sourceLine:      conv.LineNumber,
-	}
-	w.SetFocusable(true)
-	// Build and cache content lines
-	w.contentLines = w.buildContentLines()
-	// Calculate height based on content: top separator + content + bottom separator
-	height := 1 + len(w.contentLines) + 1
-	w.SetConstraints(teapot.DefaultConstraints().WithMinSize(1, height).WithPreferredSize(0, height))
-	return w
-}
-
-// buildContentLines builds the content lines for the conversation.
-func (w *CommentWidget) buildContentLines() []string {
-	var allLines []string
-
-	for i, msg := range w.conversation.Messages {
-		prefix := "You"
-		if msg.Author == critic.AuthorAI {
-			prefix = "AI"
-		}
-
-		if i == 0 && msg.Author == critic.AuthorHuman {
-			// First human message without prefix
-			msgLines := strings.Split(msg.Message, "\n")
-			for _, line := range msgLines {
-				allLines = append(allLines, renderMarkdown(line))
-			}
-		} else {
-			// Replies with prefix
-			replyLines := strings.Split(msg.Message, "\n")
-			for j, line := range replyLines {
-				if j == 0 {
-					allLines = append(allLines, fmt.Sprintf("%s: %s", prefix, renderMarkdown(line)))
-				} else {
-					indent := strings.Repeat(" ", len(prefix)+2)
-					allLines = append(allLines, indent+renderMarkdown(line))
-				}
-			}
-		}
-	}
-
-	// Prepend resolved status
-	if w.conversation.Status == critic.StatusResolved && len(allLines) > 0 {
-		allLines[0] = "(Resolved) " + allLines[0]
-	}
-
-	return allLines
-}
-
-// SetSelected sets whether this comment widget is selected.
-func (w *CommentWidget) SetSelected(selected bool) {
-	w.selected = selected
-}
-
-// Selected returns whether this comment widget is selected.
-func (w *CommentWidget) Selected() bool {
-	return w.selected
-}
-
-// Conversation returns the underlying conversation.
-func (w *CommentWidget) Conversation() *critic.Conversation {
-	return w.conversation
-}
-
-// SourceLine returns the source line this comment is attached to.
-func (w *CommentWidget) SourceLine() int {
-	return w.sourceLine
-}
-
-// Render renders the comment widget to the buffer.
-func (w *CommentWidget) Render(buf *teapot.SubBuffer) {
-	width := buf.Width()
-	height := buf.Height()
-	if width <= 0 || height <= 0 {
+// renderComment renders an inline comment/conversation.
+func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *critic.Conversation, width, height int, selected bool) {
+	if startY >= buf.Height() {
 		return
 	}
 
@@ -230,10 +234,10 @@ func (w *CommentWidget) Render(buf *teapot.SubBuffer) {
 	contentStyle := lipgloss.NewStyle().Background(lightBlueBg).Foreground(blackFg)
 	separatorStyle := lipgloss.NewStyle().Foreground(grayFg)
 
-	y := 0
+	y := startY
 
-	// Top separator with snake animation
-	if y < height {
+	// Top separator with animation
+	if y < buf.Height() {
 		var animFrame string
 		if w.animationTicker != nil {
 			animFrame = w.animationTicker.GetSeparatorFrame()
@@ -256,14 +260,45 @@ func (w *CommentWidget) Render(buf *teapot.SubBuffer) {
 		y++
 	}
 
-	// Content lines
-	for _, line := range w.contentLines {
-		if y >= height-1 { // Leave room for bottom separator
+	// Build content lines
+	var contentLines []string
+	for i, msg := range conv.Messages {
+		prefix := "You"
+		if msg.Author == critic.AuthorAI {
+			prefix = "AI"
+		}
+
+		if i == 0 && msg.Author == critic.AuthorHuman {
+			msgLines := strings.Split(msg.Message, "\n")
+			for _, line := range msgLines {
+				contentLines = append(contentLines, renderMarkdown(line))
+			}
+		} else {
+			replyLines := strings.Split(msg.Message, "\n")
+			for j, line := range replyLines {
+				if j == 0 {
+					contentLines = append(contentLines, fmt.Sprintf("%s: %s", prefix, renderMarkdown(line)))
+				} else {
+					indent := strings.Repeat(" ", len(prefix)+2)
+					contentLines = append(contentLines, indent+renderMarkdown(line))
+				}
+			}
+		}
+	}
+
+	// Prepend resolved status
+	if conv.Status == critic.StatusResolved && len(contentLines) > 0 {
+		contentLines[0] = "(Resolved) " + contentLines[0]
+	}
+
+	// Render content lines
+	for _, line := range contentLines {
+		if y >= buf.Height() {
 			break
 		}
 
 		lineStyle := contentStyle
-		if w.selected {
+		if selected {
 			lineStyle = lineStyle.Reverse(true)
 		}
 
@@ -274,7 +309,7 @@ func (w *CommentWidget) Render(buf *teapot.SubBuffer) {
 			if x < len(cells) {
 				cell = cells[x]
 				cell.Style = cell.Style.Background(lightBlueBg).Foreground(blackFg)
-				if w.selected {
+				if selected {
 					cell.Style = cell.Style.Reverse(true)
 				}
 			} else {
@@ -286,11 +321,11 @@ func (w *CommentWidget) Render(buf *teapot.SubBuffer) {
 	}
 
 	// Bottom separator with hotkeys if selected
-	if y < height {
+	if y < buf.Height() {
 		var separatorText string
-		if w.selected {
+		if selected {
 			separatorText = "[R]esolve - [Enter] reply"
-			if w.conversation.Status == critic.StatusResolved {
+			if conv.Status == critic.StatusResolved {
 				separatorText = "[R] unresolve - [Enter] reply"
 			}
 		}
@@ -322,50 +357,6 @@ func (w *CommentWidget) Render(buf *teapot.SubBuffer) {
 	}
 }
 
-// HandleKey handles key events (no-op for comment widgets, handled by parent).
-func (w *CommentWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	return false, nil
-}
-
-// HunkHeaderWidget displays the hunk header line (@@ -a,b +c,d @@).
-type HunkHeaderWidget struct {
-	teapot.BaseWidget
-	header string
-}
-
-// NewHunkHeaderWidget creates a new hunk header widget.
-func NewHunkHeaderWidget(hunk *ctypes.Hunk) *HunkHeaderWidget {
-	header := fmt.Sprintf("@@ -%d,%d +%d,%d @@", hunk.OldStart, hunk.OldLines, hunk.NewStart, hunk.NewLines)
-	if hunk.Header != "" {
-		header += " " + hunk.Header
-	}
-
-	w := &HunkHeaderWidget{
-		BaseWidget: teapot.NewBaseWidget(),
-		header:     header,
-	}
-	w.SetFocusable(false)
-	w.SetConstraints(teapot.DefaultConstraints().WithMinSize(1, 1).WithPreferredSize(0, 1))
-	return w
-}
-
-// Render renders the hunk header.
-func (w *HunkHeaderWidget) Render(buf *teapot.SubBuffer) {
-	width := buf.Width()
-	style := hunkHeaderStyle
-
-	runes := []rune(w.header)
-	for x := 0; x < width; x++ {
-		var cell teapot.Cell
-		if x < len(runes) {
-			cell = teapot.Cell{Rune: runes[x], Style: style}
-		} else {
-			cell = teapot.Cell{Rune: ' ', Style: style}
-		}
-		buf.SetCell(x, 0, cell)
-	}
-}
-
 // FileHeaderWidget displays the file header.
 type FileHeaderWidget struct {
 	teapot.BaseWidget
@@ -390,7 +381,6 @@ func NewFileHeaderWidget(file *ctypes.FileDiff) *FileHeaderWidget {
 		header:     header,
 	}
 	w.SetFocusable(false)
-	// Header + blank line = 2 lines
 	w.SetConstraints(teapot.DefaultConstraints().WithMinSize(1, 2).WithPreferredSize(0, 2))
 	return w
 }
@@ -398,21 +388,19 @@ func NewFileHeaderWidget(file *ctypes.FileDiff) *FileHeaderWidget {
 // Render renders the file header.
 func (w *FileHeaderWidget) Render(buf *teapot.SubBuffer) {
 	width := buf.Width()
-	style := hunkHeaderStyle
 
-	// Render first line with header
 	runes := []rune(w.header)
 	for x := 0; x < width; x++ {
 		var cell teapot.Cell
 		if x < len(runes) {
-			cell = teapot.Cell{Rune: runes[x], Style: style}
+			cell = teapot.Cell{Rune: runes[x], Style: hunkHeaderStyle}
 		} else {
-			cell = teapot.Cell{Rune: ' ', Style: style}
+			cell = teapot.Cell{Rune: ' ', Style: hunkHeaderStyle}
 		}
 		buf.SetCell(x, 0, cell)
 	}
 
-	// Render blank second line
+	// Blank second line
 	if buf.Height() > 1 {
 		emptyStyle := lipgloss.NewStyle()
 		for x := 0; x < width; x++ {
@@ -421,70 +409,32 @@ func (w *FileHeaderWidget) Render(buf *teapot.SubBuffer) {
 	}
 }
 
-// SpacerLineWidget is a single blank line for spacing between hunks.
-type SpacerLineWidget struct {
-	teapot.BaseWidget
-}
-
-// NewSpacerLineWidget creates a new spacer line widget.
-func NewSpacerLineWidget() *SpacerLineWidget {
-	w := &SpacerLineWidget{
-		BaseWidget: teapot.NewBaseWidget(),
-	}
-	w.SetFocusable(false)
-	w.SetConstraints(teapot.DefaultConstraints().WithMinSize(1, 1).WithPreferredSize(0, 1))
-	return w
-}
-
-// Render renders the spacer line (empty).
-func (w *SpacerLineWidget) Render(buf *teapot.SubBuffer) {
-	width := buf.Width()
-	style := lipgloss.NewStyle()
-	for x := 0; x < width; x++ {
-		buf.SetCell(x, 0, teapot.Cell{Rune: ' ', Style: style})
-	}
-}
-
-// SelectableItem is an interface for items that can be selected in the diff view.
-type SelectableItem interface {
-	teapot.Widget
-	SetSelected(bool)
-	Selected() bool
-	SourceLine() int
-}
-
-// Ensure widgets implement SelectableItem
-var _ SelectableItem = (*DiffLineWidget)(nil)
-var _ SelectableItem = (*CommentWidget)(nil)
-
-// DiffViewWidget is the main widget that displays the entire diff view as a vertical layout.
-// It contains a file header and stacks of hunk displays.
+// DiffViewWidget is the main widget that displays the entire diff view.
+// It stacks HunkWidgets vertically.
 type DiffViewWidget struct {
 	teapot.BaseWidget
-	file              *ctypes.FileDiff
-	selectableItems   []SelectableItem // All selectable items in order
-	selectedIndex     int              // Index of currently selected item
-	yOffset           int              // Scroll offset
-	conversationMap   map[int]*critic.Conversation
-	highlightedOld    map[int]string
-	highlightedNew    map[int]string
-	highlightedCtx    map[int]string
-	animationTicker   *AnimationTicker
-	messaging         critic.Messaging
-	filterMode        FilterMode
+	file            *ctypes.FileDiff
+	hunks           []*HunkWidget
+	conversationMap map[int]*critic.Conversation
+	highlightedOld  map[int]string
+	highlightedNew  map[int]string
+	highlightedCtx  map[int]string
+	animationTicker *AnimationTicker
+	filterMode      FilterMode
+	selectedRow     int // Global row number of selected item
+	yOffset         int // Scroll offset
 }
 
 // NewDiffViewWidget creates a new diff view widget.
 func NewDiffViewWidget() *DiffViewWidget {
 	w := &DiffViewWidget{
-		BaseWidget:      teapot.NewBaseWidget(),
-		selectableItems: make([]SelectableItem, 0),
+		BaseWidget: teapot.NewBaseWidget(),
 	}
 	w.SetFocusable(true)
 	return w
 }
 
-// SetFile sets the file to display and rebuilds the widget tree.
+// SetFile sets the file to display and rebuilds the hunk widgets.
 func (w *DiffViewWidget) SetFile(
 	file *ctypes.FileDiff,
 	conversationMap map[int]*critic.Conversation,
@@ -495,12 +445,9 @@ func (w *DiffViewWidget) SetFile(
 	w.highlightedOld = highlightedOld
 	w.highlightedNew = highlightedNew
 	w.highlightedCtx = highlightedCtx
-	w.rebuildSelectableItems()
+	w.rebuildHunks()
 	w.yOffset = 0
-	if len(w.selectableItems) > 0 {
-		w.selectedIndex = 0
-		w.selectableItems[0].SetSelected(true)
-	}
+	w.selectedRow = 3 // First line after header (row 0-1) and first hunk header (row 2)
 }
 
 // SetAnimationTicker sets the animation ticker.
@@ -508,66 +455,26 @@ func (w *DiffViewWidget) SetAnimationTicker(ticker *AnimationTicker) {
 	w.animationTicker = ticker
 }
 
-// SetMessaging sets the messaging interface.
-func (w *DiffViewWidget) SetMessaging(messaging critic.Messaging) {
-	w.messaging = messaging
-}
-
 // SetFilterMode sets the filter mode.
 func (w *DiffViewWidget) SetFilterMode(mode FilterMode) {
 	w.filterMode = mode
 }
 
-// rebuildSelectableItems rebuilds the list of selectable items.
-func (w *DiffViewWidget) rebuildSelectableItems() {
-	w.selectableItems = make([]SelectableItem, 0)
-
+// rebuildHunks creates HunkWidgets for each hunk.
+func (w *DiffViewWidget) rebuildHunks() {
+	w.hunks = nil
 	if w.file == nil {
 		return
 	}
 
-	// Filter hunks based on filter mode
 	hunksToRender := w.filterHunks(w.file.Hunks)
+	currentRow := 2 // After file header
 
 	for _, hunk := range hunksToRender {
-		for _, line := range hunk.Lines {
-			// Get highlighted content
-			var highlighted string
-			switch line.Type {
-			case ctypes.LineAdded:
-				if hl, ok := w.highlightedNew[line.NewNum]; ok {
-					highlighted = hl
-				} else {
-					highlighted = line.Content
-				}
-			case ctypes.LineDeleted:
-				if hl, ok := w.highlightedOld[line.OldNum]; ok {
-					highlighted = hl
-				} else {
-					highlighted = line.Content
-				}
-			case ctypes.LineContext:
-				if hl, ok := w.highlightedCtx[line.NewNum]; ok {
-					highlighted = hl
-				} else {
-					highlighted = line.Content
-				}
-			default:
-				highlighted = line.Content
-			}
-
-			// Create line widget
-			lineWidget := NewDiffLineWidget(line, highlighted)
-			w.selectableItems = append(w.selectableItems, lineWidget)
-
-			// Check for conversation at this line
-			if line.NewNum > 0 {
-				if conv, exists := w.conversationMap[line.NewNum]; exists {
-					commentWidget := NewCommentWidget(conv, w.animationTicker)
-					w.selectableItems = append(w.selectableItems, commentWidget)
-				}
-			}
-		}
+		hw := NewHunkWidget(hunk, w.conversationMap, w.highlightedOld, w.highlightedNew, w.highlightedCtx, w.animationTicker)
+		hw.SetStartRow(currentRow)
+		w.hunks = append(w.hunks, hw)
+		currentRow += hw.calculateHeight() + 1 // +1 for spacing
 	}
 }
 
@@ -586,7 +493,7 @@ func (w *DiffViewWidget) filterHunks(hunks []*ctypes.Hunk) []*ctypes.Hunk {
 	return filtered
 }
 
-// hunkMatchesFilter checks if a hunk should be included based on the current filter mode.
+// hunkMatchesFilter checks if a hunk matches the current filter.
 func (w *DiffViewWidget) hunkMatchesFilter(hunk *ctypes.Hunk) bool {
 	for _, line := range hunk.Lines {
 		if line.NewNum > 0 {
@@ -605,59 +512,35 @@ func (w *DiffViewWidget) hunkMatchesFilter(hunk *ctypes.Hunk) bool {
 	return false
 }
 
-// SelectedItem returns the currently selected item.
-func (w *DiffViewWidget) SelectedItem() SelectableItem {
-	if w.selectedIndex >= 0 && w.selectedIndex < len(w.selectableItems) {
-		return w.selectableItems[w.selectedIndex]
-	}
-	return nil
+// GetSelectedRow returns the currently selected row.
+func (w *DiffViewWidget) GetSelectedRow() int {
+	return w.selectedRow
 }
 
-// SelectNext moves selection to the next item.
-func (w *DiffViewWidget) SelectNext() bool {
-	if w.selectedIndex < len(w.selectableItems)-1 {
-		if w.selectedIndex >= 0 {
-			w.selectableItems[w.selectedIndex].SetSelected(false)
-		}
-		w.selectedIndex++
-		w.selectableItems[w.selectedIndex].SetSelected(true)
-		return true
-	}
-	return false
-}
-
-// SelectPrev moves selection to the previous item.
-func (w *DiffViewWidget) SelectPrev() bool {
-	if w.selectedIndex > 0 {
-		w.selectableItems[w.selectedIndex].SetSelected(false)
-		w.selectedIndex--
-		w.selectableItems[w.selectedIndex].SetSelected(true)
-		return true
-	}
-	return false
-}
-
-// GetSourceLine returns the source line of the currently selected item.
-func (w *DiffViewWidget) GetSourceLine() int {
-	if item := w.SelectedItem(); item != nil {
-		return item.SourceLine()
-	}
-	return 0
-}
-
-// IsAtTop returns true if at the first selectable item.
-func (w *DiffViewWidget) IsAtTop() bool {
-	return w.selectedIndex <= 0
-}
-
-// IsAtBottom returns true if at the last selectable item.
-func (w *DiffViewWidget) IsAtBottom() bool {
-	return w.selectedIndex >= len(w.selectableItems)-1
+// SetSelectedRow sets the selected row.
+func (w *DiffViewWidget) SetSelectedRow(row int) {
+	w.selectedRow = row
 }
 
 // GetFile returns the current file.
 func (w *DiffViewWidget) GetFile() *ctypes.FileDiff {
 	return w.file
+}
+
+// CalculateTotalHeight returns the total content height.
+func (w *DiffViewWidget) CalculateTotalHeight() int {
+	if w.file == nil {
+		return 0
+	}
+
+	height := 2 // File header
+	for i, hw := range w.hunks {
+		height += hw.calculateHeight()
+		if i < len(w.hunks)-1 {
+			height++ // Spacing
+		}
+	}
+	return height
 }
 
 // Render renders the entire diff view.
@@ -669,135 +552,57 @@ func (w *DiffViewWidget) Render(buf *teapot.SubBuffer) {
 	width := buf.Width()
 	height := buf.Height()
 
-	// Filter hunks
-	hunksToRender := w.filterHunks(w.file.Hunks)
-
-	// Calculate total content height for scroll management
-	contentHeight := 2 // File header height
-	for hunkIdx, hunk := range hunksToRender {
-		contentHeight++ // hunk header
-		for _, line := range hunk.Lines {
-			contentHeight++ // line
-			if line.NewNum > 0 {
-				if conv, exists := w.conversationMap[line.NewNum]; exists {
-					// Comment height: separator + content + separator
-					commentWidget := NewCommentWidget(conv, w.animationTicker)
-					contentHeight += commentWidget.Constraints().EffectivePreferredHeight()
-				}
-			}
-		}
-		if hunkIdx < len(hunksToRender)-1 {
-			contentHeight++ // spacing
-		}
-	}
+	// Calculate total content height
+	contentHeight := w.CalculateTotalHeight()
 
 	// Adjust scroll offset to keep selected item visible
 	w.ensureSelectedVisible(height, contentHeight)
 
-	// Render file header at the top (not scrolled)
+	// Render file header (fixed at top)
 	fileHeader := NewFileHeaderWidget(w.file)
 	headerBuf := buf.Sub(teapot.Rect{X: 0, Y: 0, Width: width, Height: 2})
 	fileHeader.Render(headerBuf)
 
 	// Render hunks with scroll offset
-	renderY := 2 - w.yOffset // Start after header, adjusted for scroll
-	itemIndex := 0
+	renderY := 2 - w.yOffset
 
-	for hunkIdx, hunk := range hunksToRender {
-		// Render hunk header
-		if renderY >= 0 && renderY < height {
-			hunkHeader := NewHunkHeaderWidget(hunk)
-			hunkBuf := buf.Sub(teapot.Rect{X: 0, Y: renderY, Width: width, Height: 1})
-			hunkHeader.Render(hunkBuf)
+	for hunkIdx, hw := range w.hunks {
+		hunkHeight := hw.calculateHeight()
+
+		// Calculate which row within this hunk is selected (if any)
+		localSelectedRow := -1
+		if w.selectedRow >= renderY+w.yOffset && w.selectedRow < renderY+w.yOffset+hunkHeight {
+			localSelectedRow = w.selectedRow - (renderY + w.yOffset)
 		}
-		renderY++
+		hw.SetSelectedRow(localSelectedRow)
 
-		// Render lines and comments
-		for _, line := range hunk.Lines {
-			// Find corresponding selectable item
-			var lineWidget *DiffLineWidget
-			var commentWidget *CommentWidget
-
-			if itemIndex < len(w.selectableItems) {
-				if lw, ok := w.selectableItems[itemIndex].(*DiffLineWidget); ok {
-					lineWidget = lw
-					itemIndex++
-				}
-			}
-
-			// Render line
-			if renderY >= 0 && renderY < height && lineWidget != nil {
-				lineBuf := buf.Sub(teapot.Rect{X: 0, Y: renderY, Width: width, Height: 1})
-				lineWidget.Render(lineBuf)
-			}
-			renderY++
-
-			// Check for comment
-			if line.NewNum > 0 {
-				if _, exists := w.conversationMap[line.NewNum]; exists {
-					if itemIndex < len(w.selectableItems) {
-						if cw, ok := w.selectableItems[itemIndex].(*CommentWidget); ok {
-							commentWidget = cw
-							itemIndex++
-						}
-					}
-
-					if commentWidget != nil {
-						commentHeight := commentWidget.Constraints().EffectivePreferredHeight()
-						// Render comment if any part is visible
-						if renderY+commentHeight > 0 && renderY < height {
-							visibleStart := renderY
-							if visibleStart < 0 {
-								visibleStart = 0
-							}
-							visibleHeight := commentHeight
-							if renderY+commentHeight > height {
-								visibleHeight = height - renderY
-							}
-							if visibleHeight > 0 {
-								commentBuf := buf.Sub(teapot.Rect{X: 0, Y: renderY, Width: width, Height: commentHeight})
-								commentWidget.Render(commentBuf)
-							}
-						}
-						renderY += commentHeight
-					}
-				}
-			}
+		// Render if any part is visible
+		if renderY+hunkHeight > 0 && renderY < height {
+			hunkBuf := buf.Sub(teapot.Rect{X: 0, Y: renderY, Width: width, Height: hunkHeight})
+			hw.Render(hunkBuf)
 		}
+		renderY += hunkHeight
 
 		// Spacing between hunks
-		if hunkIdx < len(hunksToRender)-1 {
+		if hunkIdx < len(w.hunks)-1 {
 			if renderY >= 0 && renderY < height {
-				spacerBuf := buf.Sub(teapot.Rect{X: 0, Y: renderY, Width: width, Height: 1})
-				spacer := NewSpacerLineWidget()
-				spacer.Render(spacerBuf)
+				emptyStyle := lipgloss.NewStyle()
+				for x := 0; x < width; x++ {
+					buf.SetCell(x, renderY, teapot.Cell{Rune: ' ', Style: emptyStyle})
+				}
 			}
 			renderY++
 		}
 	}
 }
 
-// ensureSelectedVisible adjusts yOffset to keep the selected item visible.
+// ensureSelectedVisible adjusts yOffset to keep the selected row visible.
 func (w *DiffViewWidget) ensureSelectedVisible(viewHeight, contentHeight int) {
-	if len(w.selectableItems) == 0 {
-		return
-	}
-
-	// Calculate the y position of the selected item
-	selectedY := w.calculateItemY(w.selectedIndex)
-	selectedHeight := 1
-	if item := w.SelectedItem(); item != nil {
-		selectedHeight = item.Constraints().EffectivePreferredHeight()
-		if selectedHeight == 0 {
-			selectedHeight = 1
-		}
-	}
-
-	// Adjust offset to keep item in view
-	if selectedY < w.yOffset {
-		w.yOffset = selectedY
-	} else if selectedY+selectedHeight > w.yOffset+viewHeight {
-		w.yOffset = selectedY + selectedHeight - viewHeight
+	// Ensure selected row is in view
+	if w.selectedRow < w.yOffset+2 { // +2 for header
+		w.yOffset = w.selectedRow - 2
+	} else if w.selectedRow >= w.yOffset+viewHeight {
+		w.yOffset = w.selectedRow - viewHeight + 1
 	}
 
 	// Clamp offset
@@ -813,55 +618,131 @@ func (w *DiffViewWidget) ensureSelectedVisible(viewHeight, contentHeight int) {
 	}
 }
 
-// calculateItemY calculates the y position of an item given its index.
-func (w *DiffViewWidget) calculateItemY(index int) int {
-	y := 2 // File header height
+// IsRowNavigable returns true if the given row is navigable (a diff line or comment).
+func (w *DiffViewWidget) IsRowNavigable(row int) bool {
+	if row < 2 { // Header
+		return false
+	}
 
-	hunksToRender := w.filterHunks(w.file.Hunks)
-	itemIndex := 0
+	currentRow := 2
+	for hunkIdx, hw := range w.hunks {
+		// Skip hunk header
+		currentRow++
 
-	for hunkIdx, hunk := range hunksToRender {
-		y++ // Hunk header
-
-		for _, line := range hunk.Lines {
-			if itemIndex == index {
-				return y
+		for _, line := range hw.hunk.Lines {
+			if currentRow == row {
+				return true // Diff line
 			}
-			y++ // Line
-			itemIndex++
+			currentRow++
 
-			// Check for comment
 			if line.NewNum > 0 {
 				if conv, exists := w.conversationMap[line.NewNum]; exists {
-					if itemIndex == index {
-						return y
+					commentHeight := calculateCommentHeight(conv)
+					if row >= currentRow && row < currentRow+commentHeight {
+						return true // Comment row
 					}
-					commentWidget := NewCommentWidget(conv, w.animationTicker)
-					y += commentWidget.Constraints().EffectivePreferredHeight()
-					itemIndex++
+					currentRow += commentHeight
 				}
 			}
 		}
 
-		if hunkIdx < len(hunksToRender)-1 {
-			y++ // Spacing
+		if hunkIdx < len(w.hunks)-1 {
+			currentRow++ // Spacing
 		}
 	}
-
-	return y
+	return false
 }
 
-// HandleKey handles keyboard input.
-func (w *DiffViewWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	switch msg.String() {
-	case "up", "k":
-		if w.SelectPrev() {
-			return true, nil
-		}
-	case "down", "j":
-		if w.SelectNext() {
-			return true, nil
+// GetNextNavigableRow returns the next navigable row after the given row.
+func (w *DiffViewWidget) GetNextNavigableRow(currentRow int) int {
+	totalHeight := w.CalculateTotalHeight()
+	for row := currentRow + 1; row < totalHeight; row++ {
+		if w.IsRowNavigable(row) {
+			return row
 		}
 	}
-	return false, nil
+	return currentRow // No next row
+}
+
+// GetPrevNavigableRow returns the previous navigable row before the given row.
+func (w *DiffViewWidget) GetPrevNavigableRow(currentRow int) int {
+	for row := currentRow - 1; row >= 0; row-- {
+		if w.IsRowNavigable(row) {
+			return row
+		}
+	}
+	return currentRow // No prev row
+}
+
+// GetSourceLineForRow returns the source line number for a given row.
+func (w *DiffViewWidget) GetSourceLineForRow(row int) int {
+	if row < 2 {
+		return 0
+	}
+
+	currentRow := 2
+	for hunkIdx, hw := range w.hunks {
+		currentRow++ // Hunk header
+
+		for _, line := range hw.hunk.Lines {
+			if currentRow == row {
+				if line.NewNum > 0 {
+					return line.NewNum
+				}
+				return line.OldNum
+			}
+			currentRow++
+
+			if line.NewNum > 0 {
+				if conv, exists := w.conversationMap[line.NewNum]; exists {
+					commentHeight := calculateCommentHeight(conv)
+					if row >= currentRow && row < currentRow+commentHeight {
+						return line.NewNum // Comment is attached to this line
+					}
+					currentRow += commentHeight
+				}
+			}
+		}
+
+		if hunkIdx < len(w.hunks)-1 {
+			currentRow++ // Spacing
+		}
+	}
+	return 0
+}
+
+// GetConversationUUIDForRow returns the conversation UUID for a row (if it's a comment row).
+func (w *DiffViewWidget) GetConversationUUIDForRow(row int) string {
+	if row < 2 {
+		return ""
+	}
+
+	currentRow := 2
+	for hunkIdx, hw := range w.hunks {
+		currentRow++ // Hunk header
+
+		for _, line := range hw.hunk.Lines {
+			currentRow++ // Line
+
+			if line.NewNum > 0 {
+				if conv, exists := w.conversationMap[line.NewNum]; exists {
+					commentHeight := calculateCommentHeight(conv)
+					if row >= currentRow && row < currentRow+commentHeight {
+						return conv.UUID
+					}
+					currentRow += commentHeight
+				}
+			}
+		}
+
+		if hunkIdx < len(w.hunks)-1 {
+			currentRow++ // Spacing
+		}
+	}
+	return ""
+}
+
+// IsCommentRow returns true if the given row is part of a comment.
+func (w *DiffViewWidget) IsCommentRow(row int) bool {
+	return w.GetConversationUUIDForRow(row) != ""
 }
