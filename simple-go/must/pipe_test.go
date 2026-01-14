@@ -119,12 +119,14 @@ func TestPipeInto_LargeBinaryData(t *testing.T) {
 	// This tests that the parallel exec/read works correctly with large binary data
 	// and doesn't block due to pipe buffer limits.
 	//
-	// base64 output has 76 chars per line + newline = 77 bytes per line
+	// We use fold -w 76 to ensure consistent line wrapping across platforms
+	// (macOS base64 doesn't wrap by default, GNU base64 wraps at 76 chars).
+	// 76 chars per line + newline = 77 bytes per line
 	// 1024768 bytes / 77 ≈ 13308 lines
 	pipe := sio.NewSectionPipe(100, 1000)
 
-	// Generate large binary data: base64 /dev/urandom | head -c 1024768
-	output := PipeInto(pipe, "bash", "-c", "base64 /dev/urandom | head -c 1024768")
+	// Generate large binary data with explicit line wrapping via fold
+	output := PipeInto(pipe, "bash", "-c", "base64 /dev/urandom | tr -d '\\n' | fold -w 76 | head -n 15000")
 
 	// Should have exactly 1000 lines
 	lines := strings.Split(strings.TrimSuffix(string(output), "\n"), "\n")
