@@ -496,6 +496,29 @@ func (s *SubBuffer) Clear() {
 	s.Fill(s.Bounds(), EmptyCell())
 }
 
+// Sub creates a nested sub-buffer view within this sub-buffer.
+// The rect is relative to this sub-buffer's origin.
+func (s *SubBuffer) Sub(rect Rect) *SubBuffer {
+	// Convert relative coordinates to absolute coordinates in the parent buffer
+	absRect := Rect{
+		X:      s.offset.X + rect.X,
+		Y:      s.offset.Y + rect.Y,
+		Width:  rect.Width,
+		Height: rect.Height,
+	}
+	// Clip to our bounds
+	clipped := absRect.Intersect(Rect{
+		X:      s.offset.X,
+		Y:      s.offset.Y,
+		Width:  s.offset.Width,
+		Height: s.offset.Height,
+	})
+	return &SubBuffer{
+		parent: s.parent,
+		offset: clipped,
+	}
+}
+
 // String renders the buffer to a string for terminal output.
 // This is the final step before sending to the terminal.
 func (b *Buffer) String() string {
