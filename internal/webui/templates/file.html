@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <script>
+        // Set theme immediately to avoid flash
+        document.documentElement.setAttribute('data-theme', localStorage.getItem('critic-theme') || 'dark');
+    </script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx-ext-ws@2.0.2/ws.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+    <div class="container">
+        <header class="header">
+            <div class="header-left">
+                <a href="/" class="back-link">&larr; Back</a>
+                <h1>{{.FilePath}}</h1>
+            </div>
+            <div class="header-controls">
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    <span class="theme-icon"></span>
+                </button>
+            </div>
+        </header>
+
+        <div class="main-layout single-pane">
+            <main class="content full-width">
+                <div id="diff-view" class="diff-container" data-file-path="{{.FilePath}}">
+                    {{template "diff.html" (dict "FilePath" .FilePath "Hunks" .CurrentFile.Hunks "IsNew" .CurrentFile.IsNew "IsDeleted" .CurrentFile.IsDeleted "IsRenamed" .CurrentFile.IsRenamed "OldPath" .CurrentFile.OldPath "Conversations" nil)}}
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Theme toggle
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('critic-theme', newTheme);
+        }
+
+        // Load saved theme
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('critic-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        });
+    </script>
+</body>
+</html>

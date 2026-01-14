@@ -1,0 +1,92 @@
+<div class="diff-header">
+    <h2 class="diff-title">
+        {{if .IsNew}}<span class="badge new">New</span>{{end}}
+        {{if .IsDeleted}}<span class="badge deleted">Deleted</span>{{end}}
+        {{if .IsRenamed}}<span class="badge renamed">Renamed from {{.OldPath}}</span>{{end}}
+        {{.FilePath}}
+    </h2>
+</div>
+
+<div class="diff-content" data-filepath="{{.FilePath}}">
+    {{range $hunkIdx, $hunk := .Hunks}}
+    <div class="hunk">
+        <div class="hunk-header">{{$hunk.Header}}</div>
+        {{range $lineIdx, $line := $hunk.Lines}}
+        <div class="diff-line line-{{$line.Type}}"
+             data-line-number="{{$line.NewNum}}"
+             data-old-line="{{$line.OldNum}}"
+             data-hunk="{{$hunkIdx}}"
+             data-line-index="{{$lineIdx}}">
+            <span class="line-numbers">
+                <span class="old-num">{{if gt $line.OldNum 0}}{{$line.OldNum}}{{end}}</span>
+                <span class="new-num">{{if gt $line.NewNum 0}}{{$line.NewNum}}{{end}}</span>
+            </span>
+            <span class="line-indicator">
+                {{if eq $line.Type "added"}}+{{else if eq $line.Type "deleted"}}-{{else}} {{end}}
+            </span>
+            <span class="line-content">{{$line.Content}}</span>
+            <button class="comment-btn" onclick="showCommentForm(this, '{{$.FilePath}}', {{$line.NewNum}})" title="Add comment">
+                <svg viewBox="0 0 16 16" width="14" height="14">
+                    <path fill="currentColor" d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/>
+                </svg>
+            </button>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+
+{{if .Conversations}}
+<div class="conversations-section">
+    <h3>Conversations</h3>
+    <div id="conversations-{{.FilePath}}" class="conversations-list">
+        {{range .Conversations}}
+        {{template "conversation.html" .}}
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+<!-- Comment form modal -->
+<div id="comment-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Add Comment</h3>
+            <button class="close-btn" onclick="hideCommentForm()">&times;</button>
+        </div>
+        <form id="comment-form" hx-post="/api/comment" hx-swap="beforeend" hx-target="#conversations-{{.FilePath}}">
+            <input type="hidden" name="filePath" id="comment-filepath">
+            <input type="hidden" name="lineNumber" id="comment-linenumber">
+            <div class="form-group">
+                <label for="comment-message">Your comment:</label>
+                <textarea name="message" id="comment-message" rows="4" placeholder="Enter your comment..."></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="hideCommentForm()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Submit</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function showCommentForm(btn, filePath, lineNumber) {
+    const modal = document.getElementById('comment-modal');
+    document.getElementById('comment-filepath').value = filePath;
+    document.getElementById('comment-linenumber').value = lineNumber;
+    document.getElementById('comment-message').value = '';
+    modal.style.display = 'flex';
+    document.getElementById('comment-message').focus();
+}
+
+function hideCommentForm() {
+    document.getElementById('comment-modal').style.display = 'none';
+}
+
+// Close modal on successful submit
+document.body.addEventListener('htmx:afterRequest', function(event) {
+    if (event.detail.elt.id === 'comment-form' && event.detail.successful) {
+        hideCommentForm();
+    }
+});
+</script>

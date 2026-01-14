@@ -1,0 +1,41 @@
+<div class="conversation {{if eq .Status "resolved"}}resolved{{end}}" id="conversation-{{.UUID}}" data-line="{{.LineNumber}}">
+    <div class="conversation-header">
+        <span class="conversation-location">Line {{.LineNumber}}</span>
+        <span class="conversation-status status-{{.Status}}">{{.Status}}</span>
+        {{if eq .Status "resolved"}}
+        <button class="btn btn-sm" hx-post="/api/unresolve/{{.UUID}}" hx-swap="outerHTML" hx-target="#conversation-{{.UUID}}">
+            Reopen
+        </button>
+        {{else}}
+        <button class="btn btn-sm btn-success" hx-post="/api/resolve/{{.UUID}}" hx-swap="outerHTML" hx-target="#conversation-{{.UUID}}">
+            Resolve
+        </button>
+        {{end}}
+    </div>
+
+    {{if .Context}}
+    <div class="conversation-context">
+        <pre><code>{{.Context}}</code></pre>
+    </div>
+    {{end}}
+
+    <div class="messages">
+        {{range .Messages}}
+        <div class="message message-{{.Author}}">
+            <div class="message-header">
+                <span class="message-author">{{if eq .Author "human"}}You{{else}}AI{{end}}</span>
+                <span class="message-time">{{.CreatedAt.Format "Jan 2 15:04"}}</span>
+            </div>
+            <div class="message-content">{{.Message}}</div>
+        </div>
+        {{end}}
+    </div>
+
+    <form class="reply-form" hx-post="/api/reply" hx-swap="outerHTML" hx-target="#conversation-{{.UUID}}">
+        <input type="hidden" name="conversationId" value="{{.UUID}}">
+        <div class="reply-input-group">
+            <textarea name="message" placeholder="Write a reply..." rows="2"></textarea>
+            <button type="submit" class="btn btn-primary">Reply</button>
+        </div>
+    </form>
+</div>

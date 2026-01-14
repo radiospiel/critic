@@ -1,0 +1,15 @@
+{{range .}}
+<div class="file-item" onclick="selectFile('{{.Path}}')" data-path="{{.Path}}">
+    <span class="file-status status-{{.Status}}">{{.Status}}</span>
+    <span class="file-path">{{.Path}}</span>
+    {{if .HasComments}}
+    <span class="comment-indicator{{if gt .Unresolved 0}} unresolved{{end}}">
+        {{if gt .Unresolved 0}}{{.Unresolved}}{{else}}✓{{end}}
+    </span>
+    {{end}}
+</div>
+{{else}}
+<div class="empty-state">
+    <p>No files with changes</p>
+</div>
+{{end}}

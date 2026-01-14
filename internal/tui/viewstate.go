@@ -1,4 +1,4 @@
-package ui
+package tui
 
 import (
 	ctypes "git.15b.it/eno/critic/pkg/types"
