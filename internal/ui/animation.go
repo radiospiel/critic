@@ -1,11 +1,14 @@
 package ui
 
 import (
+	"strings"
 	"sync"
 	"time"
 
 	"git.15b.it/eno/critic/pkg/critic"
+	"git.15b.it/eno/critic/simple-tui/animation"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // AnimationState represents the current animation state for conversations
@@ -20,97 +23,61 @@ const (
 	LookHereAnimation
 )
 
-// Animation frames for different states
-// Each frame should be single-width ASCII/Unicode characters
+// Animation configuration
+const (
+	// ThinkingAnimationType - BrailleSnake for when AI is thinking
+	ThinkingAnimationType = animation.BrailleSnake
+	// LookHereAnimationType - StarBurst for when AI is waiting for user
+	LookHereAnimationType = animation.StarBurst
+	// LookHereSpeedFactor - 71% speed (1/0.71 ≈ 1.41 multiplier on duration)
+	LookHereSpeedFactor = 1.41
+	// SeparatorAnimationType - Snake for separator line in diff view
+	SeparatorAnimationType = animation.Snake
+	// SeparatorSpeedFactor - 62% speed (1/0.62 ≈ 1.61 multiplier on duration)
+	SeparatorSpeedFactor = 1.61
+)
 
-// ThinkingFrames - dots animation for "thinking" state (10 chars)
-var ThinkingFrames = []string{
-	".         ",
-	"..        ",
-	"...       ",
-	"....      ",
-	".....     ",
-	"......    ",
-	".......   ",
-	"........  ",
-	"......... ",
-	"..........",
-	"......... ",
-	"........  ",
-	".......   ",
-	"......    ",
-	".....     ",
-	"....      ",
-	"...       ",
-	"..        ",
-}
+// tickInterval is the base tick rate for animations (use fastest animation speed)
+const tickInterval = 40 * time.Millisecond
 
-// ThinkingFramesShort - single char thinking animation
-var ThinkingFramesShort = []string{
-	".",
-	"o",
-	"O",
-	"o",
-}
-
-// LookHereFrames - jumping animation for "look here" state (10 chars)
-var LookHereFrames = []string{
-	">>        ",
-	" >>       ",
-	"  >>      ",
-	"   >>     ",
-	"    >>    ",
-	"     >>   ",
-	"      >>  ",
-	"       >> ",
-	"        >>",
-	"       >> ",
-	"      >>  ",
-	"     >>   ",
-	"    >>    ",
-	"   >>     ",
-	"  >>      ",
-	" >>       ",
-}
-
-// LookHereFramesShort - single char look here animation
-var LookHereFramesShort = []string{
-	">",
-	"*",
-	"<",
-	"*",
-}
-
-// AnimationTicker holds the current frame index and provides animation state
+// AnimationTicker holds the animations and provides animation state
 type AnimationTicker struct {
-	mu           sync.RWMutex
-	frameIndex   int
-	tickInterval time.Duration
+	mu             sync.RWMutex
+	thinking       *animation.Animation
+	lookHere       *animation.Animation
+	separator      *animation.Animation
+	thinkingTicks  int // accumulator for thinking animation
+	lookHereTicks  int // accumulator for look here animation
+	separatorTicks int // accumulator for separator animation
 }
 
 // NewAnimationTicker creates a new animation ticker
 func NewAnimationTicker() *AnimationTicker {
 	return &AnimationTicker{
-		tickInterval: 200 * time.Millisecond, // 200ms per frame
+		thinking:  animation.NewSingleCellAnimation(ThinkingAnimationType, true, 1.0),
+		lookHere:  animation.NewSingleCellAnimation(LookHereAnimationType, true, LookHereSpeedFactor),
+		separator: animation.NewShortAnimation(SeparatorAnimationType, true, SeparatorSpeedFactor),
 	}
 }
 
-// GetFrame returns the current animation frame for the given state
+// GetFrame returns the current animation frame for the given state (with color)
 func (at *AnimationTicker) GetFrame(state AnimationState, long bool) string {
 	at.mu.RLock()
 	defer at.mu.RUnlock()
 
 	switch state {
 	case ThinkingAnimation:
+		frame := at.thinking.Render()
 		if long {
-			return ThinkingFrames[at.frameIndex%len(ThinkingFrames)]
+			return padToWidth(frame, 10)
 		}
-		return ThinkingFramesShort[at.frameIndex%len(ThinkingFramesShort)]
+		return frame
 	case LookHereAnimation:
+		frame := at.lookHere.Render()
 		if long {
-			return LookHereFrames[at.frameIndex%len(LookHereFrames)]
+			return padToWidth(frame, 10)
 		}
-		return LookHereFramesShort[at.frameIndex%len(LookHereFramesShort)]
+		return frame
 	default:
 		if long {
 			return "          " // 10 spaces
@@ -119,19 +86,100 @@ func (at *AnimationTicker) GetFrame(state AnimationState, long bool) string {
 	}
 }
 
-// Tick advances the animation frame
+// GetFrameRune returns the current animation frame character (without color)
+func (at *AnimationTicker) GetFrameRune(state AnimationState) rune {
+	at.mu.RLock()
+	defer at.mu.RUnlock()
+
+	switch state {
+	case ThinkingAnimation:
+		return at.thinking.Rune()
+	case LookHereAnimation:
+		return at.lookHere.Rune()
+	default:
+		return ' '
+	}
+}
+
+// GetFrameStyle returns the lipgloss style for the animation state
+func (at *AnimationTicker) GetFrameStyle(state AnimationState) lipgloss.Style {
+	at.mu.RLock()
+	defer at.mu.RUnlock()
+
+	switch state {
+	case ThinkingAnimation:
+		return at.thinking.Style()
+	case LookHereAnimation:
+		return at.lookHere.Style()
+	default:
+		return lipgloss.NewStyle()
+	}
+}
+
+// GetSeparatorFrame returns the current separator animation frame (12-char snake)
+func (at *AnimationTicker) GetSeparatorFrame() string {
+	at.mu.RLock()
+	defer at.mu.RUnlock()
+	return at.separator.Render()
+}
+
+// padToWidth pads a string to exactly width characters (accounts for ANSI codes)
+func padToWidth(s string, width int) string {
+	// The animation frames are single characters, so we need to pad
+	// But they may have ANSI color codes, so we count visible width
+	visibleLen := 1 // animation frames are single chars
+	if visibleLen < width {
+		return s + strings.Repeat(" ", width-visibleLen)
+	}
+	return s
+}
+
+// Tick advances the animation frames based on their respective speeds
 func (at *AnimationTicker) Tick() {
 	at.mu.Lock()
 	defer at.mu.Unlock()
-	at.frameIndex++
+
+	// Thinking animation: BrailleSnake at 80ms per frame
+	// At 40ms tick rate, advance every 2 ticks
+	thinkingTicksNeeded := int(at.thinking.Speed / tickInterval)
+	if thinkingTicksNeeded < 1 {
+		thinkingTicksNeeded = 1
+	}
+	at.thinkingTicks++
+	if at.thinkingTicks >= thinkingTicksNeeded {
+		at.thinkingTicks = 0
+		at.thinking.Tick()
+	}
+
+	// LookHere animation: StarBurst at adjusted speed
+	lookHereTicksNeeded := int(at.lookHere.Speed / tickInterval)
+	if lookHereTicksNeeded < 1 {
+		lookHereTicksNeeded = 1
+	}
+	at.lookHereTicks++
+	if at.lookHereTicks >= lookHereTicksNeeded {
+		at.lookHereTicks = 0
+		at.lookHere.Tick()
+	}
+
+	// Separator animation: Snake short animation at 62% speed
+	separatorTicksNeeded := int(at.separator.Speed / tickInterval)
+	if separatorTicksNeeded < 1 {
+		separatorTicksNeeded = 1
+	}
+	at.separatorTicks++
+	if at.separatorTicks >= separatorTicksNeeded {
+		at.separatorTicks = 0
+		at.separator.Tick()
+	}
 }
 
 // AnimationTickMsg is sent when it's time to update animations
 type AnimationTickMsg struct{}
 
-// StartAnimationTicker returns a command that sends ticks every 200ms
+// StartAnimationTicker returns a command that sends ticks at the base tick rate
 func StartAnimationTicker() tea.Cmd {
-	return tea.Tick(200*time.Millisecond, func(t time.Time) tea.Msg {
+	return tea.Tick(tickInterval, func(t time.Time) tea.Msg {
 		return AnimationTickMsg{}
 	})
 }
@@ -168,8 +216,8 @@ func GetConversationAnimationState(conv *critic.Conversation) AnimationState {
 
 // FileAnimationSummary holds animation info for a file
 type FileAnimationSummary struct {
-	HasThinking  bool
-	HasLookHere  bool
+	HasThinking bool
+	HasLookHere bool
 }
 
 // GetFileAnimationState returns the animation state for a file
@@ -188,8 +236,8 @@ func GetFileAnimationState(summary FileAnimationSummary) AnimationState {
 
 // GlobalAnimationSummary holds animation info for the entire app
 type GlobalAnimationSummary struct {
-	HasThinking  bool
-	HasLookHere  bool
+	HasThinking bool
+	HasLookHere bool
 }
 
 // GetGlobalAnimationState returns the animation state for the status bar

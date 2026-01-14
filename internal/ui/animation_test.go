@@ -5,6 +5,7 @@ import (
 
 	"git.15b.it/eno/critic/pkg/critic"
 	"git.15b.it/eno/critic/simple-go/assert"
+	"git.15b.it/eno/critic/simple-tui/animation"
 )
 
 func TestGetConversationAnimationState_NoAnimation(t *testing.T) {
@@ -89,20 +90,27 @@ func TestGetConversationAnimationState_LookHereAnimation(t *testing.T) {
 func TestAnimationTicker(t *testing.T) {
 	ticker := NewAnimationTicker()
 
-	// Test initial state
-	frame1 := ticker.GetFrame(ThinkingAnimation, false)
-	assert.Equals(t, frame1, ThinkingFramesShort[0], "expected first thinking frame")
+	// Get the animation definitions
+	thinkingAnim := animation.Get(ThinkingAnimationType)
+	lookHereAnim := animation.Get(LookHereAnimationType)
 
-	// Test frame progression
+	// Test initial state - should return first frame of BrailleSnake
+	frame1 := ticker.GetFrame(ThinkingAnimation, false)
+	assert.Equals(t, frame1, thinkingAnim.Frames[0], "expected first thinking frame")
+
+	// Test frame progression - BrailleSnake is 80ms, tick is 40ms, so need 2 ticks to advance
 	ticker.Tick()
 	frame2 := ticker.GetFrame(ThinkingAnimation, false)
-	assert.Equals(t, frame2, ThinkingFramesShort[1], "expected second thinking frame after tick")
+	assert.Equals(t, frame2, thinkingAnim.Frames[0], "expected still first frame after 1 tick (80ms animation, 40ms tick)")
 
-	// Test long frame
 	ticker.Tick()
-	longFrame := ticker.GetFrame(LookHereAnimation, true)
-	expectedLongFrame := LookHereFrames[2%len(LookHereFrames)]
-	assert.Equals(t, longFrame, expectedLongFrame, "expected long look here frame")
+	frame3 := ticker.GetFrame(ThinkingAnimation, false)
+	assert.Equals(t, frame3, thinkingAnim.Frames[1], "expected second frame after 2 ticks")
+
+	// Test LookHere animation returns StarBurst frames (it advances at its own rate)
+	lookHereFrame := ticker.GetFrame(LookHereAnimation, false)
+	// Just verify it's a valid StarBurst frame
+	assert.Contains(t, lookHereAnim.Frames, lookHereFrame, "expected a valid StarBurst frame")
 
 	// Test NoAnimation returns spaces
 	noAnimFrame := ticker.GetFrame(NoAnimation, false)

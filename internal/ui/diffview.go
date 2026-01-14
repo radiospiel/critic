@@ -1082,12 +1082,8 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 		if i == 0 && msg.Author == critic.AuthorHuman {
 			// Add each line of the root message
 			msgLines := strings.Split(msg.Message, "\n")
-			for j, line := range msgLines {
-				if j == 0 {
-					allLines = append(allLines, renderMarkdown(line))
-				} else {
-					allLines = append(allLines, renderMarkdown(line))
-				}
+			for _, line := range msgLines {
+				allLines = append(allLines, renderMarkdown(line))
 			}
 		} else {
 			// Add each line of the reply with the prefix
@@ -1117,6 +1113,17 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	const blackFg = "\x1b[38;5;0m"               // Black text
 	const grayFg = "\x1b[38;5;240m"              // Gray text for separator
 	const reset = "\x1b[0m"
+
+	// Available width for content (full width, no animation prefix on content)
+	availableWidth := m.width
+
+	// Wrap long lines instead of truncating
+	var wrappedLines []string
+	for _, line := range allLines {
+		wrapped := wrapLine(line, availableWidth-2) // -2 for padding on sides
+		wrappedLines = append(wrappedLines, wrapped...)
+	}
+	allLines = wrappedLines
 
 	// Calculate the total lines including blank lines before/after
 	// Structure: content lines, separator line with hotkeys (when selected)
@@ -1149,23 +1156,10 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	// Build result: content lines, separator with hotkeys
 	var result []string
 
-	// Get animation state for this conversation
-	animState := GetConversationAnimationState(conv)
-	var animPrefix string
-	if m.animationTicker != nil && animState != NoAnimation {
-		animPrefix = m.animationTicker.GetFrame(animState, true) // 10-char long animation
-	} else {
-		animPrefix = "          " // 10 spaces when no animation
-	}
-
-	// Animation prefix width
-	const animPrefixWidth = 10
-
-	// Helper to create a content line (black text on light blue) with animation prefix
+	// Helper to create a content line (black text on light blue) - no animation prefix
 	createContentLine := func(text string, lineNum int) string {
 		content := " " + text
 		visibleWidth := lipgloss.Width(content)
-		availableWidth := m.width - animPrefixWidth
 
 		var processed string
 		if visibleWidth > availableWidth {
@@ -1174,17 +1168,37 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			padding := strings.Repeat(" ", availableWidth-visibleWidth)
 			processed = content + padding
 		}
-		styled := animPrefix + lightBlueBg + blackFg + processed + reset
+		styled := lightBlueBg + blackFg + processed + reset
 		return m.renderLineWithCursor(styled, lineNum)
 	}
 
-	// Helper to create the separator line with optional hotkeys
-	createSeparatorLine := func(text string, lineNum int) string {
+	// Helper to create the top separator line with snake animation
+	createTopSeparatorLine := func(lineNum int) string {
+		// Get snake animation frame (12 chars)
+		var animFrame string
+		if m.animationTicker != nil {
+			animFrame = m.animationTicker.GetSeparatorFrame()
+		} else {
+			animFrame = "○○○○○○○○○○○○" // fallback static snake
+		}
+
+		// Calculate dashes needed to fill the rest of the line
+		animWidth := 12 // snake animation is 12 chars
+		dashesNeeded := availableWidth - animWidth - 1 // -1 for space after animation
+		if dashesNeeded < 0 {
+			dashesNeeded = 0
+		}
+		line := animFrame + " " + strings.Repeat("─", dashesNeeded)
+		styled := grayFg + line + reset
+		return m.renderLineWithCursor(styled, lineNum)
+	}
+
+	// Helper to create the bottom separator line with optional hotkeys
+	createBottomSeparatorLine := func(text string, lineNum int) string {
 		// Separator is a line of dashes with optional centered text
-		availableWidth := m.width - animPrefixWidth
 		if text == "" {
 			line := strings.Repeat("─", availableWidth)
-			styled := animPrefix + grayFg + line + reset
+			styled := grayFg + line + reset
 			return m.renderLineWithCursor(styled, lineNum)
 		}
 		// Center the text in the separator
@@ -1198,14 +1212,14 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			rightDashes = 0
 		}
 		line := strings.Repeat("─", leftDashes) + " " + text + " " + strings.Repeat("─", rightDashes)
-		styled := animPrefix + grayFg + line + reset
+		styled := grayFg + line + reset
 		return m.renderLineWithCursor(styled, lineNum)
 	}
 
 	currentLine := startLineNum
 
-	// Add top separator line (plain, no hotkeys)
-	result = append(result, createSeparatorLine("", currentLine))
+	// Add top separator line with snake animation
+	result = append(result, createTopSeparatorLine(currentLine))
 	currentLine++
 
 	// Add content lines
@@ -1230,7 +1244,7 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 			separatorText = "[R] unresolve • [Enter] reply"
 		}
 	}
-	result = append(result, createSeparatorLine(separatorText, currentLine))
+	result = append(result, createBottomSeparatorLine(separatorText, currentLine))
 
 	return result
 }
@@ -1252,6 +1266,68 @@ func renderMarkdown(text string) string {
 	// Use word boundaries to avoid matching variable_names_like_this
 	underlineRegex := regexp.MustCompile(`\b_([^_]+)_\b`)
 	result = underlineRegex.ReplaceAllString(result, underline+"$1"+reset)
+
+	return result
+}
+
+// wrapLine wraps a line of text (possibly with ANSI codes) to fit within maxWidth.
+// Returns a slice of wrapped lines, preserving ANSI codes across line breaks.
+func wrapLine(line string, maxWidth int) []string {
+	if maxWidth <= 0 {
+		return []string{line}
+	}
+
+	// Calculate visible width
+	visibleWidth := lipgloss.Width(line)
+	if visibleWidth <= maxWidth {
+		return []string{line}
+	}
+
+	// Simple word-wrapping: split on spaces and accumulate words
+	words := strings.Fields(line)
+	if len(words) == 0 {
+		return []string{line}
+	}
+
+	var result []string
+	var currentLine strings.Builder
+	currentWidth := 0
+
+	for i, word := range words {
+		wordWidth := lipgloss.Width(word)
+
+		if currentWidth == 0 {
+			// First word on line
+			currentLine.WriteString(word)
+			currentWidth = wordWidth
+		} else if currentWidth+1+wordWidth <= maxWidth {
+			// Word fits on current line
+			currentLine.WriteString(" ")
+			currentLine.WriteString(word)
+			currentWidth += 1 + wordWidth
+		} else {
+			// Word doesn't fit - start new line
+			result = append(result, currentLine.String())
+			currentLine.Reset()
+			// Add indent for continuation (2 spaces)
+			currentLine.WriteString("  ")
+			currentLine.WriteString(word)
+			currentWidth = 2 + wordWidth
+		}
+
+		// Handle very long words that exceed maxWidth by themselves
+		if i == 0 && wordWidth > maxWidth {
+			// Just add it as-is, it will get truncated later
+			result = append(result, currentLine.String())
+			currentLine.Reset()
+			currentWidth = 0
+		}
+	}
+
+	// Add remaining line
+	if currentLine.Len() > 0 {
+		result = append(result, currentLine.String())
+	}
 
 	return result
 }

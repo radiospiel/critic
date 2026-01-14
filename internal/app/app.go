@@ -518,13 +518,6 @@ func (m Model) View() string {
 func (m Model) renderStatusBar() string {
 	var parts []string
 
-	// Show animation indicator if there are conversations needing attention
-	animState := ui.GetGlobalAnimationState(m.globalAnimState)
-	if animState != ui.NoAnimation {
-		animFrame := m.animationTicker.GetFrame(animState, false)
-		parts = append(parts, animFrame)
-	}
-
 	// Show current base
 	if len(m.bases) > 0 {
 		base := m.bases[m.currentBase]

@@ -107,13 +107,9 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 	animState := GetFileAnimationState(fileAnimSummary)
 
 	if animState != NoAnimation && w.animationTicker != nil {
-		// Use animation character
-		animFrame := w.animationTicker.GetFrame(animState, false)
-		if len(animFrame) > 0 {
-			indicatorRune = []rune(animFrame)[0]
-		}
-		// Use yellow for animation indicators
-		indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+		// Use animation character and style
+		indicatorRune = w.animationTicker.GetFrameRune(animState)
+		indicatorStyle = w.animationTicker.GetFrameStyle(animState)
 	} else if hasUnreadAI {
 		indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // Red
 		indicatorRune = '▌'
@@ -137,12 +133,14 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 		style = normalFileStyle
 	}
 
-	// Render indicator
+	// Render indicator at column 0
 	buf.SetCell(0, 0, pot.Cell{Rune: indicatorRune, Style: indicatorStyle})
+	// Space after indicator at column 1
+	buf.SetCell(1, 0, pot.Cell{Rune: ' ', Style: style})
 
-	// Render content
+	// Render content starting at column 2
 	content := fmt.Sprintf("%s %s", status, path)
-	availableWidth := width - 1 // -1 for indicator
+	availableWidth := width - 2 // -2 for indicator + space
 
 	// Truncate if needed
 	runes := []rune(content)
@@ -154,14 +152,14 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 		}
 	}
 
-	// Write content
+	// Write content starting at column 2
 	for i, r := range runes {
-		buf.SetCell(1+i, 0, pot.Cell{Rune: r, Style: style})
+		buf.SetCell(2+i, 0, pot.Cell{Rune: r, Style: style})
 	}
 
 	// Fill remaining width with style (for selection highlight)
 	if selected {
-		for x := 1 + len(runes); x < width; x++ {
+		for x := 2 + len(runes); x < width; x++ {
 			buf.SetCell(x, 0, pot.Cell{Rune: ' ', Style: style})
 		}
 	}
