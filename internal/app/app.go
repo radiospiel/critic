@@ -524,10 +524,6 @@ func (m Model) View() string {
 func (m Model) renderStatusBar() string {
 	var parts []string
 
-	// Debug: show tick count and current animation frame
-	thinkFrame := m.animationTicker.GetFrame(ui.ThinkingAnimation, false)
-	parts = append(parts, fmt.Sprintf("T:%d F:%s", m.tickCount, thinkFrame))
-
 	// Show current base
 	if len(m.bases) > 0 {
 		base := m.bases[m.currentBase]
