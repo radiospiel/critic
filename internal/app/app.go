@@ -43,9 +43,10 @@ func (m FilterMode) String() string {
 
 // Args represents parsed command-line arguments
 type Args struct {
-	Bases      []string // List of base points (e.g., ["main", "origin/main", "HEAD"])
-	Paths      []string // Paths to diff
-	Extensions []string // File extensions to include
+	Bases       []string // List of base points (e.g., ["main", "origin/main", "HEAD"])
+	Paths       []string // Paths to diff
+	Extensions  []string // File extensions to include
+	NoAnimation bool     // Disable animations
 }
 
 // GetDefaultBases returns the default base points based on git state
@@ -131,6 +132,7 @@ type Model struct {
 	messaging       critic.Messaging  // Messaging interface for conversations
 	filterMode      FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
 	animationTicker *ui.AnimationTicker // Animation ticker for conversation states
+	noAnimation     bool                  // Whether animations are disabled
 	globalAnimState ui.GlobalAnimationSummary // Global animation state for status bar
 	tickCount       int                       // Debug: count of animation ticks
 	err             error
@@ -159,8 +161,11 @@ func NewModel(args *Args) Model {
 		logger.Fatal("Failed to initialize message database: %v", err)
 	}
 
-	// Create animation ticker
-	animTicker := ui.NewAnimationTicker()
+	// Create animation ticker (unless disabled)
+	var animTicker *ui.AnimationTicker
+	if !args.NoAnimation {
+		animTicker = ui.NewAnimationTicker()
+	}
 
 	diffView.SetMessaging(mdb)
 	diffView.SetAnimationTicker(animTicker)
@@ -178,6 +183,7 @@ func NewModel(args *Args) Model {
 		extensions:      args.Extensions,
 		messaging:       mdb,
 		animationTicker: animTicker,
+		noAnimation:     args.NoAnimation,
 	}
 }
 
@@ -192,7 +198,11 @@ func (m Model) Init() tea.Cmd {
 		initBaseResolverCmd(&m),
 		loadDiffCmd(&m),
 		disableTerminalLineWrap,        // This now handles alternate screen + nowrap
-		ui.StartAnimationTicker(),      // Start animation ticker
+	}
+
+	// Start animation ticker (unless disabled)
+	if !m.noAnimation {
+		cmds = append(cmds, ui.StartAnimationTicker())
 	}
 
 	return tea.Batch(cmds...)
@@ -432,6 +442,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case ui.AnimationTickMsg:
+		// Skip if animations are disabled
+		if m.noAnimation || m.animationTicker == nil {
+			return m, nil
+		}
 		// Advance animation frame
 		m.animationTicker.Tick()
 		// Update global animation state based on conversations
