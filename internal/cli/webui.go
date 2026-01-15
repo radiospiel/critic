@@ -42,7 +42,12 @@ Examples:
 			}
 			return nil
 		},
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			defer func() {
+				if err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+				}
+			}()
 			config := webui.Config{
 				Port:  port,
 				Paths: []string{"."},
