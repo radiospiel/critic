@@ -519,6 +519,17 @@ func (s *SubBuffer) Sub(rect Rect) *SubBuffer {
 	}
 }
 
+// InvertRow applies Reverse styling to all cells in the specified row.
+// This is used for selection highlighting as an overlay effect.
+func (b *Buffer) InvertRow(row int) {
+	if row < 0 || row >= b.height {
+		return
+	}
+	for x := 0; x < b.width; x++ {
+		b.cells[row][x].Style = b.cells[row][x].Style.Reverse(true)
+	}
+}
+
 // String renders the buffer to a string for terminal output.
 // This is the final step before sending to the terminal.
 func (b *Buffer) String() string {

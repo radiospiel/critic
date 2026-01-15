@@ -106,20 +106,20 @@ func (w *HunkWidget) Render(buf *teapot.SubBuffer) {
 	y++
 
 	// Render each line and its comment (if any)
+	// Note: Selection highlighting is done via buffer overlay, not here
 	for _, line := range w.hunk.Lines {
 		// Get highlighted content
 		highlighted := w.getHighlightedContent(line)
 
 		// Render the diff line
-		isSelected := (y == w.selectedRow)
-		w.renderDiffLine(buf, y, line, highlighted, width, isSelected)
+		w.renderDiffLine(buf, y, line, highlighted, width)
 		y++
 
 		// Render comment if exists
 		if line.NewNum > 0 {
 			if conv, exists := w.conversationMap[line.NewNum]; exists {
 				commentHeight := calculateCommentHeight(conv)
-				// Check if any row in comment is selected
+				// Check if any row in comment is selected (for hotkey display)
 				commentSelected := w.selectedRow >= y && w.selectedRow < y+commentHeight
 				w.renderComment(buf, y, conv, width, commentHeight, commentSelected)
 				y += commentHeight
@@ -164,8 +164,8 @@ func (w *HunkWidget) renderHeaderLine(buf *teapot.SubBuffer, y int, header strin
 	}
 }
 
-// renderDiffLine renders a single diff line.
-func (w *HunkWidget) renderDiffLine(buf *teapot.SubBuffer, y int, line *ctypes.Line, highlighted string, width int, selected bool) {
+// renderDiffLine renders a single diff line (selection highlighting is done via overlay).
+func (w *HunkWidget) renderDiffLine(buf *teapot.SubBuffer, y int, line *ctypes.Line, highlighted string, width int) {
 	if y >= buf.Height() {
 		return
 	}
@@ -198,9 +198,6 @@ func (w *HunkWidget) renderDiffLine(buf *teapot.SubBuffer, y int, line *ctypes.L
 	}
 
 	style := lipgloss.NewStyle().Background(bgColor)
-	if selected {
-		style = style.Reverse(true)
-	}
 
 	// Render prefix + content
 	content := prefix + highlighted
@@ -210,9 +207,6 @@ func (w *HunkWidget) renderDiffLine(buf *teapot.SubBuffer, y int, line *ctypes.L
 		if x < len(cells) {
 			cell = cells[x]
 			cell.Style = cell.Style.Background(bgColor)
-			if selected {
-				cell.Style = cell.Style.Reverse(true)
-			}
 		} else {
 			cell = teapot.Cell{Rune: ' ', Style: style}
 		}
@@ -255,15 +249,8 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 			var cell teapot.Cell
 			if x < len(cells) {
 				cell = cells[x]
-				if selected {
-					cell.Style = cell.Style.Reverse(true)
-				}
 			} else {
-				sepStyle := separatorStyle
-				if selected {
-					sepStyle = sepStyle.Reverse(true)
-				}
-				cell = teapot.Cell{Rune: '-', Style: sepStyle}
+				cell = teapot.Cell{Rune: '-', Style: separatorStyle}
 			}
 			buf.SetCell(x, y, cell)
 		}
@@ -301,15 +288,10 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 		contentLines[0] = "(Resolved) " + contentLines[0]
 	}
 
-	// Render content lines
+	// Render content lines (selection highlighting is done via overlay)
 	for _, line := range contentLines {
 		if y >= buf.Height() {
 			break
-		}
-
-		lineStyle := contentStyle
-		if selected {
-			lineStyle = lineStyle.Reverse(true)
 		}
 
 		content := " " + line
@@ -319,11 +301,8 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 			if x < len(cells) {
 				cell = cells[x]
 				cell.Style = cell.Style.Background(lightBlueBg).Foreground(blackFg)
-				if selected {
-					cell.Style = cell.Style.Reverse(true)
-				}
 			} else {
-				cell = teapot.Cell{Rune: ' ', Style: lineStyle}
+				cell = teapot.Cell{Rune: ' ', Style: contentStyle}
 			}
 			buf.SetCell(x, y, cell)
 		}
@@ -357,16 +336,12 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 		}
 
 		runes := []rune(bottomLine)
-		bottomSepStyle := separatorStyle
-		if selected {
-			bottomSepStyle = bottomSepStyle.Reverse(true)
-		}
 		for x := 0; x < width; x++ {
 			var r rune = '-'
 			if x < len(runes) {
 				r = runes[x]
 			}
-			buf.SetCell(x, y, teapot.Cell{Rune: r, Style: bottomSepStyle})
+			buf.SetCell(x, y, teapot.Cell{Rune: r, Style: separatorStyle})
 		}
 	}
 }

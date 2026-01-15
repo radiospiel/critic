@@ -841,12 +841,17 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	// Build line mappings and navigable lines from the widget structure
 	navigableLines := m.buildLineMappingsFromWidget(conversationsByLine)
 
-	// Apply cursor highlighting by updating selection in widget
-	m.updateWidgetSelection()
+	// Update widget selection for hotkey display in comments
+	m.diffWidget.SetSelectedRow(m.cursorLine)
 
-	// Re-render with selection
+	// Re-render with the updated selection (for hotkey display)
 	buffer.Clear()
 	m.diffWidget.Render(subBuf)
+
+	// Apply selection overlay - invert the current line if focused and navigable
+	if m.focused && m.isNavigableLine(m.cursorLine) {
+		buffer.InvertRow(m.cursorLine)
+	}
 
 	// Convert buffer to string
 	result := buffer.String()
