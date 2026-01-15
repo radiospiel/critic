@@ -213,12 +213,67 @@ The Web UI is designed for local development use:
 
 For production or remote access, additional security measures would be needed.
 
+## Implemented Features
+
+The following features have been implemented:
+
+- **Syntax highlighting**: Uses Chroma library with CSS classes for highlighting
+- **Keyboard navigation**: `j`/`k` for file list, `?` for help, `Tab` for pane switching
+- **Theme toggle**: Dark/light mode with localStorage persistence
+- **Local assets**: All JS (htmx) served locally, no CDN dependencies
+
+## Testing
+
+### End-to-End Tests
+
+The Web UI includes Puppeteer-based e2e tests in `tests/e2e/`:
+
+```bash
+# Install dependencies
+cd tests/e2e
+npm install
+
+# Run tests (requires critic binary)
+npm test
+```
+
+**Test Coverage:**
+
+| Test Category | What's Tested |
+|--------------|---------------|
+| Page Load | Title, header, theme toggle button |
+| File List | Container exists, files load, item structure |
+| Diff View | Click loads diff, line numbers, syntax highlighting |
+| Theme Toggle | Default dark, toggle to light/dark, localStorage |
+| Keyboard | Help overlay (?), file navigation (j/k) |
+| API Endpoints | /api/files, /api/diff/{path} |
+| WebSocket | htmx ws extension loaded |
+
+### Manual Testing
+
+To manually test the Web UI:
+
+```bash
+# Build and start
+go build -o critic ./cmd/critic
+./critic webui --port=8080
+
+# Open browser
+open http://localhost:8080
+```
+
+Verify:
+1. File list loads with changed files
+2. Clicking a file shows the diff
+3. Theme toggle switches between light/dark
+4. Comment buttons appear on diff lines
+5. Help overlay shows on `?` key
+
 ## Future Improvements
 
 Potential enhancements:
-- Syntax highlighting in diff view (using Chroma like TUI)
-- Keyboard navigation
 - Split-view for side-by-side diff
 - File tree view with folder collapsing
 - Search functionality
 - Comment threading UI improvements
+- Mobile-responsive design
