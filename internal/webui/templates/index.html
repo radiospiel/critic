@@ -50,7 +50,7 @@
                 htmx.trigger('#file-list', 'refresh');
                 const diffView = document.getElementById('diff-view');
                 if (diffView.dataset.filePath) {
-                    htmx.ajax('GET', '/api/diff/' + diffView.dataset.filePath, {target: '#diff-view'});
+                    htmx.ajax('GET', '/api/diff/' + encodeURIComponent(diffView.dataset.filePath), {target: '#diff-view'});
                 }
             }
         });
@@ -72,11 +72,12 @@
 
         // File selection
         function selectFile(path) {
-            document.querySelectorAll('.file-item').forEach(el => el.classList.remove('active'));
-            event.currentTarget.classList.add('active');
+            document.querySelectorAll('.file-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.path === path);
+            });
             const diffView = document.getElementById('diff-view');
             diffView.dataset.filePath = path;
-            htmx.ajax('GET', '/api/diff/' + path, {target: '#diff-view'});
+            htmx.ajax('GET', '/api/diff/' + encodeURIComponent(path), {target: '#diff-view'});
         }
 
         // Keyboard shortcuts
@@ -105,7 +106,7 @@
                     const path = el.dataset.path;
                     const diffView = document.getElementById('diff-view');
                     diffView.dataset.filePath = path;
-                    htmx.ajax('GET', '/api/diff/' + path, {target: '#diff-view'});
+                    htmx.ajax('GET', '/api/diff/' + encodeURIComponent(path), {target: '#diff-view'});
                 }
             });
         }
