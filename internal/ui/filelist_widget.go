@@ -337,6 +337,12 @@ func (w *FileListWidget) View() string {
 	buf := pot.NewBuffer(w.width, w.height)
 	sub := buf.Sub(buf.Bounds())
 	w.Render(sub)
+
+	// Apply animation overlay
+	if w.NeedsAnimation() {
+		w.RenderInOverlay(buf)
+	}
+
 	return buf.String()
 }
 

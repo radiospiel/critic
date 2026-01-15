@@ -800,3 +800,23 @@ func (w *DiffViewWidget) GetConversationUUIDForRow(row int) string {
 func (w *DiffViewWidget) IsCommentRow(row int) bool {
 	return w.GetConversationUUIDForRow(row) != ""
 }
+
+// RenderAnimationOverlays renders all animation overlays from child HunkWidgets.
+// This should be called after the main Render() to fill in animation content.
+func (w *DiffViewWidget) RenderAnimationOverlays(buf *teapot.Buffer) {
+	for _, hw := range w.hunks {
+		if hw.NeedsAnimation() {
+			hw.RenderInOverlay(buf)
+		}
+	}
+}
+
+// HasAnimations returns true if any child HunkWidget has active animations.
+func (w *DiffViewWidget) HasAnimations() bool {
+	for _, hw := range w.hunks {
+		if hw.NeedsAnimation() {
+			return true
+		}
+	}
+	return false
+}
