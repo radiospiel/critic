@@ -249,17 +249,23 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 			dashCount = 0
 		}
 		separatorLine := animFrame + " " + strings.Repeat("-", dashCount)
-		runes := []rune(separatorLine)
-		sepStyle := separatorStyle
-		if selected {
-			sepStyle = sepStyle.Reverse(true)
-		}
+		// Parse ANSI codes in the animation frame
+		cells := teapot.ParseANSILine(separatorLine)
 		for x := 0; x < width; x++ {
-			var r rune = ' '
-			if x < len(runes) {
-				r = runes[x]
+			var cell teapot.Cell
+			if x < len(cells) {
+				cell = cells[x]
+				if selected {
+					cell.Style = cell.Style.Reverse(true)
+				}
+			} else {
+				sepStyle := separatorStyle
+				if selected {
+					sepStyle = sepStyle.Reverse(true)
+				}
+				cell = teapot.Cell{Rune: '-', Style: sepStyle}
 			}
-			buf.SetCell(x, y, teapot.Cell{Rune: r, Style: sepStyle})
+			buf.SetCell(x, y, cell)
 		}
 		y++
 	}

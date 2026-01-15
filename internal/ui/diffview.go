@@ -812,10 +812,11 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		m.highlightTime += time.Since(hlStart)
 	}
 
-	// Configure the widget
-	m.diffWidget.SetFile(m.file, conversationsByLine, oldFileDeleted, newFileAdded, newFileContext)
+	// Configure the widget - set filter mode and animation BEFORE SetFile
+	// since SetFile calls rebuildHunks which uses these values
 	m.diffWidget.SetAnimationTicker(m.animationTicker)
 	m.diffWidget.SetFilterMode(m.filterMode)
+	m.diffWidget.SetFile(m.file, conversationsByLine, oldFileDeleted, newFileAdded, newFileContext)
 
 	// Calculate content height for the widget
 	contentHeight := m.calculateContentHeight(conversationsByLine)
