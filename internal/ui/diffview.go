@@ -12,6 +12,7 @@ import (
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
+	"git.15b.it/eno/critic/teapot"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -54,6 +55,9 @@ type DiffViewModel struct {
 	gotoBottomOnLoad     bool           // If true, go to bottom after next file load
 	filterMode           FilterMode     // Current filter mode for hunk filtering
 	animationTicker      *AnimationTicker // Animation ticker for conversation states
+
+	// Widget-based rendering
+	diffWidget           *DiffViewWidget // The widget that renders the vertical layout of hunks
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -61,6 +65,7 @@ func NewDiffViewModel() DiffViewModel {
 	return DiffViewModel{
 		highlighter:         highlight.NewHighlighter(),
 		highlightingEnabled: true, // Default to enabled
+		diffWidget:          NewDiffViewWidget(),
 	}
 }
 
@@ -773,8 +778,9 @@ func (m *DiffViewModel) GetSourceLine(renderedLine int) int {
 	return m.sourceLines[renderedLine]
 }
 
-// renderDiff renders the diff content with syntax highlighting
-// Returns the rendered content, total line count, and navigable line numbers
+// renderDiff renders the diff content using widget-based vertical layout.
+// Each hunk is a vertical layout containing lines and their associated comments.
+// Returns the rendered content, total line count, and navigable line numbers.
 func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	startTime := time.Now()
 	m.highlightTime = 0 // Reset accumulated highlight time
@@ -783,64 +789,21 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		return "", 0, nil
 	}
 
-	var b strings.Builder
-	lineNum := 0             // Track current line number for cursor highlighting
-	var navigableLines []int // Track which lines can have cursor (diff lines only)
-
-	// Initialize comment, source line, and conversation tracking
+	// Initialize tracking maps
 	m.commentLines = make(map[int]int)
 	m.sourceLines = make(map[int]int)
 	m.lineConversationUUID = make(map[int]string)
 
-	// Load conversations for this file from messaging interface
-	var fileConversations []*critic.Conversation
-	if m.messaging != nil {
-		// Get the git-relative path
-		gitPath := m.file.NewPath
-		if m.file.IsDeleted {
-			gitPath = m.file.OldPath
-		}
-		// Try to load conversations
-		if convs, err := m.messaging.GetConversationsForFile(gitPath); err == nil {
-			fileConversations = convs
-		}
-	}
-
-	// Build a map of line number to conversation for quick lookup
-	conversationsByLine := make(map[int]*critic.Conversation)
-	for _, conv := range fileConversations {
-		conversationsByLine[conv.LineNumber] = conv
-	}
+	// Load conversations for this file
+	conversationsByLine := m.loadConversationsForFile()
 
 	filename := git.GitPathToDisplayPath(m.file.NewPath)
 	if m.file.IsDeleted {
 		filename = git.GitPathToDisplayPath(m.file.OldPath)
 	}
 
-	// Render file header
-	header := fmt.Sprintf("📄 %s", filename)
-	if m.file.IsNew {
-		header += " (new)"
-	} else if m.file.IsDeleted {
-		header += " (deleted)"
-	} else if m.file.IsRenamed {
-		header = fmt.Sprintf("📄 %s → %s (renamed)",
-			git.GitPathToDisplayPath(m.file.OldPath),
-			git.GitPathToDisplayPath(m.file.NewPath))
-	}
-
-	b.WriteString(m.renderLineWithCursor(m.truncateToWidth(hunkHeaderStyle.Render(header)), lineNum))
-	lineNum++
-	b.WriteString("\n")
-	b.WriteString(m.renderLineWithCursor(m.truncateToWidth(""), lineNum)) // Empty line
-	lineNum++
-	b.WriteString("\n")
-
-	// Highlight files with appropriate background styles
-	var oldFileDeleted map[int]string // old file with deleted background
-	var newFileAdded map[int]string   // new file with added background
-	var newFileContext map[int]string // new file with context background
-
+	// Build highlighted content maps
+	var oldFileDeleted, newFileAdded, newFileContext map[int]string
 	if m.highlightingEnabled {
 		hlStart := time.Now()
 		oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
@@ -849,104 +812,202 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		m.highlightTime += time.Since(hlStart)
 	}
 
-	// Filter hunks based on filter mode
-	hunksToRender := m.filterHunks(m.file.Hunks, conversationsByLine)
+	// Configure the widget - set filter mode and animation BEFORE SetFile
+	// since SetFile calls rebuildHunks which uses these values
+	m.diffWidget.SetAnimationTicker(m.animationTicker)
+	m.diffWidget.SetFilterMode(m.filterMode)
+	m.diffWidget.SetFile(m.file, conversationsByLine, oldFileDeleted, newFileAdded, newFileContext)
 
-	// Show message if all hunks were filtered out
-	if len(hunksToRender) == 0 && len(m.file.Hunks) > 0 && m.filterMode != FilterModeNone {
-		msg := "No hunks match filter (press f to show all)"
-		b.WriteString(m.renderLineWithCursor(m.truncateToWidth(hunkHeaderStyle.Render(msg)), lineNum))
-		lineNum++
-		b.WriteString("\n")
+	// Calculate content height for the widget
+	contentHeight := m.calculateContentHeight(conversationsByLine)
+
+	// Create buffer with appropriate dimensions
+	bufferWidth := m.width
+	if bufferWidth <= 0 {
+		bufferWidth = 80 // default width
+	}
+	bufferHeight := contentHeight
+	if bufferHeight <= 0 {
+		bufferHeight = 1
 	}
 
-	// Render each hunk
-	for hunkIdx, hunk := range hunksToRender {
-		// Render hunk header
-		hunkHeader := fmt.Sprintf("@@ -%d,%d +%d,%d @@", hunk.OldStart, hunk.OldLines, hunk.NewStart, hunk.NewLines)
-		if hunk.Header != "" {
-			hunkHeader += " " + hunk.Header
+	// Create and render to buffer
+	buffer := teapot.NewBuffer(bufferWidth, bufferHeight)
+	subBuf := buffer.Sub(teapot.Rect{X: 0, Y: 0, Width: bufferWidth, Height: bufferHeight})
+
+	// Render the widget - this creates the vertical layout of hunks
+	m.diffWidget.Render(subBuf)
+
+	// Build line mappings and navigable lines from the widget structure
+	navigableLines := m.buildLineMappingsFromWidget(conversationsByLine)
+
+	// Update widget selection for hotkey display in comments
+	m.diffWidget.SetSelectedRow(m.cursorLine)
+
+	// Re-render with the updated selection (for hotkey display)
+	buffer.Clear()
+	m.diffWidget.Render(subBuf)
+
+	// Apply selection overlay - invert the current line if focused and navigable
+	if m.focused && m.isNavigableLine(m.cursorLine) {
+		buffer.InvertRow(m.cursorLine)
+	}
+
+	// Convert buffer to string
+	result := buffer.String()
+
+	totalTime := time.Since(startTime)
+	renderTime := totalTime - m.highlightTime
+	logger.Info("renderDiff (widget): total=%v, highlight=%v, render=%v, lines=%d, navigable=%d",
+		totalTime, m.highlightTime, renderTime, m.countLines(), len(navigableLines))
+
+	return result, contentHeight, navigableLines
+}
+
+// loadConversationsForFile loads and returns conversations indexed by line number
+func (m *DiffViewModel) loadConversationsForFile() map[int]*critic.Conversation {
+	conversationsByLine := make(map[int]*critic.Conversation)
+	if m.messaging == nil || m.file == nil {
+		return conversationsByLine
+	}
+
+	gitPath := m.file.NewPath
+	if m.file.IsDeleted {
+		gitPath = m.file.OldPath
+	}
+
+	if convs, err := m.messaging.GetConversationsForFile(gitPath); err == nil {
+		for _, conv := range convs {
+			conversationsByLine[conv.LineNumber] = conv
 		}
-		b.WriteString(m.renderLineWithCursor(m.truncateToWidth(hunkHeaderStyle.Render(hunkHeader)), lineNum))
-		lineNum++
-		b.WriteString("\n")
+	}
+	return conversationsByLine
+}
 
-		// Render hunk lines
+// calculateContentHeight calculates the total height needed for the content
+func (m *DiffViewModel) calculateContentHeight(conversationsByLine map[int]*critic.Conversation) int {
+	if m.file == nil {
+		return 0
+	}
+
+	height := 2 // File header
+
+	hunksToRender := m.filterHunks(m.file.Hunks, conversationsByLine)
+	for hunkIdx, hunk := range hunksToRender {
+		height++ // Hunk header
 		for _, line := range hunk.Lines {
-			var highlighted string
-			if m.highlightingEnabled {
-				// Use pre-highlighted content with appropriate background
-				switch line.Type {
-				case ctypes.LineAdded:
-					if hl, ok := newFileAdded[line.NewNum]; ok {
-						highlighted = hl
-					} else {
-						highlighted = line.Content
-					}
-				case ctypes.LineDeleted:
-					if hl, ok := oldFileDeleted[line.OldNum]; ok {
-						highlighted = hl
-					} else {
-						highlighted = line.Content
-					}
-				case ctypes.LineContext:
-					if hl, ok := newFileContext[line.NewNum]; ok {
-						highlighted = hl
-					} else {
-						highlighted = line.Content
-					}
-				default:
-					highlighted = line.Content
+			height++ // Line
+			if line.NewNum > 0 {
+				if conv, exists := conversationsByLine[line.NewNum]; exists {
+					// Comment height: separator + content + separator
+					height += calculateCommentHeight(conv)
 				}
-			} else {
-				highlighted = line.Content
 			}
+		}
+		if hunkIdx < len(hunksToRender)-1 {
+			height++ // Spacing
+		}
+	}
+	return height
+}
 
-			lineStr := m.renderLine(line, highlighted, lineNum)
-			b.WriteString(lineStr)
-			// Add to navigable lines (only actual diff lines, not headers)
+// buildLineMappingsFromWidget builds the line mappings from the widget structure
+func (m *DiffViewModel) buildLineMappingsFromWidget(conversationsByLine map[int]*critic.Conversation) []int {
+	var navigableLines []int
+
+	if m.file == nil {
+		return navigableLines
+	}
+
+	lineNum := 2 // Start after file header
+	hunksToRender := m.filterHunks(m.file.Hunks, conversationsByLine)
+
+	for hunkIdx, hunk := range hunksToRender {
+		lineNum++ // Hunk header
+
+		for _, line := range hunk.Lines {
+			// Track this line as navigable
 			navigableLines = append(navigableLines, lineNum)
-			// Track mapping from rendered line to source line
 			if line.NewNum > 0 {
 				m.sourceLines[lineNum] = line.NewNum
 			}
 			lineNum++
-			b.WriteString("\n")
 
-			// Check if there's a conversation for this line
+			// Check for comment
 			if line.NewNum > 0 {
 				if conv, exists := conversationsByLine[line.NewNum]; exists {
-					// Render conversation preview
-					commentLines := m.renderConversationPreview(conv, lineNum)
-					for _, commentLine := range commentLines {
-						b.WriteString(commentLine)
-						// Track all comment lines for navigation
-						m.commentLines[lineNum] = line.NewNum
-						m.lineConversationUUID[lineNum] = conv.UUID
-						// Add to navigable lines so user can select it
-						navigableLines = append(navigableLines, lineNum)
-						lineNum++
-						b.WriteString("\n")
+					commentHeight := calculateCommentHeight(conv)
+
+					// Track all comment lines
+					for i := 0; i < commentHeight; i++ {
+						m.commentLines[lineNum+i] = line.NewNum
+						m.lineConversationUUID[lineNum+i] = conv.UUID
+						navigableLines = append(navigableLines, lineNum+i)
 					}
+					lineNum += commentHeight
 				}
 			}
 		}
 
-		// Add spacing between hunks
 		if hunkIdx < len(hunksToRender)-1 {
-			b.WriteString(m.renderLineWithCursor(m.truncateToWidth(""), lineNum))
-			lineNum++
-			b.WriteString("\n")
+			lineNum++ // Spacing
 		}
 	}
 
-	result := b.String()
-	totalTime := time.Since(startTime)
-	renderTime := totalTime - m.highlightTime
-	logger.Info("renderDiff: total=%v, highlight=%v, render=%v, lines=%d, navigable=%d",
-		totalTime, m.highlightTime, renderTime, m.countLines(), len(navigableLines))
+	return navigableLines
+}
 
-	return result, lineNum, navigableLines
+// updateWidgetSelection updates the widget's selection based on cursorLine
+func (m *DiffViewModel) updateWidgetSelection() {
+	if m.diffWidget == nil {
+		return
+	}
+
+	// Update the widget's selected row to match cursor position
+	m.diffWidget.SetSelectedRow(m.cursorLine)
+}
+
+// findSelectableItemForLine finds the selectable item index for a given line number
+func (m *DiffViewModel) findSelectableItemForLine(lineNum int) int {
+	if m.file == nil || m.diffWidget == nil {
+		return -1
+	}
+
+	conversationsByLine := m.loadConversationsForFile()
+	currentLine := 2 // Start after file header
+	itemIdx := 0
+	hunksToRender := m.filterHunks(m.file.Hunks, conversationsByLine)
+
+	for hunkIdx, hunk := range hunksToRender {
+		currentLine++ // Hunk header
+
+		for _, line := range hunk.Lines {
+			if currentLine == lineNum {
+				return itemIdx
+			}
+			currentLine++
+			itemIdx++
+
+			if line.NewNum > 0 {
+				if conv, exists := conversationsByLine[line.NewNum]; exists {
+					commentHeight := calculateCommentHeight(conv)
+
+					// Check if lineNum falls within comment
+					if lineNum >= currentLine && lineNum < currentLine+commentHeight {
+						return itemIdx
+					}
+					currentLine += commentHeight
+					itemIdx++
+				}
+			}
+		}
+
+		if hunkIdx < len(hunksToRender)-1 {
+			currentLine++ // Spacing
+		}
+	}
+
+	return -1
 }
 
 // countLines returns the total number of lines in the current file
