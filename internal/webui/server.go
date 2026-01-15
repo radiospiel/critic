@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sync"
 
+	"git.15b.it/eno/critic/internal/app"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/messagedb"
 	"git.15b.it/eno/critic/pkg/critic"
@@ -70,6 +71,9 @@ func templateFuncs() template.FuncMap {
 		"add":      func(a, b int) int { return a + b },
 		"sub":      func(a, b int) int { return a - b },
 		"safeHTML": func(s string) template.HTML { return template.HTML(s) },
+		"js": func(s string) template.JSStr {
+			return template.JSStr(s)
+		},
 		"dict": func(values ...interface{}) map[string]interface{} {
 			if len(values)%2 != 0 {
 				return nil
@@ -135,10 +139,58 @@ func (s *Server) loadDiff() error {
 	s.diffMu.Lock()
 	defer s.diffMu.Unlock()
 
-	// Resolve base to commit SHA
-	baseName := "HEAD"
-	if len(s.config.Bases) > 0 {
-		baseName = s.config.Bases[0]
+	// Get HEAD commit for comparison
+	headCommit, err := git.ResolveRef("HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to resolve HEAD: %w", err)
+	}
+
+	// Get bases - use default bases if none specified
+	bases := s.config.Bases
+	if len(bases) == 0 {
+		defaultBases, err := app.GetDefaultBases()
+		if err != nil {
+			return fmt.Errorf("failed to get default bases: %w", err)
+		}
+		bases = defaultBases
+	}
+
+	// Find a base that produces a non-empty diff
+	// First, try origin/master or origin/main as good defaults
+	candidateBases := []string{}
+	if len(s.config.Bases) == 0 {
+		// Add origin/master and origin/main as preferred bases
+		if sha, err := git.ResolveRef("origin/master"); err == nil && sha != headCommit {
+			candidateBases = append(candidateBases, "origin/master")
+		}
+		if sha, err := git.ResolveRef("origin/main"); err == nil && sha != headCommit {
+			candidateBases = append(candidateBases, "origin/main")
+		}
+	}
+	// Then add the default bases
+	candidateBases = append(candidateBases, bases...)
+
+	// Find a base that is different from HEAD
+	baseName := ""
+	for _, b := range candidateBases {
+		if b == "HEAD" {
+			continue
+		}
+		resolved, err := resolveBase(b)
+		if err != nil {
+			logger.Warn("Failed to resolve base %s: %v", b, err)
+			continue
+		}
+		if resolved != headCommit {
+			baseName = b
+			logger.Info("Using base %s (resolved to %s)", b, resolved)
+			break
+		}
+	}
+
+	if baseName == "" {
+		logger.Warn("No suitable base found, diff will be empty")
+		baseName = "HEAD"
 	}
 
 	baseCommit, err := resolveBase(baseName)

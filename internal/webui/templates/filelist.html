@@ -1,5 +1,5 @@
 {{range .}}
-<div class="file-item" onclick="selectFile('{{.Path}}')" data-path="{{.Path}}">
+<div class="file-item" onclick="selectFile('{{js .Path}}')" data-path="{{.Path}}">
     <span class="file-status status-{{.Status}}">{{.Status}}</span>
     <span class="file-path">{{.Path}}</span>
     {{if .HasComments}}

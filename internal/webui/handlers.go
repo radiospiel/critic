@@ -16,7 +16,7 @@ import (
 // PageData holds data for page templates
 type PageData struct {
 	Title       string
-	Files       []*types.FileDiff
+	Files       []FileListItem
 	CurrentFile *types.FileDiff
 	FilePath    string
 	Theme       string
@@ -25,9 +25,35 @@ type PageData struct {
 // handleIndex renders the main page
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	diff := s.getDiff()
-	var files []*types.FileDiff
+	var files []FileListItem
 	if diff != nil {
-		files = diff.Files
+		for _, f := range diff.Files {
+			path := f.NewPath
+			if f.IsDeleted {
+				path = f.OldPath
+			}
+
+			status := "M"
+			if f.IsNew {
+				status = "A"
+			} else if f.IsDeleted {
+				status = "D"
+			} else if f.IsRenamed {
+				status = "R"
+			}
+
+			// Get conversation summary for this file
+			summary, _ := s.messaging.GetFileConversationSummary(path)
+			hasComments := summary != nil && (summary.HasUnresolvedComments || summary.HasResolvedComments)
+			hasUnresolved := summary != nil && summary.HasUnresolvedComments
+
+			files = append(files, FileListItem{
+				Path:        path,
+				Status:      status,
+				HasComments: hasComments,
+				Unresolved:  boolToInt(hasUnresolved),
+			})
+		}
 	}
 
 	data := PageData{
@@ -57,6 +83,7 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var currentFile *types.FileDiff
+	var files []FileListItem
 	for _, f := range diff.Files {
 		path := f.NewPath
 		if f.IsDeleted {
@@ -64,8 +91,27 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 		}
 		if path == filePath {
 			currentFile = f
-			break
 		}
+
+		status := "M"
+		if f.IsNew {
+			status = "A"
+		} else if f.IsDeleted {
+			status = "D"
+		} else if f.IsRenamed {
+			status = "R"
+		}
+
+		summary, _ := s.messaging.GetFileConversationSummary(path)
+		hasComments := summary != nil && (summary.HasUnresolvedComments || summary.HasResolvedComments)
+		hasUnresolved := summary != nil && summary.HasUnresolvedComments
+
+		files = append(files, FileListItem{
+			Path:        path,
+			Status:      status,
+			HasComments: hasComments,
+			Unresolved:  boolToInt(hasUnresolved),
+		})
 	}
 
 	if currentFile == nil {
@@ -75,7 +121,7 @@ func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
 
 	data := PageData{
 		Title:       fmt.Sprintf("Critic - %s", filePath),
-		Files:       diff.Files,
+		Files:       files,
 		CurrentFile: currentFile,
 		FilePath:    filePath,
 		Theme:       "", // Theme is managed client-side via localStorage

@@ -7,6 +7,7 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
+	"github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
 )
@@ -206,12 +207,16 @@ func GetLanguage(filename string) string {
 
 // HTMLHighlighter provides syntax highlighting with HTML output
 type HTMLHighlighter struct {
-	formatter chroma.Formatter
+	formatter *html.Formatter
 }
 
 // NewHTMLHighlighter creates a new HTML syntax highlighter
 func NewHTMLHighlighter() *HTMLHighlighter {
-	formatter := formatters.Get("html")
+	// Use CSS classes and disable wrapping elements
+	formatter := html.New(
+		html.WithClasses(true),
+		html.PreventSurroundingPre(true),
+	)
 	return &HTMLHighlighter{
 		formatter: formatter,
 	}
