@@ -3,11 +3,10 @@ package ui
 import (
 	"strings"
 	"sync"
-	"time"
 
 	"git.15b.it/eno/critic/pkg/critic"
 	"git.15b.it/eno/critic/simple-tui/animation"
-	tea "github.com/charmbracelet/bubbletea"
+	"git.15b.it/eno/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -38,9 +37,10 @@ const (
 )
 
 // tickInterval is the base tick rate for animations (use fastest animation speed)
-const tickInterval = 40 * time.Millisecond
+const tickInterval = teapot.DefaultTickInterval
 
-// AnimationTicker holds the animations and provides animation state
+// AnimationTicker holds the animations and provides animation state.
+// It implements teapot.Ticker interface.
 type AnimationTicker struct {
 	mu             sync.RWMutex
 	thinking       *animation.Animation
@@ -174,15 +174,8 @@ func (at *AnimationTicker) Tick() {
 	}
 }
 
-// AnimationTickMsg is sent when it's time to update animations
-type AnimationTickMsg struct{}
-
-// StartAnimationTicker returns a command that sends ticks at the base tick rate
-func StartAnimationTicker() tea.Cmd {
-	return tea.Tick(tickInterval, func(t time.Time) tea.Msg {
-		return AnimationTickMsg{}
-	})
-}
+// AnimationTickMsg is an alias for teapot.AnimationTickMsg
+type AnimationTickMsg = teapot.AnimationTickMsg
 
 // GetConversationAnimationState determines the animation state for a conversation
 // (A) ReadByAI and not answered (last message is human) => ThinkingAnimation

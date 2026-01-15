@@ -1,13 +1,13 @@
-# Animation Overlay Architecture
+# Animation Layer Architecture
 
 This document describes the architecture for rendering animations in the critic TUI
-using an overlay-based approach.
+using a layered rendering approach.
 
 ## Overview
 
 The animation system separates animated content from static content using a layered
-rendering approach. This allows animations to be rendered efficiently on top of
-static content without re-rendering the entire widget tree.
+approach. This allows animations to be rendered efficiently on top of static content
+without re-rendering the entire widget tree.
 
 ## Key Components
 
@@ -17,13 +17,13 @@ static content without re-rendering the entire widget tree.
 type AnimationWidget interface {
     Widget
 
-    // RenderInOverlay renders the animated content to the overlay buffer.
+    // RenderInOverlay renders the animated content to the buffer.
     // This is called after all static content has been rendered.
     RenderInOverlay(buf *Buffer)
 
     // AnimationBounds returns the screen-space bounds where this widget
     // renders its animation. Used for dirty-region tracking.
-    AnimationBounds() Rect
+    AnimationBounds() []Rect
 
     // NeedsAnimation returns true if this widget currently has active animations.
     NeedsAnimation() bool
@@ -34,16 +34,28 @@ AnimationWidgets behave like regular widgets, but their `Render()` method render
 placeholder content (typically spaces) for the animated regions. The actual animated
 content is rendered via `RenderInOverlay()`.
 
-### 2. Overlay Widget
-
-The Overlay widget acts as a container that manages animation rendering:
+### 2. Ticker Interface
 
 ```go
-type Overlay struct {
+type Ticker interface {
+    Tick()
+}
+```
+
+The Ticker interface allows AnimationLayer to advance animation frames without
+depending on the specific AnimationTicker implementation.
+
+### 3. AnimationLayer
+
+The AnimationLayer manages animation rendering on top of content:
+
+```go
+type AnimationLayer struct {
     ContainerWidget
     content          Widget              // The main content widget
     animationWidgets []AnimationWidget   // Registered animation widgets
-    buffer           *Buffer             // Cached buffer from content render
+    cachedBuffer     *Buffer             // Cached buffer from content render
+    ticker           Ticker              // Animation ticker (implements Tick())
     tickInterval     time.Duration       // Base tick rate (40ms)
 }
 ```
@@ -51,11 +63,13 @@ type Overlay struct {
 **Responsibilities:**
 - Contains the main content widget tree
 - Maintains a registry of AnimationWidgets
+- Owns the animation ticker
 - Renders content to a cached buffer
 - Overlays animation content on each tick
 - Manages tick generation and distribution
+- Logs render timing
 
-### 3. Rendering Pipeline
+### 4. Rendering Pipeline
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -63,82 +77,84 @@ type Overlay struct {
 │  1. Clear buffer                                             │
 │  2. Render content widget tree (static content)              │
 │  3. Cache buffer state                                       │
-│  4. For each registered AnimationWidget:                     │
+│  4. Log: render (baselayer): X.X ms                          │
+│  5. For each registered AnimationWidget:                     │
 │     - Call RenderInOverlay() to draw animations              │
-│  5. Return final buffer                                      │
+│  6. Log: render (animation): X.X ms                          │
+│  7. Return final buffer                                      │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │                     Tick Update                              │
-│  1. Reuse cached buffer (skip content re-render)             │
-│  2. For each registered AnimationWidget:                     │
-│     - Call RenderInOverlay() with updated frame              │
-│  3. Return updated buffer                                    │
+│  1. AnimationLayer.HandleTick() is called                    │
+│  2. Ticker.Tick() advances animation frames                  │
+│  3. Continue tick loop via StartTicking()                    │
+│  4. View re-renders with new animation frames                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 4. AnimationTicker Integration
+### 5. AnimationTicker Integration
 
-The existing `AnimationTicker` continues to manage animation state:
-- Frame advancement for different animation types
+The `AnimationTicker` in `internal/ui/animation.go` implements the `Ticker` interface:
+- Frame advancement for different animation types (thinking, lookHere, separator)
 - Speed control per animation
-- Color/style information
+- Color/style information for rendering
 
-The Overlay widget owns the tick command generation instead of the app:
+The AnimationLayer owns the tick command generation:
 
 ```go
-func (o *Overlay) StartTicking() tea.Cmd {
-    return tea.Tick(o.tickInterval, func(t time.Time) tea.Msg {
+func (a *AnimationLayer) StartTicking() tea.Cmd {
+    return tea.Tick(a.tickInterval, func(t time.Time) tea.Msg {
         return AnimationTickMsg{}
     })
 }
 
-func (o *Overlay) HandleTick() tea.Cmd {
-    o.animationTicker.Tick()  // Advance frames
-    o.dirty = true            // Mark for re-render
-    return o.StartTicking()   // Continue ticking
+func (a *AnimationLayer) HandleTick() tea.Cmd {
+    if a.ticker != nil {
+        a.ticker.Tick()  // Advance frames
+    }
+    return a.StartTicking()  // Continue ticking
 }
 ```
 
 ## Widget Registration
 
-AnimationWidgets register themselves with the nearest Overlay ancestor:
+AnimationWidgets can register with an AnimationLayer:
 
 ```go
-func (w *HunkWidget) SetParent(parent Widget) {
-    w.BaseWidget.SetParent(parent)
+animLayer.RegisterAnimation(hunkWidget)
+animLayer.RegisterAnimation(fileListWidget)
+```
 
-    // Find and register with overlay
-    if overlay := FindOverlay(parent); overlay != nil {
-        overlay.RegisterAnimation(w)
-    }
+Or find the nearest AnimationLayer in the widget tree:
+
+```go
+if layer := FindAnimationLayer(parent); layer != nil {
+    layer.RegisterAnimation(w)
 }
 ```
 
-Alternatively, registration can happen during widget tree construction.
-
 ## Benefits
 
-1. **Efficient Updates**: Only animation regions are updated on tick, not the
-   entire content tree.
+1. **Centralized Tick Management**: The AnimationLayer manages all animation timing,
+   simplifying the app's message handling.
 
 2. **Clean Separation**: Static rendering logic is separated from animation logic.
 
-3. **Centralized Tick Management**: The Overlay manages all animation timing,
-   simplifying the app's message handling.
+3. **Extensible**: New animated widgets just implement the AnimationWidget interface.
 
-4. **Extensible**: New animated widgets just implement the AnimationWidget
-   interface.
+4. **Debuggable**: Logging provides visibility into render timing:
+   - `render (baselayer): X.X ms` - time to render static content
+   - `render (animation): X.X ms` - time to render animation overlays
 
-5. **Debuggable**: Logging in the Overlay provides visibility into animation
-   rendering.
+5. **Future Optimization**: The cached buffer enables skipping base layer re-render
+   when only animations change.
 
 ## Implementation Notes
 
 ### Placeholder Rendering
 
-In `Render()`, AnimationWidgets render spaces or static content where animations
-will appear:
+In `Render()`, AnimationWidgets render spaces where animations will appear:
 
 ```go
 func (w *HunkWidget) Render(buf *SubBuffer) {
@@ -151,7 +167,7 @@ func (w *HunkWidget) Render(buf *SubBuffer) {
 }
 ```
 
-### Overlay Rendering
+### Animation Overlay Rendering
 
 In `RenderInOverlay()`, the actual animation is drawn:
 
@@ -161,36 +177,27 @@ func (w *HunkWidget) RenderInOverlay(buf *Buffer) {
         return
     }
 
-    bounds := w.AnimationBounds()
-    frame := w.animationTicker.GetSeparatorFrame()
-    cells := ParseANSILine(frame)
-
-    for x, cell := range cells {
-        buf.SetCell(bounds.X+x, bounds.Y, cell)
+    for _, bounds := range w.animBounds {
+        frame := w.animationTicker.GetSeparatorFrame()
+        cells := ParseANSILine(frame)
+        for x, cell := range cells {
+            buf.SetCell(bounds.X+x, bounds.Y, cell)
+        }
     }
 }
 ```
 
-### Buffer Caching
+### Position Tracking
 
-The Overlay caches the content buffer to avoid re-rendering on tick:
+Widgets track their absolute screen position during `Render()` using `SubBuffer.AbsoluteOffset()`:
 
 ```go
-func (o *Overlay) Render() string {
-    if o.dirty {
-        o.buffer.Clear()
-        o.renderContent()
-        o.dirty = false
-    }
-
-    // Always render animations (they change on each tick)
-    for _, aw := range o.animationWidgets {
-        if aw.NeedsAnimation() {
-            aw.RenderInOverlay(o.buffer)
-        }
-    }
-
-    return o.buffer.String()
+func (w *FileListWidget) renderItem(buf *pot.SubBuffer, ...) {
+    absX, absY := buf.AbsoluteOffset()
+    w.animInfos = append(w.animInfos, fileAnimInfo{
+        bounds: pot.Rect{X: absX, Y: absY, Width: 1, Height: 1},
+        state:  animState,
+    })
 }
 ```
 
@@ -198,27 +205,31 @@ func (o *Overlay) Render() string {
 
 ```
 teapot/
-  overlay.go        # Overlay widget and AnimationWidget interface
+  overlay.go        # AnimationLayer, AnimationWidget interface, Ticker interface
   widget.go         # Base widget (unchanged)
-  compositor.go     # Integration with Overlay
+  buffer.go         # Buffer with AbsoluteOffset() method
 
 internal/ui/
-  animation.go      # AnimationTicker (largely unchanged)
-  diffview_widgets.go  # HunkWidget implementing AnimationWidget
+  animation.go      # AnimationTicker (implements Ticker interface)
+  diffview_widgets.go  # HunkWidget, DiffViewWidget implementing AnimationWidget
   filelist_widget.go   # FileListWidget implementing AnimationWidget
+
+internal/app/
+  app.go            # Creates AnimationLayer, handles AnimationTickMsg
 ```
 
 ## Logging
 
-The Overlay logs rendering activity for debugging:
+Set `teapot.RenderLogger` to enable render timing:
 
 ```go
-func (o *Overlay) Render() string {
-    log.Debug().
-        Int("animation_widgets", len(o.animationWidgets)).
-        Bool("content_dirty", o.dirty).
-        Msg("overlay render")
-
-    // ... rendering ...
+teapot.RenderLogger = func(layer string, durationMs float64) {
+    logger.Info("render (%s): %.1f ms", layer, durationMs)
 }
+```
+
+Output:
+```
+render (baselayer): 12.3 ms
+render (animation): 0.1 ms
 ```

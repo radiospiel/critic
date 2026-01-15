@@ -27,16 +27,27 @@ type AnimationWidget interface {
 	NeedsAnimation() bool
 }
 
+// Ticker is an interface for animation frame advancement.
+// The AnimationLayer calls Tick() on each animation tick to advance frames.
+type Ticker interface {
+	Tick()
+}
+
 // AnimationTickMsg is sent when it's time to update animations.
 type AnimationTickMsg struct{}
 
 // DefaultTickInterval is the base tick rate for animations (40ms = 25fps).
 const DefaultTickInterval = 40 * time.Millisecond
 
-// Overlay is a widget that manages animation rendering on top of content.
+// RenderLogger is called to log render timing information.
+// Set this to enable render logging.
+var RenderLogger func(layer string, durationMs float64)
+
+// AnimationLayer manages animation rendering on top of content.
 // It contains a single content widget and a registry of animation widgets.
 // On render, it first renders the content, then overlays all animations.
-type Overlay struct {
+// The AnimationLayer owns the animation ticker and generates tick messages.
+type AnimationLayer struct {
 	ContainerWidget
 
 	// content is the main widget tree to render
@@ -57,172 +68,205 @@ type Overlay struct {
 	// animationsEnabled controls whether animations are active
 	animationsEnabled bool
 
-	// width and height of the overlay
+	// ticker advances animation frames on each tick
+	ticker Ticker
+
+	// width and height of the layer
 	width, height int
 }
 
-// NewOverlay creates a new overlay widget.
-func NewOverlay() *Overlay {
-	o := &Overlay{
+// NewAnimationLayer creates a new animation layer.
+func NewAnimationLayer() *AnimationLayer {
+	a := &AnimationLayer{
 		ContainerWidget:   NewContainerWidget(),
 		tickInterval:      DefaultTickInterval,
 		animationsEnabled: true,
 		contentDirty:      true,
 	}
-	o.SetFocusable(false)
-	return o
+	a.SetFocusable(false)
+	return a
 }
 
 // SetContent sets the main content widget.
-func (o *Overlay) SetContent(w Widget) {
-	if o.content != nil {
-		o.content.SetParent(nil)
+func (a *AnimationLayer) SetContent(w Widget) {
+	if a.content != nil {
+		a.content.SetParent(nil)
 	}
-	o.content = w
+	a.content = w
 	if w != nil {
-		w.SetParent(o)
-		w.SetBounds(Rect{X: 0, Y: 0, Width: o.width, Height: o.height})
+		w.SetParent(a)
+		w.SetBounds(Rect{X: 0, Y: 0, Width: a.width, Height: a.height})
 	}
-	o.contentDirty = true
+	a.contentDirty = true
 }
 
 // Content returns the main content widget.
-func (o *Overlay) Content() Widget {
-	return o.content
+func (a *AnimationLayer) Content() Widget {
+	return a.content
 }
 
-// RegisterAnimation adds an animation widget to the overlay.
-func (o *Overlay) RegisterAnimation(aw AnimationWidget) {
+// SetTicker sets the animation ticker.
+// The ticker's Tick() method is called on each animation tick.
+func (a *AnimationLayer) SetTicker(t Ticker) {
+	a.ticker = t
+}
+
+// Ticker returns the animation ticker.
+func (a *AnimationLayer) Ticker() Ticker {
+	return a.ticker
+}
+
+// RegisterAnimation adds an animation widget to the layer.
+func (a *AnimationLayer) RegisterAnimation(aw AnimationWidget) {
 	// Check if already registered
-	for _, existing := range o.animationWidgets {
+	for _, existing := range a.animationWidgets {
 		if existing == aw {
 			return
 		}
 	}
-	o.animationWidgets = append(o.animationWidgets, aw)
+	a.animationWidgets = append(a.animationWidgets, aw)
 }
 
-// UnregisterAnimation removes an animation widget from the overlay.
-func (o *Overlay) UnregisterAnimation(aw AnimationWidget) {
-	for i, existing := range o.animationWidgets {
+// UnregisterAnimation removes an animation widget from the layer.
+func (a *AnimationLayer) UnregisterAnimation(aw AnimationWidget) {
+	for i, existing := range a.animationWidgets {
 		if existing == aw {
-			o.animationWidgets = append(o.animationWidgets[:i], o.animationWidgets[i+1:]...)
+			a.animationWidgets = append(a.animationWidgets[:i], a.animationWidgets[i+1:]...)
 			return
 		}
 	}
 }
 
 // ClearAnimations removes all registered animation widgets.
-func (o *Overlay) ClearAnimations() {
-	o.animationWidgets = nil
+func (a *AnimationLayer) ClearAnimations() {
+	a.animationWidgets = nil
 }
 
 // AnimationWidgets returns the registered animation widgets.
-func (o *Overlay) AnimationWidgets() []AnimationWidget {
-	return o.animationWidgets
+func (a *AnimationLayer) AnimationWidgets() []AnimationWidget {
+	return a.animationWidgets
 }
 
 // SetAnimationsEnabled enables or disables animation rendering.
-func (o *Overlay) SetAnimationsEnabled(enabled bool) {
-	o.animationsEnabled = enabled
+func (a *AnimationLayer) SetAnimationsEnabled(enabled bool) {
+	a.animationsEnabled = enabled
 }
 
 // AnimationsEnabled returns whether animations are enabled.
-func (o *Overlay) AnimationsEnabled() bool {
-	return o.animationsEnabled
+func (a *AnimationLayer) AnimationsEnabled() bool {
+	return a.animationsEnabled
 }
 
 // SetTickInterval sets the animation tick interval.
-func (o *Overlay) SetTickInterval(d time.Duration) {
-	o.tickInterval = d
+func (a *AnimationLayer) SetTickInterval(d time.Duration) {
+	a.tickInterval = d
 }
 
 // TickInterval returns the animation tick interval.
-func (o *Overlay) TickInterval() time.Duration {
-	return o.tickInterval
+func (a *AnimationLayer) TickInterval() time.Duration {
+	return a.tickInterval
 }
 
 // MarkContentDirty marks the content as needing re-rendering.
-func (o *Overlay) MarkContentDirty() {
-	o.contentDirty = true
+func (a *AnimationLayer) MarkContentDirty() {
+	a.contentDirty = true
 }
 
-// SetBounds sets the overlay bounds and propagates to content.
-func (o *Overlay) SetBounds(bounds Rect) {
-	o.bounds = bounds
-	o.width = bounds.Width
-	o.height = bounds.Height
+// SetBounds sets the layer bounds and propagates to content.
+func (a *AnimationLayer) SetBounds(bounds Rect) {
+	a.bounds = bounds
+	a.width = bounds.Width
+	a.height = bounds.Height
 
 	// Reallocate buffer if size changed
-	if o.cachedBuffer == nil || o.cachedBuffer.Width() != bounds.Width || o.cachedBuffer.Height() != bounds.Height {
-		o.cachedBuffer = NewBuffer(bounds.Width, bounds.Height)
-		o.contentDirty = true
+	if a.cachedBuffer == nil || a.cachedBuffer.Width() != bounds.Width || a.cachedBuffer.Height() != bounds.Height {
+		a.cachedBuffer = NewBuffer(bounds.Width, bounds.Height)
+		a.contentDirty = true
 	}
 
 	// Propagate to content
-	if o.content != nil {
-		o.content.SetBounds(Rect{X: 0, Y: 0, Width: bounds.Width, Height: bounds.Height})
+	if a.content != nil {
+		a.content.SetBounds(Rect{X: 0, Y: 0, Width: bounds.Width, Height: bounds.Height})
 	}
 }
 
-// Children returns the overlay's children (just the content widget).
-func (o *Overlay) Children() []Widget {
-	if o.content != nil {
-		return []Widget{o.content}
+// Children returns the layer's children (just the content widget).
+func (a *AnimationLayer) Children() []Widget {
+	if a.content != nil {
+		return []Widget{a.content}
 	}
 	return nil
 }
 
-// Render renders the overlay: content first, then animation overlays.
-func (o *Overlay) Render(buf *SubBuffer) {
+// Render renders the layer: content first, then animation overlays.
+func (a *AnimationLayer) Render(buf *SubBuffer) {
 	// Render content if dirty
-	if o.contentDirty && o.content != nil {
-		o.cachedBuffer.Clear()
-		contentSub := o.cachedBuffer.Sub(o.cachedBuffer.Bounds())
-		RenderWidget(o.content, contentSub)
-		o.contentDirty = false
+	if a.contentDirty && a.content != nil {
+		start := time.Now()
+		a.cachedBuffer.Clear()
+		contentSub := a.cachedBuffer.Sub(a.cachedBuffer.Bounds())
+		RenderWidget(a.content, contentSub)
+		a.contentDirty = false
+		if RenderLogger != nil {
+			RenderLogger("baselayer", float64(time.Since(start).Microseconds())/1000.0)
+		}
 	}
 
 	// Copy cached buffer to output
-	if o.cachedBuffer != nil {
-		buf.parent.Blit(o.cachedBuffer, buf.offset.X, buf.offset.Y)
+	if a.cachedBuffer != nil {
+		buf.parent.Blit(a.cachedBuffer, buf.offset.X, buf.offset.Y)
 	}
 
 	// Render animation overlays
-	if o.animationsEnabled && o.cachedBuffer != nil {
-		for _, aw := range o.animationWidgets {
+	if a.animationsEnabled && a.cachedBuffer != nil {
+		start := time.Now()
+		rendered := false
+		for _, aw := range a.animationWidgets {
 			if aw.NeedsAnimation() {
-				// Render to the parent buffer at the correct offset
 				aw.RenderInOverlay(buf.parent)
+				rendered = true
 			}
+		}
+		if rendered && RenderLogger != nil {
+			RenderLogger("animation", float64(time.Since(start).Microseconds())/1000.0)
 		}
 	}
 }
 
 // RenderToBuffer renders directly to a buffer and returns it.
 // This is useful for the compositor integration.
-func (o *Overlay) RenderToBuffer() *Buffer {
-	if o.cachedBuffer == nil {
-		o.cachedBuffer = NewBuffer(o.width, o.height)
+func (a *AnimationLayer) RenderToBuffer() *Buffer {
+	if a.cachedBuffer == nil {
+		a.cachedBuffer = NewBuffer(a.width, a.height)
 	}
 
 	// Render content if dirty
-	if o.contentDirty && o.content != nil {
-		o.cachedBuffer.Clear()
-		contentSub := o.cachedBuffer.Sub(o.cachedBuffer.Bounds())
-		RenderWidget(o.content, contentSub)
-		o.contentDirty = false
+	if a.contentDirty && a.content != nil {
+		start := time.Now()
+		a.cachedBuffer.Clear()
+		contentSub := a.cachedBuffer.Sub(a.cachedBuffer.Bounds())
+		RenderWidget(a.content, contentSub)
+		a.contentDirty = false
+		if RenderLogger != nil {
+			RenderLogger("baselayer", float64(time.Since(start).Microseconds())/1000.0)
+		}
 	}
 
 	// Create output buffer (copy of cached)
-	output := o.cachedBuffer.Clone()
+	output := a.cachedBuffer.Clone()
 
 	// Render animation overlays
-	if o.animationsEnabled {
-		for _, aw := range o.animationWidgets {
+	if a.animationsEnabled {
+		start := time.Now()
+		rendered := false
+		for _, aw := range a.animationWidgets {
 			if aw.NeedsAnimation() {
 				aw.RenderInOverlay(output)
+				rendered = true
 			}
+		}
+		if rendered && RenderLogger != nil {
+			RenderLogger("animation", float64(time.Since(start).Microseconds())/1000.0)
 		}
 	}
 
@@ -230,27 +274,41 @@ func (o *Overlay) RenderToBuffer() *Buffer {
 }
 
 // StartTicking returns a command that starts the animation tick loop.
-func (o *Overlay) StartTicking() tea.Cmd {
-	if !o.animationsEnabled {
+func (a *AnimationLayer) StartTicking() tea.Cmd {
+	if !a.animationsEnabled {
 		return nil
 	}
-	return tea.Tick(o.tickInterval, func(t time.Time) tea.Msg {
+	return tea.Tick(a.tickInterval, func(t time.Time) tea.Msg {
 		return AnimationTickMsg{}
 	})
 }
 
+// HandleTick processes an animation tick: advances the ticker and continues.
+// Returns a command to continue ticking.
+func (a *AnimationLayer) HandleTick() tea.Cmd {
+	if !a.animationsEnabled {
+		return nil
+	}
+	// Advance the ticker
+	if a.ticker != nil {
+		a.ticker.Tick()
+	}
+	// Continue ticking
+	return a.StartTicking()
+}
+
 // HandleKey routes key events to the content widget.
-func (o *Overlay) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	if o.content != nil {
-		return o.content.HandleKey(msg)
+func (a *AnimationLayer) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	if a.content != nil {
+		return a.content.HandleKey(msg)
 	}
 	return false, nil
 }
 
 // HandleMouse routes mouse events to the content widget.
-func (o *Overlay) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
-	if o.content != nil {
-		return o.content.HandleMouse(msg)
+func (a *AnimationLayer) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
+	if a.content != nil {
+		return a.content.HandleMouse(msg)
 	}
 	return false, nil
 }
@@ -259,23 +317,23 @@ func (o *Overlay) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 // Embed this in widgets that need animation support.
 type BaseAnimationWidget struct {
 	BaseWidget
-	overlay       *Overlay
-	animBounds    []Rect
+	layer          *AnimationLayer
+	animBounds     []Rect
 	needsAnimation bool
 }
 
-// SetOverlay sets the overlay this widget is registered with.
-func (b *BaseAnimationWidget) SetOverlay(o *Overlay) {
-	// Unregister from old overlay
-	if b.overlay != nil {
-		b.overlay.UnregisterAnimation(b)
+// SetAnimationLayer sets the layer this widget is registered with.
+func (b *BaseAnimationWidget) SetAnimationLayer(a *AnimationLayer) {
+	// Unregister from old layer
+	if b.layer != nil {
+		b.layer.UnregisterAnimation(b)
 	}
-	b.overlay = o
+	b.layer = a
 }
 
-// Overlay returns the overlay this widget is registered with.
-func (b *BaseAnimationWidget) Overlay() *Overlay {
-	return b.overlay
+// AnimationLayer returns the layer this widget is registered with.
+func (b *BaseAnimationWidget) AnimationLayer() *AnimationLayer {
+	return b.layer
 }
 
 // SetAnimationBounds sets the animation bounds.
@@ -304,11 +362,11 @@ func (b *BaseAnimationWidget) RenderInOverlay(buf *Buffer) {
 	// No-op: override in concrete implementations
 }
 
-// FindOverlay walks up the widget tree to find the nearest Overlay.
-func FindOverlay(w Widget) *Overlay {
+// FindAnimationLayer walks up the widget tree to find the nearest AnimationLayer.
+func FindAnimationLayer(w Widget) *AnimationLayer {
 	for w != nil {
-		if o, ok := w.(*Overlay); ok {
-			return o
+		if a, ok := w.(*AnimationLayer); ok {
+			return a
 		}
 		w = w.Parent()
 	}
