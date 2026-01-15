@@ -2,8 +2,6 @@ module git.15b.it/eno/critic
 
 go 1.24.0
 
-toolchain go1.24.11
-
 require (
 	github.com/alecthomas/chroma/v2 v2.14.0
 	github.com/charmbracelet/bubbles v0.20.0
