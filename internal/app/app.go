@@ -460,13 +460,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// Handle tick via animation layer (advances ticker and continues)
+		// Animation rendering happens via RenderInOverlay, not full content re-render
 		cmd := m.animationLayer.HandleTick()
 		// Update global animation state based on conversations
 		m.updateGlobalAnimationState()
-		// Debug: increment tick counter
-		m.tickCount++
-		// Refresh diff view content to update animations
-		m.diffView.RefreshContentForAnimation()
 		cmds = append(cmds, cmd)
 
 	default:
