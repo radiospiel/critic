@@ -44,14 +44,20 @@
     <script>
         // WebSocket message handler
         document.body.addEventListener('ws:message', function(event) {
-            const data = JSON.parse(event.detail.message);
-            if (data.type === 'conversation' || data.type === 'file') {
-                // Trigger refresh of the current view
-                htmx.trigger('#file-list', 'refresh');
-                const diffView = document.getElementById('diff-view');
-                if (diffView.dataset.filePath) {
-                    htmx.ajax('GET', '/api/diff/' + encodeURIComponent(diffView.dataset.filePath), {target: '#diff-view'});
+            try {
+                const data = JSON.parse(event.detail.message);
+                if (data.type === 'conversation' || data.type === 'file') {
+                    // Trigger refresh of the current view
+                    if (typeof htmx !== 'undefined') {
+                        htmx.trigger('#file-list', 'refresh');
+                    }
+                    const diffView = document.getElementById('diff-view');
+                    if (diffView.dataset.filePath) {
+                        selectFile(diffView.dataset.filePath);
+                    }
                 }
+            } catch (e) {
+                console.error('WebSocket message error:', e);
             }
         });
 
@@ -72,12 +78,35 @@
 
         // File selection
         function selectFile(path) {
+            console.log('selectFile called with:', path);
             document.querySelectorAll('.file-item').forEach(el => {
                 el.classList.toggle('active', el.dataset.path === path);
             });
             const diffView = document.getElementById('diff-view');
             diffView.dataset.filePath = path;
-            htmx.ajax('GET', '/api/diff/' + encodeURIComponent(path), {target: '#diff-view'});
+            const url = '/api/diff/' + encodeURIComponent(path);
+            console.log('Fetching diff from:', url);
+            // Use fetch directly for reliability
+            fetch(url)
+                .then(function(response) {
+                    console.log('Fetch response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.text();
+                })
+                .then(function(html) {
+                    console.log('Got HTML, length:', html.length);
+                    diffView.innerHTML = html;
+                    // Process any htmx attributes in the new content
+                    if (typeof htmx !== 'undefined') {
+                        htmx.process(diffView);
+                    }
+                })
+                .catch(function(err) {
+                    console.error('Fetch error:', err);
+                    diffView.innerHTML = '<div class="error">Failed to load diff: ' + err.message + '</div>';
+                });
         }
 
         // Keyboard shortcuts
@@ -103,10 +132,7 @@
                 el.classList.toggle('active', i === index);
                 if (i === index) {
                     el.scrollIntoView({ block: 'nearest' });
-                    const path = el.dataset.path;
-                    const diffView = document.getElementById('diff-view');
-                    diffView.dataset.filePath = path;
-                    htmx.ajax('GET', '/api/diff/' + encodeURIComponent(path), {target: '#diff-view'});
+                    selectFile(el.dataset.path);
                 }
             });
         }
