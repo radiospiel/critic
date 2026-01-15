@@ -98,10 +98,6 @@
                 .then(function(html) {
                     console.log('Got HTML, length:', html.length);
                     diffView.innerHTML = html;
-                    // Process any htmx attributes in the new content
-                    if (typeof htmx !== 'undefined') {
-                        htmx.process(diffView);
-                    }
                 })
                 .catch(function(err) {
                     console.error('Fetch error:', err);
