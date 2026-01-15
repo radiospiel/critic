@@ -370,6 +370,26 @@ func (m *DiffViewModel) refreshContent() tea.Cmd {
 	return nil
 }
 
+// RefreshAnimations re-renders the diff content to update animation frames.
+// This uses cached syntax highlighting so it's fast - only the widget rendering
+// and animation overlay are recomputed.
+func (m *DiffViewModel) RefreshAnimations() {
+	if m.file == nil || m.animationTicker == nil {
+		return
+	}
+	// Only refresh if there are active animations
+	if !m.diffWidget.HasAnimations() {
+		return
+	}
+	content, totalLines, navigableLines := m.renderDiff()
+	m.cachedContent = content
+	m.totalLines = totalLines
+	m.navigableLines = navigableLines
+	if m.ready {
+		m.viewport.SetContent(m.cachedContent)
+	}
+}
+
 // moveCursorUp moves cursor to previous navigable line
 func (m *DiffViewModel) moveCursorUp() bool {
 	if len(m.navigableLines) == 0 {

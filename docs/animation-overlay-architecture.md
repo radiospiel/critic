@@ -144,11 +144,19 @@ if layer := FindAnimationLayer(parent); layer != nil {
 3. **Extensible**: New animated widgets just implement the AnimationWidget interface.
 
 4. **Debuggable**: Logging provides visibility into render timing:
-   - `render (baselayer): X.X ms` - time to render static content
-   - `render (animation): X.X ms` - time to render animation overlays
+   - `renderDiff (widget): total=X.Xms, highlight=X.Xms, render=X.Xms` - diff view render timing
 
 5. **Future Optimization**: The cached buffer enables skipping base layer re-render
    when only animations change.
+
+## Current Implementation Notes
+
+The app uses string-based `View()` methods rather than `AnimationLayer.Render()`:
+
+- **AnimationLayer**: Used for tick management only (advances animation frames via `HandleTick()`)
+- **DiffViewModel.View()**: Returns cached content; `RefreshAnimations()` is called on ticks
+  to re-render with updated animation frames (uses cached syntax highlighting for speed)
+- **FileListWidget.View()**: Renders fresh each time, calling `RenderInOverlay()` directly
 
 ## Implementation Notes
 
@@ -220,16 +228,11 @@ internal/app/
 
 ## Logging
 
-Set `teapot.RenderLogger` to enable render timing:
+Render timing is logged by `DiffViewModel.renderDiff()`:
 
-```go
-teapot.RenderLogger = func(layer string, durationMs float64) {
-    logger.Info("render (%s): %.1f ms", layer, durationMs)
-}
+```
+renderDiff (widget): total=12.3ms, highlight=10.1ms, render=2.2ms, lines=50, navigable=25
 ```
 
-Output:
-```
-render (baselayer): 12.3 ms
-render (animation): 0.1 ms
-```
+Note: The `teapot.RenderLogger` callback exists for `AnimationLayer.Render()`, but since the
+app uses string-based `View()` methods instead, those logs don't appear in normal operation.
