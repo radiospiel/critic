@@ -8,8 +8,8 @@
         // Set theme immediately to avoid flash
         document.documentElement.setAttribute('data-theme', localStorage.getItem('critic-theme') || 'dark');
     </script>
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script src="https://unpkg.com/htmx-ext-ws@2.0.2/ws.js"></script>
+    <script src="/static/htmx.min.js"></script>
+    <script src="/static/htmx-ws.js"></script>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body hx-ext="ws" ws-connect="/ws">
@@ -78,6 +78,247 @@
             diffView.dataset.filePath = path;
             htmx.ajax('GET', '/api/diff/' + path, {target: '#diff-view'});
         }
+
+        // Keyboard shortcuts
+        let focusedPane = 'files'; // 'files' or 'diff'
+        let selectedFileIndex = 0;
+        let selectedLineIndex = 0;
+        let showHelp = false;
+
+        function getFileItems() {
+            return Array.from(document.querySelectorAll('.file-item'));
+        }
+
+        function getDiffLines() {
+            return Array.from(document.querySelectorAll('.diff-line'));
+        }
+
+        function selectFileByIndex(index) {
+            const items = getFileItems();
+            if (items.length === 0) return;
+            index = Math.max(0, Math.min(index, items.length - 1));
+            selectedFileIndex = index;
+            items.forEach((el, i) => {
+                el.classList.toggle('active', i === index);
+                if (i === index) {
+                    el.scrollIntoView({ block: 'nearest' });
+                    const path = el.dataset.path;
+                    const diffView = document.getElementById('diff-view');
+                    diffView.dataset.filePath = path;
+                    htmx.ajax('GET', '/api/diff/' + path, {target: '#diff-view'});
+                }
+            });
+        }
+
+        function selectLineByIndex(index) {
+            const lines = getDiffLines();
+            if (lines.length === 0) return;
+            index = Math.max(0, Math.min(index, lines.length - 1));
+            selectedLineIndex = index;
+            lines.forEach((el, i) => {
+                el.classList.toggle('selected', i === index);
+                if (i === index) {
+                    el.scrollIntoView({ block: 'nearest' });
+                }
+            });
+        }
+
+        function nextFile() {
+            const items = getFileItems();
+            const currentActive = items.findIndex(el => el.classList.contains('active'));
+            selectFileByIndex(currentActive + 1);
+        }
+
+        function prevFile() {
+            const items = getFileItems();
+            const currentActive = items.findIndex(el => el.classList.contains('active'));
+            selectFileByIndex(currentActive - 1);
+        }
+
+        function nextHunk() {
+            const lines = getDiffLines();
+            const headers = document.querySelectorAll('.hunk-header');
+            if (headers.length === 0) return;
+
+            const currentScroll = document.querySelector('.diff-container').scrollTop;
+            for (const header of headers) {
+                if (header.offsetTop > currentScroll + 50) {
+                    header.scrollIntoView({ block: 'start' });
+                    break;
+                }
+            }
+        }
+
+        function prevHunk() {
+            const headers = Array.from(document.querySelectorAll('.hunk-header'));
+            if (headers.length === 0) return;
+
+            const currentScroll = document.querySelector('.diff-container').scrollTop;
+            for (let i = headers.length - 1; i >= 0; i--) {
+                if (headers[i].offsetTop < currentScroll - 10) {
+                    headers[i].scrollIntoView({ block: 'start' });
+                    break;
+                }
+            }
+        }
+
+        function toggleHelp() {
+            showHelp = !showHelp;
+            let helpOverlay = document.getElementById('help-overlay');
+            if (!helpOverlay) {
+                helpOverlay = document.createElement('div');
+                helpOverlay.id = 'help-overlay';
+                helpOverlay.className = 'help-overlay';
+                helpOverlay.innerHTML = `
+                    <div class="help-content">
+                        <h2>Keyboard Shortcuts</h2>
+                        <div class="help-section">
+                            <h3>Navigation</h3>
+                            <p><kbd>Tab</kbd> Switch focus between file list and diff view</p>
+                            <p><kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>j</kbd>/<kbd>k</kbd> Navigate up/down</p>
+                            <p><kbd>g</kbd> Jump to top</p>
+                            <p><kbd>G</kbd> Jump to bottom</p>
+                        </div>
+                        <div class="help-section">
+                            <h3>File Navigation</h3>
+                            <p><kbd>n</kbd> Next file</p>
+                            <p><kbd>p</kbd> Previous file</p>
+                            <p><kbd>[</kbd> Previous hunk</p>
+                            <p><kbd>]</kbd> Next hunk</p>
+                        </div>
+                        <div class="help-section">
+                            <h3>Actions</h3>
+                            <p><kbd>Enter</kbd> Add comment on selected line</p>
+                            <p><kbd>t</kbd> Toggle theme (light/dark)</p>
+                            <p><kbd>?</kbd> Toggle this help</p>
+                        </div>
+                        <p class="help-dismiss">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</p>
+                    </div>
+                `;
+                document.body.appendChild(helpOverlay);
+            }
+            helpOverlay.style.display = showHelp ? 'flex' : 'none';
+        }
+
+        document.addEventListener('keydown', function(e) {
+            // Ignore if typing in input/textarea
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            // Help toggle
+            if (e.key === '?') {
+                e.preventDefault();
+                toggleHelp();
+                return;
+            }
+
+            // Close help with Escape
+            if (e.key === 'Escape') {
+                if (showHelp) {
+                    toggleHelp();
+                }
+                // Also close any open modal
+                const modal = document.getElementById('comment-modal');
+                if (modal && modal.style.display !== 'none') {
+                    modal.style.display = 'none';
+                }
+                return;
+            }
+
+            // Skip other shortcuts if help is open
+            if (showHelp) return;
+
+            const items = getFileItems();
+            const lines = getDiffLines();
+
+            switch (e.key) {
+                case 'Tab':
+                    e.preventDefault();
+                    focusedPane = focusedPane === 'files' ? 'diff' : 'files';
+                    document.querySelector('.sidebar').classList.toggle('focused', focusedPane === 'files');
+                    document.querySelector('.content').classList.toggle('focused', focusedPane === 'diff');
+                    break;
+
+                case 'ArrowUp':
+                case 'k':
+                    e.preventDefault();
+                    if (focusedPane === 'files') {
+                        const idx = items.findIndex(el => el.classList.contains('active'));
+                        selectFileByIndex(idx - 1);
+                    } else {
+                        selectLineByIndex(selectedLineIndex - 1);
+                    }
+                    break;
+
+                case 'ArrowDown':
+                case 'j':
+                    e.preventDefault();
+                    if (focusedPane === 'files') {
+                        const idx = items.findIndex(el => el.classList.contains('active'));
+                        selectFileByIndex(idx + 1);
+                    } else {
+                        selectLineByIndex(selectedLineIndex + 1);
+                    }
+                    break;
+
+                case 'g':
+                    e.preventDefault();
+                    if (focusedPane === 'files') {
+                        selectFileByIndex(0);
+                    } else {
+                        selectLineByIndex(0);
+                    }
+                    break;
+
+                case 'G':
+                    e.preventDefault();
+                    if (focusedPane === 'files') {
+                        selectFileByIndex(items.length - 1);
+                    } else {
+                        selectLineByIndex(lines.length - 1);
+                    }
+                    break;
+
+                case 'n':
+                    e.preventDefault();
+                    nextFile();
+                    break;
+
+                case 'p':
+                    e.preventDefault();
+                    prevFile();
+                    break;
+
+                case '[':
+                    e.preventDefault();
+                    prevHunk();
+                    break;
+
+                case ']':
+                    e.preventDefault();
+                    nextHunk();
+                    break;
+
+                case 't':
+                    e.preventDefault();
+                    toggleTheme();
+                    break;
+
+                case 'Enter':
+                    e.preventDefault();
+                    if (focusedPane === 'diff' && lines[selectedLineIndex]) {
+                        const line = lines[selectedLineIndex];
+                        const lineNum = line.dataset.lineNumber;
+                        const diffView = document.getElementById('diff-view');
+                        const filePath = diffView.dataset.filePath;
+                        if (filePath && lineNum && typeof showCommentForm === 'function') {
+                            showCommentForm(line, filePath, parseInt(lineNum));
+                        }
+                    }
+                    break;
+            }
+        });
     </script>
 </body>
 </html>

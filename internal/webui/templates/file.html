@@ -8,8 +8,8 @@
         // Set theme immediately to avoid flash
         document.documentElement.setAttribute('data-theme', localStorage.getItem('critic-theme') || 'dark');
     </script>
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script src="https://unpkg.com/htmx-ext-ws@2.0.2/ws.js"></script>
+    <script src="/static/htmx.min.js"></script>
+    <script src="/static/htmx-ws.js"></script>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body hx-ext="ws" ws-connect="/ws">

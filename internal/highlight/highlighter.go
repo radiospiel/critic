@@ -203,3 +203,144 @@ func GetLanguage(filename string) string {
 
 	return "text"
 }
+
+// HTMLHighlighter provides syntax highlighting with HTML output
+type HTMLHighlighter struct {
+	formatter chroma.Formatter
+}
+
+// NewHTMLHighlighter creates a new HTML syntax highlighter
+func NewHTMLHighlighter() *HTMLHighlighter {
+	formatter := formatters.Get("html")
+	return &HTMLHighlighter{
+		formatter: formatter,
+	}
+}
+
+// HighlightHTML highlights code and returns HTML output
+func (h *HTMLHighlighter) HighlightHTML(code, filename string) (string, error) {
+	lexer := lexers.Match(filename)
+	if lexer == nil {
+		ext := filepath.Ext(filename)
+		if ext != "" {
+			lexer = lexers.Get(strings.TrimPrefix(ext, "."))
+		}
+	}
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+	lexer = chroma.Coalesce(lexer)
+
+	language := GetLanguage(filename)
+	tabWidth := TabWidth(language)
+	code = expandTabs(code, tabWidth)
+
+	iterator, err := lexer.Tokenise(nil, code)
+	if err != nil {
+		return code, err
+	}
+
+	// Use monokai style for HTML output
+	style := styles.Get("monokai")
+	if style == nil {
+		style = styles.Fallback
+	}
+
+	var buf bytes.Buffer
+	err = h.formatter.Format(&buf, style, iterator)
+	if err != nil {
+		return code, err
+	}
+
+	return buf.String(), nil
+}
+
+// HighlightLineHTML highlights a single line of code and returns HTML
+func (h *HTMLHighlighter) HighlightLineHTML(line, filename string) string {
+	highlighted, err := h.HighlightHTML(line, filename)
+	if err != nil {
+		return escapeHTML(line)
+	}
+	return strings.TrimSuffix(highlighted, "\n")
+}
+
+// escapeHTML escapes HTML special characters
+func escapeHTML(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
+// GetHighlightCSS returns the CSS for syntax highlighting
+func GetHighlightCSS() string {
+	// Return CSS for monokai-style highlighting
+	return `
+/* Syntax highlighting - Monokai style */
+.chroma { background-color: transparent; }
+.chroma .err { color: #960050; background-color: #1e0010 }
+.chroma .lntd { vertical-align: top; padding: 0; margin: 0; border: 0; }
+.chroma .lntable { border-spacing: 0; padding: 0; margin: 0; border: 0; }
+.chroma .hl { background-color: #3d3d3d }
+.chroma .ln { color: #7f7f7f }
+.chroma .cl { }
+.chroma .k { color: #66d9ef }
+.chroma .kc { color: #66d9ef }
+.chroma .kd { color: #66d9ef }
+.chroma .kn { color: #f92672 }
+.chroma .kp { color: #66d9ef }
+.chroma .kr { color: #66d9ef }
+.chroma .kt { color: #66d9ef }
+.chroma .n { color: #f8f8f2 }
+.chroma .na { color: #a6e22e }
+.chroma .nb { color: #f8f8f2 }
+.chroma .nc { color: #a6e22e }
+.chroma .no { color: #66d9ef }
+.chroma .nd { color: #a6e22e }
+.chroma .ni { color: #f8f8f2 }
+.chroma .ne { color: #a6e22e }
+.chroma .nf { color: #a6e22e }
+.chroma .nl { color: #f8f8f2 }
+.chroma .nn { color: #f8f8f2 }
+.chroma .nx { color: #a6e22e }
+.chroma .py { color: #f8f8f2 }
+.chroma .nt { color: #f92672 }
+.chroma .nv { color: #f8f8f2 }
+.chroma .o { color: #f92672 }
+.chroma .ow { color: #f92672 }
+.chroma .p { color: #f8f8f2 }
+.chroma .c { color: #75715e }
+.chroma .ch { color: #75715e }
+.chroma .cm { color: #75715e }
+.chroma .c1 { color: #75715e }
+.chroma .cs { color: #75715e }
+.chroma .cp { color: #75715e }
+.chroma .cpf { color: #75715e }
+.chroma .s { color: #e6db74 }
+.chroma .sa { color: #e6db74 }
+.chroma .sb { color: #e6db74 }
+.chroma .sc { color: #e6db74 }
+.chroma .dl { color: #e6db74 }
+.chroma .sd { color: #e6db74 }
+.chroma .s2 { color: #e6db74 }
+.chroma .se { color: #ae81ff }
+.chroma .sh { color: #e6db74 }
+.chroma .si { color: #e6db74 }
+.chroma .sx { color: #e6db74 }
+.chroma .sr { color: #e6db74 }
+.chroma .s1 { color: #e6db74 }
+.chroma .ss { color: #e6db74 }
+.chroma .m { color: #ae81ff }
+.chroma .mb { color: #ae81ff }
+.chroma .mf { color: #ae81ff }
+.chroma .mh { color: #ae81ff }
+.chroma .mi { color: #ae81ff }
+.chroma .il { color: #ae81ff }
+.chroma .mo { color: #ae81ff }
+.chroma .gd { color: #f92672 }
+.chroma .ge { font-style: italic }
+.chroma .gi { color: #a6e22e }
+.chroma .gs { font-weight: bold }
+.chroma .gu { color: #75715e }
+`
+}

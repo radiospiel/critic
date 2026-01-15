@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/internal/highlight"
 	"git.15b.it/eno/critic/pkg/critic"
 	"git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
@@ -139,11 +140,12 @@ func (s *Server) handleFileList(w http.ResponseWriter, r *http.Request) {
 
 // DiffLine represents a line in the diff view
 type DiffLine struct {
-	Type      string `json:"type"` // "context", "added", "deleted", "header"
-	Content   string `json:"content"`
-	OldNum    int    `json:"oldNum"`
-	NewNum    int    `json:"newNum"`
-	LineIndex int    `json:"lineIndex"` // Index in the hunk for commenting
+	Type        string `json:"type"` // "context", "added", "deleted", "header"
+	Content     string `json:"content"`
+	HTMLContent string `json:"htmlContent"` // Syntax highlighted HTML
+	OldNum      int    `json:"oldNum"`
+	NewNum      int    `json:"newNum"`
+	LineIndex   int    `json:"lineIndex"` // Index in the hunk for commenting
 }
 
 // DiffHunk represents a hunk in the diff
@@ -194,7 +196,8 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build diff data
+	// Build diff data with syntax highlighting
+	highlighter := highlight.NewHTMLHighlighter()
 	hunks := make([]DiffHunk, 0, len(file.Hunks))
 	for _, h := range file.Hunks {
 		lines := make([]DiffLine, 0, len(h.Lines))
@@ -207,12 +210,16 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 				lineType = "deleted"
 			}
 
+			// Get syntax-highlighted HTML for the content
+			htmlContent := highlighter.HighlightLineHTML(l.Content, filePath)
+
 			lines = append(lines, DiffLine{
-				Type:      lineType,
-				Content:   l.Content,
-				OldNum:    l.OldNum,
-				NewNum:    l.NewNum,
-				LineIndex: i,
+				Type:        lineType,
+				Content:     l.Content,
+				HTMLContent: htmlContent,
+				OldNum:      l.OldNum,
+				NewNum:      l.NewNum,
+				LineIndex:   i,
 			})
 		}
 
