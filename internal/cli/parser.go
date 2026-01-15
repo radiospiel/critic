@@ -43,6 +43,7 @@ func ParseArgsForTesting(args []string) (*app.Args, error) {
 // newRootCmd creates the root cobra command with the given handler
 func newRootCmd(handler func(*app.Args) error) *cobra.Command {
 	var extensionsFlag []string
+	var noAnimationFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "critic [flags] [base1,base2,...] [-- path1 path2 ...]",
@@ -81,8 +82,9 @@ Examples:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Parse arguments
 			parsedArgs := &app.Args{
-				Extensions: ensureSlice(extensionsFlag),
-				Paths:      []string{"."},
+				Extensions:  ensureSlice(extensionsFlag),
+				Paths:       []string{"."},
+				NoAnimation: noAnimationFlag,
 			}
 
 			// Get paths after -- separator
@@ -118,6 +120,7 @@ Examples:
 
 	// Define flags
 	cmd.Flags().StringSliceVar(&extensionsFlag, "extensions", nil, "Comma-separated list of file extensions to include")
+	cmd.Flags().BoolVar(&noAnimationFlag, "no-animation", false, "Disable animations")
 
 	return cmd
 }
