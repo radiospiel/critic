@@ -21,10 +21,11 @@ const (
 )
 
 var (
-	logger *log.Logger
-	once   sync.Once
-	level  Level = INFO // default log level
-	prefix string
+	logger      *log.Logger
+	once        sync.Once
+	level       Level = INFO // default log level
+	prefix      string
+	logFilePath string // stores the path to the current log file
 )
 
 func SetPrefix(s string) {
@@ -34,14 +35,28 @@ func SetPrefix(s string) {
 // ensureLogger initializes the logger if not already set
 func ensureLogger() {
 	once.Do(func() {
-		// Use ${TMPDIR:-/tmp}/critic.log as the log file
-		tmpDir := os.Getenv("TMPDIR")
-		if tmpDir == "" {
-			tmpDir = "/tmp"
-		}
-		logPath := filepath.Join(tmpDir, "critic.log")
-		logger = newFileLogger(logPath)
+		logFilePath = buildLogFilePath()
+		logger = newFileLogger(logFilePath)
 	})
+}
+
+// buildLogFilePath determines the log file path from the process name
+func buildLogFilePath() string {
+	tmpDir := os.Getenv("TMPDIR")
+	if tmpDir == "" {
+		tmpDir = "/tmp"
+	}
+
+	// Get the process name from os.Args[0]
+	processName := filepath.Base(os.Args[0])
+
+	return filepath.Join(tmpDir, processName+".log")
+}
+
+// LogFilePath returns the full path to the current log file
+func LogFilePath() string {
+	ensureLogger() // ensure the logger is initialized so logFilePath is set
+	return logFilePath
 }
 
 // newFileLogger creates a new file-based logger
@@ -61,6 +76,7 @@ func newNullLogger() *log.Logger {
 
 // SetLogFile sets the logger to write to a file
 func SetLogFile(path string) {
+	logFilePath = path
 	logger = newFileLogger(path)
 }
 
