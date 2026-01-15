@@ -13,6 +13,7 @@ import (
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
+	"git.15b.it/eno/critic/teapot"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -131,8 +132,9 @@ type Model struct {
 	resolver        *git.BaseResolver // Base resolver with polling
 	messaging       critic.Messaging  // Messaging interface for conversations
 	filterMode      FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
-	animationTicker *ui.AnimationTicker // Animation ticker for conversation states
-	noAnimation     bool                  // Whether animations are disabled
+	animationTicker *ui.AnimationTicker    // Animation ticker for conversation states
+	animationLayer  *teapot.AnimationLayer // Animation layer for tick management
+	noAnimation     bool                   // Whether animations are disabled
 	globalAnimState ui.GlobalAnimationSummary // Global animation state for status bar
 	tickCount       int                       // Debug: count of animation ticks
 	err             error
@@ -172,6 +174,11 @@ func NewModel(args *Args) Model {
 	fileList.SetMessaging(mdb)
 	fileList.SetAnimationTicker(animTicker)
 
+	// Create animation layer for tick management
+	animLayer := teapot.NewAnimationLayer()
+	animLayer.SetTicker(animTicker)
+	animLayer.SetAnimationsEnabled(!args.NoAnimation)
+
 	return Model{
 		fileList:        fileList,
 		diffView:        diffView,
@@ -183,6 +190,7 @@ func NewModel(args *Args) Model {
 		extensions:      args.Extensions,
 		messaging:       mdb,
 		animationTicker: animTicker,
+		animationLayer:  animLayer,
 		noAnimation:     args.NoAnimation,
 	}
 }
@@ -194,15 +202,20 @@ func (m Model) Init() tea.Cmd {
 	// Check terminal color support
 	checkTerminalColors()
 
+	// Set up render logger
+	teapot.RenderLogger = func(layer string, durationMs float64) {
+		logger.Info("render (%s): %.1f ms", layer, durationMs)
+	}
+
 	cmds := []tea.Cmd{
 		initBaseResolverCmd(&m),
 		loadDiffCmd(&m),
-		disableTerminalLineWrap,        // This now handles alternate screen + nowrap
+		disableTerminalLineWrap, // This now handles alternate screen + nowrap
 	}
 
-	// Start animation ticker (unless disabled)
-	if !m.noAnimation {
-		cmds = append(cmds, ui.StartAnimationTicker())
+	// Start animation ticker via animation layer
+	if m.animationLayer != nil {
+		cmds = append(cmds, m.animationLayer.StartTicking())
 	}
 
 	return tea.Batch(cmds...)
@@ -441,22 +454,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
-	case ui.AnimationTickMsg:
+	case teapot.AnimationTickMsg:
 		// Skip if animations are disabled
-		if m.noAnimation || m.animationTicker == nil {
+		if m.animationLayer == nil || !m.animationLayer.AnimationsEnabled() {
 			return m, nil
 		}
-		// Advance animation frame
-		m.animationTicker.Tick()
+		// Handle tick via animation layer (advances ticker and continues)
+		cmd := m.animationLayer.HandleTick()
 		// Update global animation state based on conversations
 		m.updateGlobalAnimationState()
-		// Debug: increment tick counter
-		m.tickCount++
-		// Refresh diff view content to update snake animation in separators
-		// (uses cached syntax highlighting, so relatively fast)
-		m.diffView.RefreshContentForAnimation()
-		// Continue the ticker
-		cmds = append(cmds, ui.StartAnimationTicker())
+		// Refresh diff view animations (uses cached highlights, only renders if animations active)
+		m.diffView.RefreshAnimations()
+		cmds = append(cmds, cmd)
 
 	default:
 		// Route other messages to diff view (like diffRenderedMsg)

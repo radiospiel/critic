@@ -12,6 +12,7 @@ import (
 
 // HunkWidget renders a complete hunk: header + lines + inline comments.
 // This is the primary building block of the diff view.
+// HunkWidget implements AnimationWidget for separator animations.
 type HunkWidget struct {
 	teapot.BaseWidget
 	hunk            *ctypes.Hunk
@@ -22,6 +23,10 @@ type HunkWidget struct {
 	animationTicker *AnimationTicker
 	selectedRow     int  // Which row within this hunk is selected (-1 = none)
 	startRow        int  // Global row number where this hunk starts (for selection mapping)
+
+	// Animation support - tracks absolute screen positions of separator animations
+	animBounds    []teapot.Rect // Absolute screen bounds for each animation region
+	screenWidth   int           // Width of the render area (for animation)
 }
 
 // NewHunkWidget creates a new hunk widget.
@@ -89,11 +94,20 @@ func (w *HunkWidget) Hunk() *ctypes.Hunk {
 }
 
 // Render renders the hunk to the buffer.
+// Animation regions are rendered as placeholders (spaces); actual animation
+// is rendered via RenderInOverlay.
 func (w *HunkWidget) Render(buf *teapot.SubBuffer) {
 	width := buf.Width()
 	if width <= 0 {
 		return
 	}
+
+	// Get absolute offset for animation tracking
+	absX, absY := buf.AbsoluteOffset()
+
+	// Reset animation bounds for this render
+	w.animBounds = nil
+	w.screenWidth = width
 
 	y := 0
 
@@ -121,6 +135,18 @@ func (w *HunkWidget) Render(buf *teapot.SubBuffer) {
 				commentHeight := calculateCommentHeight(conv)
 				// Check if any row in comment is selected (for hotkey display)
 				commentSelected := w.selectedRow >= y && w.selectedRow < y+commentHeight
+
+				// Track animation bounds (top separator, first 12 chars)
+				// Only track if within visible buffer bounds
+				if y >= 0 && y < buf.Height() {
+					w.animBounds = append(w.animBounds, teapot.Rect{
+						X:      absX,
+						Y:      absY + y,
+						Width:  12, // Animation frame width
+						Height: 1,
+					})
+				}
+
 				w.renderComment(buf, y, conv, width, commentHeight, commentSelected)
 				y += commentHeight
 			}
@@ -230,29 +256,24 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 
 	y := startY
 
-	// Top separator with animation
+	// Top separator with animation placeholder
+	// The actual animation is rendered via RenderInOverlay; here we render spaces
+	// as placeholders for the animation region (first 12 chars)
 	if y < buf.Height() {
-		var animFrame string
-		if w.animationTicker != nil {
-			animFrame = w.animationTicker.GetSeparatorFrame()
-		} else {
-			animFrame = strings.Repeat(" ", 12)
+		// Render placeholder spaces for animation region (will be filled by overlay)
+		for x := 0; x < 12 && x < width; x++ {
+			buf.SetCell(x, y, teapot.Cell{Rune: ' ', Style: separatorStyle})
+		}
+		// Render the rest of the separator (space + dashes)
+		if width > 12 {
+			buf.SetCell(12, y, teapot.Cell{Rune: ' ', Style: separatorStyle})
 		}
 		dashCount := width - 13
 		if dashCount < 0 {
 			dashCount = 0
 		}
-		separatorLine := animFrame + " " + strings.Repeat("-", dashCount)
-		// Parse ANSI codes in the animation frame
-		cells := teapot.ParseANSILine(separatorLine)
-		for x := 0; x < width; x++ {
-			var cell teapot.Cell
-			if x < len(cells) {
-				cell = cells[x]
-			} else {
-				cell = teapot.Cell{Rune: '-', Style: separatorStyle}
-			}
-			buf.SetCell(x, y, cell)
+		for x := 13; x < width; x++ {
+			buf.SetCell(x, y, teapot.Cell{Rune: '-', Style: separatorStyle})
 		}
 		y++
 	}
@@ -342,6 +363,50 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 				r = runes[x]
 			}
 			buf.SetCell(x, y, teapot.Cell{Rune: r, Style: separatorStyle})
+		}
+	}
+}
+
+// AnimationBounds returns the screen-space bounds for all animation regions.
+// Implements teapot.AnimationWidget.
+func (w *HunkWidget) AnimationBounds() []teapot.Rect {
+	return w.animBounds
+}
+
+// NeedsAnimation returns true if this widget has active animations.
+// Implements teapot.AnimationWidget.
+func (w *HunkWidget) NeedsAnimation() bool {
+	return w.animationTicker != nil && len(w.animBounds) > 0
+}
+
+// RenderInOverlay renders the animation frames directly to the buffer.
+// Implements teapot.AnimationWidget.
+func (w *HunkWidget) RenderInOverlay(buf *teapot.Buffer) {
+	if w.animationTicker == nil {
+		return
+	}
+
+	// Get the current animation frame
+	animFrame := w.animationTicker.GetSeparatorFrame()
+	cells := teapot.ParseANSILine(animFrame)
+
+	// Render animation at each tracked position
+	for _, bounds := range w.animBounds {
+		// Check bounds are within buffer
+		if bounds.Y < 0 || bounds.Y >= buf.Height() {
+			continue
+		}
+		if bounds.X < 0 || bounds.X >= buf.Width() {
+			continue
+		}
+
+		// Render the animation frame cells
+		for i, cell := range cells {
+			x := bounds.X + i
+			if x >= buf.Width() || i >= bounds.Width {
+				break
+			}
+			buf.SetCell(x, bounds.Y, cell)
 		}
 	}
 }
@@ -734,4 +799,24 @@ func (w *DiffViewWidget) GetConversationUUIDForRow(row int) string {
 // IsCommentRow returns true if the given row is part of a comment.
 func (w *DiffViewWidget) IsCommentRow(row int) bool {
 	return w.GetConversationUUIDForRow(row) != ""
+}
+
+// RenderAnimationOverlays renders all animation overlays from child HunkWidgets.
+// This should be called after the main Render() to fill in animation content.
+func (w *DiffViewWidget) RenderAnimationOverlays(buf *teapot.Buffer) {
+	for _, hw := range w.hunks {
+		if hw.NeedsAnimation() {
+			hw.RenderInOverlay(buf)
+		}
+	}
+}
+
+// HasAnimations returns true if any child HunkWidget has active animations.
+func (w *DiffViewWidget) HasAnimations() bool {
+	for _, hw := range w.hunks {
+		if hw.NeedsAnimation() {
+			return true
+		}
+	}
+	return false
 }

@@ -58,6 +58,12 @@ type DiffViewModel struct {
 
 	// Widget-based rendering
 	diffWidget           *DiffViewWidget // The widget that renders the vertical layout of hunks
+
+	// Cached syntax highlighting (expensive to compute, reused across renders)
+	cachedHighlightFile  *ctypes.FileDiff   // File the cached highlights are for
+	cachedOldFileDeleted map[int]string     // Cached highlighted deleted lines
+	cachedNewFileAdded   map[int]string     // Cached highlighted added lines
+	cachedNewFileContext map[int]string     // Cached highlighted context lines
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -364,10 +370,15 @@ func (m *DiffViewModel) refreshContent() tea.Cmd {
 	return nil
 }
 
-// RefreshContentForAnimation re-renders the diff content for animation updates.
-// This is lighter than RefreshFile as it uses cached syntax highlighting.
-func (m *DiffViewModel) RefreshContentForAnimation() {
-	if m.file == nil {
+// RefreshAnimations re-renders the diff content to update animation frames.
+// This uses cached syntax highlighting so it's fast - only the widget rendering
+// and animation overlay are recomputed.
+func (m *DiffViewModel) RefreshAnimations() {
+	if m.file == nil || m.animationTicker == nil {
+		return
+	}
+	// Only refresh if there are active animations
+	if !m.diffWidget.HasAnimations() {
 		return
 	}
 	content, totalLines, navigableLines := m.renderDiff()
@@ -802,14 +813,29 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		filename = git.GitPathToDisplayPath(m.file.OldPath)
 	}
 
-	// Build highlighted content maps
+	// Build highlighted content maps (cached - only recompute when file changes)
 	var oldFileDeleted, newFileAdded, newFileContext map[int]string
 	if m.highlightingEnabled {
-		hlStart := time.Now()
-		oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
-		newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
-		newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
-		m.highlightTime += time.Since(hlStart)
+		// Check if we can reuse cached highlights
+		if m.cachedHighlightFile == m.file && m.cachedOldFileDeleted != nil {
+			// Reuse cached highlights
+			oldFileDeleted = m.cachedOldFileDeleted
+			newFileAdded = m.cachedNewFileAdded
+			newFileContext = m.cachedNewFileContext
+		} else {
+			// Compute and cache highlights
+			hlStart := time.Now()
+			oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
+			newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
+			newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
+			m.highlightTime += time.Since(hlStart)
+
+			// Cache for reuse
+			m.cachedHighlightFile = m.file
+			m.cachedOldFileDeleted = oldFileDeleted
+			m.cachedNewFileAdded = newFileAdded
+			m.cachedNewFileContext = newFileContext
+		}
 	}
 
 	// Configure the widget - set filter mode and animation BEFORE SetFile
@@ -848,6 +874,11 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	buffer.Clear()
 	m.diffWidget.Render(subBuf)
 
+	// Apply animation overlays (fills in animation content after placeholder render)
+	if m.diffWidget.HasAnimations() {
+		m.diffWidget.RenderAnimationOverlays(buffer)
+	}
+
 	// Apply selection overlay - invert the current line if focused and navigable
 	if m.focused && m.isNavigableLine(m.cursorLine) {
 		buffer.InvertRow(m.cursorLine)
@@ -858,8 +889,11 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 
 	totalTime := time.Since(startTime)
 	renderTime := totalTime - m.highlightTime
-	logger.Info("renderDiff (widget): total=%v, highlight=%v, render=%v, lines=%d, navigable=%d",
-		totalTime, m.highlightTime, renderTime, m.countLines(), len(navigableLines))
+	logger.Info("renderDiff (widget): total=%.1fms, highlight=%.1fms, render=%.1fms, lines=%d, navigable=%d",
+		float64(totalTime.Microseconds())/1000.0,
+		float64(m.highlightTime.Microseconds())/1000.0,
+		float64(renderTime.Microseconds())/1000.0,
+		m.countLines(), len(navigableLines))
 
 	return result, contentHeight, navigableLines
 }

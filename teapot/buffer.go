@@ -496,6 +496,12 @@ func (s *SubBuffer) Clear() {
 	s.Fill(s.Bounds(), EmptyCell())
 }
 
+// AbsoluteOffset returns the absolute offset of this sub-buffer within the root buffer.
+// This is useful for widgets that need to track their screen-space position.
+func (s *SubBuffer) AbsoluteOffset() (x, y int) {
+	return s.offset.X, s.offset.Y
+}
+
 // Sub creates a nested sub-buffer view within this sub-buffer.
 // The rect is relative to this sub-buffer's origin.
 func (s *SubBuffer) Sub(rect Rect) *SubBuffer {
