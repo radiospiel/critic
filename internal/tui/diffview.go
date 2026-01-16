@@ -375,13 +375,6 @@ func (m *DiffViewModel) refreshContent() tea.Cmd {
 	return nil
 }
 
-// RefreshAnimations re-renders the diff content to update animation frames.
-// Deprecated: Animation refresh now happens automatically in View() when animations are active.
-// This method is kept for backward compatibility but does nothing.
-func (m *DiffViewModel) RefreshAnimations() {
-	// No-op: View() now handles animation refresh automatically
-}
-
 // refreshAnimationsInternal re-renders the diff content to update animation frames.
 // This uses cached syntax highlighting so it's fast - only the widget rendering
 // and animation overlay are recomputed.
