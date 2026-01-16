@@ -110,7 +110,9 @@ func (c *Compositor) UnregisterTopLevelWidget(w Widget) {
 	for i, existing := range c.topLevelWidgets {
 		if existing == w {
 			c.topLevelWidgets = append(c.topLevelWidgets[:i], c.topLevelWidgets[i+1:]...)
-			w.SetCachedView(nil) // Clear the widget's cache
+			if cw, ok := w.(cacheableWidget); ok {
+				cw.SetCachedView(nil) // Clear the widget's cache
+			}
 			return
 		}
 	}
@@ -153,7 +155,9 @@ func (c *Compositor) clearWidgetCaches(w Widget) {
 	if w == nil {
 		return
 	}
-	w.SetCachedView(nil)
+	if cw, ok := w.(cacheableWidget); ok {
+		cw.SetCachedView(nil)
+	}
 	for _, child := range w.Children() {
 		c.clearWidgetCaches(child)
 	}
@@ -223,13 +227,26 @@ func (c *Compositor) Render() string {
 }
 
 // renderWidgetWithCache renders a widget, using its cache if available.
-// The cache lives in each widget (via CachedView/SetCachedView), not in the compositor.
+// The cache is accessed via the internal cacheableWidget interface.
+// Widgets that embed BaseWidget automatically support caching.
 func (c *Compositor) renderWidgetWithCache(w Widget) {
 	bounds := w.Bounds()
 	needsRender := w.MightBeDirty() // MightBeDirty() returns true if dirty or animated
 
+	// Try to use caching if the widget supports it
+	cw, canCache := w.(cacheableWidget)
+	if !canCache {
+		// Widget doesn't support caching, render directly
+		buf := NewBuffer(bounds.Width, bounds.Height)
+		buf.Clear()
+		sub := buf.Sub(buf.Bounds())
+		RenderWidget(w, sub)
+		c.buffer.Blit(buf, bounds.X, bounds.Y)
+		return
+	}
+
 	// Check if we have a cached buffer in the widget
-	cached := w.CachedView()
+	cached := cw.CachedView()
 	if cached == nil || needsRender {
 		// Create or resize the cache buffer
 		if cached == nil || cached.Width() != bounds.Width || cached.Height() != bounds.Height {
@@ -242,7 +259,7 @@ func (c *Compositor) renderWidgetWithCache(w Widget) {
 		RenderWidget(w, sub)
 
 		// SetCachedView clears the dirty flag automatically
-		w.SetCachedView(cached)
+		cw.SetCachedView(cached)
 	}
 
 	// Blit the cached buffer to the output

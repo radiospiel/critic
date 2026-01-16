@@ -32,13 +32,11 @@ type Widget interface {
 	// Rendering
 	Render(buf *SubBuffer)
 
-	// Dirty tracking and caching
-	IsDirty() bool          // Returns true if widget needs repainting
-	Repaint()               // Marks widget as needing repaint (propagates to parents)
-	MightBeDirty() bool     // Returns true if widget might need repainting (animated widgets override to return true)
-	ZOrder() int            // Returns the z-order for rendering layers
-	CachedView() *Buffer    // Returns the cached rendered view (nil if not cached)
-	SetCachedView(*Buffer)  // Sets the cached rendered view
+	// Dirty tracking
+	IsDirty() bool      // Returns true if widget needs repainting
+	Repaint()           // Marks widget as needing repaint (propagates to parents)
+	MightBeDirty() bool // Returns true if widget might need repainting (animated widgets override to return true)
+	ZOrder() int        // Returns the z-order for rendering layers
 
 	// Focus and input handling
 	Focusable() bool
@@ -51,6 +49,16 @@ type Widget interface {
 	Children() []Widget
 	Parent() Widget
 	SetParent(parent Widget)
+}
+
+// cacheableWidget is an internal interface used by the Compositor to manage
+// per-widget render caching. This interface is intentionally not part of the
+// public Widget interface because caching is an implementation detail of the
+// compositor's rendering strategy. Widgets that embed BaseWidget automatically
+// implement this interface.
+type cacheableWidget interface {
+	CachedView() *Buffer
+	SetCachedView(*Buffer)
 }
 
 // BaseWidget provides a default implementation of Widget.
