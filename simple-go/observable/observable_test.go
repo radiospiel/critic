@@ -465,3 +465,169 @@ func TestComplexNestedSetTriggersMultipleChanges(t *testing.T) {
 	assert.True(t, aTriggered, "name subscription should trigger")
 	assert.True(t, bTriggered, "age subscription should trigger")
 }
+
+// Tests for typed getters
+
+func TestGetValueAs(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("name", "Alice")
+	obs.SetValueAtKey("age", 30)
+	obs.SetValueAtKey("active", true)
+	obs.SetValueAtKey("score", 95.5)
+
+	// Test successful type assertions
+	name, ok := GetValueAs[string](obs, "name")
+	assert.True(t, ok, "should get string")
+	assert.Equals(t, name, "Alice", "name should be Alice")
+
+	age, ok := GetValueAs[int](obs, "age")
+	assert.True(t, ok, "should get int")
+	assert.Equals(t, age, 30, "age should be 30")
+
+	active, ok := GetValueAs[bool](obs, "active")
+	assert.True(t, ok, "should get bool")
+	assert.True(t, active, "active should be true")
+
+	score, ok := GetValueAs[float64](obs, "score")
+	assert.True(t, ok, "should get float64")
+	assert.Equals(t, score, 95.5, "score should be 95.5")
+}
+
+func TestGetValueAsWrongType(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("name", "Alice")
+
+	// Try to get string as int
+	val, ok := GetValueAs[int](obs, "name")
+	assert.False(t, ok, "should fail type assertion")
+	assert.Equals(t, val, 0, "should return zero value")
+}
+
+func TestGetValueAsMissing(t *testing.T) {
+	obs := New()
+
+	val, ok := GetValueAs[string](obs, "nonexistent")
+	assert.False(t, ok, "should return false for missing key")
+	assert.Equals(t, val, "", "should return zero value")
+}
+
+func TestMustGetValueAs(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("name", "Alice")
+
+	val := MustGetValueAs[string](obs, "name")
+	assert.Equals(t, val, "Alice", "should get value")
+}
+
+func TestMustGetValueAsPanicsOnMissing(t *testing.T) {
+	obs := New()
+
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "should panic on missing key")
+	}()
+
+	MustGetValueAs[string](obs, "nonexistent")
+}
+
+func TestMustGetValueAsPanicsOnWrongType(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("name", "Alice")
+
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "should panic on wrong type")
+	}()
+
+	MustGetValueAs[int](obs, "name")
+}
+
+func TestGetMap(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("config", map[string]any{"key": "value"})
+
+	m, ok := obs.GetMap("config")
+	assert.True(t, ok, "should get map")
+	assert.Equals(t, m["key"], "value", "should have correct value")
+
+	// Test wrong type
+	obs.SetValueAtKey("notmap", "string")
+	_, ok = obs.GetMap("notmap")
+	assert.False(t, ok, "should fail for non-map")
+}
+
+func TestGetSlice(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("items", []any{"a", "b", "c"})
+
+	s, ok := obs.GetSlice("items")
+	assert.True(t, ok, "should get slice")
+	assert.Equals(t, len(s), 3, "should have 3 items")
+	assert.Equals(t, s[0], "a", "first item should be 'a'")
+
+	// Test wrong type
+	obs.SetValueAtKey("notslice", "string")
+	_, ok = obs.GetSlice("notslice")
+	assert.False(t, ok, "should fail for non-slice")
+}
+
+func TestGetString(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("name", "Alice")
+
+	s, ok := obs.GetString("name")
+	assert.True(t, ok, "should get string")
+	assert.Equals(t, s, "Alice", "should be Alice")
+
+	// Test wrong type
+	obs.SetValueAtKey("notstring", 42)
+	_, ok = obs.GetString("notstring")
+	assert.False(t, ok, "should fail for non-string")
+}
+
+func TestGetInt(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("count", 42)
+
+	i, ok := obs.GetInt("count")
+	assert.True(t, ok, "should get int")
+	assert.Equals(t, i, 42, "should be 42")
+
+	// Test wrong type
+	obs.SetValueAtKey("notint", "string")
+	_, ok = obs.GetInt("notint")
+	assert.False(t, ok, "should fail for non-int")
+}
+
+func TestGetFloat64(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("price", 19.99)
+
+	f, ok := obs.GetFloat64("price")
+	assert.True(t, ok, "should get float64")
+	assert.Equals(t, f, 19.99, "should be 19.99")
+
+	// Test wrong type
+	obs.SetValueAtKey("notfloat", "string")
+	_, ok = obs.GetFloat64("notfloat")
+	assert.False(t, ok, "should fail for non-float64")
+}
+
+func TestGetBool(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("enabled", true)
+
+	b, ok := obs.GetBool("enabled")
+	assert.True(t, ok, "should get bool")
+	assert.True(t, b, "should be true")
+
+	obs.SetValueAtKey("disabled", false)
+	b, ok = obs.GetBool("disabled")
+	assert.True(t, ok, "should get bool")
+	assert.False(t, b, "should be false")
+
+	// Test wrong type
+	obs.SetValueAtKey("notbool", "string")
+	_, ok = obs.GetBool("notbool")
+	assert.False(t, ok, "should fail for non-bool")
+}

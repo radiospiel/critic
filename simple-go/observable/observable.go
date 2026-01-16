@@ -67,6 +67,64 @@ func (o *Observable) GetValue(key string) any {
 	return o.getValueInternal(key)
 }
 
+// GetValueAs returns the value at the given key path, cast to type T.
+// Returns the zero value and false if not found or if the type assertion fails.
+// Usage: val, ok := observable.GetValueAs[string](obs, "config.name")
+func GetValueAs[T any](o *Observable, key string) (T, bool) {
+	val := o.GetValue(key)
+	if val == nil {
+		var zero T
+		return zero, false
+	}
+	typed, ok := val.(T)
+	return typed, ok
+}
+
+// MustGetValueAs returns the value at the given key path, cast to type T.
+// Panics if not found or if the type assertion fails.
+// Usage: val := observable.MustGetValueAs[string](obs, "config.name")
+func MustGetValueAs[T any](o *Observable, key string) T {
+	val, ok := GetValueAs[T](o, key)
+	preconditions.Check(ok, "value at key %q is not of type %T or does not exist", key, val)
+	return val
+}
+
+// GetMap returns the value at the given key path as a map[string]any.
+// Returns nil and false if not found or if the value is not a map.
+func (o *Observable) GetMap(key string) (map[string]any, bool) {
+	return GetValueAs[map[string]any](o, key)
+}
+
+// GetSlice returns the value at the given key path as a []any.
+// Returns nil and false if not found or if the value is not a slice.
+func (o *Observable) GetSlice(key string) ([]any, bool) {
+	return GetValueAs[[]any](o, key)
+}
+
+// GetString returns the value at the given key path as a string.
+// Returns empty string and false if not found or if the value is not a string.
+func (o *Observable) GetString(key string) (string, bool) {
+	return GetValueAs[string](o, key)
+}
+
+// GetInt returns the value at the given key path as an int.
+// Returns 0 and false if not found or if the value is not an int.
+func (o *Observable) GetInt(key string) (int, bool) {
+	return GetValueAs[int](o, key)
+}
+
+// GetFloat64 returns the value at the given key path as a float64.
+// Returns 0 and false if not found or if the value is not a float64.
+func (o *Observable) GetFloat64(key string) (float64, bool) {
+	return GetValueAs[float64](o, key)
+}
+
+// GetBool returns the value at the given key path as a bool.
+// Returns false and false if not found or if the value is not a bool.
+func (o *Observable) GetBool(key string) (bool, bool) {
+	return GetValueAs[bool](o, key)
+}
+
 // getValueInternal returns the value without locking (caller must hold lock).
 func (o *Observable) getValueInternal(key string) any {
 	if key == "" {
