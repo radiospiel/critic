@@ -73,6 +73,13 @@ func NewDiffViewModel() DiffViewModel {
 	}
 }
 
+// NewDiffViewModelPtr creates a new diff viewer model and returns a pointer to it.
+// Use this when the model needs to be shared across multiple components.
+func NewDiffViewModelPtr() *DiffViewModel {
+	m := NewDiffViewModel()
+	return &m
+}
+
 // Init initializes the diff view model
 func (m DiffViewModel) Init() tea.Cmd {
 	return nil
@@ -203,20 +210,32 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-// View renders the diff view
-func (m DiffViewModel) View() string {
+// Render renders the diff view to a buffer (widget-based rendering)
+func (m *DiffViewModel) Render(buf *teapot.SubBuffer) {
+	width := buf.Width()
+	height := buf.Height()
+
+	logger.Info("DiffViewModel.Render: buf=%dx%d, file=%v", width, height, m.file != nil)
+
+	// Update widget bounds
+	m.diffWidget.SetBounds(teapot.NewRect(0, 0, width, height))
+
 	if m.file == nil {
-		return lipgloss.NewStyle().
-			Padding(1, 2).
-			Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"}).
-			Render("Select a file to view diff")
+		logger.Info("DiffViewModel.Render: no file, showing message")
+		m.renderMessage(buf, "Select a file to view diff")
+		return
+	}
+
+	// Check if widget is ready (async highlighting may still be in progress)
+	if m.diffWidget.GetFile() == nil {
+		logger.Info("DiffViewModel.Render: waiting for syntax highlighting")
+		m.renderMessage(buf, "Loading...")
+		return
 	}
 
 	if m.file.IsBinary {
-		return lipgloss.NewStyle().
-			Padding(1, 2).
-			Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"}).
-			Render("Binary file - no diff available")
+		m.renderMessage(buf, "Binary file - no diff available")
+		return
 	}
 
 	if len(m.file.Hunks) == 0 {
@@ -226,18 +245,42 @@ func (m DiffViewModel) View() string {
 		} else if m.file.IsDeleted {
 			msg = "File deleted"
 		}
-		return lipgloss.NewStyle().
-			Padding(1, 2).
-			Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"}).
-			Render(msg)
+		logger.Info("DiffViewModel.Render: no hunks, showing: %s", msg)
+		m.renderMessage(buf, msg)
+		return
 	}
 
-	if m.ready {
-		return m.viewport.View()
-	}
+	// Set the selected row on the widget for hotkey display
+	m.diffWidget.SetSelectedRow(m.cursorLine)
 
-	// Fallback if viewport not ready
-	return m.cachedContent
+	// Delegate to the diffWidget
+	logger.Info("DiffViewModel.Render: rendering %d hunks via diffWidget", len(m.file.Hunks))
+	m.diffWidget.Render(buf)
+
+	// Apply selection overlay - invert the current line if focused and navigable
+	// Convert from content coordinates to screen coordinates (account for scroll offset)
+	if m.focused && m.isNavigableLine(m.cursorLine) {
+		screenRow := m.cursorLine - m.diffWidget.GetYOffset()
+		if screenRow >= 0 && screenRow < height {
+			buf.InvertRow(screenRow)
+		}
+	}
+	logger.Info("DiffViewModel.Render: complete, cursorLine=%d, screenRow=%d, focused=%v", m.cursorLine, m.cursorLine-m.diffWidget.GetYOffset(), m.focused)
+}
+
+// renderMessage renders a centered message in the buffer
+func (m *DiffViewModel) renderMessage(buf *teapot.SubBuffer, msg string) {
+	style := lipgloss.NewStyle().
+		Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"})
+
+	// Render centered
+	width := buf.Width()
+	x := (width - len(msg)) / 2
+	if x < 0 {
+		x = 0
+	}
+	y := 1 // Some padding from top
+	buf.SetStringTruncated(x, y, msg, len(msg), style)
 }
 
 // SetFile sets the current file to display
@@ -249,11 +292,24 @@ func (m *DiffViewModel) SetFile(file *ctypes.FileDiff) tea.Cmd {
 		m.cachedFile = file
 
 		// Return command to render in background if highlighting is enabled
+		// Don't set up the widget here - let renderDiff() do it with highlighting
 		if m.highlightingEnabled {
 			return m.renderDiffAsync(file)
 		}
 
-		// Otherwise render immediately (no highlighting)
+		// Only set up widget immediately when highlighting is disabled
+		// Get conversations for comment display
+		conversationsByLine := make(map[int]*critic.Conversation)
+		if m.messaging != nil {
+			convs, _ := m.messaging.GetConversationsForFile(file.NewPath)
+			for _, conv := range convs {
+				conversationsByLine[conv.LineNumber] = conv
+			}
+		}
+		m.diffWidget.SetFilterMode(m.filterMode)
+		m.diffWidget.SetFile(file, conversationsByLine, nil, nil, nil)
+
+		// Render immediately (no highlighting)
 		content, totalLines, navigableLines := m.renderDiff()
 		m.cachedContent = content
 		m.totalLines = totalLines
@@ -669,7 +725,13 @@ func (m *DiffViewModel) SetSize(width, height int) {
 		m.viewport.Height = height
 	}
 
-	// Experiment: Don't repaint on resize
+	// Update widget bounds
+	m.diffWidget.SetBounds(teapot.NewRect(0, 0, width, height))
+}
+
+// SetBounds sets the bounds for widget-based rendering
+func (m *DiffViewModel) SetBounds(bounds teapot.Rect) {
+	m.SetSize(bounds.Width, bounds.Height)
 }
 
 // SetHighlightingEnabled enables or disables syntax highlighting

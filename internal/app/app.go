@@ -122,9 +122,12 @@ func Run(args *Args) error {
 // Model represents the main application model
 type Model struct {
 	fileList        *tui.FileListWidget
-	diffView        tui.DiffViewModel
+	diffView        *tui.DiffViewModel
 	commentEditor   tui.CommentEditor
-	layout          tui.LayoutModel
+	statusBar       *tui.StatusBarWidget
+	mainLayout      *tui.MainLayout
+	compositor      *teapot.Compositor
+	layout          tui.LayoutModel // TODO: Remove after full migration
 	diff            *ctypes.Diff
 	bases           []string          // List of base refs
 	currentBase     int               // Index of current base
@@ -145,7 +148,7 @@ type Model struct {
 // NewModel creates a new application model
 func NewModel(args *Args) Model {
 	logger.Info("NewModel: Creating model with %d paths, %d bases", len(args.Paths), len(args.Bases))
-	diffView := tui.NewDiffViewModel()
+	diffView := tui.NewDiffViewModelPtr()
 	diffView.SetHighlightingEnabled(true) // Always enable highlighting
 
 	fileList := tui.NewFileListWidget()
@@ -164,10 +167,25 @@ func NewModel(args *Args) Model {
 	diffView.SetMessaging(mdb)
 	fileList.SetMessaging(mdb)
 
+	statusBar := tui.NewStatusBarWidget()
+	statusBar.SetFilter("All") // Default filter mode
+
+	// Subscribe statusbar to receive tick notifications for clock updates
+	teapot.SubscribeToGlobalTicks(statusBar)
+
+	// Create the main layout (VBox with HSplit and StatusBar)
+	mainLayout := tui.NewMainLayout(fileList, diffView, statusBar)
+
+	// Create compositor with main layout as root
+	compositor := teapot.NewCompositor(mainLayout)
+
 	return Model{
 		fileList:      fileList,
 		diffView:      diffView,
 		commentEditor: tui.NewCommentEditor(),
+		statusBar:     statusBar,
+		mainLayout:    mainLayout,
+		compositor:    compositor,
 		layout:        tui.NewLayoutModel(),
 		bases:         args.Bases,
 		currentBase:   0, // Start with first base
@@ -181,6 +199,9 @@ func NewModel(args *Args) Model {
 // Init initializes the application
 func (m Model) Init() tea.Cmd {
 	logger.Info("Init: Starting application initialization")
+
+	// Enable compositor debug logging
+	teapot.CompositorDebug = true
 
 	// Check terminal color support
 	checkTerminalColors()
@@ -231,21 +252,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Cycle through filter modes (works from both file list and diff pane)
 			m.filterMode = (m.filterMode + 1) % 3
 			logger.Info("Update: Switching to filter mode %d: %s", m.filterMode, m.filterMode.String())
+			// Update status bar
+			m.statusBar.SetFilter(m.filterMode.String())
 			// Re-apply filter to file list and update diff view
 			m.applyFilterMode()
 			cmd := m.diffView.SetFile(m.fileList.GetActiveFile())
 			cmds = append(cmds, cmd)
+			m.mainLayout.Repaint() // Trigger widget re-render
 			return m, tea.Batch(cmds...)
 
 		case " ": // Space - page down diff view regardless of focus
 			// Scroll by height - 3 (but at least 1 row) and position cursor on second line
 			cmd := m.diffView.ScrollPageDown()
 			cmds = append(cmds, cmd)
+			m.mainLayout.Repaint() // Trigger widget re-render
 
 		case "shift+ ": // Shift+Space - page up diff view regardless of focus
 			// Scroll by height - 3 (but at least 1 row) and position cursor on second line
 			cmd := m.diffView.ScrollPageUp()
 			cmds = append(cmds, cmd)
+			m.mainLayout.Repaint() // Trigger widget re-render
 
 		case "?":
 			// Toggle help screen
@@ -307,26 +333,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					setFileCmd := m.diffView.SetFile(newFile)
 					cmds = append(cmds, cmd, setFileCmd)
+					m.mainLayout.Repaint() // Trigger widget re-render
 				} else {
 					cmds = append(cmds, cmd)
+					m.mainLayout.Repaint() // Trigger widget re-render
 				}
 			} else {
 				cmd := m.diffView.Update(msg)
 				cmds = append(cmds, cmd)
+				m.mainLayout.Repaint() // Trigger widget re-render after cursor movement
 			}
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+		// Update compositor and main layout size
+		m.compositor.Resize(msg.Width, msg.Height)
+
+		// Keep legacy layout for now (can be removed after full migration)
 		m.layout.SetSize(msg.Width, msg.Height)
-
-		// Update component sizes
-		leftWidth, leftHeight := m.layout.GetFileListSize()
-		m.fileList.SetSize(leftWidth, leftHeight)
-
-		rightWidth, rightHeight := m.layout.GetDiffViewSize()
-		m.diffView.SetSize(rightWidth, rightHeight)
 
 		// Update comment editor size (80% width, centered)
 		editorWidth := msg.Width * 80 / 100
@@ -351,9 +378,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Apply filter mode (this handles file selection and filtering)
 			m.applyFilterMode()
 
+			// Update status bar
+			if len(m.bases) > 0 {
+				m.statusBar.SetBase(m.bases[m.currentBase])
+			}
+			m.statusBar.SetFilter(m.filterMode.String())
+			stats := computeDiffStats(m.diff)
+			m.statusBar.SetDiffStats(stats.Added, stats.Deleted, stats.Moved)
+
 			// Update diff view with (potentially) new content
 			cmd := m.diffView.SetFile(m.fileList.GetActiveFile())
 			cmds = append(cmds, cmd)
+
+			// Mark layout dirty since diffView changed (diffView is a model, not a widget)
+			m.mainLayout.Repaint()
 		} else if m.err != nil {
 			logger.Error("Update: Diff loading failed: %v", m.err)
 		}
@@ -436,6 +474,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case teapot.ComposerTickMsg:
+		// Notify all tick subscribers (e.g., statusbar clock)
+		teapot.NotifyGlobalTickSubscribers()
+
 		// Continue ticking for animations
 		cmds = append(cmds, tea.Tick(teapot.ComposerTickInterval, func(_ time.Time) tea.Msg {
 			return teapot.ComposerTickMsg{}
@@ -449,6 +490,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Also route to comment editor in case it's a message it handles
 		editorCmd := m.commentEditor.Update(msg)
 		cmds = append(cmds, editorCmd)
+
+		// Trigger repaint in case the message updated widget state (e.g., diffRenderedMsg)
+		m.mainLayout.Repaint()
 	}
 
 	return m, tea.Batch(cmds...)
@@ -464,23 +508,20 @@ func (m Model) View() string {
 		return renderError(m.err)
 	}
 
-	// Render panes
-	fileListView := m.fileList.View()
-	diffViewView := m.diffView.View()
+	// Use compositor for widget-based rendering
+	view := m.compositor.Render()
 
-	// Render layout
-	mainView := m.layout.RenderSplitView(fileListView, diffViewView)
-
-	// Render status bar
-	statusBar := m.renderStatusBar()
-
-	// Combine main view and status bar
-	view := lipgloss.JoinVertical(lipgloss.Left, mainView, statusBar)
+	// Debug: log compositor output
+	w, h := m.compositor.Size()
+	logger.Info("View: compositor size=%dx%d, view len=%d, lines=%d", w, h, len(view), len(strings.Split(view, "\n")))
 
 	// Overlay comment editor if active
 	if m.commentEditor.IsActive() {
-		// Render comment editor centered horizontally
-		editorView := m.commentEditor.View()
+		// Render comment editor to buffer
+		editorBuf := teapot.NewBuffer(m.commentEditor.Width(), m.commentEditor.Height())
+		editorSub := editorBuf.Sub(editorBuf.Bounds())
+		m.commentEditor.Render(editorSub)
+		editorView := editorBuf.String()
 		editorLines := strings.Split(editorView, "\n")
 
 		// Calculate horizontal padding for centering (80% width means 10% padding on each side)
@@ -823,4 +864,59 @@ func (m *Model) getCurrentCodeVersion() string {
 		return "unknown"
 	}
 	return strings.TrimSpace(string(output))
+}
+
+// diffStats holds statistics about a diff
+type diffStats struct {
+	Added   int
+	Deleted int
+	Moved   int
+}
+
+// computeDiffStats computes line statistics for a diff
+func computeDiffStats(diff *ctypes.Diff) diffStats {
+	var stats diffStats
+	if diff == nil {
+		return stats
+	}
+
+	// Sum up pre-computed hunk stats and track content for move detection
+	addedLines := make(map[string]int)   // content -> count
+	deletedLines := make(map[string]int) // content -> count
+
+	for _, file := range diff.Files {
+		for _, hunk := range file.Hunks {
+			// Use pre-computed stats from hunk
+			stats.Added += hunk.Stats.Added
+			stats.Deleted += hunk.Stats.Deleted
+
+			// Track line content for move detection
+			for _, line := range hunk.Lines {
+				switch line.Type {
+				case ctypes.LineAdded:
+					addedLines[line.Content]++
+				case ctypes.LineDeleted:
+					deletedLines[line.Content]++
+				}
+			}
+		}
+	}
+
+	// Detect moved lines: content that appears in both added and deleted
+	for content, deletedCount := range deletedLines {
+		if addedCount, ok := addedLines[content]; ok {
+			// Count the minimum as moved (the rest are true adds/deletes)
+			moved := deletedCount
+			if addedCount < moved {
+				moved = addedCount
+			}
+			stats.Moved += moved
+		}
+	}
+
+	// Adjust added/deleted to exclude moved lines
+	stats.Added -= stats.Moved
+	stats.Deleted -= stats.Moved
+
+	return stats
 }
