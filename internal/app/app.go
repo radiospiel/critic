@@ -454,7 +454,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
-	case teapot.AnimationTickMsg:
+	case teapot.ComposerTickMsg:
 		// Skip if animations are disabled
 		if m.animationLayer == nil || !m.animationLayer.AnimationsEnabled() {
 			return m, nil

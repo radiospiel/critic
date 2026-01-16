@@ -34,10 +34,12 @@ type Ticker interface {
 }
 
 // AnimationTickMsg is sent when it's time to update animations.
-type AnimationTickMsg struct{}
+// Deprecated: Use ComposerTickMsg instead. This is kept as an alias for backwards compatibility.
+type AnimationTickMsg = ComposerTickMsg
 
 // DefaultTickInterval is the base tick rate for animations (40ms = 25fps).
-const DefaultTickInterval = 40 * time.Millisecond
+// Deprecated: Use ComposerTickInterval instead.
+const DefaultTickInterval = ComposerTickInterval
 
 // RenderLogger is called to log render timing information.
 // Set this to enable render logging.
@@ -84,7 +86,20 @@ func NewAnimationLayer() *AnimationLayer {
 		contentDirty:      true,
 	}
 	a.SetFocusable(false)
+	a.SetAnimated(true)    // Animation layers are always animated
+	a.SetZOrder(ZOrderAnimation) // Animation layers render at animation z-order
 	return a
+}
+
+// MightBeDirty returns true if this layer might need repainting.
+// For AnimationLayer, this is true if animations are enabled or the layer is dirty.
+func (a *AnimationLayer) MightBeDirty() bool {
+	return a.animationsEnabled || a.IsDirty()
+}
+
+// IsAnimated returns true because AnimationLayer always supports animation.
+func (a *AnimationLayer) IsAnimated() bool {
+	return true
 }
 
 // SetContent sets the main content widget.
@@ -274,17 +289,19 @@ func (a *AnimationLayer) RenderToBuffer() *Buffer {
 }
 
 // StartTicking returns a command that starts the animation tick loop.
+// Deprecated: Use Compositor.StartTicking() instead. The compositor now manages all ticks.
 func (a *AnimationLayer) StartTicking() tea.Cmd {
 	if !a.animationsEnabled {
 		return nil
 	}
 	return tea.Tick(a.tickInterval, func(t time.Time) tea.Msg {
-		return AnimationTickMsg{}
+		return ComposerTickMsg{}
 	})
 }
 
 // HandleTick processes an animation tick: advances the ticker and continues.
 // Returns a command to continue ticking.
+// Deprecated: Use Compositor.HandleTick() instead. The compositor now manages all ticks.
 func (a *AnimationLayer) HandleTick() tea.Cmd {
 	if !a.animationsEnabled {
 		return nil
@@ -293,6 +310,8 @@ func (a *AnimationLayer) HandleTick() tea.Cmd {
 	if a.ticker != nil {
 		a.ticker.Tick()
 	}
+	// Mark this layer as needing repaint for animation frames
+	a.MarkDirty()
 	// Continue ticking
 	return a.StartTicking()
 }

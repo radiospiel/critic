@@ -4,6 +4,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// Z-order constants for rendering layers
+const (
+	// ZOrderDefault is the default z-order for normal widgets
+	ZOrderDefault = 1
+	// ZOrderAnimation is the z-order for animation overlays
+	ZOrderAnimation = 100
+)
+
 // Widget is the core interface for all UI components.
 // Widgets form a tree structure where containers manage their children's layout.
 type Widget interface {
@@ -23,6 +31,14 @@ type Widget interface {
 
 	// Rendering
 	Render(buf *SubBuffer)
+
+	// Dirty tracking and caching
+	IsDirty() bool          // Returns true if widget needs repainting
+	MarkDirty()             // Marks widget as needing repaint (propagates to parents)
+	ClearDirty()            // Clears the dirty flag after rendering
+	MightBeDirty() bool     // Returns true if widget might need repainting (animated or dirty)
+	IsAnimated() bool       // Returns true if widget is animated
+	ZOrder() int            // Returns the z-order for rendering layers
 
 	// Focus and input handling
 	Focusable() bool
@@ -48,6 +64,9 @@ type BaseWidget struct {
 	border       Border
 	borderTitle  string
 	borderFooter string
+	dirty        bool // True if widget needs repainting
+	animated     bool // True if widget is animated
+	zOrder       int  // Z-order for rendering layers (default: ZOrderDefault)
 }
 
 // NewBaseWidget creates a new base widget with default settings.
@@ -55,6 +74,8 @@ func NewBaseWidget() BaseWidget {
 	return BaseWidget{
 		constraints: DefaultConstraints(),
 		focusable:   true,
+		dirty:       true, // Widgets start dirty so they're rendered initially
+		zOrder:      ZOrderDefault,
 	}
 }
 
@@ -126,6 +147,56 @@ func (b *BaseWidget) Parent() Widget {
 // SetParent sets the widget's parent.
 func (b *BaseWidget) SetParent(parent Widget) {
 	b.parent = parent
+}
+
+// IsDirty returns true if the widget needs repainting.
+func (b *BaseWidget) IsDirty() bool {
+	return b.dirty
+}
+
+// MarkDirty marks this widget as needing repaint and propagates to parents.
+func (b *BaseWidget) MarkDirty() {
+	if b.dirty {
+		return // Already dirty, no need to propagate
+	}
+	b.dirty = true
+	if b.parent != nil {
+		b.parent.MarkDirty()
+	}
+}
+
+// ClearDirty clears the dirty flag after rendering.
+func (b *BaseWidget) ClearDirty() {
+	b.dirty = false
+}
+
+// MightBeDirty returns true if the widget might need repainting.
+// This is true for animated widgets or dirty widgets.
+func (b *BaseWidget) MightBeDirty() bool {
+	return b.dirty || b.animated
+}
+
+// IsAnimated returns true if the widget is animated.
+func (b *BaseWidget) IsAnimated() bool {
+	return b.animated
+}
+
+// SetAnimated sets whether this widget is animated.
+func (b *BaseWidget) SetAnimated(animated bool) {
+	b.animated = animated
+	if animated && b.zOrder == ZOrderDefault {
+		b.zOrder = ZOrderAnimation
+	}
+}
+
+// ZOrder returns the widget's z-order for rendering.
+func (b *BaseWidget) ZOrder() int {
+	return b.zOrder
+}
+
+// SetZOrder sets the widget's z-order for rendering.
+func (b *BaseWidget) SetZOrder(zOrder int) {
+	b.zOrder = zOrder
 }
 
 // Border returns the widget's border configuration.

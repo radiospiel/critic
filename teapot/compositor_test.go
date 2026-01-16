@@ -201,9 +201,9 @@ func TestCompositorModel(t *testing.T) {
 	root := newMockWidget("R", 0, 0, 1)
 	model := NewCompositorModel(root)
 
-	// Init should return nil
+	// Init returns a tick command for animation (ticking is enabled by default)
 	cmd := model.Init()
-	assert.Nil(t, cmd)
+	assert.NotNil(t, cmd, "Init should return tick command when ticking is enabled")
 
 	// Update with resize
 	newModel, cmd := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})

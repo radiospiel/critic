@@ -37,7 +37,8 @@ const (
 )
 
 // tickInterval is the base tick rate for animations (use fastest animation speed)
-const tickInterval = teapot.DefaultTickInterval
+// Note: This now uses the ComposerTickInterval from the teapot package.
+const tickInterval = teapot.ComposerTickInterval
 
 // AnimationTicker holds the animations and provides animation state.
 // It implements teapot.Ticker interface.
@@ -174,8 +175,9 @@ func (at *AnimationTicker) Tick() {
 	}
 }
 
-// AnimationTickMsg is an alias for teapot.AnimationTickMsg
-type AnimationTickMsg = teapot.AnimationTickMsg
+// AnimationTickMsg is an alias for teapot.ComposerTickMsg (kept for backwards compatibility)
+// Deprecated: Use teapot.ComposerTickMsg instead.
+type AnimationTickMsg = teapot.ComposerTickMsg
 
 // GetConversationAnimationState determines the animation state for a conversation
 // (A) ReadByAI and not answered (last message is human) => ThinkingAnimation
