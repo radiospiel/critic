@@ -87,37 +87,41 @@ func TestGetConversationAnimationState_LookHereAnimation(t *testing.T) {
 	assert.Equals(t, state, LookHereAnimation, "expected LookHereAnimation with single AI message")
 }
 
-func TestAnimationTicker(t *testing.T) {
-	ticker := NewAnimationTicker()
-
+func TestGetFrame(t *testing.T) {
 	// Get the animation definitions
 	thinkingAnim := animation.Get(ThinkingAnimationType)
 	lookHereAnim := animation.Get(LookHereAnimationType)
 
-	// Test initial state - should return first frame of BrailleSnake
-	frame1 := ticker.GetFrame(ThinkingAnimation, false)
-	assert.Equals(t, frame1, thinkingAnim.Frames[0], "expected first thinking frame")
-
-	// Test frame progression - BrailleSnake is 80ms, tick is 40ms, so need 2 ticks to advance
-	ticker.Tick()
-	frame2 := ticker.GetFrame(ThinkingAnimation, false)
-	assert.Equals(t, frame2, thinkingAnim.Frames[0], "expected still first frame after 1 tick (80ms animation, 40ms tick)")
-
-	ticker.Tick()
-	frame3 := ticker.GetFrame(ThinkingAnimation, false)
-	assert.Equals(t, frame3, thinkingAnim.Frames[1], "expected second frame after 2 ticks")
-
-	// Test LookHere animation returns StarBurst frames (it advances at its own rate)
-	lookHereFrame := ticker.GetFrame(LookHereAnimation, false)
-	// Just verify it's a valid StarBurst frame
-	assert.Contains(t, lookHereAnim.Frames, lookHereFrame, "expected a valid StarBurst frame")
-
 	// Test NoAnimation returns spaces
-	noAnimFrame := ticker.GetFrame(NoAnimation, false)
+	noAnimFrame := GetFrame(NoAnimation, false)
 	assert.Equals(t, noAnimFrame, " ", "expected space for NoAnimation short")
 
-	noAnimFrameLong := ticker.GetFrame(NoAnimation, true)
+	noAnimFrameLong := GetFrame(NoAnimation, true)
 	assert.Equals(t, noAnimFrameLong, "          ", "expected 10 spaces for NoAnimation long")
+
+	// Test ThinkingAnimation returns valid BrailleSnake frames
+	thinkingFrame := GetFrameRune(ThinkingAnimation)
+	validThinkingRune := false
+	for _, f := range thinkingAnim.Frames {
+		runes := []rune(f)
+		if len(runes) > 0 && runes[0] == thinkingFrame {
+			validThinkingRune = true
+			break
+		}
+	}
+	assert.True(t, validThinkingRune, "expected valid BrailleSnake frame rune")
+
+	// Test LookHereAnimation returns valid StarBurst frames
+	lookHereFrame := GetFrameRune(LookHereAnimation)
+	validLookHereRune := false
+	for _, f := range lookHereAnim.Frames {
+		runes := []rune(f)
+		if len(runes) > 0 && runes[0] == lookHereFrame {
+			validLookHereRune = true
+			break
+		}
+	}
+	assert.True(t, validLookHereRune, "expected valid StarBurst frame rune")
 }
 
 func TestGetFileAnimationState(t *testing.T) {

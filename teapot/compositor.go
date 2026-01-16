@@ -14,10 +14,10 @@ type ComposerTickMsg struct{}
 // ComposerTickInterval is the tick rate for the compositor (40ms = 25fps).
 const ComposerTickInterval = 40 * time.Millisecond
 
-// GlobalTicker is the global animation ticker that widgets can access.
-// Animated widgets should use this to get the current animation state when rendering.
-// Set this before starting the application.
-var GlobalTicker Ticker
+// GlobalTickCount is the global tick counter that animations use to compute their current frame.
+// Each animation computes: frame = (GlobalTickCount / ticksPerFrame) % numFrames
+// This is incremented by the compositor on each tick.
+var GlobalTickCount int64
 
 // Compositor manages the root widget tree and orchestrates rendering.
 // It owns the screen buffer and handles the render loop.
@@ -48,10 +48,8 @@ func NewCompositor(root Widget) *Compositor {
 
 // HandleTick processes a compositor tick: checks for dirty widgets and continues ticking.
 func (c *Compositor) HandleTick() tea.Cmd {
-	// Advance the global animation ticker
-	if GlobalTicker != nil {
-		GlobalTicker.Tick()
-	}
+	// Advance the global tick counter
+	GlobalTickCount++
 
 	// Check if any widget might be dirty
 	c.checkDirtyWidgets(c.root)

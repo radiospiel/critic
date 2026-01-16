@@ -131,10 +131,9 @@ type Model struct {
 	paths           []string          // Paths to diff
 	extensions      []string          // File extensions to include
 	resolver        *git.BaseResolver // Base resolver with polling
-	messaging       critic.Messaging  // Messaging interface for conversations
-	filterMode      FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
-	animationTicker *tui.AnimationTicker    // Animation ticker for conversation states
-	noAnimation     bool                   // Whether animations are disabled
+	messaging       critic.Messaging           // Messaging interface for conversations
+	filterMode      FilterMode                 // Current filter mode (None, WithComments, WithUnresolved)
+	noAnimation     bool                       // Whether animations are disabled
 	globalAnimState tui.GlobalAnimationSummary // Global animation state for status bar
 	tickCount       int                       // Debug: count of animation ticks
 	err             error
@@ -163,32 +162,20 @@ func NewModel(args *Args) Model {
 		logger.Fatal("Failed to initialize message database: %v", err)
 	}
 
-	// Create animation ticker (unless disabled)
-	var animTicker *tui.AnimationTicker
-	if !args.NoAnimation {
-		animTicker = tui.NewAnimationTicker()
-	}
-
 	diffView.SetMessaging(mdb)
-	diffView.SetAnimationTicker(animTicker)
 	fileList.SetMessaging(mdb)
-	fileList.SetAnimationTicker(animTicker)
-
-	// Set global ticker so widgets can access animation state
-	teapot.GlobalTicker = animTicker
 
 	return Model{
-		fileList:        fileList,
-		diffView:        diffView,
-		commentEditor:   tui.NewCommentEditor(),
-		layout:          tui.NewLayoutModel(),
-		bases:           args.Bases,
-		currentBase:     0, // Start with first base
-		paths:           args.Paths,
-		extensions:      args.Extensions,
-		messaging:       mdb,
-		animationTicker: animTicker,
-		noAnimation:     args.NoAnimation,
+		fileList:      fileList,
+		diffView:      diffView,
+		commentEditor: tui.NewCommentEditor(),
+		layout:        tui.NewLayoutModel(),
+		bases:         args.Bases,
+		currentBase:   0, // Start with first base
+		paths:         args.Paths,
+		extensions:    args.Extensions,
+		messaging:     mdb,
+		noAnimation:   args.NoAnimation,
 	}
 }
 
@@ -455,10 +442,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case teapot.ComposerTickMsg:
-		// Advance the animation ticker if animations are enabled
-		if !m.noAnimation && m.animationTicker != nil {
-			m.animationTicker.Tick()
-			// Update global animation state based on conversations
+		// Update global animation state based on conversations
+		if !m.noAnimation {
 			m.updateGlobalAnimationState()
 		}
 		// Always continue ticking
@@ -569,13 +554,24 @@ func (m Model) renderStatusBar() string {
 	// Show help hint
 	parts = append(parts, "[Tab] switch • [?] help • [q] quit")
 
-	status := strings.Join(parts, " • ")
+	leftStatus := strings.Join(parts, " • ")
 
-	// Truncate if too long (account for padding)
-	maxLen := m.width - 4 // subtract padding and some margin
-	if maxLen > 3 && len(status) > maxLen {
-		status = status[:maxLen-3] + "..."
+	// Add UTC clock on the right side
+	clock := time.Now().UTC().Format("15:04:05")
+
+	// Calculate available width for left status (leave room for clock + padding)
+	clockWidth := len(clock) + 2 // clock + 2 spaces padding
+	availableWidth := m.width - clockWidth - 4
+	if availableWidth > 3 && len(leftStatus) > availableWidth {
+		leftStatus = leftStatus[:availableWidth-3] + "..."
 	}
+
+	// Pad left status to push clock to the right
+	padding := m.width - len(leftStatus) - len(clock) - 2 // -2 for style padding
+	if padding < 1 {
+		padding = 1
+	}
+	status := leftStatus + strings.Repeat(" ", padding) + clock
 
 	return tui.GetStatusStyle().
 		Width(m.width).

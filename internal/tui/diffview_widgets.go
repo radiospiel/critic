@@ -20,13 +20,12 @@ type HunkWidget struct {
 	highlightedOld  map[int]string // Pre-highlighted content for deleted lines
 	highlightedNew  map[int]string // Pre-highlighted content for added lines
 	highlightedCtx  map[int]string // Pre-highlighted content for context lines
-	animationTicker *AnimationTicker
-	selectedRow     int  // Which row within this hunk is selected (-1 = none)
-	startRow        int  // Global row number where this hunk starts (for selection mapping)
+	selectedRow     int            // Which row within this hunk is selected (-1 = none)
+	startRow        int            // Global row number where this hunk starts (for selection mapping)
 
 	// Animation support - tracks absolute screen positions of separator animations
-	animBounds    []teapot.Rect // Absolute screen bounds for each animation region
-	screenWidth   int           // Width of the render area (for animation)
+	animBounds  []teapot.Rect // Absolute screen bounds for each animation region
+	screenWidth int           // Width of the render area (for animation)
 }
 
 // NewHunkWidget creates a new hunk widget.
@@ -34,7 +33,6 @@ func NewHunkWidget(
 	hunk *ctypes.Hunk,
 	conversationMap map[int]*critic.Conversation,
 	highlightedOld, highlightedNew, highlightedCtx map[int]string,
-	ticker *AnimationTicker,
 ) *HunkWidget {
 	w := &HunkWidget{
 		BaseWidget:      teapot.NewBaseWidget(teapot.ZOrderDefault),
@@ -43,7 +41,6 @@ func NewHunkWidget(
 		highlightedOld:  highlightedOld,
 		highlightedNew:  highlightedNew,
 		highlightedCtx:  highlightedCtx,
-		animationTicker: ticker,
 		selectedRow:     -1,
 	}
 	w.SetFocusable(false)
@@ -376,18 +373,14 @@ func (w *HunkWidget) AnimationBounds() []teapot.Rect {
 // NeedsAnimation returns true if this widget has active animations.
 // Implements teapot.AnimationWidget.
 func (w *HunkWidget) NeedsAnimation() bool {
-	return w.animationTicker != nil && len(w.animBounds) > 0
+	return len(w.animBounds) > 0
 }
 
 // RenderInOverlay renders the animation frames directly to the buffer.
 // Implements teapot.AnimationWidget.
 func (w *HunkWidget) RenderInOverlay(buf *teapot.Buffer) {
-	if w.animationTicker == nil {
-		return
-	}
-
 	// Get the current animation frame
-	animFrame := w.animationTicker.GetSeparatorFrame()
+	animFrame := GetSeparatorFrame()
 	cells := teapot.ParseANSILine(animFrame)
 
 	// Render animation at each tracked position
@@ -473,7 +466,6 @@ type DiffViewWidget struct {
 	highlightedOld  map[int]string
 	highlightedNew  map[int]string
 	highlightedCtx  map[int]string
-	animationTicker *AnimationTicker
 	filterMode      FilterMode
 	selectedRow     int // Global row number of selected item
 	yOffset         int // Scroll offset
@@ -504,11 +496,6 @@ func (w *DiffViewWidget) SetFile(
 	w.selectedRow = 3 // First line after header (row 0-1) and first hunk header (row 2)
 }
 
-// SetAnimationTicker sets the animation ticker.
-func (w *DiffViewWidget) SetAnimationTicker(ticker *AnimationTicker) {
-	w.animationTicker = ticker
-}
-
 // SetFilterMode sets the filter mode.
 func (w *DiffViewWidget) SetFilterMode(mode FilterMode) {
 	w.filterMode = mode
@@ -525,7 +512,7 @@ func (w *DiffViewWidget) rebuildHunks() {
 	currentRow := 2 // After file header
 
 	for _, hunk := range hunksToRender {
-		hw := NewHunkWidget(hunk, w.conversationMap, w.highlightedOld, w.highlightedNew, w.highlightedCtx, w.animationTicker)
+		hw := NewHunkWidget(hunk, w.conversationMap, w.highlightedOld, w.highlightedNew, w.highlightedCtx)
 		hw.SetStartRow(currentRow)
 		w.hunks = append(w.hunks, hw)
 		currentRow += hw.calculateHeight() + 1 // +1 for spacing

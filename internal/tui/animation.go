@@ -2,7 +2,6 @@ package tui
 
 import (
 	"strings"
-	"sync"
 
 	"git.15b.it/eno/critic/pkg/critic"
 	"git.15b.it/eno/critic/simple-tui/animation"
@@ -36,45 +35,27 @@ const (
 	SeparatorSpeedFactor = 1.61
 )
 
-// tickInterval is the base tick rate for animations (use fastest animation speed)
-// Note: This now uses the ComposerTickInterval from the teapot package.
-const tickInterval = teapot.ComposerTickInterval
-
-// AnimationTicker holds the animations and provides animation state.
-// It implements teapot.Ticker interface.
-type AnimationTicker struct {
-	mu             sync.RWMutex
-	thinking       *animation.Animation
-	lookHere       *animation.Animation
-	separator      *animation.Animation
-	thinkingTicks  int // accumulator for thinking animation
-	lookHereTicks  int // accumulator for look here animation
-	separatorTicks int // accumulator for separator animation
-}
-
-// NewAnimationTicker creates a new animation ticker
-func NewAnimationTicker() *AnimationTicker {
-	return &AnimationTicker{
-		thinking:  animation.NewSingleCellAnimation(ThinkingAnimationType, true, 1.0),
-		lookHere:  animation.NewSingleCellAnimation(LookHereAnimationType, true, LookHereSpeedFactor),
-		separator: animation.NewShortAnimation(SeparatorAnimationType, true, SeparatorSpeedFactor),
-	}
-}
+// Static animation instances - these are stateless, frames are computed from GlobalTickCount
+var (
+	thinkingAnim  = animation.NewSingleCellAnimation(ThinkingAnimationType, true, 1.0)
+	lookHereAnim  = animation.NewSingleCellAnimation(LookHereAnimationType, true, LookHereSpeedFactor)
+	separatorAnim = animation.NewShortAnimation(SeparatorAnimationType, true, SeparatorSpeedFactor)
+)
 
 // GetFrame returns the current animation frame for the given state (with color)
-func (at *AnimationTicker) GetFrame(state AnimationState, long bool) string {
-	at.mu.RLock()
-	defer at.mu.RUnlock()
+func GetFrame(state AnimationState, long bool) string {
+	tick := teapot.GlobalTickCount
+	interval := teapot.ComposerTickInterval
 
 	switch state {
 	case ThinkingAnimation:
-		frame := at.thinking.Render()
+		frame := thinkingAnim.RenderAt(tick, interval)
 		if long {
 			return padToWidth(frame, 10)
 		}
 		return frame
 	case LookHereAnimation:
-		frame := at.lookHere.Render()
+		frame := lookHereAnim.RenderAt(tick, interval)
 		if long {
 			return padToWidth(frame, 10)
 		}
@@ -88,40 +69,40 @@ func (at *AnimationTicker) GetFrame(state AnimationState, long bool) string {
 }
 
 // GetFrameRune returns the current animation frame character (without color)
-func (at *AnimationTicker) GetFrameRune(state AnimationState) rune {
-	at.mu.RLock()
-	defer at.mu.RUnlock()
+func GetFrameRune(state AnimationState) rune {
+	tick := teapot.GlobalTickCount
+	interval := teapot.ComposerTickInterval
 
 	switch state {
 	case ThinkingAnimation:
-		return at.thinking.Rune()
+		return thinkingAnim.RuneAt(tick, interval)
 	case LookHereAnimation:
-		return at.lookHere.Rune()
+		return lookHereAnim.RuneAt(tick, interval)
 	default:
 		return ' '
 	}
 }
 
 // GetFrameStyle returns the lipgloss style for the animation state
-func (at *AnimationTicker) GetFrameStyle(state AnimationState) lipgloss.Style {
-	at.mu.RLock()
-	defer at.mu.RUnlock()
+func GetFrameStyle(state AnimationState) lipgloss.Style {
+	tick := teapot.GlobalTickCount
+	interval := teapot.ComposerTickInterval
 
 	switch state {
 	case ThinkingAnimation:
-		return at.thinking.Style()
+		return thinkingAnim.StyleAt(tick, interval)
 	case LookHereAnimation:
-		return at.lookHere.Style()
+		return lookHereAnim.StyleAt(tick, interval)
 	default:
 		return lipgloss.NewStyle()
 	}
 }
 
 // GetSeparatorFrame returns the current separator animation frame (12-char snake)
-func (at *AnimationTicker) GetSeparatorFrame() string {
-	at.mu.RLock()
-	defer at.mu.RUnlock()
-	return at.separator.Render()
+func GetSeparatorFrame() string {
+	tick := teapot.GlobalTickCount
+	interval := teapot.ComposerTickInterval
+	return separatorAnim.RenderAt(tick, interval)
 }
 
 // padToWidth pads a string to exactly width characters (accounts for ANSI codes)
@@ -133,46 +114,6 @@ func padToWidth(s string, width int) string {
 		return s + strings.Repeat(" ", width-visibleLen)
 	}
 	return s
-}
-
-// Tick advances the animation frames based on their respective speeds
-func (at *AnimationTicker) Tick() {
-	at.mu.Lock()
-	defer at.mu.Unlock()
-
-	// Thinking animation: BrailleSnake at 80ms per frame
-	// At 40ms tick rate, advance every 2 ticks
-	thinkingTicksNeeded := int(at.thinking.Speed / tickInterval)
-	if thinkingTicksNeeded < 1 {
-		thinkingTicksNeeded = 1
-	}
-	at.thinkingTicks++
-	if at.thinkingTicks >= thinkingTicksNeeded {
-		at.thinkingTicks = 0
-		at.thinking.Tick()
-	}
-
-	// LookHere animation: StarBurst at adjusted speed
-	lookHereTicksNeeded := int(at.lookHere.Speed / tickInterval)
-	if lookHereTicksNeeded < 1 {
-		lookHereTicksNeeded = 1
-	}
-	at.lookHereTicks++
-	if at.lookHereTicks >= lookHereTicksNeeded {
-		at.lookHereTicks = 0
-		at.lookHere.Tick()
-	}
-
-	// Separator animation: Snake short animation at 62% speed
-	separatorTicksNeeded := int(at.separator.Speed / tickInterval)
-	if separatorTicksNeeded < 1 {
-		separatorTicksNeeded = 1
-	}
-	at.separatorTicks++
-	if at.separatorTicks >= separatorTicksNeeded {
-		at.separatorTicks = 0
-		at.separator.Tick()
-	}
 }
 
 // GetConversationAnimationState determines the animation state for a conversation

@@ -54,8 +54,6 @@ type DiffViewModel struct {
 	lineConversationUUID map[int]string // Maps rendered line number to conversation UUID
 	gotoBottomOnLoad     bool           // If true, go to bottom after next file load
 	filterMode           FilterMode     // Current filter mode for hunk filtering
-	animationTicker      *AnimationTicker // Animation ticker for conversation states
-
 	// Widget-based rendering
 	diffWidget           *DiffViewWidget // The widget that renders the vertical layout of hunks
 
@@ -687,11 +685,6 @@ func (m *DiffViewModel) SetMessaging(messaging critic.Messaging) {
 	m.messaging = messaging
 }
 
-// SetAnimationTicker sets the animation ticker for conversation state animations
-func (m *DiffViewModel) SetAnimationTicker(ticker *AnimationTicker) {
-	m.animationTicker = ticker
-}
-
 // SetFilterMode sets the filter mode for hunk filtering
 func (m *DiffViewModel) SetFilterMode(mode FilterMode) {
 	if m.filterMode != mode {
@@ -818,9 +811,8 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		}
 	}
 
-	// Configure the widget - set filter mode and animation BEFORE SetFile
+	// Configure the widget - set filter mode BEFORE SetFile
 	// since SetFile calls rebuildHunks which uses these values
-	m.diffWidget.SetAnimationTicker(m.animationTicker)
 	m.diffWidget.SetFilterMode(m.filterMode)
 	m.diffWidget.SetFile(m.file, conversationsByLine, oldFileDeleted, newFileAdded, newFileContext)
 
@@ -1265,12 +1257,7 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	// Helper to create the top separator line with snake animation
 	createTopSeparatorLine := func(lineNum int) string {
 		// Get snake animation frame (12 chars)
-		var animFrame string
-		if m.animationTicker != nil {
-			animFrame = m.animationTicker.GetSeparatorFrame()
-		} else {
-			animFrame = "○○○○○○○○○○○○" // fallback static snake
-		}
+		animFrame := GetSeparatorFrame()
 
 		// Calculate dashes needed to fill the rest of the line
 		animWidth := 12 // snake animation is 12 chars

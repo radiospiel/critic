@@ -34,13 +34,12 @@ type fileAnimInfo struct {
 // FileListWidget implements AnimationWidget for file indicator animations.
 type FileListWidget struct {
 	pot.BaseWidget
-	list            *pot.SelectableList[FileItem]
-	messaging       critic.Messaging
-	animationTicker *AnimationTicker
-	width           int
-	height          int
-	filterMode      int // 0 = all, 1 = with comments, 2 = unresolved only
-	totalFiles      int // Total files before filtering (for "No files match filter" message)
+	list       *pot.SelectableList[FileItem]
+	messaging  critic.Messaging
+	width      int
+	height     int
+	filterMode int // 0 = all, 1 = with comments, 2 = unresolved only
+	totalFiles int // Total files before filtering (for "No files match filter" message)
 
 	// Animation support - tracks positions of animated file indicators
 	animInfos []fileAnimInfo // Animation info for each visible animated item
@@ -116,7 +115,7 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 	var indicatorRune rune = ' '
 	animState := GetFileAnimationState(fileAnimSummary)
 
-	if animState != NoAnimation && w.animationTicker != nil {
+	if animState != NoAnimation {
 		// Animation is active - render placeholder space, actual animation via overlay
 		indicatorRune = ' '
 		indicatorStyle = lipgloss.NewStyle()
@@ -272,11 +271,6 @@ func (w *FileListWidget) SetMessaging(messaging critic.Messaging) {
 	w.messaging = messaging
 }
 
-// SetAnimationTicker sets the animation ticker for conversation state animations
-func (w *FileListWidget) SetAnimationTicker(ticker *AnimationTicker) {
-	w.animationTicker = ticker
-}
-
 // SetFilterMode sets the current filter mode and total files count
 // filterMode: 0 = all, 1 = with comments, 2 = unresolved only
 func (w *FileListWidget) SetFilterMode(filterMode int, totalFiles int) {
@@ -370,16 +364,12 @@ func (w *FileListWidget) AnimationBounds() []pot.Rect {
 // NeedsAnimation returns true if this widget has active animations.
 // Implements teapot.AnimationWidget.
 func (w *FileListWidget) NeedsAnimation() bool {
-	return w.animationTicker != nil && len(w.animInfos) > 0
+	return len(w.animInfos) > 0
 }
 
 // RenderInOverlay renders the animation indicators directly to the buffer.
 // Implements teapot.AnimationWidget.
 func (w *FileListWidget) RenderInOverlay(buf *pot.Buffer) {
-	if w.animationTicker == nil {
-		return
-	}
-
 	// Render each animation at its tracked position
 	for _, info := range w.animInfos {
 		// Check bounds are within buffer
@@ -391,8 +381,8 @@ func (w *FileListWidget) RenderInOverlay(buf *pot.Buffer) {
 		}
 
 		// Get the animation character and style for this state
-		indicatorRune := w.animationTicker.GetFrameRune(info.state)
-		indicatorStyle := w.animationTicker.GetFrameStyle(info.state)
+		indicatorRune := GetFrameRune(info.state)
+		indicatorStyle := GetFrameStyle(info.state)
 
 		// Render the animation character
 		buf.SetCell(info.bounds.X, info.bounds.Y, pot.Cell{

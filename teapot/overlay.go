@@ -21,12 +21,6 @@ type AnimationWidget interface {
 	NeedsAnimation() bool
 }
 
-// Ticker is an interface for animation frame advancement.
-// Call Tick() on each compositor tick to advance animation frames.
-type Ticker interface {
-	Tick()
-}
-
 // RenderLogger is called to log render timing information.
 // Set this to enable render logging.
 var RenderLogger func(layer string, durationMs float64)
