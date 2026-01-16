@@ -258,16 +258,19 @@ func NewVSplit(top, bottom Widget, ratio float64) *Split {
 // SetRatio sets the split ratio (0.0 to 1.0).
 func (s *Split) SetRatio(ratio float64) {
 	s.ratio = max(0.0, min(1.0, ratio))
+	s.Repaint()
 }
 
 // SetFixedSize sets a fixed size for the first pane (0 to use ratio instead).
 func (s *Split) SetFixedSize(size int) {
 	s.fixedSize = size
+	s.Repaint()
 }
 
 // SetDividerStyle sets the style for the divider line.
 func (s *Split) SetDividerStyle(style lipgloss.Style) {
 	s.dividerStyle = style
+	s.Repaint()
 }
 
 // Children returns the split's children.
@@ -455,6 +458,7 @@ func (s *Split) SetFirst(w Widget) {
 		w.SetParent(s)
 	}
 	s.SetBounds(s.bounds) // Re-layout
+	s.Repaint()
 }
 
 // SetSecond sets the second pane widget.
@@ -467,4 +471,5 @@ func (s *Split) SetSecond(w Widget) {
 		w.SetParent(s)
 	}
 	s.SetBounds(s.bounds) // Re-layout
+	s.Repaint()
 }

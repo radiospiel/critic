@@ -54,8 +54,6 @@ type DiffViewModel struct {
 	lineConversationUUID map[int]string // Maps rendered line number to conversation UUID
 	gotoBottomOnLoad     bool           // If true, go to bottom after next file load
 	filterMode           FilterMode     // Current filter mode for hunk filtering
-	animationTicker      *AnimationTicker // Animation ticker for conversation states
-
 	// Widget-based rendering
 	diffWidget           *DiffViewWidget // The widget that renders the vertical layout of hunks
 
@@ -368,26 +366,6 @@ func (m *DiffViewModel) refreshContent() tea.Cmd {
 		m.viewport.SetContent(m.cachedContent)
 	}
 	return nil
-}
-
-// RefreshAnimations re-renders the diff content to update animation frames.
-// This uses cached syntax highlighting so it's fast - only the widget rendering
-// and animation overlay are recomputed.
-func (m *DiffViewModel) RefreshAnimations() {
-	if m.file == nil || m.animationTicker == nil {
-		return
-	}
-	// Only refresh if there are active animations
-	if !m.diffWidget.HasAnimations() {
-		return
-	}
-	content, totalLines, navigableLines := m.renderDiff()
-	m.cachedContent = content
-	m.totalLines = totalLines
-	m.navigableLines = navigableLines
-	if m.ready {
-		m.viewport.SetContent(m.cachedContent)
-	}
 }
 
 // moveCursorUp moves cursor to previous navigable line
@@ -707,11 +685,6 @@ func (m *DiffViewModel) SetMessaging(messaging critic.Messaging) {
 	m.messaging = messaging
 }
 
-// SetAnimationTicker sets the animation ticker for conversation state animations
-func (m *DiffViewModel) SetAnimationTicker(ticker *AnimationTicker) {
-	m.animationTicker = ticker
-}
-
 // SetFilterMode sets the filter mode for hunk filtering
 func (m *DiffViewModel) SetFilterMode(mode FilterMode) {
 	if m.filterMode != mode {
@@ -838,9 +811,8 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 		}
 	}
 
-	// Configure the widget - set filter mode and animation BEFORE SetFile
+	// Configure the widget - set filter mode BEFORE SetFile
 	// since SetFile calls rebuildHunks which uses these values
-	m.diffWidget.SetAnimationTicker(m.animationTicker)
 	m.diffWidget.SetFilterMode(m.filterMode)
 	m.diffWidget.SetFile(m.file, conversationsByLine, oldFileDeleted, newFileAdded, newFileContext)
 
@@ -873,11 +845,6 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	// Re-render with the updated selection (for hotkey display)
 	buffer.Clear()
 	m.diffWidget.Render(subBuf)
-
-	// Apply animation overlays (fills in animation content after placeholder render)
-	if m.diffWidget.HasAnimations() {
-		m.diffWidget.RenderAnimationOverlays(buffer)
-	}
 
 	// Apply selection overlay - invert the current line if focused and navigable
 	if m.focused && m.isNavigableLine(m.cursorLine) {
@@ -1285,12 +1252,7 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 	// Helper to create the top separator line with snake animation
 	createTopSeparatorLine := func(lineNum int) string {
 		// Get snake animation frame (12 chars)
-		var animFrame string
-		if m.animationTicker != nil {
-			animFrame = m.animationTicker.GetSeparatorFrame()
-		} else {
-			animFrame = "○○○○○○○○○○○○" // fallback static snake
-		}
+		animFrame := GetSeparatorFrame()
 
 		// Calculate dashes needed to fill the rest of the line
 		animWidth := 12 // snake animation is 12 chars

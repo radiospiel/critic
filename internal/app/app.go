@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
@@ -130,13 +131,10 @@ type Model struct {
 	paths           []string          // Paths to diff
 	extensions      []string          // File extensions to include
 	resolver        *git.BaseResolver // Base resolver with polling
-	messaging       critic.Messaging  // Messaging interface for conversations
-	filterMode      FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
-	animationTicker *tui.AnimationTicker    // Animation ticker for conversation states
-	animationLayer  *teapot.AnimationLayer // Animation layer for tick management
-	noAnimation     bool                   // Whether animations are disabled
-	globalAnimState tui.GlobalAnimationSummary // Global animation state for status bar
-	tickCount       int                       // Debug: count of animation ticks
+	messaging       critic.Messaging           // Messaging interface for conversations
+	filterMode      FilterMode                 // Current filter mode (None, WithComments, WithUnresolved)
+	noAnimation     bool                       // Whether animations are disabled
+	tickCount       int                        // Debug: count of animation ticks
 	err             error
 	width           int
 	height          int
@@ -163,35 +161,20 @@ func NewModel(args *Args) Model {
 		logger.Fatal("Failed to initialize message database: %v", err)
 	}
 
-	// Create animation ticker (unless disabled)
-	var animTicker *tui.AnimationTicker
-	if !args.NoAnimation {
-		animTicker = tui.NewAnimationTicker()
-	}
-
 	diffView.SetMessaging(mdb)
-	diffView.SetAnimationTicker(animTicker)
 	fileList.SetMessaging(mdb)
-	fileList.SetAnimationTicker(animTicker)
-
-	// Create animation layer for tick management
-	animLayer := teapot.NewAnimationLayer()
-	animLayer.SetTicker(animTicker)
-	animLayer.SetAnimationsEnabled(!args.NoAnimation)
 
 	return Model{
-		fileList:        fileList,
-		diffView:        diffView,
-		commentEditor:   tui.NewCommentEditor(),
-		layout:          tui.NewLayoutModel(),
-		bases:           args.Bases,
-		currentBase:     0, // Start with first base
-		paths:           args.Paths,
-		extensions:      args.Extensions,
-		messaging:       mdb,
-		animationTicker: animTicker,
-		animationLayer:  animLayer,
-		noAnimation:     args.NoAnimation,
+		fileList:      fileList,
+		diffView:      diffView,
+		commentEditor: tui.NewCommentEditor(),
+		layout:        tui.NewLayoutModel(),
+		bases:         args.Bases,
+		currentBase:   0, // Start with first base
+		paths:         args.Paths,
+		extensions:    args.Extensions,
+		messaging:     mdb,
+		noAnimation:   args.NoAnimation,
 	}
 }
 
@@ -211,11 +194,10 @@ func (m Model) Init() tea.Cmd {
 		initBaseResolverCmd(&m),
 		loadDiffCmd(&m),
 		disableTerminalLineWrap, // This now handles alternate screen + nowrap
-	}
-
-	// Start animation ticker via animation layer
-	if m.animationLayer != nil {
-		cmds = append(cmds, m.animationLayer.StartTicking())
+		// Always start compositor tick loop
+		tea.Tick(teapot.ComposerTickInterval, func(_ time.Time) tea.Msg {
+			return teapot.ComposerTickMsg{}
+		}),
 	}
 
 	return tea.Batch(cmds...)
@@ -324,7 +306,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_, cmd := m.fileList.HandleKey(msg)
 				// Update diff view when file selection changes
 				if m.fileList.GetActiveFile() != prevFile {
-					setFileCmd := m.diffView.SetFile(m.fileList.GetActiveFile())
+					newFile := m.fileList.GetActiveFile()
+					if newFile != nil {
+						logger.Info("File selected: %s", newFile.NewPath)
+					}
+					setFileCmd := m.diffView.SetFile(newFile)
 					cmds = append(cmds, cmd, setFileCmd)
 				} else {
 					cmds = append(cmds, cmd)
@@ -454,18 +440,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
-	case teapot.AnimationTickMsg:
-		// Skip if animations are disabled
-		if m.animationLayer == nil || !m.animationLayer.AnimationsEnabled() {
-			return m, nil
-		}
-		// Handle tick via animation layer (advances ticker and continues)
-		cmd := m.animationLayer.HandleTick()
-		// Update global animation state based on conversations
-		m.updateGlobalAnimationState()
-		// Refresh diff view animations (uses cached highlights, only renders if animations active)
-		m.diffView.RefreshAnimations()
-		cmds = append(cmds, cmd)
+	case teapot.ComposerTickMsg:
+		// Continue ticking for animations
+		cmds = append(cmds, tea.Tick(teapot.ComposerTickInterval, func(_ time.Time) tea.Msg {
+			return teapot.ComposerTickMsg{}
+		}))
 
 	default:
 		// Route other messages to diff view (like diffRenderedMsg)
@@ -541,87 +520,6 @@ func (m Model) View() string {
 	}
 
 	return view
-}
-
-// renderStatusBar renders the bottom status bar
-func (m Model) renderStatusBar() string {
-	var parts []string
-
-	// Show current base
-	if len(m.bases) > 0 {
-		base := m.bases[m.currentBase]
-		parts = append(parts, fmt.Sprintf("[B]ase: %s → HEAD", base))
-	}
-
-	// Show filter mode (always visible in status bar)
-	parts = append(parts, fmt.Sprintf("[f]ilter: %s", m.filterMode.String()))
-
-	// Show file count (filtered count if filtering)
-	// Use cached filter info from fileList to avoid expensive re-filtering on every render
-	if m.diff != nil {
-		filteredCount, totalCount := m.fileList.GetFilterInfo()
-		if m.filterMode == FilterModeNone {
-			parts = append(parts, fmt.Sprintf("Files: %d", len(m.diff.Files)))
-		} else {
-			parts = append(parts, fmt.Sprintf("Files: %d/%d", filteredCount, totalCount))
-		}
-	}
-
-	// Show help hint
-	parts = append(parts, "[Tab] switch • [?] help • [q] quit")
-
-	status := strings.Join(parts, " • ")
-
-	// Truncate if too long (account for padding)
-	maxLen := m.width - 4 // subtract padding and some margin
-	if maxLen > 3 && len(status) > maxLen {
-		status = status[:maxLen-3] + "..."
-	}
-
-	return tui.GetStatusStyle().
-		Width(m.width).
-		MaxWidth(m.width).
-		Inline(true).
-		Render(status)
-}
-
-// updateGlobalAnimationState updates the global animation state based on all conversations
-func (m *Model) updateGlobalAnimationState() {
-	m.globalAnimState = tui.GlobalAnimationSummary{
-		HasThinking:  false,
-		HasLookHere:  false,
-	}
-
-	if m.messaging == nil {
-		return
-	}
-
-	// Get all unresolved conversations
-	conversations, err := m.messaging.GetConversations(string(critic.StatusUnresolved))
-	if err != nil {
-		return
-	}
-
-	for _, conv := range conversations {
-		// Get the full conversation to check ReadByAI and last message
-		fullConv, err := m.messaging.GetFullConversation(conv.UUID)
-		if err != nil {
-			continue
-		}
-
-		state := tui.GetConversationAnimationState(fullConv)
-		switch state {
-		case tui.ThinkingAnimation:
-			m.globalAnimState.HasThinking = true
-		case tui.LookHereAnimation:
-			m.globalAnimState.HasLookHere = true
-		}
-
-		// Early exit if both are already true
-		if m.globalAnimState.HasThinking && m.globalAnimState.HasLookHere {
-			return
-		}
-	}
 }
 
 // renderError renders an error message

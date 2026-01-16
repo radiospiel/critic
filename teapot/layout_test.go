@@ -14,7 +14,7 @@ type mockWidget struct {
 
 func newMockWidget(id string, minW, minH, stretch int) *mockWidget {
 	w := &mockWidget{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 		id:         id,
 	}
 	w.SetConstraints(DefaultConstraints().WithMinSize(minW, minH).WithStretch(stretch, stretch))

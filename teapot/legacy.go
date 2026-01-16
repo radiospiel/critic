@@ -28,7 +28,7 @@ type LegacyAdapter struct {
 // NewLegacyAdapter creates a new adapter wrapping a legacy model.
 func NewLegacyAdapter(model LegacyModel) *LegacyAdapter {
 	return &LegacyAdapter{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 		model:      model,
 	}
 }
@@ -134,7 +134,7 @@ type StringWidget struct {
 // NewStringWidget creates a new string widget.
 func NewStringWidget(content string) *StringWidget {
 	return &StringWidget{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 		content:    content,
 	}
 }
@@ -180,7 +180,7 @@ type CallbackWidget struct {
 // NewCallbackWidget creates a new callback widget.
 func NewCallbackWidget(renderFn func(buf *SubBuffer, bounds Rect, focused bool)) *CallbackWidget {
 	return &CallbackWidget{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 		renderFn:   renderFn,
 	}
 }

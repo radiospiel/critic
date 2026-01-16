@@ -20,14 +20,21 @@ type FileDiff struct {
 	Hunks     []*Hunk `json:"hunks"`
 }
 
+// HunkStats holds line statistics for a hunk
+type HunkStats struct {
+	Added   int `json:"added"`
+	Deleted int `json:"deleted"`
+}
+
 // Hunk represents a chunk of changes within a file
 type Hunk struct {
-	OldStart int     `json:"old_start"`
-	OldLines int     `json:"old_lines"`
-	NewStart int     `json:"new_start"`
-	NewLines int     `json:"new_lines"`
-	Header   string  `json:"header,omitempty"` // The @@ ... @@ header line
-	Lines    []*Line `json:"lines"`
+	OldStart int        `json:"old_start"`
+	OldLines int        `json:"old_lines"`
+	NewStart int        `json:"new_start"`
+	NewLines int        `json:"new_lines"`
+	Header   string     `json:"header,omitempty"` // The @@ ... @@ header line
+	Lines    []*Line    `json:"lines"`
+	Stats    HunkStats  `json:"stats"`
 }
 
 // Line represents a single line in a diff hunk

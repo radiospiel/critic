@@ -8,37 +8,43 @@ import (
 	"git.15b.it/eno/critic/simple-tui/animation"
 )
 
-func TestGetConversationAnimationState_NoAnimation(t *testing.T) {
-	// Test NoAnimation when not read by AI
+func TestUpdateFromConversation_NoChange(t *testing.T) {
+	// Test no change when not read by AI
 	conv := &critic.Conversation{
 		ReadByAI: false,
 		Status:   critic.StatusUnresolved,
 		Messages: []critic.Message{{Author: critic.AuthorHuman}},
 	}
-	state := GetConversationAnimationState(conv)
-	assert.Equals(t, state, NoAnimation, "expected NoAnimation when ReadByAI is false")
+	var summary FileAnimationSummary
+	changed := summary.UpdateFromConversation(conv)
+	assert.False(t, changed, "expected no change when ReadByAI is false")
+	assert.False(t, summary.HasAnimation(), "expected no animation when ReadByAI is false")
 
-	// Test NoAnimation when resolved
+	// Test no change when resolved
 	conv = &critic.Conversation{
 		ReadByAI: true,
 		Status:   critic.StatusResolved,
 		Messages: []critic.Message{{Author: critic.AuthorHuman}},
 	}
-	state = GetConversationAnimationState(conv)
-	assert.Equals(t, state, NoAnimation, "expected NoAnimation when Status is resolved")
+	summary = FileAnimationSummary{}
+	changed = summary.UpdateFromConversation(conv)
+	assert.False(t, changed, "expected no change when Status is resolved")
+	assert.False(t, summary.HasAnimation(), "expected no animation when resolved")
 
-	// Test NoAnimation when no messages
+	// Test no change when no messages
 	conv = &critic.Conversation{
 		ReadByAI: true,
 		Status:   critic.StatusUnresolved,
 		Messages: []critic.Message{},
 	}
-	state = GetConversationAnimationState(conv)
-	assert.Equals(t, state, NoAnimation, "expected NoAnimation when no messages")
+	summary = FileAnimationSummary{}
+	changed = summary.UpdateFromConversation(conv)
+	assert.False(t, changed, "expected no change when no messages")
+	assert.False(t, summary.HasAnimation(), "expected no animation when no messages")
 }
 
-func TestGetConversationAnimationState_ThinkingAnimation(t *testing.T) {
-	// Test ThinkingAnimation when last message is human
+func TestUpdateFromConversation_Thinking(t *testing.T) {
+	// Test HasThinking set when last message is human
 	conv := &critic.Conversation{
 		ReadByAI: true,
 		Status:   critic.StatusUnresolved,
@@ -47,23 +53,19 @@ func TestGetConversationAnimationState_ThinkingAnimation(t *testing.T) {
 			{Author: critic.AuthorHuman}, // Last message is human
 		},
 	}
-	state := GetConversationAnimationState(conv)
-	assert.Equals(t, state, ThinkingAnimation, "expected ThinkingAnimation when last message is human")
+	var summary FileAnimationSummary
+	changed := summary.UpdateFromConversation(conv)
+	assert.True(t, changed, "expected change when last message is human")
+	assert.True(t, summary.HasThinking, "expected HasThinking when last message is human")
+	assert.False(t, summary.HasLookHere, "expected no HasLookHere")
 
-	// Test with single human message
-	conv = &critic.Conversation{
-		ReadByAI: true,
-		Status:   critic.StatusUnresolved,
-		Messages: []critic.Message{
-			{Author: critic.AuthorHuman},
-		},
-	}
-	state = GetConversationAnimationState(conv)
-	assert.Equals(t, state, ThinkingAnimation, "expected ThinkingAnimation with single human message")
+	// Test no change when HasThinking already set
+	changed = summary.UpdateFromConversation(conv)
+	assert.False(t, changed, "expected no change when HasThinking already set")
 }
 
-func TestGetConversationAnimationState_LookHereAnimation(t *testing.T) {
-	// Test LookHereAnimation when last message is AI
+func TestUpdateFromConversation_LookHere(t *testing.T) {
+	// Test HasLookHere set when last message is AI
 	conv := &critic.Conversation{
 		ReadByAI: true,
 		Status:   critic.StatusUnresolved,
@@ -72,110 +74,83 @@ func TestGetConversationAnimationState_LookHereAnimation(t *testing.T) {
 			{Author: critic.AuthorAI}, // Last message is AI
 		},
 	}
-	state := GetConversationAnimationState(conv)
-	assert.Equals(t, state, LookHereAnimation, "expected LookHereAnimation when last message is AI")
+	var summary FileAnimationSummary
+	changed := summary.UpdateFromConversation(conv)
+	assert.True(t, changed, "expected change when last message is AI")
+	assert.True(t, summary.HasLookHere, "expected HasLookHere when last message is AI")
+	assert.False(t, summary.HasThinking, "expected no HasThinking")
 
-	// Test with single AI message
-	conv = &critic.Conversation{
-		ReadByAI: true,
-		Status:   critic.StatusUnresolved,
-		Messages: []critic.Message{
-			{Author: critic.AuthorAI},
-		},
-	}
-	state = GetConversationAnimationState(conv)
-	assert.Equals(t, state, LookHereAnimation, "expected LookHereAnimation with single AI message")
+	// Test no change when HasLookHere already set
+	changed = summary.UpdateFromConversation(conv)
+	assert.False(t, changed, "expected no change when HasLookHere already set")
 }
 
-func TestAnimationTicker(t *testing.T) {
-	ticker := NewAnimationTicker()
+func TestGetAnimatedIndicator(t *testing.T) {
+	// Get the animation definitions for validation
+	thinkingAnimDef := animation.Get(ThinkingAnimationType)
+	lookHereAnimDef := animation.Get(LookHereAnimationType)
 
-	// Get the animation definitions
-	thinkingAnim := animation.Get(ThinkingAnimationType)
-	lookHereAnim := animation.Get(LookHereAnimationType)
+	// Test no animation returns space
+	r, _ := GetAnimatedIndicator(false, false)
+	assert.Equals(t, r, ' ', "expected space for no animation")
 
-	// Test initial state - should return first frame of BrailleSnake
-	frame1 := ticker.GetFrame(ThinkingAnimation, false)
-	assert.Equals(t, frame1, thinkingAnim.Frames[0], "expected first thinking frame")
+	// Test HasThinking returns valid BrailleSnake frame
+	thinkingRune, _ := GetAnimatedIndicator(true, false)
+	validThinkingRune := false
+	for _, f := range thinkingAnimDef.Frames {
+		runes := []rune(f)
+		if len(runes) > 0 && runes[0] == thinkingRune {
+			validThinkingRune = true
+			break
+		}
+	}
+	assert.True(t, validThinkingRune, "expected valid BrailleSnake frame rune")
 
-	// Test frame progression - BrailleSnake is 80ms, tick is 40ms, so need 2 ticks to advance
-	ticker.Tick()
-	frame2 := ticker.GetFrame(ThinkingAnimation, false)
-	assert.Equals(t, frame2, thinkingAnim.Frames[0], "expected still first frame after 1 tick (80ms animation, 40ms tick)")
+	// Test HasLookHere returns valid StarBurst frame
+	lookHereRune, _ := GetAnimatedIndicator(false, true)
+	validLookHereRune := false
+	for _, f := range lookHereAnimDef.Frames {
+		runes := []rune(f)
+		if len(runes) > 0 && runes[0] == lookHereRune {
+			validLookHereRune = true
+			break
+		}
+	}
+	assert.True(t, validLookHereRune, "expected valid StarBurst frame rune")
 
-	ticker.Tick()
-	frame3 := ticker.GetFrame(ThinkingAnimation, false)
-	assert.Equals(t, frame3, thinkingAnim.Frames[1], "expected second frame after 2 ticks")
-
-	// Test LookHere animation returns StarBurst frames (it advances at its own rate)
-	lookHereFrame := ticker.GetFrame(LookHereAnimation, false)
-	// Just verify it's a valid StarBurst frame
-	assert.Contains(t, lookHereAnim.Frames, lookHereFrame, "expected a valid StarBurst frame")
-
-	// Test NoAnimation returns spaces
-	noAnimFrame := ticker.GetFrame(NoAnimation, false)
-	assert.Equals(t, noAnimFrame, " ", "expected space for NoAnimation short")
-
-	noAnimFrameLong := ticker.GetFrame(NoAnimation, true)
-	assert.Equals(t, noAnimFrameLong, "          ", "expected 10 spaces for NoAnimation long")
+	// Test LookHere takes priority over Thinking
+	priorityRune, _ := GetAnimatedIndicator(true, true)
+	validPriorityRune := false
+	for _, f := range lookHereAnimDef.Frames {
+		runes := []rune(f)
+		if len(runes) > 0 && runes[0] == priorityRune {
+			validPriorityRune = true
+			break
+		}
+	}
+	assert.True(t, validPriorityRune, "expected LookHere to take priority when both set")
 }
 
-func TestGetFileAnimationState(t *testing.T) {
-	// Test NoAnimation
-	summary := FileAnimationSummary{
-		HasThinking:  false,
-		HasLookHere:  false,
-	}
-	state := GetFileAnimationState(summary)
-	assert.Equals(t, state, NoAnimation, "expected NoAnimation when no flags set")
+func TestFileAnimationSummary_HasAnimation(t *testing.T) {
+	// Test no animation
+	summary := FileAnimationSummary{}
+	assert.False(t, summary.HasAnimation(), "expected no animation for empty summary")
 
-	// Test ThinkingAnimation
-	summary = FileAnimationSummary{
-		HasThinking:  true,
-		HasLookHere:  false,
-	}
-	state = GetFileAnimationState(summary)
-	assert.Equals(t, state, ThinkingAnimation, "expected ThinkingAnimation when HasThinking is true")
+	// Test HasThinking
+	summary = FileAnimationSummary{HasThinking: true}
+	assert.True(t, summary.HasAnimation(), "expected animation when HasThinking")
 
-	// Test LookHereAnimation takes priority
-	summary = FileAnimationSummary{
-		HasThinking:  true,
-		HasLookHere:  true,
-	}
-	state = GetFileAnimationState(summary)
-	assert.Equals(t, state, LookHereAnimation, "expected LookHereAnimation when both flags set (higher priority)")
+	// Test HasLookHere
+	summary = FileAnimationSummary{HasLookHere: true}
+	assert.True(t, summary.HasAnimation(), "expected animation when HasLookHere")
 
-	// Test LookHereAnimation alone
-	summary = FileAnimationSummary{
-		HasThinking:  false,
-		HasLookHere:  true,
-	}
-	state = GetFileAnimationState(summary)
-	assert.Equals(t, state, LookHereAnimation, "expected LookHereAnimation when HasLookHere is true")
+	// Test both
+	summary = FileAnimationSummary{HasThinking: true, HasLookHere: true}
+	assert.True(t, summary.HasAnimation(), "expected animation when both set")
 }
 
-func TestGetGlobalAnimationState(t *testing.T) {
-	// Test NoAnimation
-	summary := GlobalAnimationSummary{
-		HasThinking:  false,
-		HasLookHere:  false,
-	}
-	state := GetGlobalAnimationState(summary)
-	assert.Equals(t, state, NoAnimation, "expected NoAnimation when no flags set")
-
-	// Test ThinkingAnimation
-	summary = GlobalAnimationSummary{
-		HasThinking:  true,
-		HasLookHere:  false,
-	}
-	state = GetGlobalAnimationState(summary)
-	assert.Equals(t, state, ThinkingAnimation, "expected ThinkingAnimation when HasThinking is true")
-
-	// Test LookHereAnimation takes priority
-	summary = GlobalAnimationSummary{
-		HasThinking:  true,
-		HasLookHere:  true,
-	}
-	state = GetGlobalAnimationState(summary)
-	assert.Equals(t, state, LookHereAnimation, "expected LookHereAnimation when both flags set (higher priority)")
+func TestGetSeparatorFrame(t *testing.T) {
+	// Test that GetSeparatorFrame returns a non-empty string
+	frame := GetSeparatorFrame()
+	assert.True(t, len(frame) > 0, "expected non-empty separator frame")
 }

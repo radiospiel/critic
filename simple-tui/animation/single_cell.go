@@ -67,6 +67,46 @@ func (a *Animation) Tick() {
 	a.Frame = (a.Frame + 1) % len(a.Frames)
 }
 
+// FrameAt computes the current frame index from a global tick count.
+// This allows animations to be stateless - the frame is computed from the global tick.
+// tickInterval should be the compositor's tick interval (e.g., 40ms).
+func (a *Animation) FrameAt(globalTick int64, tickInterval time.Duration) int {
+	return int(int64(float64(globalTick)*float64(tickInterval)/float64(a.Speed)) % int64(len(a.Frames)))
+}
+
+// RenderAt returns the rendered frame at the given global tick.
+func (a *Animation) RenderAt(globalTick int64, tickInterval time.Duration) string {
+	frameIdx := a.FrameAt(globalTick, tickInterval)
+	frame := a.Frames[frameIdx]
+	if !a.Colored {
+		return frame
+	}
+	colorIdx := frameIdx % len(a.Colors)
+	style := lipgloss.NewStyle().Foreground(lipgloss.Color(a.Colors[colorIdx]))
+	return style.Render(frame)
+}
+
+// RuneAt returns the frame rune at the given global tick.
+func (a *Animation) RuneAt(globalTick int64, tickInterval time.Duration) rune {
+	frameIdx := a.FrameAt(globalTick, tickInterval)
+	frame := a.Frames[frameIdx]
+	runes := []rune(frame)
+	if len(runes) > 0 {
+		return runes[0]
+	}
+	return ' '
+}
+
+// StyleAt returns the lipgloss style at the given global tick.
+func (a *Animation) StyleAt(globalTick int64, tickInterval time.Duration) lipgloss.Style {
+	if !a.Colored {
+		return lipgloss.NewStyle()
+	}
+	frameIdx := a.FrameAt(globalTick, tickInterval)
+	colorIdx := frameIdx % len(a.Colors)
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(a.Colors[colorIdx]))
+}
+
 // animations contains all available animation definitions.
 var animations = map[Type]Animation{
 	BrailleSpinner: {
