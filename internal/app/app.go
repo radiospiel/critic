@@ -185,11 +185,6 @@ func (m Model) Init() tea.Cmd {
 	// Check terminal color support
 	checkTerminalColors()
 
-	// Set up render logger
-	teapot.RenderLogger = func(layer string, durationMs float64) {
-		logger.Info("render (%s): %.1f ms", layer, durationMs)
-	}
-
 	cmds := []tea.Cmd{
 		initBaseResolverCmd(&m),
 		loadDiffCmd(&m),

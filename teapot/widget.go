@@ -15,6 +15,9 @@ const (
 // Widget is the core interface for all UI components.
 // Widgets form a tree structure where containers manage their children's layout.
 type Widget interface {
+	// Identity
+	Name() string // Returns the widget's name (typically the struct type name)
+
 	// Layout and sizing
 	Constraints() Constraints
 	SetBounds(bounds Rect)
@@ -64,6 +67,7 @@ type cacheableWidget interface {
 // BaseWidget provides a default implementation of Widget.
 // Embed this in concrete widget types to get sensible defaults.
 type BaseWidget struct {
+	name         string  // Widget name (typically the struct type name)
 	bounds       Rect
 	constraints  Constraints
 	focused      bool
@@ -85,6 +89,16 @@ func NewBaseWidget(zOrder int) BaseWidget {
 		dirty:       true, // Widgets start dirty so they're rendered initially
 		zOrder:      zOrder,
 	}
+}
+
+// Name returns the widget's name.
+func (b *BaseWidget) Name() string {
+	return b.name
+}
+
+// SetName sets the widget's name.
+func (b *BaseWidget) SetName(name string) {
+	b.name = name
 }
 
 // Constraints returns the widget's size constraints.
