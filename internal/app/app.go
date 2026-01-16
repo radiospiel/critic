@@ -134,8 +134,7 @@ type Model struct {
 	messaging       critic.Messaging           // Messaging interface for conversations
 	filterMode      FilterMode                 // Current filter mode (None, WithComments, WithUnresolved)
 	noAnimation     bool                       // Whether animations are disabled
-	globalAnimState tui.GlobalAnimationSummary // Global animation state for status bar
-	tickCount       int                       // Debug: count of animation ticks
+	tickCount       int                        // Debug: count of animation ticks
 	err             error
 	width           int
 	height          int
@@ -442,11 +441,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case teapot.ComposerTickMsg:
-		// Update global animation state based on conversations
-		if !m.noAnimation {
-			m.updateGlobalAnimationState()
-		}
-		// Always continue ticking
+		// Continue ticking for animations
 		cmds = append(cmds, tea.Tick(teapot.ComposerTickInterval, func(_ time.Time) tea.Msg {
 			return teapot.ComposerTickMsg{}
 		}))
@@ -578,45 +573,6 @@ func (m Model) renderStatusBar() string {
 		MaxWidth(m.width).
 		Inline(true).
 		Render(status)
-}
-
-// updateGlobalAnimationState updates the global animation state based on all conversations
-func (m *Model) updateGlobalAnimationState() {
-	m.globalAnimState = tui.GlobalAnimationSummary{
-		HasThinking:  false,
-		HasLookHere:  false,
-	}
-
-	if m.messaging == nil {
-		return
-	}
-
-	// Get all unresolved conversations
-	conversations, err := m.messaging.GetConversations(string(critic.StatusUnresolved))
-	if err != nil {
-		return
-	}
-
-	for _, conv := range conversations {
-		// Get the full conversation to check ReadByAI and last message
-		fullConv, err := m.messaging.GetFullConversation(conv.UUID)
-		if err != nil {
-			continue
-		}
-
-		state := tui.GetConversationAnimationState(fullConv)
-		switch state {
-		case tui.ThinkingAnimation:
-			m.globalAnimState.HasThinking = true
-		case tui.LookHereAnimation:
-			m.globalAnimState.HasLookHere = true
-		}
-
-		// Early exit if both are already true
-		if m.globalAnimState.HasThinking && m.globalAnimState.HasLookHere {
-			return
-		}
-	}
 }
 
 // renderError renders an error message

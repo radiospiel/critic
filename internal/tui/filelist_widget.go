@@ -103,12 +103,9 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 	// Determine left indicator - animation takes priority
 	var indicatorStyle lipgloss.Style
 	var indicatorRune rune = ' '
-	animState := GetFileAnimationState(fileAnimSummary)
 
-	if animState != NoAnimation {
-		// Animation is active - render animation directly
-		indicatorRune = GetFrameRune(animState)
-		indicatorStyle = GetFrameStyle(animState)
+	if fileAnimSummary.HasAnimation() {
+		indicatorRune, indicatorStyle = GetAnimatedIndicator(fileAnimSummary.HasThinking, fileAnimSummary.HasLookHere)
 	} else if hasUnreadAI {
 		indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // Red
 		indicatorRune = '▌'
@@ -166,7 +163,7 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 
 // getFileAnimationSummary calculates the animation summary for a file
 func (w *FileListWidget) getFileAnimationSummary(gitPath string) FileAnimationSummary {
-	summary := FileAnimationSummary{}
+	var summary FileAnimationSummary
 	if w.messaging == nil {
 		return summary
 	}
@@ -177,14 +174,7 @@ func (w *FileListWidget) getFileAnimationSummary(gitPath string) FileAnimationSu
 	}
 
 	for _, conv := range convs {
-		state := GetConversationAnimationState(conv)
-		switch state {
-		case ThinkingAnimation:
-			summary.HasThinking = true
-		case LookHereAnimation:
-			summary.HasLookHere = true
-		}
-
+		summary.UpdateFromConversation(conv)
 		// Early exit if both are true
 		if summary.HasThinking && summary.HasLookHere {
 			return summary

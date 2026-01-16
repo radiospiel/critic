@@ -1,24 +1,10 @@
 package tui
 
 import (
-	"strings"
-
 	"git.15b.it/eno/critic/pkg/critic"
 	"git.15b.it/eno/critic/simple-tui/animation"
 	"git.15b.it/eno/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
-)
-
-// AnimationState represents the current animation state for conversations
-type AnimationState int
-
-const (
-	// NoAnimation - conversation is not read by AI or is resolved
-	NoAnimation AnimationState = iota
-	// ThinkingAnimation - read by AI but not answered (last message is human)
-	ThinkingAnimation
-	// LookHereAnimation - read by AI and answered (last message is AI) but not resolved
-	LookHereAnimation
 )
 
 // Animation configuration
@@ -42,60 +28,20 @@ var (
 	separatorAnim = animation.NewShortAnimation(SeparatorAnimationType, true, SeparatorSpeedFactor)
 )
 
-// GetFrame returns the current animation frame for the given state (with color)
-func GetFrame(state AnimationState, long bool) string {
+// GetAnimatedIndicator returns the animated indicator rune and style.
+// LookHere has priority over Thinking.
+// Returns (' ', empty style) if no animation is active.
+func GetAnimatedIndicator(hasThinking, hasLookHere bool) (rune, lipgloss.Style) {
 	tick := teapot.GlobalTickCount
 	interval := teapot.ComposerTickInterval
 
-	switch state {
-	case ThinkingAnimation:
-		frame := thinkingAnim.RenderAt(tick, interval)
-		if long {
-			return padToWidth(frame, 10)
-		}
-		return frame
-	case LookHereAnimation:
-		frame := lookHereAnim.RenderAt(tick, interval)
-		if long {
-			return padToWidth(frame, 10)
-		}
-		return frame
-	default:
-		if long {
-			return "          " // 10 spaces
-		}
-		return " "
+	if hasLookHere {
+		return lookHereAnim.RuneAt(tick, interval), lookHereAnim.StyleAt(tick, interval)
 	}
-}
-
-// GetFrameRune returns the current animation frame character (without color)
-func GetFrameRune(state AnimationState) rune {
-	tick := teapot.GlobalTickCount
-	interval := teapot.ComposerTickInterval
-
-	switch state {
-	case ThinkingAnimation:
-		return thinkingAnim.RuneAt(tick, interval)
-	case LookHereAnimation:
-		return lookHereAnim.RuneAt(tick, interval)
-	default:
-		return ' '
+	if hasThinking {
+		return thinkingAnim.RuneAt(tick, interval), thinkingAnim.StyleAt(tick, interval)
 	}
-}
-
-// GetFrameStyle returns the lipgloss style for the animation state
-func GetFrameStyle(state AnimationState) lipgloss.Style {
-	tick := teapot.GlobalTickCount
-	interval := teapot.ComposerTickInterval
-
-	switch state {
-	case ThinkingAnimation:
-		return thinkingAnim.StyleAt(tick, interval)
-	case LookHereAnimation:
-		return lookHereAnim.StyleAt(tick, interval)
-	default:
-		return lipgloss.NewStyle()
-	}
+	return ' ', lipgloss.NewStyle()
 }
 
 // GetSeparatorFrame returns the current separator animation frame (12-char snake)
@@ -105,80 +51,38 @@ func GetSeparatorFrame() string {
 	return separatorAnim.RenderAt(tick, interval)
 }
 
-// padToWidth pads a string to exactly width characters (accounts for ANSI codes)
-func padToWidth(s string, width int) string {
-	// The animation frames are single characters, so we need to pad
-	// But they may have ANSI color codes, so we count visible width
-	visibleLen := 1 // animation frames are single chars
-	if visibleLen < width {
-		return s + strings.Repeat(" ", width-visibleLen)
-	}
-	return s
-}
-
-// GetConversationAnimationState determines the animation state for a conversation
-// (A) ReadByAI and not answered (last message is human) => ThinkingAnimation
-// (B) ReadByAI and answered (last message is AI) but not resolved => LookHereAnimation
-// Otherwise => NoAnimation
-func GetConversationAnimationState(conv *critic.Conversation) AnimationState {
-	// Not read by AI - no animation
-	if !conv.ReadByAI {
-		return NoAnimation
-	}
-
-	// Resolved - no animation
-	if conv.Status == critic.StatusResolved {
-		return NoAnimation
-	}
-
-	// Check last message author
-	if len(conv.Messages) == 0 {
-		return NoAnimation
-	}
-
-	lastMsg := conv.Messages[len(conv.Messages)-1]
-	if lastMsg.Author == critic.AuthorAI {
-		// Last message is AI - look here animation (call to action for user)
-		return LookHereAnimation
-	}
-
-	// Last message is human - thinking animation (AI is working on it)
-	return ThinkingAnimation
-}
-
-// FileAnimationSummary holds animation info for a file
+// FileAnimationSummary holds animation info for a file, aggregated from its conversations
 type FileAnimationSummary struct {
 	HasThinking bool
 	HasLookHere bool
 }
 
-// GetFileAnimationState returns the animation state for a file
-// If file has any LookHere conversations, return LookHere (higher priority)
-// If file has any Thinking conversations, return Thinking
-// Otherwise return NoAnimation
-func GetFileAnimationState(summary FileAnimationSummary) AnimationState {
-	if summary.HasLookHere {
-		return LookHereAnimation
+// UpdateFromConversation updates the summary based on a conversation's state.
+// Returns true if the summary changed.
+func (s *FileAnimationSummary) UpdateFromConversation(conv *critic.Conversation) bool {
+	// Not read by AI or resolved - no animation
+	if !conv.ReadByAI || conv.Status == critic.StatusResolved || len(conv.Messages) == 0 {
+		return false
 	}
-	if summary.HasThinking {
-		return ThinkingAnimation
+
+	lastMsg := conv.Messages[len(conv.Messages)-1]
+	if lastMsg.Author == critic.AuthorAI {
+		// Last message is AI - look here animation
+		if !s.HasLookHere {
+			s.HasLookHere = true
+			return true
+		}
+	} else {
+		// Last message is human - thinking animation
+		if !s.HasThinking {
+			s.HasThinking = true
+			return true
+		}
 	}
-	return NoAnimation
+	return false
 }
 
-// GlobalAnimationSummary holds animation info for the entire app
-type GlobalAnimationSummary struct {
-	HasThinking bool
-	HasLookHere bool
-}
-
-// GetGlobalAnimationState returns the animation state for the status bar
-func GetGlobalAnimationState(summary GlobalAnimationSummary) AnimationState {
-	if summary.HasLookHere {
-		return LookHereAnimation
-	}
-	if summary.HasThinking {
-		return ThinkingAnimation
-	}
-	return NoAnimation
+// HasAnimation returns true if any animation is active
+func (s *FileAnimationSummary) HasAnimation() bool {
+	return s.HasThinking || s.HasLookHere
 }
