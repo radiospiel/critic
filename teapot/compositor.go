@@ -1,6 +1,7 @@
 package teapot
 
 import (
+	"reflect"
 	"sort"
 	"time"
 
@@ -200,6 +201,19 @@ func (c *Compositor) Render() string {
 	return c.buffer.String()
 }
 
+// widgetTypeName returns the type name of a widget using reflection.
+// If the widget has a non-empty Name(), that is returned instead.
+func widgetTypeName(w Widget) string {
+	if name := w.Name(); name != "" {
+		return name
+	}
+	t := reflect.TypeOf(w)
+	if t.Kind() == reflect.Ptr {
+		return t.Elem().Name()
+	}
+	return t.Name()
+}
+
 // renderWidgetWithCache renders a widget, using its cache if available.
 // The cache is accessed via the internal cacheableWidget interface.
 // Widgets that embed BaseWidget automatically support caching.
@@ -211,17 +225,24 @@ func (c *Compositor) renderWidgetWithCache(w Widget) {
 	cw, canCache := w.(cacheableWidget)
 	if !canCache {
 		// Widget doesn't support caching, render directly
+		start := time.Now()
 		buf := NewBuffer(bounds.Width, bounds.Height)
 		buf.Clear()
 		sub := buf.Sub(buf.Bounds())
 		RenderWidget(w, sub)
 		c.buffer.Blit(buf, bounds.X, bounds.Y)
+		if RenderLogger != nil {
+			durationMs := float64(time.Since(start).Microseconds()) / 1000.0
+			RenderLogger(widgetTypeName(w)+": View()", durationMs)
+		}
 		return
 	}
 
 	// Check if we have a cached buffer in the widget
 	cached := cw.CachedView()
 	if cached == nil || needsRender {
+		start := time.Now()
+
 		// Create or resize the cache buffer
 		if cached == nil || cached.Width() != bounds.Width || cached.Height() != bounds.Height {
 			cached = NewBuffer(bounds.Width, bounds.Height)
@@ -234,6 +255,11 @@ func (c *Compositor) renderWidgetWithCache(w Widget) {
 
 		// SetCachedView clears the dirty flag automatically
 		cw.SetCachedView(cached)
+
+		if RenderLogger != nil {
+			durationMs := float64(time.Since(start).Microseconds()) / 1000.0
+			RenderLogger(widgetTypeName(w)+": View()", durationMs)
+		}
 	}
 
 	// Blit the cached buffer to the output
