@@ -24,14 +24,7 @@ func (f FileItem) FilterValue() string {
 	return f.File.NewPath
 }
 
-// fileAnimInfo tracks animation information for a file indicator
-type fileAnimInfo struct {
-	bounds pot.Rect
-	state  AnimationState
-}
-
 // FileListWidget is a teapot-based file list widget.
-// FileListWidget implements AnimationWidget for file indicator animations.
 type FileListWidget struct {
 	pot.BaseWidget
 	list       *pot.SelectableList[FileItem]
@@ -40,9 +33,6 @@ type FileListWidget struct {
 	height     int
 	filterMode int // 0 = all, 1 = with comments, 2 = unresolved only
 	totalFiles int // Total files before filtering (for "No files match filter" message)
-
-	// Animation support - tracks positions of animated file indicators
-	animInfos []fileAnimInfo // Animation info for each visible animated item
 }
 
 // NewFileListWidget creates a new file list widget
@@ -116,16 +106,9 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 	animState := GetFileAnimationState(fileAnimSummary)
 
 	if animState != NoAnimation {
-		// Animation is active - render placeholder space, actual animation via overlay
-		indicatorRune = ' '
-		indicatorStyle = lipgloss.NewStyle()
-
-		// Track animation position for RenderInOverlay
-		absX, absY := buf.AbsoluteOffset()
-		w.animInfos = append(w.animInfos, fileAnimInfo{
-			bounds: pot.Rect{X: absX, Y: absY, Width: 1, Height: 1},
-			state:  animState,
-		})
+		// Animation is active - render animation directly
+		indicatorRune = GetFrameRune(animState)
+		indicatorStyle = GetFrameStyle(animState)
 	} else if hasUnreadAI {
 		indicatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196")) // Red
 		indicatorRune = '▌'
@@ -299,12 +282,7 @@ func (w *FileListWidget) SetFocused(focused bool) {
 }
 
 // Render implements pot.Widget.
-// Animation indicators are rendered as placeholders (spaces); actual animation
-// is rendered via RenderInOverlay.
 func (w *FileListWidget) Render(buf *pot.SubBuffer) {
-	// Reset animation tracking for this render cycle
-	w.animInfos = nil
-
 	if len(w.list.Items()) == 0 {
 		style := lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"})
@@ -337,12 +315,6 @@ func (w *FileListWidget) View() string {
 	buf := pot.NewBuffer(w.width, w.height)
 	sub := buf.Sub(buf.Bounds())
 	w.Render(sub)
-
-	// Apply animation overlay
-	if w.NeedsAnimation() {
-		w.RenderInOverlay(buf)
-	}
-
 	return buf.String()
 }
 
@@ -351,43 +323,3 @@ func (w *FileListWidget) SetSize(width, height int) {
 	w.SetBounds(pot.NewRect(0, 0, width, height))
 }
 
-// AnimationBounds returns the screen-space bounds for all animation regions.
-// Implements teapot.AnimationWidget.
-func (w *FileListWidget) AnimationBounds() []pot.Rect {
-	bounds := make([]pot.Rect, len(w.animInfos))
-	for i, info := range w.animInfos {
-		bounds[i] = info.bounds
-	}
-	return bounds
-}
-
-// NeedsAnimation returns true if this widget has active animations.
-// Implements teapot.AnimationWidget.
-func (w *FileListWidget) NeedsAnimation() bool {
-	return len(w.animInfos) > 0
-}
-
-// RenderInOverlay renders the animation indicators directly to the buffer.
-// Implements teapot.AnimationWidget.
-func (w *FileListWidget) RenderInOverlay(buf *pot.Buffer) {
-	// Render each animation at its tracked position
-	for _, info := range w.animInfos {
-		// Check bounds are within buffer
-		if info.bounds.Y < 0 || info.bounds.Y >= buf.Height() {
-			continue
-		}
-		if info.bounds.X < 0 || info.bounds.X >= buf.Width() {
-			continue
-		}
-
-		// Get the animation character and style for this state
-		indicatorRune := GetFrameRune(info.state)
-		indicatorStyle := GetFrameStyle(info.state)
-
-		// Render the animation character
-		buf.SetCell(info.bounds.X, info.bounds.Y, pot.Cell{
-			Rune:  indicatorRune,
-			Style: indicatorStyle,
-		})
-	}
-}

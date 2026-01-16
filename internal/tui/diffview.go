@@ -846,11 +846,6 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	buffer.Clear()
 	m.diffWidget.Render(subBuf)
 
-	// Apply animation overlays (fills in animation content after placeholder render)
-	if m.diffWidget.HasAnimations() {
-		m.diffWidget.RenderAnimationOverlays(buffer)
-	}
-
 	// Apply selection overlay - invert the current line if focused and navigable
 	if m.focused && m.isNavigableLine(m.cursorLine) {
 		buffer.InvertRow(m.cursorLine)
