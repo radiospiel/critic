@@ -284,6 +284,12 @@ func (w *FileListWidget) SetFilterMode(filterMode int, totalFiles int) {
 	w.totalFiles = totalFiles
 }
 
+// GetFilterInfo returns the current filtered file count and total file count
+// This is used by the status bar to avoid re-filtering on every render
+func (w *FileListWidget) GetFilterInfo() (filteredCount, totalCount int) {
+	return len(w.list.Items()), w.totalFiles
+}
+
 // SetBounds implements pot.Widget
 func (w *FileListWidget) SetBounds(bounds pot.Rect) {
 	w.BaseWidget.SetBounds(bounds)

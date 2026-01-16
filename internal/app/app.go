@@ -557,12 +557,13 @@ func (m Model) renderStatusBar() string {
 	parts = append(parts, fmt.Sprintf("[f]ilter: %s", m.filterMode.String()))
 
 	// Show file count (filtered count if filtering)
+	// Use cached filter info from fileList to avoid expensive re-filtering on every render
 	if m.diff != nil {
-		filteredFiles := m.filterFiles(m.diff.Files)
+		filteredCount, totalCount := m.fileList.GetFilterInfo()
 		if m.filterMode == FilterModeNone {
 			parts = append(parts, fmt.Sprintf("Files: %d", len(m.diff.Files)))
 		} else {
-			parts = append(parts, fmt.Sprintf("Files: %d/%d", len(filteredFiles), len(m.diff.Files)))
+			parts = append(parts, fmt.Sprintf("Files: %d/%d", filteredCount, totalCount))
 		}
 	}
 
