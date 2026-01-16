@@ -191,6 +191,7 @@ func (w *FileListWidget) SetFiles(files []*ctypes.FileDiff) {
 		items[i] = FileItem{File: f}
 	}
 	w.list.SetItems(items)
+	w.Repaint() // Propagate dirty state to parent (MainLayout)
 }
 
 // GetActiveFile returns the currently selected file
@@ -298,14 +299,6 @@ func (w *FileListWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 // Children returns the child widgets
 func (w *FileListWidget) Children() []pot.Widget {
 	return nil
-}
-
-// View returns a string representation (for compatibility with existing code)
-func (w *FileListWidget) View() string {
-	buf := pot.NewBuffer(w.width, w.height)
-	sub := buf.Sub(buf.Bounds())
-	w.Render(sub)
-	return buf.String()
 }
 
 // SetSize sets the size (for compatibility)

@@ -411,10 +411,10 @@ func (m *CommentEditor) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// View renders the comment editor
-func (m CommentEditor) View() string {
+// Render renders the comment editor to a buffer
+func (m *CommentEditor) Render(buf *pot.SubBuffer) {
 	if !m.active {
-		return ""
+		return
 	}
 
 	// Sync textarea state to widget
@@ -422,12 +422,8 @@ func (m CommentEditor) View() string {
 		content.textarea = m.textarea
 	}
 
-	// Create a buffer and render the dialog using RenderWidget for proper border handling
-	buf := pot.NewBuffer(m.width, m.height)
-	sub := buf.Sub(buf.Bounds())
-	pot.RenderWidget(m.dialog, sub)
-
-	return buf.String()
+	// Render the dialog using RenderWidget for proper border handling
+	pot.RenderWidget(m.dialog, buf)
 }
 
 // ActivateWithConversation activates the comment editor with a full conversation
@@ -533,6 +529,16 @@ func (m *CommentEditor) SetSize(width, height int) {
 	if content, ok := m.dialog.Content().(*commentEditorContent); ok {
 		content.SetBounds(pot.NewRect(0, 0, innerWidth, innerHeight))
 	}
+}
+
+// Width returns the width of the comment editor
+func (m *CommentEditor) Width() int {
+	return m.width
+}
+
+// Height returns the height of the comment editor
+func (m *CommentEditor) Height() int {
+	return m.height
 }
 
 // CommentSavedMsg is sent when a comment is saved

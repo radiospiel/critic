@@ -493,6 +493,11 @@ func (w *DiffViewWidget) SetSelectedRow(row int) {
 	w.selectedRow = row
 }
 
+// GetYOffset returns the current scroll offset.
+func (w *DiffViewWidget) GetYOffset() int {
+	return w.yOffset
+}
+
 // GetFile returns the current file.
 func (w *DiffViewWidget) GetFile() *ctypes.FileDiff {
 	return w.file
