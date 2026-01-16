@@ -14,19 +14,10 @@ type ComposerTickMsg struct{}
 // ComposerTickInterval is the tick rate for the compositor (40ms = 25fps).
 const ComposerTickInterval = 40 * time.Millisecond
 
-// globalTicker is the global animation ticker that widgets can access.
-var globalTicker Ticker
-
-// GlobalTicker returns the global animation ticker.
+// GlobalTicker is the global animation ticker that widgets can access.
 // Animated widgets should use this to get the current animation state when rendering.
-func GlobalTicker() Ticker {
-	return globalTicker
-}
-
-// SetGlobalTicker sets the global animation ticker.
-func SetGlobalTicker(t Ticker) {
-	globalTicker = t
-}
+// Set this before starting the application.
+var GlobalTicker Ticker
 
 // Compositor manages the root widget tree and orchestrates rendering.
 // It owns the screen buffer and handles the render loop.
@@ -40,9 +31,6 @@ type Compositor struct {
 
 	// Layer management: top-level widgets sorted by z-order
 	topLevelWidgets []Widget
-
-	// Tick management
-	ticker Ticker // Animation ticker to advance on each tick
 }
 
 // NewCompositor creates a new compositor with the given root widget.
@@ -58,23 +46,11 @@ func NewCompositor(root Widget) *Compositor {
 	return c
 }
 
-// SetTicker sets the animation ticker that is advanced on each ComposerTick.
-// This also sets the global ticker so widgets can access it via GlobalTicker().
-func (c *Compositor) SetTicker(t Ticker) {
-	c.ticker = t
-	globalTicker = t
-}
-
-// Ticker returns the animation ticker.
-func (c *Compositor) Ticker() Ticker {
-	return c.ticker
-}
-
 // HandleTick processes a compositor tick: checks for dirty widgets and continues ticking.
 func (c *Compositor) HandleTick() tea.Cmd {
-	// Advance the animation ticker
-	if c.ticker != nil {
-		c.ticker.Tick()
+	// Advance the global animation ticker
+	if GlobalTicker != nil {
+		GlobalTicker.Tick()
 	}
 
 	// Check if any widget might be dirty

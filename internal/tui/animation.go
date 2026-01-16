@@ -175,10 +175,6 @@ func (at *AnimationTicker) Tick() {
 	}
 }
 
-// AnimationTickMsg is an alias for teapot.ComposerTickMsg (kept for backwards compatibility)
-// Deprecated: Use teapot.ComposerTickMsg instead.
-type AnimationTickMsg = teapot.ComposerTickMsg
-
 // GetConversationAnimationState determines the animation state for a conversation
 // (A) ReadByAI and not answered (last message is human) => ThinkingAnimation
 // (B) ReadByAI and answered (last message is AI) but not resolved => LookHereAnimation

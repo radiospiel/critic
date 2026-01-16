@@ -175,9 +175,7 @@ func NewModel(args *Args) Model {
 	fileList.SetAnimationTicker(animTicker)
 
 	// Set global ticker so widgets can access animation state
-	if animTicker != nil {
-		teapot.SetGlobalTicker(animTicker)
-	}
+	teapot.GlobalTicker = animTicker
 
 	return Model{
 		fileList:        fileList,
