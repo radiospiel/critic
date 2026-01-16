@@ -535,8 +535,7 @@ func (m Model) renderStatusBar() string {
 	// Show filter mode (always visible in status bar)
 	parts = append(parts, fmt.Sprintf("[f]ilter: %s", m.filterMode.String()))
 
-	// Show file count (filtered count if filtering)
-	// Use cached filter info from fileList to avoid expensive re-filtering on every render
+	// Show file count and line stats
 	if m.diff != nil {
 		filteredCount, totalCount := m.fileList.GetFilterInfo()
 		if m.filterMode == FilterModeNone {
@@ -544,10 +543,14 @@ func (m Model) renderStatusBar() string {
 		} else {
 			parts = append(parts, fmt.Sprintf("Files: %d/%d", filteredCount, totalCount))
 		}
+
+		// Show line statistics
+		stats := computeDiffStats(m.diff)
+		parts = append(parts, fmt.Sprintf("+%d -%d ~%d", stats.Added, stats.Deleted, stats.Moved))
 	}
 
 	// Show help hint
-	parts = append(parts, "[Tab] switch • [?] help • [q] quit")
+	parts = append(parts, "[?] help • [q] quit")
 
 	leftStatus := strings.Join(parts, " • ")
 
@@ -582,6 +585,59 @@ func renderError(err error) string {
 		Bold(true).
 		Padding(1, 2).
 		Render(fmt.Sprintf("Error: %s", err))
+}
+
+// diffStats holds statistics about a diff
+type diffStats struct {
+	Added   int
+	Deleted int
+	Moved   int
+}
+
+// computeDiffStats computes line statistics for a diff
+func computeDiffStats(diff *ctypes.Diff) diffStats {
+	var stats diffStats
+	if diff == nil {
+		return stats
+	}
+
+	// First pass: count all added and deleted lines, track content for move detection
+	addedLines := make(map[string]int)   // content -> count
+	deletedLines := make(map[string]int) // content -> count
+
+	for _, file := range diff.Files {
+		for _, hunk := range file.Hunks {
+			for _, line := range hunk.Lines {
+				content := line.Content
+				switch line.Type {
+				case ctypes.LineAdded:
+					stats.Added++
+					addedLines[content]++
+				case ctypes.LineDeleted:
+					stats.Deleted++
+					deletedLines[content]++
+				}
+			}
+		}
+	}
+
+	// Detect moved lines: content that appears in both added and deleted
+	for content, deletedCount := range deletedLines {
+		if addedCount, ok := addedLines[content]; ok {
+			// Count the minimum as moved (the rest are true adds/deletes)
+			moved := deletedCount
+			if addedCount < moved {
+				moved = addedCount
+			}
+			stats.Moved += moved
+		}
+	}
+
+	// Adjust added/deleted to exclude moved lines
+	stats.Added -= stats.Moved
+	stats.Deleted -= stats.Moved
+
+	return stats
 }
 
 // Messages
