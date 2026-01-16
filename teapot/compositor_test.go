@@ -217,3 +217,25 @@ func TestCompositorModel(t *testing.T) {
 	_, cmd = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	assert.NotNil(t, cmd, "q should produce quit command")
 }
+
+func TestCompositorWidgetCaching(t *testing.T) {
+	root := newMockWidget("X", 0, 0, 1)
+	comp := NewCompositor(root)
+	comp.Resize(10, 5)
+
+	// First render should cache the widget
+	comp.Render()
+	assert.False(t, root.IsDirty(), "widget should not be dirty after render")
+
+	// Second render should use cached buffer (widget.Render not called if not dirty)
+	comp.Render()
+	assert.False(t, root.IsDirty(), "widget should still not be dirty")
+
+	// Mark widget dirty via Repaint
+	root.Repaint()
+	assert.True(t, root.IsDirty(), "widget should be dirty after Repaint")
+
+	// Render should clear dirty flag
+	comp.Render()
+	assert.False(t, root.IsDirty(), "widget should not be dirty after re-render")
+}

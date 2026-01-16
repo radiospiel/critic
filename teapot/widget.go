@@ -51,14 +51,13 @@ type Widget interface {
 	SetParent(parent Widget)
 }
 
-// cacheableWidget is an internal interface used by the Compositor to manage
-// per-widget render caching. This interface is intentionally not part of the
-// public Widget interface because caching is an implementation detail of the
-// compositor's rendering strategy. Widgets that embed BaseWidget automatically
-// implement this interface.
-type cacheableWidget interface {
-	CachedView() *Buffer
-	SetCachedView(*Buffer)
+// dirtyWidget is an internal interface used by the Compositor to clear the
+// dirty flag after caching a widget's rendered output. This interface is
+// intentionally not part of the public Widget interface because dirty flag
+// management is an implementation detail of the compositor's rendering strategy.
+// Widgets that embed BaseWidget automatically implement this interface.
+type dirtyWidget interface {
+	ClearDirty()
 }
 
 // BaseWidget provides a default implementation of Widget.
@@ -72,9 +71,8 @@ type BaseWidget struct {
 	border       Border
 	borderTitle  string
 	borderFooter string
-	dirty        bool    // True if widget needs repainting
-	zOrder       int     // Z-order for rendering layers (default: ZOrderDefault)
-	cachedView   *Buffer // Cached rendered view (owned by widget, not compositor)
+	dirty        bool // True if widget needs repainting
+	zOrder       int  // Z-order for rendering layers (default: ZOrderDefault)
 }
 
 // NewBaseWidget creates a new base widget with the given z-order.
@@ -185,18 +183,10 @@ func (b *BaseWidget) ZOrder() int {
 	return b.zOrder
 }
 
-// CachedView returns the cached rendered view, or nil if not cached.
-func (b *BaseWidget) CachedView() *Buffer {
-	return b.cachedView
-}
-
-// SetCachedView sets the cached rendered view and clears the dirty flag.
-// This should be called after rendering to cache.
-func (b *BaseWidget) SetCachedView(buf *Buffer) {
-	b.cachedView = buf
-	if buf != nil {
-		b.dirty = false // Clear dirty after caching the view
-	}
+// ClearDirty clears the widget's dirty flag.
+// This is called by the compositor after caching the widget's rendered output.
+func (b *BaseWidget) ClearDirty() {
+	b.dirty = false
 }
 
 // Border returns the widget's border configuration.

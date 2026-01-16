@@ -31,13 +31,17 @@ type Compositor struct {
 
 	// Layer management: top-level widgets sorted by z-order
 	topLevelWidgets []Widget
+
+	// Widget render cache: maps widgets to their cached rendered buffers
+	widgetCache map[Widget]*Buffer
 }
 
 // NewCompositor creates a new compositor with the given root widget.
 func NewCompositor(root Widget) *Compositor {
 	c := &Compositor{
-		root:  root,
-		dirty: true,
+		root:        root,
+		dirty:       true,
+		widgetCache: make(map[Widget]*Buffer),
 	}
 	if root != nil {
 		c.focusManager = NewFocusManager(root)
@@ -84,9 +88,7 @@ func (c *Compositor) UnregisterTopLevelWidget(w Widget) {
 	for i, existing := range c.topLevelWidgets {
 		if existing == w {
 			c.topLevelWidgets = append(c.topLevelWidgets[:i], c.topLevelWidgets[i+1:]...)
-			if cw, ok := w.(cacheableWidget); ok {
-				cw.SetCachedView(nil) // Clear the widget's cache
-			}
+			delete(c.widgetCache, w) // Clear the widget's cache
 			return
 		}
 	}
@@ -124,14 +126,12 @@ func (c *Compositor) SetRoot(root Widget) {
 	c.dirty = true
 }
 
-// clearWidgetCaches clears cached views on a widget and its children.
+// clearWidgetCaches clears cached views for a widget and its children from the compositor's cache.
 func (c *Compositor) clearWidgetCaches(w Widget) {
 	if w == nil {
 		return
 	}
-	if cw, ok := w.(cacheableWidget); ok {
-		cw.SetCachedView(nil)
-	}
+	delete(c.widgetCache, w)
 	for _, child := range w.Children() {
 		c.clearWidgetCaches(child)
 	}
@@ -200,27 +200,15 @@ func (c *Compositor) Render() string {
 	return c.buffer.String()
 }
 
-// renderWidgetWithCache renders a widget, using its cache if available.
-// The cache is accessed via the internal cacheableWidget interface.
-// Widgets that embed BaseWidget automatically support caching.
+// renderWidgetWithCache renders a widget, using the compositor's cache if available.
+// When the widget is not dirty and a cache exists, the cached buffer is used directly
+// without calling the widget's Render method.
 func (c *Compositor) renderWidgetWithCache(w Widget) {
 	bounds := w.Bounds()
 	needsRender := w.MightBeDirty() // MightBeDirty() returns true if dirty or animated
 
-	// Try to use caching if the widget supports it
-	cw, canCache := w.(cacheableWidget)
-	if !canCache {
-		// Widget doesn't support caching, render directly
-		buf := NewBuffer(bounds.Width, bounds.Height)
-		buf.Clear()
-		sub := buf.Sub(buf.Bounds())
-		RenderWidget(w, sub)
-		c.buffer.Blit(buf, bounds.X, bounds.Y)
-		return
-	}
-
-	// Check if we have a cached buffer in the widget
-	cached := cw.CachedView()
+	// Check if we have a cached buffer for this widget
+	cached := c.widgetCache[w]
 	if cached == nil || needsRender {
 		// Create or resize the cache buffer
 		if cached == nil || cached.Width() != bounds.Width || cached.Height() != bounds.Height {
@@ -232,8 +220,13 @@ func (c *Compositor) renderWidgetWithCache(w Widget) {
 		sub := cached.Sub(cached.Bounds())
 		RenderWidget(w, sub)
 
-		// SetCachedView clears the dirty flag automatically
-		cw.SetCachedView(cached)
+		// Store in compositor's cache
+		c.widgetCache[w] = cached
+
+		// Clear the widget's dirty flag if it supports the interface
+		if dw, ok := w.(dirtyWidget); ok {
+			dw.ClearDirty()
+		}
 	}
 
 	// Blit the cached buffer to the output
