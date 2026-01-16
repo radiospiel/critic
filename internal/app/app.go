@@ -463,8 +463,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.animationLayer.HandleTick()
 		// Update global animation state based on conversations
 		m.updateGlobalAnimationState()
-		// Refresh diff view animations (uses cached highlights, only renders if animations active)
-		m.diffView.RefreshAnimations()
+		// Note: Animation refresh now happens automatically in View() via global ticker
 		cmds = append(cmds, cmd)
 
 	default:

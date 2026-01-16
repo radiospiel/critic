@@ -14,6 +14,16 @@ type ComposerTickMsg struct{}
 // ComposerTickInterval is the tick rate for the compositor (40ms = 25fps).
 const ComposerTickInterval = 40 * time.Millisecond
 
+// globalTicker is the global animation ticker that widgets can access.
+// This is set by the compositor when SetTicker is called.
+var globalTicker Ticker
+
+// GlobalTicker returns the global animation ticker.
+// Animated widgets should use this to get the current animation state when rendering.
+func GlobalTicker() Ticker {
+	return globalTicker
+}
+
 // Compositor manages the root widget tree and orchestrates rendering.
 // It owns the screen buffer and handles the render loop.
 type Compositor struct {
@@ -26,7 +36,6 @@ type Compositor struct {
 
 	// Layer management: top-level widgets sorted by z-order
 	topLevelWidgets []Widget
-	widgetCache     map[Widget]*Buffer // Cached rendered output for each widget
 
 	// Tick management
 	tickEnabled bool
@@ -38,7 +47,6 @@ func NewCompositor(root Widget) *Compositor {
 	c := &Compositor{
 		root:        root,
 		dirty:       true,
-		widgetCache: make(map[Widget]*Buffer),
 		tickEnabled: true,
 	}
 	if root != nil {
@@ -49,8 +57,10 @@ func NewCompositor(root Widget) *Compositor {
 }
 
 // SetTicker sets the animation ticker that is advanced on each ComposerTick.
+// This also sets the global ticker so widgets can access it via GlobalTicker().
 func (c *Compositor) SetTicker(t Ticker) {
 	c.ticker = t
+	globalTicker = t
 }
 
 // Ticker returns the animation ticker.
@@ -120,7 +130,7 @@ func (c *Compositor) UnregisterTopLevelWidget(w Widget) {
 	for i, existing := range c.topLevelWidgets {
 		if existing == w {
 			c.topLevelWidgets = append(c.topLevelWidgets[:i], c.topLevelWidgets[i+1:]...)
-			delete(c.widgetCache, w)
+			w.SetCachedView(nil) // Clear the widget's cache
 			return
 		}
 	}
@@ -144,8 +154,9 @@ func (c *Compositor) sortTopLevelWidgets() {
 
 // SetRoot sets the root widget.
 func (c *Compositor) SetRoot(root Widget) {
+	// Clear cache on old widgets
+	c.clearWidgetCaches(c.root)
 	c.root = root
-	c.widgetCache = make(map[Widget]*Buffer) // Clear cache
 	if root != nil {
 		root.SetBounds(Rect{X: 0, Y: 0, Width: c.width, Height: c.height})
 		c.focusManager = NewFocusManager(root)
@@ -155,6 +166,17 @@ func (c *Compositor) SetRoot(root Widget) {
 		c.topLevelWidgets = nil
 	}
 	c.dirty = true
+}
+
+// clearWidgetCaches clears cached views on a widget and its children.
+func (c *Compositor) clearWidgetCaches(w Widget) {
+	if w == nil {
+		return
+	}
+	w.SetCachedView(nil)
+	for _, child := range w.Children() {
+		c.clearWidgetCaches(child)
+	}
 }
 
 // Root returns the root widget.
@@ -171,8 +193,8 @@ func (c *Compositor) Resize(width, height int) {
 	c.buffer = NewBuffer(width, height)
 	c.prevBuffer = nil // Force full redraw
 
-	// Clear cache as sizes have changed
-	c.widgetCache = make(map[Widget]*Buffer)
+	// Clear widget caches as sizes have changed
+	c.clearWidgetCaches(c.root)
 
 	// Propagate size to root
 	if c.root != nil {
@@ -221,17 +243,17 @@ func (c *Compositor) Render() string {
 }
 
 // renderWidgetWithCache renders a widget, using its cache if available.
+// The cache lives in each widget (via CachedView/SetCachedView), not in the compositor.
 func (c *Compositor) renderWidgetWithCache(w Widget) {
 	bounds := w.Bounds()
-	needsRender := w.MightBeDirty() // MightBeDirty() includes IsDirty() check
+	needsRender := w.MightBeDirty() // MightBeDirty() returns true if dirty or animated
 
-	// Check if we have a cached buffer
-	cached, hasCached := c.widgetCache[w]
-	if !hasCached || needsRender {
+	// Check if we have a cached buffer in the widget
+	cached := w.CachedView()
+	if cached == nil || needsRender {
 		// Create or resize the cache buffer
 		if cached == nil || cached.Width() != bounds.Width || cached.Height() != bounds.Height {
 			cached = NewBuffer(bounds.Width, bounds.Height)
-			c.widgetCache[w] = cached
 		}
 
 		// Clear and render to cache
@@ -239,21 +261,12 @@ func (c *Compositor) renderWidgetWithCache(w Widget) {
 		sub := cached.Sub(cached.Bounds())
 		RenderWidget(w, sub)
 
-		// Clear the dirty flag
-		w.ClearDirty()
-		c.clearDirtyRecursive(w)
+		// SetCachedView clears the dirty flag automatically
+		w.SetCachedView(cached)
 	}
 
 	// Blit the cached buffer to the output
 	c.buffer.Blit(cached, bounds.X, bounds.Y)
-}
-
-// clearDirtyRecursive clears dirty flags on all children.
-func (c *Compositor) clearDirtyRecursive(w Widget) {
-	for _, child := range w.Children() {
-		child.ClearDirty()
-		c.clearDirtyRecursive(child)
-	}
 }
 
 // RenderWidget renders a widget with its border (if any) to the given buffer.

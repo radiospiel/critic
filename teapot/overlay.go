@@ -86,20 +86,15 @@ func NewAnimationLayer() *AnimationLayer {
 		contentDirty:      true,
 	}
 	a.SetFocusable(false)
-	a.SetAnimated(true)    // Animation layers are always animated
 	a.SetZOrder(ZOrderAnimation) // Animation layers render at animation z-order
 	return a
 }
 
 // MightBeDirty returns true if this layer might need repainting.
-// For AnimationLayer, this is true if animations are enabled or the layer is dirty.
+// For AnimationLayer, this always returns true when animations are enabled
+// (animated widgets always need repainting to show updated frames).
 func (a *AnimationLayer) MightBeDirty() bool {
 	return a.animationsEnabled || a.IsDirty()
-}
-
-// IsAnimated returns true because AnimationLayer always supports animation.
-func (a *AnimationLayer) IsAnimated() bool {
-	return true
 }
 
 // SetContent sets the main content widget.
@@ -122,8 +117,10 @@ func (a *AnimationLayer) Content() Widget {
 
 // SetTicker sets the animation ticker.
 // The ticker's Tick() method is called on each animation tick.
+// This also sets the global ticker so widgets can access it via GlobalTicker().
 func (a *AnimationLayer) SetTicker(t Ticker) {
 	a.ticker = t
+	globalTicker = t
 }
 
 // Ticker returns the animation ticker.
@@ -311,7 +308,7 @@ func (a *AnimationLayer) HandleTick() tea.Cmd {
 		a.ticker.Tick()
 	}
 	// Mark this layer as needing repaint for animation frames
-	a.MarkDirty()
+	a.Repaint()
 	// Continue ticking
 	return a.StartTicking()
 }

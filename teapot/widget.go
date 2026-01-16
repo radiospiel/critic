@@ -34,11 +34,11 @@ type Widget interface {
 
 	// Dirty tracking and caching
 	IsDirty() bool          // Returns true if widget needs repainting
-	MarkDirty()             // Marks widget as needing repaint (propagates to parents)
-	ClearDirty()            // Clears the dirty flag after rendering
-	MightBeDirty() bool     // Returns true if widget might need repainting (animated or dirty)
-	IsAnimated() bool       // Returns true if widget is animated
+	Repaint()               // Marks widget as needing repaint (propagates to parents)
+	MightBeDirty() bool     // Returns true if widget might need repainting (animated widgets override to return true)
 	ZOrder() int            // Returns the z-order for rendering layers
+	CachedView() *Buffer    // Returns the cached rendered view (nil if not cached)
+	SetCachedView(*Buffer)  // Sets the cached rendered view
 
 	// Focus and input handling
 	Focusable() bool
@@ -64,9 +64,9 @@ type BaseWidget struct {
 	border       Border
 	borderTitle  string
 	borderFooter string
-	dirty        bool // True if widget needs repainting
-	animated     bool // True if widget is animated
-	zOrder       int  // Z-order for rendering layers (default: ZOrderDefault)
+	dirty        bool    // True if widget needs repainting
+	zOrder       int     // Z-order for rendering layers (default: ZOrderDefault)
+	cachedView   *Buffer // Cached rendered view (owned by widget, not compositor)
 }
 
 // NewBaseWidget creates a new base widget with default settings.
@@ -154,39 +154,27 @@ func (b *BaseWidget) IsDirty() bool {
 	return b.dirty
 }
 
-// MarkDirty marks this widget as needing repaint and propagates to parents.
-func (b *BaseWidget) MarkDirty() {
+// Repaint marks this widget as needing repaint and propagates to parents.
+func (b *BaseWidget) Repaint() {
 	if b.dirty {
 		return // Already dirty, no need to propagate
 	}
 	b.dirty = true
 	if b.parent != nil {
-		b.parent.MarkDirty()
+		b.parent.Repaint()
 	}
 }
 
-// ClearDirty clears the dirty flag after rendering.
-func (b *BaseWidget) ClearDirty() {
+// clearDirty clears the dirty flag after rendering (internal use only).
+func (b *BaseWidget) clearDirty() {
 	b.dirty = false
 }
 
 // MightBeDirty returns true if the widget might need repainting.
-// This is true for animated widgets or dirty widgets.
+// For normal widgets, this returns true only if dirty.
+// Animated widgets should override this to always return true.
 func (b *BaseWidget) MightBeDirty() bool {
-	return b.dirty || b.animated
-}
-
-// IsAnimated returns true if the widget is animated.
-func (b *BaseWidget) IsAnimated() bool {
-	return b.animated
-}
-
-// SetAnimated sets whether this widget is animated.
-func (b *BaseWidget) SetAnimated(animated bool) {
-	b.animated = animated
-	if animated && b.zOrder == ZOrderDefault {
-		b.zOrder = ZOrderAnimation
-	}
+	return b.dirty
 }
 
 // ZOrder returns the widget's z-order for rendering.
@@ -197,6 +185,20 @@ func (b *BaseWidget) ZOrder() int {
 // SetZOrder sets the widget's z-order for rendering.
 func (b *BaseWidget) SetZOrder(zOrder int) {
 	b.zOrder = zOrder
+}
+
+// CachedView returns the cached rendered view, or nil if not cached.
+func (b *BaseWidget) CachedView() *Buffer {
+	return b.cachedView
+}
+
+// SetCachedView sets the cached rendered view and clears the dirty flag.
+// This should be called after rendering to cache.
+func (b *BaseWidget) SetCachedView(buf *Buffer) {
+	b.cachedView = buf
+	if buf != nil {
+		b.clearDirty() // Clear dirty after caching the view
+	}
 }
 
 // Border returns the widget's border configuration.
