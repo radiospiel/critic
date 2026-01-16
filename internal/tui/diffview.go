@@ -234,11 +234,6 @@ func (m DiffViewModel) View() string {
 			Render(msg)
 	}
 
-	// Auto-refresh animations if active - widgets pull current tick from global ticker
-	if m.ready && m.diffWidget.HasAnimations() {
-		m.refreshAnimationsInternal()
-	}
-
 	if m.ready {
 		return m.viewport.View()
 	}
@@ -373,22 +368,6 @@ func (m *DiffViewModel) refreshContent() tea.Cmd {
 		m.viewport.SetContent(m.cachedContent)
 	}
 	return nil
-}
-
-// refreshAnimationsInternal re-renders the diff content to update animation frames.
-// This uses cached syntax highlighting so it's fast - only the widget rendering
-// and animation overlay are recomputed.
-func (m *DiffViewModel) refreshAnimationsInternal() {
-	if m.file == nil || m.animationTicker == nil {
-		return
-	}
-	content, totalLines, navigableLines := m.renderDiff()
-	m.cachedContent = content
-	m.totalLines = totalLines
-	m.navigableLines = navigableLines
-	if m.ready {
-		m.viewport.SetContent(m.cachedContent)
-	}
 }
 
 // moveCursorUp moves cursor to previous navigable line
