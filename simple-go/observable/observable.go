@@ -3,6 +3,7 @@
 package observable
 
 import (
+	"encoding/json"
 	"path"
 	"reflect"
 	"strconv"
@@ -67,19 +68,34 @@ func (o *Observable) GetValue(key string) any {
 	return o.getValueInternal(key)
 }
 
-// GetValueAs returns the value at the given key path, cast to type T.
+// GetValueAs returns the value at the given key path, converted to type T.
 // Returns the zero value if the key does not exist.
-// Panics if the key exists but the value is not of type T.
-// Usage: val := observable.GetValueAs[string](obs, "config.name")
+// For primitive types, performs a direct type assertion.
+// For structs, uses JSON marshaling to convert from map[string]any.
+// The returned value is always a copy.
+// Panics if the conversion fails.
+// Usage: val := observable.GetValueAs[MyStruct](obs, "config")
 func GetValueAs[T any](o *Observable, key string) T {
 	val := o.GetValue(key)
 	if val == nil {
 		var zero T
 		return zero
 	}
-	typed, ok := val.(T)
-	preconditions.Check(ok, "value at key %q is not of type %T, got %T", key, typed, val)
-	return typed
+
+	// Try direct type assertion first (works for primitives and exact type matches)
+	if typed, ok := val.(T); ok {
+		return typed
+	}
+
+	// Use JSON round-trip for struct conversion (provides deep copy)
+	bytes, err := json.Marshal(val)
+	preconditions.Check(err == nil, "failed to marshal value at key %q: %v", key, err)
+
+	var result T
+	err = json.Unmarshal(bytes, &result)
+	preconditions.Check(err == nil, "failed to unmarshal value at key %q to %T: %v", key, result, err)
+
+	return result
 }
 
 // GetMap returns a copy of the map at the given key path.

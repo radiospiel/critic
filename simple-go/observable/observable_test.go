@@ -662,3 +662,135 @@ func TestGetBoolPanicsOnWrongType(t *testing.T) {
 
 	obs.GetBool("notbool")
 }
+
+// Tests for struct conversion
+
+type TestUser struct {
+	Name  string `json:"name"`
+	Age   int    `json:"age"`
+	Email string `json:"email,omitempty"`
+}
+
+type TestConfig struct {
+	Host    string   `json:"host"`
+	Port    int      `json:"port"`
+	Tags    []string `json:"tags"`
+	Enabled bool     `json:"enabled"`
+}
+
+func TestGetValueAsStruct(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("user", map[string]any{
+		"name":  "Alice",
+		"age":   30,
+		"email": "alice@example.com",
+	})
+
+	user := GetValueAs[TestUser](obs, "user")
+	assert.Equals(t, user.Name, "Alice", "name should be Alice")
+	assert.Equals(t, user.Age, 30, "age should be 30")
+	assert.Equals(t, user.Email, "alice@example.com", "email should match")
+}
+
+func TestGetValueAsStructWithSlice(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("config", map[string]any{
+		"host":    "localhost",
+		"port":    8080,
+		"tags":    []any{"web", "api", "production"},
+		"enabled": true,
+	})
+
+	config := GetValueAs[TestConfig](obs, "config")
+	assert.Equals(t, config.Host, "localhost", "host should be localhost")
+	assert.Equals(t, config.Port, 8080, "port should be 8080")
+	assert.Equals(t, len(config.Tags), 3, "should have 3 tags")
+	assert.Equals(t, config.Tags[0], "web", "first tag should be 'web'")
+	assert.True(t, config.Enabled, "enabled should be true")
+}
+
+func TestGetValueAsStructMissingReturnsZero(t *testing.T) {
+	obs := New()
+
+	user := GetValueAs[TestUser](obs, "nonexistent")
+	assert.Equals(t, user.Name, "", "name should be empty")
+	assert.Equals(t, user.Age, 0, "age should be 0")
+}
+
+func TestGetValueAsStructReturnsCopy(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("user", map[string]any{
+		"name": "Alice",
+		"age":  30,
+	})
+
+	// Get the struct
+	user1 := GetValueAs[TestUser](obs, "user")
+	user1.Name = "Modified"
+
+	// Get again - should be unchanged
+	user2 := GetValueAs[TestUser](obs, "user")
+	assert.Equals(t, user2.Name, "Alice", "original should be unchanged")
+}
+
+func TestGetValueAsSliceOfStructs(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("users", []any{
+		map[string]any{"name": "Alice", "age": 30},
+		map[string]any{"name": "Bob", "age": 25},
+	})
+
+	users := GetValueAs[[]TestUser](obs, "users")
+	assert.Equals(t, len(users), 2, "should have 2 users")
+	assert.Equals(t, users[0].Name, "Alice", "first user should be Alice")
+	assert.Equals(t, users[1].Name, "Bob", "second user should be Bob")
+}
+
+func TestGetValueAsNestedStruct(t *testing.T) {
+	type Address struct {
+		City    string `json:"city"`
+		Country string `json:"country"`
+	}
+	type Person struct {
+		Name    string  `json:"name"`
+		Address Address `json:"address"`
+	}
+
+	obs := New()
+	obs.SetValueAtKey("person", map[string]any{
+		"name": "Alice",
+		"address": map[string]any{
+			"city":    "New York",
+			"country": "USA",
+		},
+	})
+
+	person := GetValueAs[Person](obs, "person")
+	assert.Equals(t, person.Name, "Alice", "name should be Alice")
+	assert.Equals(t, person.Address.City, "New York", "city should be New York")
+	assert.Equals(t, person.Address.Country, "USA", "country should be USA")
+}
+
+func TestGetValueAsPointerToStruct(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("user", map[string]any{
+		"name": "Alice",
+		"age":  30,
+	})
+
+	user := GetValueAs[*TestUser](obs, "user")
+	assert.NotNil(t, user, "should get pointer to struct")
+	assert.Equals(t, user.Name, "Alice", "name should be Alice")
+}
+
+func TestGetValueAsStructPanicsOnIncompatible(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("data", "not a struct compatible value")
+
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "should panic on incompatible type")
+	}()
+
+	GetValueAs[TestUser](obs, "data")
+}
