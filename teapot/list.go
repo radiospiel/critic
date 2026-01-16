@@ -39,7 +39,7 @@ type SelectableList[T ListItem] struct {
 // NewSelectableList creates a new selectable list with the given renderer.
 func NewSelectableList[T ListItem](renderer ItemRenderer[T]) *SelectableList[T] {
 	list := &SelectableList[T]{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 		renderer:   renderer,
 		selectedStyle: lipgloss.NewStyle().
 			Bold(true).
@@ -285,7 +285,7 @@ type ScrollView struct {
 // NewScrollView creates a new scroll view with the given content.
 func NewScrollView(content Widget) *ScrollView {
 	sv := &ScrollView{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 		content:    content,
 	}
 	if content != nil {

@@ -26,7 +26,7 @@ const (
 // NewText creates a new text widget.
 func NewText(content string) *Text {
 	t := &Text{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 		content:    content,
 		style:      lipgloss.NewStyle(),
 		align:      AlignLeft,
@@ -113,7 +113,7 @@ type StatusBar struct {
 // NewStatusBar creates a new status bar.
 func NewStatusBar() *StatusBar {
 	sb := &StatusBar{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 		style: lipgloss.NewStyle().
 			Background(lipgloss.Color("236")).
 			Foreground(lipgloss.Color("252")),
@@ -185,7 +185,7 @@ type Spacer struct {
 // NewSpacer creates a new spacer with the given stretch factor.
 func NewSpacer(stretch int) *Spacer {
 	s := &Spacer{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 	}
 	s.SetFocusable(false)
 	s.SetConstraints(DefaultConstraints().WithStretch(stretch, stretch))
@@ -195,7 +195,7 @@ func NewSpacer(stretch int) *Spacer {
 // NewHSpacer creates a horizontal spacer.
 func NewHSpacer(stretch int) *Spacer {
 	s := &Spacer{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 	}
 	s.SetFocusable(false)
 	s.SetConstraints(DefaultConstraints().WithStretch(stretch, 0))
@@ -205,7 +205,7 @@ func NewHSpacer(stretch int) *Spacer {
 // NewVSpacer creates a vertical spacer.
 func NewVSpacer(stretch int) *Spacer {
 	s := &Spacer{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 	}
 	s.SetFocusable(false)
 	s.SetConstraints(DefaultConstraints().WithStretch(0, stretch))

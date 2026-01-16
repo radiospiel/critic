@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
@@ -133,7 +134,6 @@ type Model struct {
 	messaging       critic.Messaging  // Messaging interface for conversations
 	filterMode      FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
 	animationTicker *tui.AnimationTicker    // Animation ticker for conversation states
-	animationLayer  *teapot.AnimationLayer // Animation layer for tick management
 	noAnimation     bool                   // Whether animations are disabled
 	globalAnimState tui.GlobalAnimationSummary // Global animation state for status bar
 	tickCount       int                       // Debug: count of animation ticks
@@ -174,10 +174,10 @@ func NewModel(args *Args) Model {
 	fileList.SetMessaging(mdb)
 	fileList.SetAnimationTicker(animTicker)
 
-	// Create animation layer for tick management
-	animLayer := teapot.NewAnimationLayer()
-	animLayer.SetTicker(animTicker)
-	animLayer.SetAnimationsEnabled(!args.NoAnimation)
+	// Set global ticker so widgets can access animation state
+	if animTicker != nil {
+		teapot.SetGlobalTicker(animTicker)
+	}
 
 	return Model{
 		fileList:        fileList,
@@ -190,7 +190,6 @@ func NewModel(args *Args) Model {
 		extensions:      args.Extensions,
 		messaging:       mdb,
 		animationTicker: animTicker,
-		animationLayer:  animLayer,
 		noAnimation:     args.NoAnimation,
 	}
 }
@@ -211,11 +210,10 @@ func (m Model) Init() tea.Cmd {
 		initBaseResolverCmd(&m),
 		loadDiffCmd(&m),
 		disableTerminalLineWrap, // This now handles alternate screen + nowrap
-	}
-
-	// Start animation ticker via animation layer
-	if m.animationLayer != nil {
-		cmds = append(cmds, m.animationLayer.StartTicking())
+		// Always start compositor tick loop
+		tea.Tick(teapot.ComposerTickInterval, func(_ time.Time) tea.Msg {
+			return teapot.ComposerTickMsg{}
+		}),
 	}
 
 	return tea.Batch(cmds...)
@@ -324,7 +322,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_, cmd := m.fileList.HandleKey(msg)
 				// Update diff view when file selection changes
 				if m.fileList.GetActiveFile() != prevFile {
-					setFileCmd := m.diffView.SetFile(m.fileList.GetActiveFile())
+					newFile := m.fileList.GetActiveFile()
+					if newFile != nil {
+						logger.Info("File selected: %s", newFile.NewPath)
+					}
+					setFileCmd := m.diffView.SetFile(newFile)
 					cmds = append(cmds, cmd, setFileCmd)
 				} else {
 					cmds = append(cmds, cmd)
@@ -455,16 +457,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case teapot.ComposerTickMsg:
-		// Skip if animations are disabled
-		if m.animationLayer == nil || !m.animationLayer.AnimationsEnabled() {
-			return m, nil
+		// Advance the animation ticker if animations are enabled
+		if !m.noAnimation && m.animationTicker != nil {
+			m.animationTicker.Tick()
+			// Update global animation state based on conversations
+			m.updateGlobalAnimationState()
 		}
-		// Handle tick via animation layer (advances ticker and continues)
-		cmd := m.animationLayer.HandleTick()
-		// Update global animation state based on conversations
-		m.updateGlobalAnimationState()
-		// Note: Animation refresh now happens automatically in View() via global ticker
-		cmds = append(cmds, cmd)
+		// Always continue ticking
+		cmds = append(cmds, tea.Tick(teapot.ComposerTickInterval, func(_ time.Time) tea.Msg {
+			return teapot.ComposerTickMsg{}
+		}))
 
 	default:
 		// Route other messages to diff view (like diffRenderedMsg)

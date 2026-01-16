@@ -15,13 +15,17 @@ type ComposerTickMsg struct{}
 const ComposerTickInterval = 40 * time.Millisecond
 
 // globalTicker is the global animation ticker that widgets can access.
-// This is set by the compositor when SetTicker is called.
 var globalTicker Ticker
 
 // GlobalTicker returns the global animation ticker.
 // Animated widgets should use this to get the current animation state when rendering.
 func GlobalTicker() Ticker {
 	return globalTicker
+}
+
+// SetGlobalTicker sets the global animation ticker.
+func SetGlobalTicker(t Ticker) {
+	globalTicker = t
 }
 
 // Compositor manages the root widget tree and orchestrates rendering.
@@ -38,16 +42,14 @@ type Compositor struct {
 	topLevelWidgets []Widget
 
 	// Tick management
-	tickEnabled bool
-	ticker      Ticker // Animation ticker to advance on each tick
+	ticker Ticker // Animation ticker to advance on each tick
 }
 
 // NewCompositor creates a new compositor with the given root widget.
 func NewCompositor(root Widget) *Compositor {
 	c := &Compositor{
-		root:        root,
-		dirty:       true,
-		tickEnabled: true,
+		root:  root,
+		dirty: true,
 	}
 	if root != nil {
 		c.focusManager = NewFocusManager(root)
@@ -68,32 +70,8 @@ func (c *Compositor) Ticker() Ticker {
 	return c.ticker
 }
 
-// SetTickEnabled enables or disables tick generation.
-func (c *Compositor) SetTickEnabled(enabled bool) {
-	c.tickEnabled = enabled
-}
-
-// TickEnabled returns whether tick generation is enabled.
-func (c *Compositor) TickEnabled() bool {
-	return c.tickEnabled
-}
-
-// StartTicking returns a command that starts the compositor tick loop.
-func (c *Compositor) StartTicking() tea.Cmd {
-	if !c.tickEnabled {
-		return nil
-	}
-	return tea.Tick(ComposerTickInterval, func(t time.Time) tea.Msg {
-		return ComposerTickMsg{}
-	})
-}
-
 // HandleTick processes a compositor tick: checks for dirty widgets and continues ticking.
 func (c *Compositor) HandleTick() tea.Cmd {
-	if !c.tickEnabled {
-		return nil
-	}
-
 	// Advance the animation ticker
 	if c.ticker != nil {
 		c.ticker.Tick()
@@ -103,7 +81,9 @@ func (c *Compositor) HandleTick() tea.Cmd {
 	c.checkDirtyWidgets(c.root)
 
 	// Continue ticking
-	return c.StartTicking()
+	return tea.Tick(ComposerTickInterval, func(t time.Time) tea.Msg {
+		return ComposerTickMsg{}
+	})
 }
 
 // checkDirtyWidgets recursively checks widgets for MightBeDirty status.
@@ -424,7 +404,9 @@ func (m CompositorModel) Compositor() *Compositor {
 
 // Init implements tea.Model.
 func (m CompositorModel) Init() tea.Cmd {
-	return m.compositor.StartTicking()
+	return tea.Tick(ComposerTickInterval, func(t time.Time) tea.Msg {
+		return ComposerTickMsg{}
+	})
 }
 
 // Update implements tea.Model.

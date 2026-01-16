@@ -39,7 +39,7 @@ type Dialog struct {
 // NewDialog creates a new dialog with the given content and title.
 func NewDialog(content Widget, title string) *Dialog {
 	d := &Dialog{
-		BaseWidget:  NewBaseWidget(),
+		BaseWidget:  NewBaseWidget(ZOrderDefault),
 		content:     content,
 		title:       title,
 		okLabel:     "OK",

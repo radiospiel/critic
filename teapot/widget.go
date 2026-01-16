@@ -69,13 +69,13 @@ type BaseWidget struct {
 	cachedView   *Buffer // Cached rendered view (owned by widget, not compositor)
 }
 
-// NewBaseWidget creates a new base widget with default settings.
-func NewBaseWidget() BaseWidget {
+// NewBaseWidget creates a new base widget with the given z-order.
+func NewBaseWidget(zOrder int) BaseWidget {
 	return BaseWidget{
 		constraints: DefaultConstraints(),
 		focusable:   true,
 		dirty:       true, // Widgets start dirty so they're rendered initially
-		zOrder:      ZOrderDefault,
+		zOrder:      zOrder,
 	}
 }
 
@@ -165,11 +165,6 @@ func (b *BaseWidget) Repaint() {
 	}
 }
 
-// clearDirty clears the dirty flag after rendering (internal use only).
-func (b *BaseWidget) clearDirty() {
-	b.dirty = false
-}
-
 // MightBeDirty returns true if the widget might need repainting.
 // For normal widgets, this returns true only if dirty.
 // Animated widgets should override this to always return true.
@@ -182,11 +177,6 @@ func (b *BaseWidget) ZOrder() int {
 	return b.zOrder
 }
 
-// SetZOrder sets the widget's z-order for rendering.
-func (b *BaseWidget) SetZOrder(zOrder int) {
-	b.zOrder = zOrder
-}
-
 // CachedView returns the cached rendered view, or nil if not cached.
 func (b *BaseWidget) CachedView() *Buffer {
 	return b.cachedView
@@ -197,7 +187,7 @@ func (b *BaseWidget) CachedView() *Buffer {
 func (b *BaseWidget) SetCachedView(buf *Buffer) {
 	b.cachedView = buf
 	if buf != nil {
-		b.clearDirty() // Clear dirty after caching the view
+		b.dirty = false // Clear dirty after caching the view
 	}
 }
 
@@ -254,7 +244,7 @@ type ContainerWidget struct {
 // NewContainerWidget creates a new container widget.
 func NewContainerWidget() ContainerWidget {
 	return ContainerWidget{
-		BaseWidget: NewBaseWidget(),
+		BaseWidget: NewBaseWidget(ZOrderDefault),
 	}
 }
 

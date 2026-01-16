@@ -37,7 +37,7 @@ func NewHunkWidget(
 	ticker *AnimationTicker,
 ) *HunkWidget {
 	w := &HunkWidget{
-		BaseWidget:      teapot.NewBaseWidget(),
+		BaseWidget:      teapot.NewBaseWidget(teapot.ZOrderDefault),
 		hunk:            hunk,
 		conversationMap: conversationMap,
 		highlightedOld:  highlightedOld,
@@ -431,7 +431,7 @@ func NewFileHeaderWidget(file *ctypes.FileDiff) *FileHeaderWidget {
 	}
 
 	w := &FileHeaderWidget{
-		BaseWidget: teapot.NewBaseWidget(),
+		BaseWidget: teapot.NewBaseWidget(teapot.ZOrderDefault),
 		header:     header,
 	}
 	w.SetFocusable(false)
@@ -482,7 +482,7 @@ type DiffViewWidget struct {
 // NewDiffViewWidget creates a new diff view widget.
 func NewDiffViewWidget() *DiffViewWidget {
 	w := &DiffViewWidget{
-		BaseWidget: teapot.NewBaseWidget(),
+		BaseWidget: teapot.NewBaseWidget(teapot.ZOrderDefault),
 	}
 	w.SetFocusable(true)
 	return w

@@ -113,7 +113,7 @@ type Modal struct {
 // NewModal creates a new modal dialog with the given content.
 func NewModal(content Widget, title string) *Modal {
 	m := &Modal{
-		BaseWidget:    NewBaseWidget(),
+		BaseWidget:    NewBaseWidget(ZOrderDefault),
 		content:       content,
 		title:         title,
 		centerH:       true,
