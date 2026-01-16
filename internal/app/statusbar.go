@@ -79,21 +79,23 @@ func computeDiffStats(diff *ctypes.Diff) diffStats {
 		return stats
 	}
 
-	// First pass: count all added and deleted lines, track content for move detection
+	// Sum up pre-computed hunk stats and track content for move detection
 	addedLines := make(map[string]int)   // content -> count
 	deletedLines := make(map[string]int) // content -> count
 
 	for _, file := range diff.Files {
 		for _, hunk := range file.Hunks {
+			// Use pre-computed stats from hunk
+			stats.Added += hunk.Stats.Added
+			stats.Deleted += hunk.Stats.Deleted
+
+			// Track line content for move detection
 			for _, line := range hunk.Lines {
-				content := line.Content
 				switch line.Type {
 				case ctypes.LineAdded:
-					stats.Added++
-					addedLines[content]++
+					addedLines[line.Content]++
 				case ctypes.LineDeleted:
-					stats.Deleted++
-					deletedLines[content]++
+					deletedLines[line.Content]++
 				}
 			}
 		}

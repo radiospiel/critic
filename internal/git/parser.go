@@ -223,12 +223,14 @@ func ParseDiff(diffText string) (*ctypes.Diff, error) {
 				oldNum = 0
 				newNum = newLineNum
 				newLineNum++
+				currentHunk.Stats.Added++
 			case '-':
 				lineType = ctypes.LineDeleted
 				content = line[1:]
 				oldNum = oldLineNum
 				newNum = 0
 				oldLineNum++
+				currentHunk.Stats.Deleted++
 			case ' ':
 				lineType = ctypes.LineContext
 				content = line[1:]
