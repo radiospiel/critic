@@ -476,158 +476,189 @@ func TestGetValueAs(t *testing.T) {
 	obs.SetValueAtKey("score", 95.5)
 
 	// Test successful type assertions
-	name, ok := GetValueAs[string](obs, "name")
-	assert.True(t, ok, "should get string")
-	assert.Equals(t, name, "Alice", "name should be Alice")
-
-	age, ok := GetValueAs[int](obs, "age")
-	assert.True(t, ok, "should get int")
-	assert.Equals(t, age, 30, "age should be 30")
-
-	active, ok := GetValueAs[bool](obs, "active")
-	assert.True(t, ok, "should get bool")
-	assert.True(t, active, "active should be true")
-
-	score, ok := GetValueAs[float64](obs, "score")
-	assert.True(t, ok, "should get float64")
-	assert.Equals(t, score, 95.5, "score should be 95.5")
+	assert.Equals(t, GetValueAs[string](obs, "name"), "Alice", "name should be Alice")
+	assert.Equals(t, GetValueAs[int](obs, "age"), 30, "age should be 30")
+	assert.True(t, GetValueAs[bool](obs, "active"), "active should be true")
+	assert.Equals(t, GetValueAs[float64](obs, "score"), 95.5, "score should be 95.5")
 }
 
-func TestGetValueAsWrongType(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("name", "Alice")
-
-	// Try to get string as int
-	val, ok := GetValueAs[int](obs, "name")
-	assert.False(t, ok, "should fail type assertion")
-	assert.Equals(t, val, 0, "should return zero value")
-}
-
-func TestGetValueAsMissing(t *testing.T) {
-	obs := New()
-
-	val, ok := GetValueAs[string](obs, "nonexistent")
-	assert.False(t, ok, "should return false for missing key")
-	assert.Equals(t, val, "", "should return zero value")
-}
-
-func TestMustGetValueAs(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("name", "Alice")
-
-	val := MustGetValueAs[string](obs, "name")
-	assert.Equals(t, val, "Alice", "should get value")
-}
-
-func TestMustGetValueAsPanicsOnMissing(t *testing.T) {
-	obs := New()
-
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic on missing key")
-	}()
-
-	MustGetValueAs[string](obs, "nonexistent")
-}
-
-func TestMustGetValueAsPanicsOnWrongType(t *testing.T) {
+func TestGetValueAsPanicsOnWrongType(t *testing.T) {
 	obs := New()
 	obs.SetValueAtKey("name", "Alice")
 
 	defer func() {
 		r := recover()
-		assert.NotNil(t, r, "should panic on wrong type")
+		assert.NotNil(t, r, "should panic on type mismatch")
 	}()
 
-	MustGetValueAs[int](obs, "name")
+	GetValueAs[int](obs, "name")
+}
+
+func TestGetValueAsMissingReturnsZero(t *testing.T) {
+	obs := New()
+
+	assert.Equals(t, GetValueAs[string](obs, "nonexistent"), "", "should return empty string for missing key")
+	assert.Equals(t, GetValueAs[int](obs, "nonexistent"), 0, "should return 0 for missing key")
+	assert.False(t, GetValueAs[bool](obs, "nonexistent"), "should return false for missing key")
 }
 
 func TestGetMap(t *testing.T) {
 	obs := New()
 	obs.SetValueAtKey("config", map[string]any{"key": "value"})
 
-	m, ok := obs.GetMap("config")
-	assert.True(t, ok, "should get map")
+	m := obs.GetMap("config")
+	assert.NotNil(t, m, "should get map")
 	assert.Equals(t, m["key"], "value", "should have correct value")
 
-	// Test wrong type
+	// Test missing returns nil
+	assert.Nil(t, obs.GetMap("nonexistent"), "should return nil for missing key")
+}
+
+func TestGetMapPanicsOnWrongType(t *testing.T) {
+	obs := New()
 	obs.SetValueAtKey("notmap", "string")
-	_, ok = obs.GetMap("notmap")
-	assert.False(t, ok, "should fail for non-map")
+
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "should panic on type mismatch")
+	}()
+
+	obs.GetMap("notmap")
+}
+
+func TestGetMapReturnsCopy(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("config", map[string]any{"key": "value"})
+
+	m := obs.GetMap("config")
+	// Modify the copy at top level
+	m["key"] = "modified"
+	m["newkey"] = "added"
+
+	// Original should be unchanged
+	original := obs.GetMap("config")
+	assert.Equals(t, original["key"], "value", "original should be unchanged")
+	assert.Nil(t, original["newkey"], "original should not have new key")
 }
 
 func TestGetSlice(t *testing.T) {
 	obs := New()
 	obs.SetValueAtKey("items", []any{"a", "b", "c"})
 
-	s, ok := obs.GetSlice("items")
-	assert.True(t, ok, "should get slice")
+	s := obs.GetSlice("items")
+	assert.NotNil(t, s, "should get slice")
 	assert.Equals(t, len(s), 3, "should have 3 items")
 	assert.Equals(t, s[0], "a", "first item should be 'a'")
 
-	// Test wrong type
+	// Test missing returns nil
+	assert.Nil(t, obs.GetSlice("nonexistent"), "should return nil for missing key")
+}
+
+func TestGetSlicePanicsOnWrongType(t *testing.T) {
+	obs := New()
 	obs.SetValueAtKey("notslice", "string")
-	_, ok = obs.GetSlice("notslice")
-	assert.False(t, ok, "should fail for non-slice")
+
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "should panic on type mismatch")
+	}()
+
+	obs.GetSlice("notslice")
+}
+
+func TestGetSliceReturnsCopy(t *testing.T) {
+	obs := New()
+	obs.SetValueAtKey("items", []any{"a", "b", "c"})
+
+	s := obs.GetSlice("items")
+	// Modify the copy at top level
+	s[0] = "modified"
+	s = append(s, "d")
+
+	// Original should be unchanged
+	original := obs.GetSlice("items")
+	assert.Equals(t, original[0], "a", "original should be unchanged")
+	assert.Equals(t, len(original), 3, "original length should be unchanged")
 }
 
 func TestGetString(t *testing.T) {
 	obs := New()
 	obs.SetValueAtKey("name", "Alice")
 
-	s, ok := obs.GetString("name")
-	assert.True(t, ok, "should get string")
-	assert.Equals(t, s, "Alice", "should be Alice")
+	assert.Equals(t, obs.GetString("name"), "Alice", "should be Alice")
+	assert.Equals(t, obs.GetString("nonexistent"), "", "should return empty for missing")
+}
 
-	// Test wrong type
+func TestGetStringPanicsOnWrongType(t *testing.T) {
+	obs := New()
 	obs.SetValueAtKey("notstring", 42)
-	_, ok = obs.GetString("notstring")
-	assert.False(t, ok, "should fail for non-string")
+
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "should panic on type mismatch")
+	}()
+
+	obs.GetString("notstring")
 }
 
 func TestGetInt(t *testing.T) {
 	obs := New()
 	obs.SetValueAtKey("count", 42)
 
-	i, ok := obs.GetInt("count")
-	assert.True(t, ok, "should get int")
-	assert.Equals(t, i, 42, "should be 42")
+	assert.Equals(t, obs.GetInt("count"), 42, "should be 42")
+	assert.Equals(t, obs.GetInt("nonexistent"), 0, "should return 0 for missing")
+}
 
-	// Test wrong type
+func TestGetIntPanicsOnWrongType(t *testing.T) {
+	obs := New()
 	obs.SetValueAtKey("notint", "string")
-	_, ok = obs.GetInt("notint")
-	assert.False(t, ok, "should fail for non-int")
+
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "should panic on type mismatch")
+	}()
+
+	obs.GetInt("notint")
 }
 
 func TestGetFloat64(t *testing.T) {
 	obs := New()
 	obs.SetValueAtKey("price", 19.99)
 
-	f, ok := obs.GetFloat64("price")
-	assert.True(t, ok, "should get float64")
-	assert.Equals(t, f, 19.99, "should be 19.99")
+	assert.Equals(t, obs.GetFloat64("price"), 19.99, "should be 19.99")
+	assert.Equals(t, obs.GetFloat64("nonexistent"), 0.0, "should return 0 for missing")
+}
 
-	// Test wrong type
+func TestGetFloat64PanicsOnWrongType(t *testing.T) {
+	obs := New()
 	obs.SetValueAtKey("notfloat", "string")
-	_, ok = obs.GetFloat64("notfloat")
-	assert.False(t, ok, "should fail for non-float64")
+
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "should panic on type mismatch")
+	}()
+
+	obs.GetFloat64("notfloat")
 }
 
 func TestGetBool(t *testing.T) {
 	obs := New()
 	obs.SetValueAtKey("enabled", true)
-
-	b, ok := obs.GetBool("enabled")
-	assert.True(t, ok, "should get bool")
-	assert.True(t, b, "should be true")
-
 	obs.SetValueAtKey("disabled", false)
-	b, ok = obs.GetBool("disabled")
-	assert.True(t, ok, "should get bool")
-	assert.False(t, b, "should be false")
 
-	// Test wrong type
+	assert.True(t, obs.GetBool("enabled"), "should be true")
+	assert.False(t, obs.GetBool("disabled"), "should be false")
+	assert.False(t, obs.GetBool("nonexistent"), "should return false for missing")
+}
+
+func TestGetBoolPanicsOnWrongType(t *testing.T) {
+	obs := New()
 	obs.SetValueAtKey("notbool", "string")
-	_, ok = obs.GetBool("notbool")
-	assert.False(t, ok, "should fail for non-bool")
+
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "should panic on type mismatch")
+	}()
+
+	obs.GetBool("notbool")
 }
