@@ -1,18 +1,17 @@
 package cli
 
 import (
-	"fmt"
-	"strings"
-
 	"git.15b.it/eno/critic/internal/app"
 	"github.com/spf13/cobra"
 )
 
 // Execute runs the CLI application with the given handler
 func Execute(handler func(*app.Args) error) error {
-	rootCmd := newRootCmd(handler)
+	rootCmd := newRootCmd()
 
 	// Add subcommands
+	rootCmd.AddCommand(newTUICmd(handler))
+	rootCmd.AddCommand(newWebUICmd())
 	rootCmd.AddCommand(newMCPCmd())
 	rootCmd.AddCommand(newConvoCmd())
 	rootCmd.AddCommand(newLogCmd())
@@ -25,102 +24,44 @@ func Execute(handler func(*app.Args) error) error {
 func ParseArgsForTesting(args []string) (*app.Args, error) {
 	var result *app.Args
 
-	// Create command with a test handler that captures the args
-	cmd := newRootCmd(func(a *app.Args) error {
+	// Create tui command with a test handler that captures the args
+	tuiCmd := newTUICmd(func(a *app.Args) error {
 		result = a
 		return nil
 	})
 
-	cmd.SetArgs(args)
+	// Prepend "tui" to args for testing
+	tuiCmd.SetArgs(args)
 
-	if err := cmd.Execute(); err != nil {
+	if err := tuiCmd.Execute(); err != nil {
 		return nil, err
 	}
 
 	return result, nil
 }
 
-// newRootCmd creates the root cobra command with the given handler
-func newRootCmd(handler func(*app.Args) error) *cobra.Command {
-	var extensionsFlag []string
-	var noAnimationFlag bool
-
+// newRootCmd creates the root cobra command
+func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "critic [flags] [base1,base2,...] [-- path1 path2 ...]",
-		Short: "Critic - Git diff viewer with side-by-side comparison",
-		Long: `Critic is a terminal-based git diff viewer that shows changes side-by-side.
+		Use:   "critic",
+		Short: "Critic - Git diff viewer and code review tool",
+		Long: `Critic is a git diff viewer and code review tool.
 
-Syntax:
-  critic [base1,base2,base3] [-- path1 path2 path3]
+Available commands:
+  tui     Start the terminal user interface
+  webui   Start the web user interface
+  mcp     Start the MCP server
+  convo   Manage conversations
 
 Examples:
-  critic                           # Compare against default bases (main/master, origin/<branch>, HEAD)
-  critic main                      # Compare main branch to HEAD
-  critic main,develop              # Compare against multiple bases
-  critic -- src tests              # Only show changes in src and tests directories
-  critic --extensions=go,rs        # Only show .go and .rs files
+  critic tui                    # Start TUI with default bases
+  critic tui main               # Compare against main branch
+  critic webui                  # Start web interface on localhost:8080
+  critic webui --port=3000      # Start web interface on port 3000
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Args: func(cmd *cobra.Command, args []string) error {
-			// Custom validator: allow at most 1 arg before --, any number after --
-			argsLenAtDash := cmd.ArgsLenAtDash()
-			if argsLenAtDash >= 0 {
-				// There was a -- separator
-				// args before -- should be at most 1
-				if argsLenAtDash > 1 {
-					return fmt.Errorf("accepts at most 1 arg before --, received %d", argsLenAtDash)
-				}
-				return nil
-			}
-			// No -- separator, so all args are positional
-			if len(args) > 1 {
-				return fmt.Errorf("accepts at most 1 arg, received %d", len(args))
-			}
-			return nil
-		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Parse arguments
-			parsedArgs := &app.Args{
-				Extensions:  ensureSlice(extensionsFlag),
-				Paths:       []string{"."},
-				NoAnimation: noAnimationFlag,
-			}
-
-			// Get paths after -- separator
-			argsLenAtDash := cmd.ArgsLenAtDash()
-			var baseArg string
-			if argsLenAtDash >= 0 {
-				// There was a -- separator
-				// The bases arg is before --
-				if argsLenAtDash > 0 {
-					baseArg = args[0]
-				}
-				// Paths are after --
-				pathArgs := args[argsLenAtDash:]
-				if len(pathArgs) > 0 {
-					parsedArgs.Paths = pathArgs
-				}
-			} else {
-				// No -- separator
-				if len(args) > 0 {
-					baseArg = args[0]
-				}
-			}
-
-			// Parse bases
-			if baseArg != "" {
-				parsedArgs.Bases = strings.Split(baseArg, ",")
-			}
-
-			// Call the command handler
-			return handler(parsedArgs)
-		},
 	}
-
-	// Define flags
-	cmd.Flags().StringSliceVar(&extensionsFlag, "extensions", nil, "Comma-separated list of file extensions to include")
-	cmd.Flags().BoolVar(&noAnimationFlag, "no-animation", false, "Disable animations")
 
 	return cmd
 }

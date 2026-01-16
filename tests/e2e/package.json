@@ -1,0 +1,12 @@
+{
+  "name": "critic-e2e-tests",
+  "version": "1.0.0",
+  "description": "End-to-end tests for Critic webui using Puppeteer",
+  "main": "index.js",
+  "scripts": {
+    "test": "node webui.test.js"
+  },
+  "dependencies": {
+    "puppeteer": "^22.0.0"
+  }
+}

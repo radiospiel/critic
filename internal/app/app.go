@@ -9,7 +9,7 @@ import (
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/messagedb"
-	"git.15b.it/eno/critic/internal/ui"
+	"git.15b.it/eno/critic/internal/tui"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
@@ -120,10 +120,10 @@ func Run(args *Args) error {
 
 // Model represents the main application model
 type Model struct {
-	fileList        *ui.FileListWidget
-	diffView        ui.DiffViewModel
-	commentEditor   ui.CommentEditor
-	layout          ui.LayoutModel
+	fileList        *tui.FileListWidget
+	diffView        tui.DiffViewModel
+	commentEditor   tui.CommentEditor
+	layout          tui.LayoutModel
 	diff            *ctypes.Diff
 	bases           []string          // List of base refs
 	currentBase     int               // Index of current base
@@ -132,10 +132,10 @@ type Model struct {
 	resolver        *git.BaseResolver // Base resolver with polling
 	messaging       critic.Messaging  // Messaging interface for conversations
 	filterMode      FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
-	animationTicker *ui.AnimationTicker    // Animation ticker for conversation states
+	animationTicker *tui.AnimationTicker    // Animation ticker for conversation states
 	animationLayer  *teapot.AnimationLayer // Animation layer for tick management
 	noAnimation     bool                   // Whether animations are disabled
-	globalAnimState ui.GlobalAnimationSummary // Global animation state for status bar
+	globalAnimState tui.GlobalAnimationSummary // Global animation state for status bar
 	tickCount       int                       // Debug: count of animation ticks
 	err             error
 	width           int
@@ -147,10 +147,10 @@ type Model struct {
 // NewModel creates a new application model
 func NewModel(args *Args) Model {
 	logger.Info("NewModel: Creating model with %d paths, %d bases", len(args.Paths), len(args.Bases))
-	diffView := ui.NewDiffViewModel()
+	diffView := tui.NewDiffViewModel()
 	diffView.SetHighlightingEnabled(true) // Always enable highlighting
 
-	fileList := ui.NewFileListWidget()
+	fileList := tui.NewFileListWidget()
 	fileList.SetFocused(true) // Start with file list focused
 
 	// Initialize message database
@@ -164,9 +164,9 @@ func NewModel(args *Args) Model {
 	}
 
 	// Create animation ticker (unless disabled)
-	var animTicker *ui.AnimationTicker
+	var animTicker *tui.AnimationTicker
 	if !args.NoAnimation {
-		animTicker = ui.NewAnimationTicker()
+		animTicker = tui.NewAnimationTicker()
 	}
 
 	diffView.SetMessaging(mdb)
@@ -182,8 +182,8 @@ func NewModel(args *Args) Model {
 	return Model{
 		fileList:        fileList,
 		diffView:        diffView,
-		commentEditor:   ui.NewCommentEditor(),
-		layout:          ui.NewLayoutModel(),
+		commentEditor:   tui.NewCommentEditor(),
+		layout:          tui.NewLayoutModel(),
 		bases:           args.Bases,
 		currentBase:     0, // Start with first base
 		paths:           args.Paths,
@@ -241,8 +241,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab", "shift+tab":
 			m.layout.ToggleFocus()
 			// Update focus state on both panes
-			m.fileList.SetFocused(m.layout.GetFocusedPane() == ui.FileListPane)
-			m.diffView.SetFocused(m.layout.GetFocusedPane() == ui.DiffViewPane)
+			m.fileList.SetFocused(m.layout.GetFocusedPane() == tui.FileListPane)
+			m.diffView.SetFocused(m.layout.GetFocusedPane() == tui.DiffViewPane)
 
 		case "b":
 			// Cycle through bases
@@ -277,7 +277,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter":
 			// Activate comment editor when focused on diff view
-			if m.layout.GetFocusedPane() == ui.DiffViewPane {
+			if m.layout.GetFocusedPane() == tui.DiffViewPane {
 				activeFile := m.fileList.GetActiveFile()
 				if activeFile != nil {
 					// Get the current cursor line from diff view
@@ -319,7 +319,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		default:
 			// Route key messages to focused pane
-			if m.layout.GetFocusedPane() == ui.FileListPane {
+			if m.layout.GetFocusedPane() == tui.FileListPane {
 				prevFile := m.fileList.GetActiveFile()
 				_, cmd := m.fileList.HandleKey(msg)
 				// Update diff view when file selection changes
@@ -387,14 +387,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.Info("Update: Received baseChangedMsg, reloading diff")
 		return m, loadDiffCmd(&m)
 
-	case ui.RequestNextFileMsg:
+	case tui.RequestNextFileMsg:
 		// User scrolled past end of diff, load next file
 		if m.fileList.SelectNext() {
 			cmd := m.diffView.SetFile(m.fileList.GetActiveFile())
 			cmds = append(cmds, cmd)
 		}
 
-	case ui.RequestPrevFileMsg:
+	case tui.RequestPrevFileMsg:
 		// User scrolled before start of diff, load previous file and go to bottom
 		if m.fileList.SelectPrev() {
 			m.diffView.SetGotoBottomOnLoad()
@@ -402,7 +402,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
-	case ui.CommentSavedMsg:
+	case tui.CommentSavedMsg:
 		// Save the comment using the messaging interface
 		activeFile := m.fileList.GetActiveFile()
 		if activeFile != nil && msg.Comment != "" {
@@ -577,7 +577,7 @@ func (m Model) renderStatusBar() string {
 		status = status[:maxLen-3] + "..."
 	}
 
-	return ui.GetStatusStyle().
+	return tui.GetStatusStyle().
 		Width(m.width).
 		MaxWidth(m.width).
 		Inline(true).
@@ -586,7 +586,7 @@ func (m Model) renderStatusBar() string {
 
 // updateGlobalAnimationState updates the global animation state based on all conversations
 func (m *Model) updateGlobalAnimationState() {
-	m.globalAnimState = ui.GlobalAnimationSummary{
+	m.globalAnimState = tui.GlobalAnimationSummary{
 		HasThinking:  false,
 		HasLookHere:  false,
 	}
@@ -608,11 +608,11 @@ func (m *Model) updateGlobalAnimationState() {
 			continue
 		}
 
-		state := ui.GetConversationAnimationState(fullConv)
+		state := tui.GetConversationAnimationState(fullConv)
 		switch state {
-		case ui.ThinkingAnimation:
+		case tui.ThinkingAnimation:
 			m.globalAnimState.HasThinking = true
-		case ui.LookHereAnimation:
+		case tui.LookHereAnimation:
 			m.globalAnimState.HasLookHere = true
 		}
 
@@ -872,7 +872,7 @@ func (m *Model) applyFilterMode() {
 	}
 
 	// Update the diff view's filter mode
-	m.diffView.SetFilterMode(ui.FilterMode(m.filterMode))
+	m.diffView.SetFilterMode(tui.FilterMode(m.filterMode))
 
 	logger.Info("applyFilterMode: mode=%s, filtered=%d/%d files",
 		m.filterMode.String(), len(filteredFiles), len(m.diff.Files))

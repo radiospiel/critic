@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <script>
+        // Set theme immediately to avoid flash
+        document.documentElement.setAttribute('data-theme', localStorage.getItem('critic-theme') || 'dark');
+    </script>
+    <script src="/static/htmx.min.js"></script>
+    <script src="/static/htmx-ws.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body hx-ext="ws" ws-connect="/ws">
+    <div class="container">
+        <header class="header">
+            <h1>Critic</h1>
+            <div class="header-controls">
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    <span class="theme-icon"></span>
+                </button>
+            </div>
+        </header>
+
+        <div class="main-layout">
+            <aside class="sidebar">
+                <h2>Files</h2>
+                <div id="file-list" hx-get="/api/files" hx-trigger="load, ws:update">
+                    {{template "filelist.html" .Files}}
+                </div>
+            </aside>
+
+            <main class="content">
+                <div id="diff-view" class="diff-container">
+                    <div class="empty-state">
+                        <p>Select a file from the list to view its diff</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket message handler
+        document.body.addEventListener('ws:message', function(event) {
+            try {
+                const data = JSON.parse(event.detail.message);
+                if (data.type === 'conversation' || data.type === 'file') {
+                    // Trigger refresh of the current view
+                    if (typeof htmx !== 'undefined') {
+                        htmx.trigger('#file-list', 'refresh');
+                    }
+                    const diffView = document.getElementById('diff-view');
+                    if (diffView.dataset.filePath) {
+                        selectFile(diffView.dataset.filePath);
+                    }
+                }
+            } catch (e) {
+                console.error('WebSocket message error:', e);
+            }
+        });
+
+        // Theme toggle
+        function toggleTheme() {
+            const html = document.documentElement;
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            localStorage.setItem('critic-theme', newTheme);
+        }
+
+        // Load saved theme
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('critic-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        });
+
+        // File selection
+        function selectFile(path) {
+            console.log('selectFile called with:', path);
+            document.querySelectorAll('.file-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.path === path);
+            });
+            const diffView = document.getElementById('diff-view');
+            diffView.dataset.filePath = path;
+            const url = '/api/diff/' + encodeURIComponent(path);
+            console.log('Fetching diff from:', url);
+            // Use fetch directly for reliability
+            fetch(url)
+                .then(function(response) {
+                    console.log('Fetch response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.text();
+                })
+                .then(function(html) {
+                    console.log('Got HTML, length:', html.length);
+                    diffView.innerHTML = html;
+                })
+                .catch(function(err) {
+                    console.error('Fetch error:', err);
+                    diffView.innerHTML = '<div class="error">Failed to load diff: ' + err.message + '</div>';
+                });
+        }
+
+        // Keyboard shortcuts
+        let focusedPane = 'files'; // 'files' or 'diff'
+        let selectedFileIndex = 0;
+        let selectedLineIndex = 0;
+        let showHelp = false;
+
+        function getFileItems() {
+            return Array.from(document.querySelectorAll('.file-item'));
+        }
+
+        function getDiffLines() {
+            return Array.from(document.querySelectorAll('.diff-line'));
+        }
+
+        function selectFileByIndex(index) {
+            const items = getFileItems();
+            if (items.length === 0) return;
+            index = Math.max(0, Math.min(index, items.length - 1));
+            selectedFileIndex = index;
+            items.forEach((el, i) => {
+                el.classList.toggle('active', i === index);
+                if (i === index) {
+                    el.scrollIntoView({ block: 'nearest' });
+                    selectFile(el.dataset.path);
+                }
+            });
+        }
+
+        function selectLineByIndex(index) {
+            const lines = getDiffLines();
+            if (lines.length === 0) return;
+            index = Math.max(0, Math.min(index, lines.length - 1));
+            selectedLineIndex = index;
+            lines.forEach((el, i) => {
+                el.classList.toggle('selected', i === index);
+                if (i === index) {
+                    el.scrollIntoView({ block: 'nearest' });
+                }
+            });
+        }
+
+        function nextFile() {
+            const items = getFileItems();
+            const currentActive = items.findIndex(el => el.classList.contains('active'));
+            selectFileByIndex(currentActive + 1);
+        }
+
+        function prevFile() {
+            const items = getFileItems();
+            const currentActive = items.findIndex(el => el.classList.contains('active'));
+            selectFileByIndex(currentActive - 1);
+        }
+
+        function nextHunk() {
+            const lines = getDiffLines();
+            const headers = document.querySelectorAll('.hunk-header');
+            if (headers.length === 0) return;
+
+            const currentScroll = document.querySelector('.diff-container').scrollTop;
+            for (const header of headers) {
+                if (header.offsetTop > currentScroll + 50) {
+                    header.scrollIntoView({ block: 'start' });
+                    break;
+                }
+            }
+        }
+
+        function prevHunk() {
+            const headers = Array.from(document.querySelectorAll('.hunk-header'));
+            if (headers.length === 0) return;
+
+            const currentScroll = document.querySelector('.diff-container').scrollTop;
+            for (let i = headers.length - 1; i >= 0; i--) {
+                if (headers[i].offsetTop < currentScroll - 10) {
+                    headers[i].scrollIntoView({ block: 'start' });
+                    break;
+                }
+            }
+        }
+
+        function toggleHelp() {
+            showHelp = !showHelp;
+            let helpOverlay = document.getElementById('help-overlay');
+            if (!helpOverlay) {
+                helpOverlay = document.createElement('div');
+                helpOverlay.id = 'help-overlay';
+                helpOverlay.className = 'help-overlay';
+                helpOverlay.innerHTML = `
+                    <div class="help-content">
+                        <h2>Keyboard Shortcuts</h2>
+                        <div class="help-section">
+                            <h3>Navigation</h3>
+                            <p><kbd>Tab</kbd> Switch focus between file list and diff view</p>
+                            <p><kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>j</kbd>/<kbd>k</kbd> Navigate up/down</p>
+                            <p><kbd>g</kbd> Jump to top</p>
+                            <p><kbd>G</kbd> Jump to bottom</p>
+                        </div>
+                        <div class="help-section">
+                            <h3>File Navigation</h3>
+                            <p><kbd>n</kbd> Next file</p>
+                            <p><kbd>p</kbd> Previous file</p>
+                            <p><kbd>[</kbd> Previous hunk</p>
+                            <p><kbd>]</kbd> Next hunk</p>
+                        </div>
+                        <div class="help-section">
+                            <h3>Actions</h3>
+                            <p><kbd>Enter</kbd> Add comment on selected line</p>
+                            <p><kbd>t</kbd> Toggle theme (light/dark)</p>
+                            <p><kbd>?</kbd> Toggle this help</p>
+                        </div>
+                        <p class="help-dismiss">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</p>
+                    </div>
+                `;
+                document.body.appendChild(helpOverlay);
+            }
+            helpOverlay.style.display = showHelp ? 'flex' : 'none';
+        }
+
+        document.addEventListener('keydown', function(e) {
+            // Ignore if typing in input/textarea
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            // Help toggle
+            if (e.key === '?') {
+                e.preventDefault();
+                toggleHelp();
+                return;
+            }
+
+            // Close help with Escape
+            if (e.key === 'Escape') {
+                if (showHelp) {
+                    toggleHelp();
+                }
+                // Also close any open modal
+                const modal = document.getElementById('comment-modal');
+                if (modal && modal.style.display !== 'none') {
+                    modal.style.display = 'none';
+                }
+                return;
+            }
+
+            // Skip other shortcuts if help is open
+            if (showHelp) return;
+
+            const items = getFileItems();
+            const lines = getDiffLines();
+
+            switch (e.key) {
+                case 'Tab':
+                    e.preventDefault();
+                    focusedPane = focusedPane === 'files' ? 'diff' : 'files';
+                    document.querySelector('.sidebar').classList.toggle('focused', focusedPane === 'files');
+                    document.querySelector('.content').classList.toggle('focused', focusedPane === 'diff');
+                    break;
+
+                case 'ArrowUp':
+                case 'k':
+                    e.preventDefault();
+                    if (focusedPane === 'files') {
+                        const idx = items.findIndex(el => el.classList.contains('active'));
+                        selectFileByIndex(idx - 1);
+                    } else {
+                        selectLineByIndex(selectedLineIndex - 1);
+                    }
+                    break;
+
+                case 'ArrowDown':
+                case 'j':
+                    e.preventDefault();
+                    if (focusedPane === 'files') {
+                        const idx = items.findIndex(el => el.classList.contains('active'));
+                        selectFileByIndex(idx + 1);
+                    } else {
+                        selectLineByIndex(selectedLineIndex + 1);
+                    }
+                    break;
+
+                case 'g':
+                    e.preventDefault();
+                    if (focusedPane === 'files') {
+                        selectFileByIndex(0);
+                    } else {
+                        selectLineByIndex(0);
+                    }
+                    break;
+
+                case 'G':
+                    e.preventDefault();
+                    if (focusedPane === 'files') {
+                        selectFileByIndex(items.length - 1);
+                    } else {
+                        selectLineByIndex(lines.length - 1);
+                    }
+                    break;
+
+                case 'n':
+                    e.preventDefault();
+                    nextFile();
+                    break;
+
+                case 'p':
+                    e.preventDefault();
+                    prevFile();
+                    break;
+
+                case '[':
+                    e.preventDefault();
+                    prevHunk();
+                    break;
+
+                case ']':
+                    e.preventDefault();
+                    nextHunk();
+                    break;
+
+                case 't':
+                    e.preventDefault();
+                    toggleTheme();
+                    break;
+
+                case 'Enter':
+                    e.preventDefault();
+                    if (focusedPane === 'diff' && lines[selectedLineIndex]) {
+                        const line = lines[selectedLineIndex];
+                        const lineNum = line.dataset.lineNumber;
+                        const diffView = document.getElementById('diff-view');
+                        const filePath = diffView.dataset.filePath;
+                        if (filePath && lineNum && typeof showCommentForm === 'function') {
+                            showCommentForm(line, filePath, parseInt(lineNum));
+                        }
+                    }
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>
