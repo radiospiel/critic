@@ -167,7 +167,7 @@ func TestSelectableListRender(t *testing.T) {
 		if selected {
 			prefix = "> "
 		}
-		buf.SetString(0, 0, prefix+item.name, EmptyCell().Style)
+		buf.SetString(0, 0, prefix+item.name, EmptyCell.Style)
 	}
 
 	list := NewSelectableList[testItem](renderer)

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"git.15b.it/eno/critic/simple-go/logger"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -182,17 +183,51 @@ type Cell struct {
 	Style lipgloss.Style
 }
 
-// EmptyCell returns a cell with a space and no styling.
-func EmptyCell() Cell {
-	return Cell{Rune: ' ', Style: lipgloss.NewStyle()}
+// noStyle is the default unstyled lipgloss style.
+var noStyle = lipgloss.NewStyle()
+
+// noStyleStr is the rendered representation of noStyle for fast comparison.
+var noStyleStr = noStyle.Render("")
+
+// EmptyCell is a cell with a space and no styling.
+var EmptyCell = Cell{Rune: ' ', Style: noStyle}
+
+func emptyRow(width int) []Cell {
+	row := make([]Cell, width)
+	for i := range row {
+		row[i] = EmptyCell
+	}
+	return row
+}
+
+// cachedEmptyRow is a pre-allocated row of empty cells for fast copying.
+var cachedEmptyRow = emptyRow(256)
+
+// EmptyRow returns a slice of empty cells to copy from.
+// For width <= 256, returns a slice of the cached row (no allocation).
+// For width > 256, allocates and fills a new row.
+func EmptyRow(width int) []Cell {
+	if width <= 256 {
+		return cachedEmptyRow[:width]
+	}
+
+	logger.Debug("Could not load empty row from cache: allocating; w/width=%d", width)
+	return emptyRow(width)
 }
 
 // Buffer is a 2D grid of cells representing the terminal display.
 // Widgets render into buffers, and the compositor combines them.
 type Buffer struct {
-	cells  [][]Cell
-	width  int
-	height int
+	cells        [][]Cell
+	width        int
+	height       int
+	dirty        bool   // true if buffer has been modified since last String()
+	cachedString string // cached result of String()
+}
+
+// markDirty marks the buffer as modified, invalidating the cached string.
+func (b *Buffer) markDirty() {
+	b.dirty = true
 }
 
 // NewBuffer creates a new buffer with the given dimensions.
@@ -202,17 +237,19 @@ func NewBuffer(width, height int) *Buffer {
 	}
 
 	cells := make([][]Cell, height)
+	emptyRow := EmptyRow(width)
+
+	// Allocate rows and copy from cached empty row
 	for y := 0; y < height; y++ {
 		cells[y] = make([]Cell, width)
-		for x := 0; x < width; x++ {
-			cells[y][x] = EmptyCell()
-		}
+		copy(cells[y], emptyRow)
 	}
 
 	return &Buffer{
 		cells:  cells,
 		width:  width,
 		height: height,
+		dirty:  true,
 	}
 }
 
@@ -238,10 +275,14 @@ func (b *Buffer) Bounds() Rect {
 
 // Clear fills the entire buffer with empty cells.
 func (b *Buffer) Clear() {
+	if b.height == 0 || b.width == 0 {
+		return
+	}
+
+	b.markDirty()
+	emptyRow := EmptyRow(b.width)
 	for y := 0; y < b.height; y++ {
-		for x := 0; x < b.width; x++ {
-			b.cells[y][x] = EmptyCell()
-		}
+		copy(b.cells[y], emptyRow)
 	}
 }
 
@@ -251,6 +292,7 @@ func (b *Buffer) SetCell(x, y int, cell Cell) {
 	if x < 0 || x >= b.width || y < 0 || y >= b.height {
 		return
 	}
+	b.markDirty()
 	b.cells[y][x] = cell
 }
 
@@ -258,7 +300,7 @@ func (b *Buffer) SetCell(x, y int, cell Cell) {
 // Out of bounds reads return an empty cell.
 func (b *Buffer) GetCell(x, y int) Cell {
 	if x < 0 || x >= b.width || y < 0 || y >= b.height {
-		return EmptyCell()
+		return EmptyCell
 	}
 	return b.cells[y][x]
 }
@@ -270,6 +312,7 @@ func (b *Buffer) SetString(x, y int, s string, style lipgloss.Style) {
 		return
 	}
 
+	b.markDirty()
 	for _, r := range s {
 		if x >= b.width {
 			break
@@ -302,6 +345,10 @@ func (b *Buffer) SetStringTruncated(x, y int, s string, maxWidth int, style lipg
 // Fill fills a rectangular region with the given cell.
 func (b *Buffer) Fill(rect Rect, cell Cell) {
 	clipped := rect.Intersect(b.Bounds())
+	if clipped.Width == 0 || clipped.Height == 0 {
+		return
+	}
+	b.markDirty()
 	for y := clipped.Y; y < clipped.Y+clipped.Height; y++ {
 		for x := clipped.X; x < clipped.X+clipped.Width; x++ {
 			b.cells[y][x] = cell
@@ -312,6 +359,10 @@ func (b *Buffer) Fill(rect Rect, cell Cell) {
 // FillStyle fills a rectangular region with a style (keeping existing runes).
 func (b *Buffer) FillStyle(rect Rect, style lipgloss.Style) {
 	clipped := rect.Intersect(b.Bounds())
+	if clipped.Width == 0 || clipped.Height == 0 {
+		return
+	}
+	b.markDirty()
 	for y := clipped.Y; y < clipped.Y+clipped.Height; y++ {
 		for x := clipped.X; x < clipped.X+clipped.Width; x++ {
 			b.cells[y][x].Style = style
@@ -361,6 +412,7 @@ func (b *Buffer) DrawHorizontalLine(y, x1, x2 int, style lipgloss.Style) {
 // Blit copies the contents of another buffer into this one at the given offset.
 // This is used by the compositor to combine widget buffers.
 func (b *Buffer) Blit(src *Buffer, destX, destY int) {
+	b.markDirty()
 	for y := 0; y < src.height; y++ {
 		dy := destY + y
 		if dy < 0 || dy >= b.height {
@@ -378,6 +430,7 @@ func (b *Buffer) Blit(src *Buffer, destX, destY int) {
 
 // BlitRect copies a rectangular region from another buffer.
 func (b *Buffer) BlitRect(src *Buffer, srcRect Rect, destX, destY int) {
+	b.markDirty()
 	for y := 0; y < srcRect.Height; y++ {
 		sy := srcRect.Y + y
 		dy := destY + y
@@ -442,7 +495,7 @@ func (s *SubBuffer) SetCell(x, y int, cell Cell) {
 // GetCell returns the cell at the given position.
 func (s *SubBuffer) GetCell(x, y int) Cell {
 	if x < 0 || x >= s.offset.Width || y < 0 || y >= s.offset.Height {
-		return EmptyCell()
+		return EmptyCell
 	}
 	return s.parent.GetCell(s.offset.X+x, s.offset.Y+y)
 }
@@ -493,7 +546,7 @@ func (s *SubBuffer) Fill(rect Rect, cell Cell) {
 
 // Clear fills the sub-buffer with empty cells.
 func (s *SubBuffer) Clear() {
-	s.Fill(s.Bounds(), EmptyCell())
+	s.Fill(s.Bounds(), EmptyCell)
 }
 
 // AbsoluteOffset returns the absolute offset of this sub-buffer within the root buffer.
@@ -531,6 +584,7 @@ func (b *Buffer) InvertRow(row int) {
 	if row < 0 || row >= b.height {
 		return
 	}
+	b.markDirty()
 	for x := 0; x < b.width; x++ {
 		b.cells[row][x].Style = b.cells[row][x].Style.Reverse(true)
 	}
@@ -551,9 +605,14 @@ func (s *SubBuffer) InvertRow(row int) {
 
 // String renders the buffer to a string for terminal output.
 // This is the final step before sending to the terminal.
+// The result is cached until the buffer is modified.
 func (b *Buffer) String() string {
 	if b.height == 0 || b.width == 0 {
 		return ""
+	}
+
+	if !b.dirty {
+		return b.cachedString
 	}
 
 	var sb strings.Builder
@@ -564,14 +623,50 @@ func (b *Buffer) String() string {
 		if y > 0 {
 			sb.WriteString("\n")
 		}
-		for x := 0; x < b.width; x++ {
-			cell := b.cells[y][x]
-			styled := cell.Style.Render(string(cell.Rune))
-			sb.WriteString(styled)
-		}
+		renderRow(b.cells[y], &sb)
 	}
 
-	return sb.String()
+	b.cachedString = sb.String()
+	b.dirty = false
+	return b.cachedString
+}
+
+// renderRow renders a row of cells, grouping consecutive cells with the same style.
+func renderRow(row []Cell, sb *strings.Builder) {
+	if len(row) == 0 {
+		return
+	}
+
+	var runes strings.Builder
+	runes.Grow(len(row)) // Preallocate for worst case (all same style)
+	currentStyleStr := row[0].Style.Render("")
+	currentStyle := row[0].Style
+
+	for _, cell := range row {
+		cellStyleStr := cell.Style.Render("")
+		if cellStyleStr != currentStyleStr {
+			// Style changed - render accumulated runes and start new group
+			writeStyled(sb, currentStyleStr, currentStyle, runes.String())
+			runes.Reset()
+			currentStyle = cell.Style
+			currentStyleStr = cellStyleStr
+		}
+		runes.WriteRune(cell.Rune)
+	}
+
+	// Render final group
+	if runes.Len() > 0 {
+		writeStyled(sb, currentStyleStr, currentStyle, runes.String())
+	}
+}
+
+// writeStyled writes text to sb, applying style only if it's not noStyle.
+func writeStyled(sb *strings.Builder, styleStr string, style lipgloss.Style, text string) {
+	if styleStr == noStyleStr {
+		sb.WriteString(text)
+	} else {
+		sb.WriteString(style.Render(text))
+	}
 }
 
 // Equals compares two buffers for equality.
