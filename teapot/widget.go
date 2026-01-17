@@ -1,6 +1,7 @@
 package teapot
 
 import (
+	"git.15b.it/eno/critic/simple-go/logger"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -67,7 +68,7 @@ type cacheableWidget interface {
 // BaseWidget provides a default implementation of Widget.
 // Embed this in concrete widget types to get sensible defaults.
 type BaseWidget struct {
-	name         string  // Widget name (typically the struct type name)
+	name         string // Widget name (typically the struct type name)
 	bounds       Rect
 	constraints  Constraints
 	focused      bool
@@ -302,9 +303,9 @@ func (c *ContainerWidget) ClearChildren() {
 
 // FocusManager handles focus traversal within a widget tree.
 type FocusManager struct {
-	root        Widget
-	focused     Widget
-	focusChain  []Widget
+	root       Widget
+	focused    Widget
+	focusChain []Widget
 }
 
 // NewFocusManager creates a new focus manager for the given widget tree.
@@ -386,6 +387,7 @@ func (fm *FocusManager) collectFocusable(w Widget) {
 	}
 
 	if w.Focusable() {
+		logger.Info("*** collectFocusable")
 		fm.focusChain = append(fm.focusChain, w)
 	}
 

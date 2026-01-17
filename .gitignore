@@ -16,3 +16,4 @@ critic.bin
 
 # Go workspace file
 go.work
+critic.prof

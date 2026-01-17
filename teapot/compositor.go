@@ -51,6 +51,7 @@ func UnsubscribeFromGlobalTicks(handler TickHandler) {
 // Call this when handling ComposerTickMsg without a Compositor.
 func NotifyGlobalTickSubscribers() {
 	GlobalTickCount++
+	// logger.Info("*** Notifying %d tick subscribers", len(globalTickSubscribers))
 	for _, handler := range globalTickSubscribers {
 		handler.HandleTick()
 	}
@@ -125,6 +126,7 @@ func (c *Compositor) HandleTick() tea.Cmd {
 	}
 
 	// Check if any widget might be dirty
+	logger.Info("*** checkDirtyWidgets")
 	c.checkDirtyWidgets(c.root)
 
 	// Continue ticking
@@ -311,8 +313,6 @@ func (c *Compositor) renderWidgetWithCache(w Widget) {
 	bounds := w.Bounds()
 	mightBeDirty := w.MightBeDirty() // MightBeDirty() returns true if dirty or animated
 
-	compositorLog("renderWidgetWithCache: bounds=%dx%d, mightBeDirty=%v", bounds.Width, bounds.Height, mightBeDirty)
-
 	// Try to use caching if the widget supports it
 	cw, isCacheableWidget := w.(cacheableWidget)
 	preconditions.Check(isCacheableWidget, "widget is not a cacheableWidget")
@@ -342,6 +342,7 @@ func (c *Compositor) renderWidgetWithCache(w Widget) {
 	}
 
 	// Blit the cached buffer to the output
+	compositorLog("buffer.Blit: x=%d, y=%d, w=%d, h=%d", bounds.X, bounds.Y, cached.width, cached.height)
 	c.buffer.Blit(cached, bounds.X, bounds.Y)
 }
 

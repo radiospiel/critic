@@ -2,6 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"runtime/pprof"
 	"strings"
 
 	"git.15b.it/eno/critic/internal/app"
@@ -12,6 +15,7 @@ import (
 func newTUICmd(handler func(*app.Args) error) *cobra.Command {
 	var extensionsFlag []string
 	var noAnimationFlag bool
+	var cpuprofileFlag string
 
 	cmd := &cobra.Command{
 		Use:   "tui [flags] [base1,base2,...] [-- path1 path2 ...]",
@@ -49,6 +53,16 @@ Examples:
 					fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 				}
 			}()
+
+			// CPU profiling
+			if cpuprofileFlag != "" {
+				f, err := os.Create(cpuprofileFlag)
+				if err != nil {
+					log.Fatal(err)
+				}
+				pprof.StartCPUProfile(f)
+				defer pprof.StopCPUProfile()
+			}
 			parsedArgs := &app.Args{
 				Extensions:  ensureSlice(extensionsFlag),
 				Paths:       []string{"."},
@@ -81,6 +95,7 @@ Examples:
 
 	cmd.Flags().StringSliceVar(&extensionsFlag, "extensions", nil, "Comma-separated list of file extensions to include")
 	cmd.Flags().BoolVar(&noAnimationFlag, "no-animation", false, "Disable animations")
+	cmd.Flags().StringVar(&cpuprofileFlag, "cpuprofile", "", "Write CPU profile to file")
 
 	return cmd
 }

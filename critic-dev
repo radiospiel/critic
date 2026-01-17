@@ -6,5 +6,16 @@ echo "Running critic in development mode" >&2
 # Build the binary
 go build -o critic.bin ./cmd/critic
 
-# Execute with all arguments
-exec ./critic.bin "$@"
+# Execute with CPU profiling enabled
+# Use go tool pprof critic.prof to check profile
+if [[ "${1:-}" == "tui" ]]; then
+    # Strip 'tui' from args since we add it with cpuprofile
+    shift
+    exec ./critic.bin tui --cpuprofile=critic.prof "$@"
+elif [[ "${1:-}" =~ ^(webui|mcp|convo|log)$ ]]; then
+    # Other subcommands: pass through as-is
+    exec ./critic.bin "$@"
+else
+    # No subcommand or unknown arg: default to tui with cpuprofile
+    exec ./critic.bin tui --cpuprofile=critic.prof "$@"
+fi
