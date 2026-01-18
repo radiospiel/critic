@@ -185,6 +185,6 @@ obs.SetValueAtKey("diff", currentDiff) // DiffViewWidget auto-invalidated
 - [x] Add `OnChange()` method to Observable
 - [x] Add `needsRender` field and `MarkRendered()` to BaseWidget
 - [x] Add widget subscription management to Compositor
-- [ ] Wire up FileListWidget subscription in app
-- [ ] Wire up DiffViewWidget subscription in app
-- [ ] Migrate state updates to use observable
+- [x] Wire up FileListWidget subscription in app
+- [x] Wire up DiffViewWidget subscription in app
+- [ ] Migrate state updates to use observable (optional - can be done incrementally)
