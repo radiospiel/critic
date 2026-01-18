@@ -14,7 +14,7 @@ type mockWidget struct {
 
 func newMockWidget(id string, minW, minH, stretch int) *mockWidget {
 	w := &mockWidget{
-		BaseWidget: NewBaseWidget(ZOrderDefault),
+		BaseWidget: NewBaseWidget(),
 		id:         id,
 	}
 	w.SetConstraints(DefaultConstraints().WithMinSize(minW, minH).WithStretch(stretch, stretch))
@@ -63,8 +63,8 @@ func TestVBoxLayout(t *testing.T) {
 func TestVBoxWithMinSize(t *testing.T) {
 	vbox := NewVBox(0)
 
-	child1 := newMockWidget("A", 0, 30, 0)  // Fixed 30px height
-	child2 := newMockWidget("B", 0, 0, 1)   // Takes remaining space
+	child1 := newMockWidget("A", 0, 30, 0) // Fixed 30px height
+	child2 := newMockWidget("B", 0, 0, 1)  // Takes remaining space
 
 	vbox.AddChild(child1)
 	vbox.AddChild(child2)
@@ -131,7 +131,7 @@ func TestHSplit(t *testing.T) {
 	left := newMockWidget("L", 0, 0, 0)
 	right := newMockWidget("R", 0, 0, 0)
 
-	split := NewHSplit(left, right, 0.3) // 30% left, 70% right
+	split := NewHSplit(left, right, 0.3)    // 30% left, 70% right
 	split.SetBounds(NewRect(0, 0, 101, 50)) // 101 - 1 divider = 100 available
 
 	// 30% of 100 = 30
@@ -147,7 +147,7 @@ func TestVSplit(t *testing.T) {
 	top := newMockWidget("T", 0, 0, 0)
 	bottom := newMockWidget("B", 0, 0, 0)
 
-	split := NewVSplit(top, bottom, 0.4) // 40% top, 60% bottom
+	split := NewVSplit(top, bottom, 0.4)    // 40% top, 60% bottom
 	split.SetBounds(NewRect(0, 0, 50, 101)) // 101 - 1 divider = 100 available
 
 	// 40% of 100 = 40

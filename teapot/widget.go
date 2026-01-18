@@ -5,14 +5,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Z-order constants for rendering layers
-const (
-	// ZOrderDefault is the default z-order for normal widgets
-	ZOrderDefault = 1
-	// ZOrderAnimation is the z-order for animation overlays
-	ZOrderAnimation = 100
-)
-
 // Widget is the core interface for all UI components.
 // Widgets form a tree structure where containers manage their children's layout.
 type Widget interface {
@@ -40,7 +32,6 @@ type Widget interface {
 	IsDirty() bool      // Returns true if widget needs repainting
 	Repaint()           // Marks widget as needing repaint (propagates to parents)
 	MightBeDirty() bool // Returns true if widget might need repainting (animated widgets override to return true)
-	ZOrder() int        // Returns the z-order for rendering layers
 
 	// Focus and input handling
 	Focusable() bool
@@ -55,16 +46,6 @@ type Widget interface {
 	SetParent(parent Widget)
 }
 
-// cacheableWidget is an internal interface used by the Compositor to manage
-// per-widget render caching. This interface is intentionally not part of the
-// public Widget interface because caching is an implementation detail of the
-// compositor's rendering strategy. Widgets that embed BaseWidget automatically
-// implement this interface.
-type cacheableWidget interface {
-	CachedView() *Buffer
-	SetCachedView(*Buffer)
-}
-
 // BaseWidget provides a default implementation of Widget.
 // Embed this in concrete widget types to get sensible defaults.
 type BaseWidget struct {
@@ -77,18 +58,15 @@ type BaseWidget struct {
 	border       Border
 	borderTitle  string
 	borderFooter string
-	dirty        bool    // True if widget needs repainting
-	zOrder       int     // Z-order for rendering layers (default: ZOrderDefault)
-	cachedView   *Buffer // Cached rendered view (owned by widget, not compositor)
+	dirty        bool // True if widget needs repainting
 }
 
 // NewBaseWidget creates a new base widget with the given z-order.
-func NewBaseWidget(zOrder int) BaseWidget {
+func NewBaseWidget() BaseWidget {
 	return BaseWidget{
 		constraints: DefaultConstraints(),
 		focusable:   true,
 		dirty:       true, // Widgets start dirty so they're rendered initially
-		zOrder:      zOrder,
 	}
 }
 
@@ -195,25 +173,6 @@ func (b *BaseWidget) MightBeDirty() bool {
 	return b.dirty
 }
 
-// ZOrder returns the widget's z-order for rendering.
-func (b *BaseWidget) ZOrder() int {
-	return b.zOrder
-}
-
-// CachedView returns the cached rendered view, or nil if not cached.
-func (b *BaseWidget) CachedView() *Buffer {
-	return b.cachedView
-}
-
-// SetCachedView sets the cached rendered view and clears the dirty flag.
-// This should be called after rendering to cache.
-func (b *BaseWidget) SetCachedView(buf *Buffer) {
-	b.cachedView = buf
-	if buf != nil {
-		b.dirty = false // Clear dirty after caching the view
-	}
-}
-
 // Border returns the widget's border configuration.
 func (b *BaseWidget) Border() Border {
 	return b.border
@@ -267,7 +226,7 @@ type ContainerWidget struct {
 // NewContainerWidget creates a new container widget.
 func NewContainerWidget() ContainerWidget {
 	return ContainerWidget{
-		BaseWidget: NewBaseWidget(ZOrderDefault),
+		BaseWidget: NewBaseWidget(),
 	}
 }
 

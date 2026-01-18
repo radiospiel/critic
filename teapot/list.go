@@ -28,20 +28,20 @@ type SelectableList[T ListItem] struct {
 	renderer     ItemRenderer[T]
 
 	// Styles
-	selectedStyle         lipgloss.Style
+	selectedStyle          lipgloss.Style
 	selectedUnfocusedStyle lipgloss.Style
-	normalStyle           lipgloss.Style
+	normalStyle            lipgloss.Style
 
 	// Callbacks
-	onSelect  func(item T)        // Called when selection changes
-	onConfirm func(item T)        // Called when Enter is pressed
-	onChange  func(items []T)     // Called when items change
+	onSelect  func(item T)    // Called when selection changes
+	onConfirm func(item T)    // Called when Enter is pressed
+	onChange  func(items []T) // Called when items change
 }
 
 // NewSelectableList creates a new selectable list with the given renderer.
 func NewSelectableList[T ListItem](renderer ItemRenderer[T]) *SelectableList[T] {
 	list := &SelectableList[T]{
-		BaseWidget: NewBaseWidget(ZOrderDefault),
+		BaseWidget: NewBaseWidget(),
 		renderer:   renderer,
 		selectedStyle: lipgloss.NewStyle().
 			Bold(true).
@@ -283,16 +283,16 @@ func (l *SelectableList[T]) pageDown() {
 // ScrollView is a widget that provides scrolling for content larger than its bounds.
 type ScrollView struct {
 	BaseWidget
-	content      Widget
-	scrollX      int
-	scrollY      int
-	contentSize  Size
+	content     Widget
+	scrollX     int
+	scrollY     int
+	contentSize Size
 }
 
 // NewScrollView creates a new scroll view with the given content.
 func NewScrollView(content Widget) *ScrollView {
 	sv := &ScrollView{
-		BaseWidget: NewBaseWidget(ZOrderDefault),
+		BaseWidget: NewBaseWidget(),
 		content:    content,
 	}
 	if content != nil {

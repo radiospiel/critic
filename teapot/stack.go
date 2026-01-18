@@ -100,22 +100,22 @@ func (s *Stack) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 // It captures all input and prevents interaction with content below.
 type Modal struct {
 	BaseWidget
-	content      Widget
-	title        string
-	width        int  // 0 = auto
-	height       int  // 0 = auto
-	centerH      bool // Center horizontally
-	centerV      bool // Center vertically
-	showBorder   bool
-	borderStyle  lipgloss.Style
-	bgStyle      lipgloss.Style
+	content       Widget
+	title         string
+	width         int  // 0 = auto
+	height        int  // 0 = auto
+	centerH       bool // Center horizontally
+	centerV       bool // Center vertically
+	showBorder    bool
+	borderStyle   lipgloss.Style
+	bgStyle       lipgloss.Style
 	dimBackground bool
 }
 
 // NewModal creates a new modal dialog with the given content.
 func NewModal(content Widget, title string) *Modal {
 	m := &Modal{
-		BaseWidget:    NewBaseWidget(ZOrderDefault),
+		BaseWidget:    NewBaseWidget(),
 		content:       content,
 		title:         title,
 		centerH:       true,

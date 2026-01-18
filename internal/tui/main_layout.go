@@ -1,8 +1,8 @@
 package tui
 
 import (
-	pot "git.15b.it/eno/critic/teapot"
 	"git.15b.it/eno/critic/simple-go/logger"
+	pot "git.15b.it/eno/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -23,7 +23,7 @@ type MainLayout struct {
 // NewMainLayout creates a new main layout with the given widgets.
 func NewMainLayout(fileList *FileListWidget, diffView *DiffViewModel, statusBar *StatusBarWidget) *MainLayout {
 	m := &MainLayout{
-		BaseWidget: pot.NewBaseWidget(pot.ZOrderDefault),
+		BaseWidget: pot.NewBaseWidget(),
 		fileList:   fileList,
 		diffView:   diffView,
 		statusBar:  statusBar,

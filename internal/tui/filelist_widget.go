@@ -304,4 +304,3 @@ func (w *FileListWidget) Children() []pot.Widget {
 func (w *FileListWidget) SetSize(width, height int) {
 	w.SetBounds(pot.NewRect(0, 0, width, height))
 }
-

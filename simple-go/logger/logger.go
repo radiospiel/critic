@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // Level represents a log level
@@ -38,6 +39,15 @@ func ensureLogger() {
 		logFilePath = buildLogFilePath()
 		logger = newFileLogger(logFilePath)
 	})
+}
+
+func Runtime[T any](msg string, fun func() T) T {
+	start := time.Now()
+	r := fun()
+
+	durationMs := float64(time.Since(start).Microseconds()) / 1000.0
+	Info("%s: %.1f msecs", msg, durationMs)
+	return r
 }
 
 // buildLogFilePath determines the log file path from the process name

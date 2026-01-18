@@ -21,14 +21,13 @@ type LegacyModel interface {
 // This enables incremental migration from string-based rendering to the widget system.
 type LegacyAdapter struct {
 	BaseWidget
-	model   LegacyModel
-	cached  string
+	model LegacyModel
 }
 
 // NewLegacyAdapter creates a new adapter wrapping a legacy model.
 func NewLegacyAdapter(model LegacyModel) *LegacyAdapter {
 	return &LegacyAdapter{
-		BaseWidget: NewBaseWidget(ZOrderDefault),
+		BaseWidget: NewBaseWidget(),
 		model:      model,
 	}
 }
@@ -62,7 +61,6 @@ func (l *LegacyAdapter) Render(buf *SubBuffer) {
 
 	// Get the string output from the legacy model
 	view := l.model.View()
-	l.cached = view
 
 	// Parse the string output and render to buffer
 	// This handles basic ANSI sequences and newlines
@@ -127,7 +125,7 @@ type StringWidget struct {
 // NewStringWidget creates a new string widget.
 func NewStringWidget(content string) *StringWidget {
 	return &StringWidget{
-		BaseWidget: NewBaseWidget(ZOrderDefault),
+		BaseWidget: NewBaseWidget(),
 		content:    content,
 	}
 }
@@ -165,7 +163,7 @@ type CallbackWidget struct {
 // NewCallbackWidget creates a new callback widget.
 func NewCallbackWidget(renderFn func(buf *SubBuffer, bounds Rect, focused bool)) *CallbackWidget {
 	return &CallbackWidget{
-		BaseWidget: NewBaseWidget(ZOrderDefault),
+		BaseWidget: NewBaseWidget(),
 		renderFn:   renderFn,
 	}
 }

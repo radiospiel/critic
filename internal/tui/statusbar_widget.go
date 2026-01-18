@@ -31,7 +31,7 @@ func NewStatusBarWidget() *StatusBarWidget {
 		Foreground(lipgloss.Color("#000000"))
 
 	sb := &StatusBarWidget{
-		BaseWidget: teapot.NewBaseWidget(teapot.ZOrderDefault),
+		BaseWidget: teapot.NewBaseWidget(),
 		cellStyle:  cellStyle,
 		help:       "[?] help",
 	}

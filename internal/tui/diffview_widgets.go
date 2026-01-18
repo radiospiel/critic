@@ -30,7 +30,7 @@ func NewHunkWidget(
 	highlightedOld, highlightedNew, highlightedCtx map[int]string,
 ) *HunkWidget {
 	w := &HunkWidget{
-		BaseWidget:      teapot.NewBaseWidget(teapot.ZOrderDefault),
+		BaseWidget:      teapot.NewBaseWidget(),
 		hunk:            hunk,
 		conversationMap: conversationMap,
 		highlightedOld:  highlightedOld,
@@ -358,7 +358,7 @@ func NewFileHeaderWidget(file *ctypes.FileDiff) *FileHeaderWidget {
 	}
 
 	w := &FileHeaderWidget{
-		BaseWidget: teapot.NewBaseWidget(teapot.ZOrderDefault),
+		BaseWidget: teapot.NewBaseWidget(),
 		header:     header,
 	}
 	w.SetFocusable(false)
@@ -407,7 +407,7 @@ type DiffViewWidget struct {
 // NewDiffViewWidget creates a new diff view widget.
 func NewDiffViewWidget() *DiffViewWidget {
 	w := &DiffViewWidget{
-		BaseWidget: teapot.NewBaseWidget(teapot.ZOrderDefault),
+		BaseWidget: teapot.NewBaseWidget(),
 	}
 	w.SetFocusable(true)
 	return w
@@ -723,4 +723,3 @@ func (w *DiffViewWidget) GetConversationUUIDForRow(row int) string {
 func (w *DiffViewWidget) IsCommentRow(row int) bool {
 	return w.GetConversationUUIDForRow(row) != ""
 }
-

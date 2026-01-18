@@ -2,11 +2,9 @@ package teapot
 
 import (
 	"reflect"
-	"sort"
 	"time"
 
 	"git.15b.it/eno/critic/simple-go/logger"
-	"git.15b.it/eno/critic/simple-go/preconditions"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -151,17 +149,14 @@ func (c *Compositor) checkDirtyWidgets(w Widget) {
 // RegisterTopLevelWidget adds a widget to the top-level widget list.
 func (c *Compositor) RegisterTopLevelWidget(w Widget) {
 	c.topLevelWidgets = append(c.topLevelWidgets, w)
-	c.sortTopLevelWidgets()
 }
 
 // UnregisterTopLevelWidget removes a widget from the top-level widget list.
 func (c *Compositor) UnregisterTopLevelWidget(w Widget) {
-	for i, existing := range c.topLevelWidgets {
+	for i := range c.topLevelWidgets {
+		existing := c.topLevelWidgets[i]
 		if existing == w {
 			c.topLevelWidgets = append(c.topLevelWidgets[:i], c.topLevelWidgets[i+1:]...)
-			cw, isCacheableWidget := w.(cacheableWidget)
-			preconditions.Check(isCacheableWidget, "widget is not a cacheableWidget")
-			cw.SetCachedView(nil) // Clear the widget's cache
 			return
 		}
 	}
@@ -173,20 +168,10 @@ func (c *Compositor) rebuildTopLevelWidgets() {
 	if c.root != nil {
 		c.topLevelWidgets = append(c.topLevelWidgets, c.root)
 	}
-	c.sortTopLevelWidgets()
-}
-
-// sortTopLevelWidgets sorts top-level widgets by z-order.
-func (c *Compositor) sortTopLevelWidgets() {
-	sort.Slice(c.topLevelWidgets, func(i, j int) bool {
-		return c.topLevelWidgets[i].ZOrder() < c.topLevelWidgets[j].ZOrder()
-	})
 }
 
 // SetRoot sets the root widget.
 func (c *Compositor) SetRoot(root Widget) {
-	// Clear cache on old widgets
-	c.clearWidgetCaches(c.root)
 	c.root = root
 	if root != nil {
 		root.SetBounds(Rect{X: 0, Y: 0, Width: c.width, Height: c.height})
@@ -197,19 +182,6 @@ func (c *Compositor) SetRoot(root Widget) {
 		c.topLevelWidgets = nil
 	}
 	c.dirty = true
-}
-
-// clearWidgetCaches clears cached views on a widget and its children.
-func (c *Compositor) clearWidgetCaches(w Widget) {
-	if w == nil {
-		return
-	}
-	cw, isCacheableWidget := w.(cacheableWidget)
-	preconditions.Check(isCacheableWidget, "widget is not a cacheableWidget")
-	cw.SetCachedView(nil)
-	for _, child := range w.Children() {
-		c.clearWidgetCaches(child)
-	}
 }
 
 // Root returns the root widget.
@@ -225,9 +197,6 @@ func (c *Compositor) Resize(width, height int) {
 	// Reallocate buffers
 	c.buffer = NewBuffer(width, height)
 	c.prevBuffer = nil // Force full redraw
-
-	// Clear widget caches as sizes have changed
-	c.clearWidgetCaches(c.root)
 
 	// Propagate size to root
 	if c.root != nil {
@@ -274,7 +243,7 @@ func (c *Compositor) Render() string {
 
 	// Iterate over top-level widgets by z-order (already sorted)
 	for _, w := range c.topLevelWidgets {
-		c.renderWidgetWithCache(w)
+		c.renderWidget(w)
 	}
 
 	// Save for next comparison
@@ -306,44 +275,20 @@ func widgetTypeName(w Widget) string {
 	return t.Name()
 }
 
-// renderWidgetWithCache renders a widget, using its cache if available.
-// The cache is accessed via the internal cacheableWidget interface.
-// Widgets that embed BaseWidget automatically support caching.
-func (c *Compositor) renderWidgetWithCache(w Widget) {
+// renderWidget renders a widget.
+func (c *Compositor) renderWidget(w Widget) {
 	bounds := w.Bounds()
-	mightBeDirty := w.MightBeDirty() // MightBeDirty() returns true if dirty or animated
 
-	// Try to use caching if the widget supports it
-	cw, isCacheableWidget := w.(cacheableWidget)
-	preconditions.Check(isCacheableWidget, "widget is not a cacheableWidget")
+	widgetBuffer := logger.Runtime("render "+widgetTypeName(w), func() *Buffer {
+		wb := NewBuffer(bounds.Width, bounds.Height)
+		sb := wb.Sub(wb.Bounds())
+		RenderWidget(w, sb)
+		return wb
+	})
 
-	// Check if we have a cached buffer in the widget
-	cached := cw.CachedView()
-	if cached == nil || mightBeDirty {
-		start := time.Now()
-		compositorLog("rendering (cached=%v, mightBeDirty=%v)", cached != nil, mightBeDirty)
-
-		// Create or resize the cache buffer
-		if cached == nil || cached.Width() != bounds.Width || cached.Height() != bounds.Height {
-			cached = NewBuffer(bounds.Width, bounds.Height)
-		}
-
-		// Clear and render to cache
-		cached.Clear()
-		sub := cached.Sub(cached.Bounds())
-		RenderWidget(w, sub)
-
-		// SetCachedView clears the dirty flag automatically
-		cw.SetCachedView(cached)
-
-		durationMs := float64(time.Since(start).Microseconds()) / 1000.0
-		renderLogger(widgetTypeName(w)+": View()", durationMs)
-		compositorLog("render complete, cached buffer set")
-	}
-
-	// Blit the cached buffer to the output
-	compositorLog("buffer.Blit: x=%d, y=%d, w=%d, h=%d", bounds.X, bounds.Y, cached.width, cached.height)
-	c.buffer.Blit(cached, bounds.X, bounds.Y)
+	// Blit the buffer to the output
+	c.buffer.Blit(widgetBuffer, bounds.X, bounds.Y)
+	compositorLog("buffer.Blit: x=%d, y=%d, w=%d, h=%d", bounds.X, bounds.Y, widgetBuffer.width, widgetBuffer.height)
 }
 
 // RenderWidget renders a widget with its border (if any) to the given buffer.

@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"git.15b.it/eno/critic/simple-go/logger"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -200,34 +199,26 @@ func emptyRow(width int) []Cell {
 	return row
 }
 
-// cachedEmptyRow is a pre-allocated row of empty cells for fast copying.
-var cachedEmptyRow = emptyRow(256)
+// precalculatedEmptyRow is a pre-allocated row of empty cells for fast copying.
+var precalculatedEmptyRow = emptyRow(256)
 
 // EmptyRow returns a slice of empty cells to copy from.
-// For width <= 256, returns a slice of the cached row (no allocation).
+// For width <= 256, returns a slice of the preallocated empty row.
 // For width > 256, allocates and fills a new row.
 func EmptyRow(width int) []Cell {
 	if width <= 256 {
-		return cachedEmptyRow[:width]
+		return precalculatedEmptyRow[:width]
 	}
 
-	logger.Debug("Could not load empty row from cache: allocating; w/width=%d", width)
 	return emptyRow(width)
 }
 
 // Buffer is a 2D grid of cells representing the terminal display.
 // Widgets render into buffers, and the compositor combines them.
 type Buffer struct {
-	cells        [][]Cell
-	width        int
-	height       int
-	dirty        bool   // true if buffer has been modified since last String()
-	cachedString string // cached result of String()
-}
-
-// markDirty marks the buffer as modified, invalidating the cached string.
-func (b *Buffer) markDirty() {
-	b.dirty = true
+	cells  [][]Cell
+	width  int
+	height int
 }
 
 // NewBuffer creates a new buffer with the given dimensions.
@@ -239,7 +230,6 @@ func NewBuffer(width, height int) *Buffer {
 	cells := make([][]Cell, height)
 	emptyRow := EmptyRow(width)
 
-	// Allocate rows and copy from cached empty row
 	for y := 0; y < height; y++ {
 		cells[y] = make([]Cell, width)
 		copy(cells[y], emptyRow)
@@ -249,7 +239,6 @@ func NewBuffer(width, height int) *Buffer {
 		cells:  cells,
 		width:  width,
 		height: height,
-		dirty:  true,
 	}
 }
 
@@ -279,7 +268,6 @@ func (b *Buffer) Clear() {
 		return
 	}
 
-	b.markDirty()
 	emptyRow := EmptyRow(b.width)
 	for y := 0; y < b.height; y++ {
 		copy(b.cells[y], emptyRow)
@@ -302,8 +290,6 @@ func (b *Buffer) SetCells(x, y int, cells []Cell) {
 	if y < 0 || y >= b.height || len(cells) == 0 {
 		return
 	}
-
-	b.markDirty()
 
 	// Handle negative x by skipping cells
 	if x < 0 {
@@ -369,7 +355,6 @@ func (b *Buffer) Fill(rect Rect, cell Cell) {
 	if clipped.Width == 0 || clipped.Height == 0 {
 		return
 	}
-	b.markDirty()
 	for y := clipped.Y; y < clipped.Y+clipped.Height; y++ {
 		for x := clipped.X; x < clipped.X+clipped.Width; x++ {
 			b.cells[y][x] = cell
@@ -383,7 +368,7 @@ func (b *Buffer) FillStyle(rect Rect, style lipgloss.Style) {
 	if clipped.Width == 0 || clipped.Height == 0 {
 		return
 	}
-	b.markDirty()
+
 	for y := clipped.Y; y < clipped.Y+clipped.Height; y++ {
 		for x := clipped.X; x < clipped.X+clipped.Width; x++ {
 			b.cells[y][x].Style = style
@@ -429,7 +414,6 @@ func (b *Buffer) DrawHorizontalLine(y, x1, x2 int, style lipgloss.Style) {
 // Blit copies the contents of another buffer into this one at the given offset.
 // This is used by the compositor to combine widget buffers.
 func (b *Buffer) Blit(src *Buffer, destX, destY int) {
-	b.markDirty()
 	for y := 0; y < src.height; y++ {
 		dy := destY + y
 		if dy < 0 || dy >= b.height {
@@ -447,7 +431,6 @@ func (b *Buffer) Blit(src *Buffer, destX, destY int) {
 
 // BlitRect copies a rectangular region from another buffer.
 func (b *Buffer) BlitRect(src *Buffer, srcRect Rect, destX, destY int) {
-	b.markDirty()
 	for y := 0; y < srcRect.Height; y++ {
 		sy := srcRect.Y + y
 		dy := destY + y
@@ -631,7 +614,6 @@ func (b *Buffer) InvertRow(row int) {
 	if row < 0 || row >= b.height {
 		return
 	}
-	b.markDirty()
 	for x := 0; x < b.width; x++ {
 		b.cells[row][x].Style = b.cells[row][x].Style.Reverse(true)
 	}
@@ -653,14 +635,9 @@ func (s *SubBuffer) InvertRow(row int) {
 
 // String renders the buffer to a string for terminal output.
 // This is the final step before sending to the terminal.
-// The result is cached until the buffer is modified.
 func (b *Buffer) String() string {
 	if b.height == 0 || b.width == 0 {
 		return ""
-	}
-
-	if !b.dirty {
-		return b.cachedString
 	}
 
 	var sb strings.Builder
@@ -674,9 +651,7 @@ func (b *Buffer) String() string {
 		renderRow(b.cells[y], &sb)
 	}
 
-	b.cachedString = sb.String()
-	b.dirty = false
-	return b.cachedString
+	return sb.String()
 }
 
 // renderRow renders a row of cells, grouping consecutive cells with the same style.
