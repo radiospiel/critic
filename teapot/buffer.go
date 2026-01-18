@@ -654,6 +654,11 @@ func (b *Buffer) RenderToString() string {
 	return sb.String()
 }
 
+func rendercellStyleStr(style lipgloss.Style) string {
+	// return style.Render("")
+	return ""
+}
+
 // renderRow renders a row of cells, grouping consecutive cells with the same style.
 func renderRow(row []Cell, sb *strings.Builder) {
 	if len(row) == 0 {
@@ -662,11 +667,11 @@ func renderRow(row []Cell, sb *strings.Builder) {
 
 	var runes strings.Builder
 	runes.Grow(len(row)) // Preallocate for worst case (all same style)
-	currentStyleStr := row[0].Style.Render("")
+	currentStyleStr := rendercellStyleStr(row[0].Style)
 	currentStyle := row[0].Style
 
 	for _, cell := range row {
-		cellStyleStr := cell.Style.Render("")
+		cellStyleStr := rendercellStyleStr(cell.Style)
 		if cellStyleStr != currentStyleStr {
 			// Style changed - render accumulated runes and start new group
 			writeStyled(sb, currentStyleStr, currentStyle, runes.String())
@@ -685,11 +690,12 @@ func renderRow(row []Cell, sb *strings.Builder) {
 
 // writeStyled writes text to sb, applying style only if it's not noStyle.
 func writeStyled(sb *strings.Builder, styleStr string, style lipgloss.Style, text string) {
-	if styleStr == noStyleStr {
-		sb.WriteString(text)
-	} else {
-		sb.WriteString(style.Render(text))
-	}
+	sb.WriteString(text)
+	// if false && styleStr == noStyleStr {
+	// 	sb.WriteString(text)
+	// } else {
+	// 	sb.WriteString(style.Render(text))
+	// }
 }
 
 // Equals compares two buffers for equality.

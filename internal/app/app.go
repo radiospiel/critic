@@ -211,9 +211,9 @@ func (m Model) Init() tea.Cmd {
 		loadDiffCmd(&m),
 		disableTerminalLineWrap, // This now handles alternate screen + nowrap
 		// Always start compositor tick loop
-		tea.Tick(teapot.ComposerTickInterval, func(_ time.Time) tea.Msg {
-			return teapot.ComposerTickMsg{}
-		}),
+		// tea.Tick(teapot.ComposerTickInterval, func(_ time.Time) tea.Msg {
+		// 	return teapot.ComposerTickMsg{}
+		// }),
 	}
 
 	return tea.Batch(cmds...)
