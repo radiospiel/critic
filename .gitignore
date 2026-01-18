@@ -4,6 +4,9 @@ critic.bin
 critic.prof
 .critic.db*
 
+# Profiling output
+tests/pprof/*.prof
+
 
 # Build artifacts
 *.exe
