@@ -19,13 +19,19 @@ const maxArrayIndex = 99999
 // Subscription represents a registered observer subscription.
 type Subscription int
 
-// ChangeCallback is the function signature for change notifications.
-// It receives the full key path, the old value, and the new value.
+// PathChangeCallback is the function signature for change notifications.
+// It receives only the changed key path, not the old/new values.
+// Widgets should fetch fresh data when notified rather than using cached values.
+type PathChangeCallback func(path string)
+
+// ChangeCallback is the legacy function signature for change notifications.
+// Deprecated: Use PathChangeCallback instead.
 type ChangeCallback func(key string, oldValue, newValue any)
 
 type subscription struct {
-	patterns []string
-	callback ChangeCallback
+	patterns     []string
+	callback     ChangeCallback     // Legacy callback with old/new values
+	pathCallback PathChangeCallback // New path-only callback
 }
 
 // Observable wraps maps and lists with path-based access and change subscriptions.
@@ -345,6 +351,7 @@ func (o *Observable) DeleteValueAtKey(key string) {
 // OnKeyChange registers a callback to be notified when values at matching paths change.
 // Patterns use fnmatch-style matching (using path.Match).
 // Returns the subscriptions created (one per pattern) for later cleanup.
+// Deprecated: Use OnPathChange for new code.
 func (o *Observable) OnKeyChange(patterns []string, callback ChangeCallback) []Subscription {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -363,6 +370,28 @@ func (o *Observable) OnKeyChange(patterns []string, callback ChangeCallback) []S
 	return []Subscription{id}
 }
 
+// OnPathChange registers a callback to be notified when values at matching paths change.
+// The callback receives only the changed path, not the old/new values.
+// Patterns use fnmatch-style matching (using path.Match).
+// Returns a subscription ID for later cleanup.
+func (o *Observable) OnPathChange(patterns []string, callback PathChangeCallback) Subscription {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	preconditions.Check(len(patterns) > 0, "at least one pattern required")
+	preconditions.Check(callback != nil, "callback must not be nil")
+
+	id := o.nextSubID
+	o.nextSubID++
+
+	o.subscriptions[id] = &subscription{
+		patterns:     patterns,
+		pathCallback: callback,
+	}
+
+	return id
+}
+
 // ClearSubscriptions removes the specified subscriptions.
 func (o *Observable) ClearSubscriptions(subs ...Subscription) {
 	o.mu.Lock()
@@ -371,6 +400,13 @@ func (o *Observable) ClearSubscriptions(subs ...Subscription) {
 	for _, sub := range subs {
 		delete(o.subscriptions, sub)
 	}
+}
+
+// Unsubscribe removes a single subscription.
+func (o *Observable) Unsubscribe(sub Subscription) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	delete(o.subscriptions, sub)
 }
 
 // notifySubscribers notifies all matching subscribers of the changes.
@@ -403,7 +439,12 @@ func (o *Observable) notifySubscribers(changes map[string]struct{ old, new any }
 		}
 
 		if matched {
-			sub.callback(matchedKey, matchedChange.old, matchedChange.new)
+			// Call the appropriate callback type
+			if sub.pathCallback != nil {
+				sub.pathCallback(matchedKey)
+			} else if sub.callback != nil {
+				sub.callback(matchedKey, matchedChange.old, matchedChange.new)
+			}
 		}
 	}
 }

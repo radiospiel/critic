@@ -258,20 +258,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.applyFilterMode()
 			cmd := m.diffView.SetFile(m.fileList.GetActiveFile())
 			cmds = append(cmds, cmd)
-			m.mainLayout.Repaint() // Trigger widget re-render
+			m.mainLayout.Invalidate() // Trigger widget re-render
 			return m, tea.Batch(cmds...)
 
 		case " ": // Space - page down diff view regardless of focus
 			// Scroll by height - 3 (but at least 1 row) and position cursor on second line
 			cmd := m.diffView.ScrollPageDown()
 			cmds = append(cmds, cmd)
-			m.mainLayout.Repaint() // Trigger widget re-render
+			m.mainLayout.Invalidate() // Trigger widget re-render
 
 		case "shift+ ": // Shift+Space - page up diff view regardless of focus
 			// Scroll by height - 3 (but at least 1 row) and position cursor on second line
 			cmd := m.diffView.ScrollPageUp()
 			cmds = append(cmds, cmd)
-			m.mainLayout.Repaint() // Trigger widget re-render
+			m.mainLayout.Invalidate() // Trigger widget re-render
 
 		case "?":
 			// Toggle help screen
@@ -333,15 +333,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					setFileCmd := m.diffView.SetFile(newFile)
 					cmds = append(cmds, cmd, setFileCmd)
-					m.mainLayout.Repaint() // Trigger widget re-render
+					m.mainLayout.Invalidate() // Trigger widget re-render
 				} else {
 					cmds = append(cmds, cmd)
-					m.mainLayout.Repaint() // Trigger widget re-render
+					m.mainLayout.Invalidate() // Trigger widget re-render
 				}
 			} else {
 				cmd := m.diffView.Update(msg)
 				cmds = append(cmds, cmd)
-				m.mainLayout.Repaint() // Trigger widget re-render after cursor movement
+				m.mainLayout.Invalidate() // Trigger widget re-render after cursor movement
 			}
 		}
 
@@ -391,7 +391,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 
 			// Mark layout dirty since diffView changed (diffView is a model, not a widget)
-			m.mainLayout.Repaint()
+			m.mainLayout.Invalidate()
 		} else if m.err != nil {
 			logger.Error("Update: Diff loading failed: %v", m.err)
 		}
@@ -492,7 +492,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, editorCmd)
 
 		// Trigger repaint in case the message updated widget state (e.g., diffRenderedMsg)
-		m.mainLayout.Repaint()
+		m.mainLayout.Invalidate()
 	}
 
 	return m, tea.Batch(cmds...)

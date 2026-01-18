@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"git.15b.it/eno/critic/simple-go/logger"
+	"git.15b.it/eno/critic/simple-go/observable"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -54,8 +55,14 @@ func NotifyGlobalTickSubscribers() {
 // Widgets implementing this interface can subscribe to receive ticks via SubscribeToTicks.
 type TickHandler interface {
 	// HandleTick is called on each compositor tick.
-	// The widget should update its state and call Repaint() if needed.
+	// The widget should update its state and call Invalidate() if needed.
 	HandleTick()
+}
+
+// widgetSubscription tracks a widget's subscription to an observable path.
+type widgetSubscription struct {
+	widget Widget
+	subID  observable.Subscription
 }
 
 // Compositor manages the root widget tree and orchestrates rendering.
@@ -72,6 +79,12 @@ type Compositor struct {
 	// Tick subscribers: widgets that want to receive tick notifications
 	tickSubscribers []TickHandler
 
+	// Observable-based widget subscriptions
+	// The compositor manages subscriptions on behalf of widgets to avoid
+	// circular references and memory leaks.
+	observable          *observable.Observable
+	widgetSubscriptions map[string][]widgetSubscription // path -> widgets subscribed
+
 	// FPS measurement
 	startTime  time.Time
 	frameCount int64
@@ -80,15 +93,84 @@ type Compositor struct {
 // NewCompositor creates a new compositor with the given root widget.
 func NewCompositor(root Widget) *Compositor {
 	c := &Compositor{
-		root:      root,
-		dirty:     true,
-		startTime: time.Now(),
+		root:                root,
+		dirty:               true,
+		startTime:           time.Now(),
+		widgetSubscriptions: make(map[string][]widgetSubscription),
 	}
 	if root != nil {
 		c.focusManager = NewFocusManager(root)
 		c.rebuildTopLevelWidgets()
 	}
 	return c
+}
+
+// SetObservable sets the observable that widgets can subscribe to.
+// This should be called before subscribing any widgets.
+func (c *Compositor) SetObservable(obs *observable.Observable) {
+	c.observable = obs
+}
+
+// Observable returns the compositor's observable.
+func (c *Compositor) Observable() *observable.Observable {
+	return c.observable
+}
+
+// SubscribeWidget subscribes a widget to one or more observable paths.
+// When any of the paths change, the widget will be invalidated.
+// The compositor manages the subscription to avoid circular references.
+func (c *Compositor) SubscribeWidget(widget Widget, paths ...string) {
+	if c.observable == nil {
+		logger.Warn("SubscribeWidget called but no observable set")
+		return
+	}
+
+	for _, path := range paths {
+		// Subscribe to the observable
+		subID := c.observable.OnPathChange([]string{path}, func(changedPath string) {
+			// Find and invalidate the widget for this path
+			c.onPathChange(changedPath)
+		})
+
+		// Track the subscription
+		c.widgetSubscriptions[path] = append(c.widgetSubscriptions[path], widgetSubscription{
+			widget: widget,
+			subID:  subID,
+		})
+	}
+}
+
+// UnsubscribeWidget removes all subscriptions for a widget.
+func (c *Compositor) UnsubscribeWidget(widget Widget) {
+	if c.observable == nil {
+		return
+	}
+
+	for path, subs := range c.widgetSubscriptions {
+		var remaining []widgetSubscription
+		for _, sub := range subs {
+			if sub.widget == widget {
+				// Unsubscribe from the observable
+				c.observable.Unsubscribe(sub.subID)
+			} else {
+				remaining = append(remaining, sub)
+			}
+		}
+		if len(remaining) == 0 {
+			delete(c.widgetSubscriptions, path)
+		} else {
+			c.widgetSubscriptions[path] = remaining
+		}
+	}
+}
+
+// onPathChange handles observable path changes and invalidates subscribed widgets.
+func (c *Compositor) onPathChange(path string) {
+	if subs, ok := c.widgetSubscriptions[path]; ok {
+		for _, sub := range subs {
+			sub.widget.Invalidate()
+		}
+	}
 }
 
 // SubscribeToTicks registers a TickHandler to receive tick notifications.
