@@ -1,6 +1,10 @@
 package teapot
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 // BorderStyle defines the style of a border edge.
 type BorderStyle int
@@ -216,46 +220,42 @@ func RenderBorder(buf *SubBuffer, border Border) {
 	// Draw corners
 	if border.Top != BorderNone || border.Left != BorderNone {
 		corner := getCorner(border.Left, border.Top, "topLeft")
-		buf.SetCell(0, 0, Cell{Rune: corner, Style: border.Style})
+		buf.SetString(0, 0, string(corner), border.Style)
 	}
 	if border.Top != BorderNone || border.Right != BorderNone {
 		corner := getCorner(border.Right, border.Top, "topRight")
-		buf.SetCell(width-1, 0, Cell{Rune: corner, Style: border.Style})
+		buf.SetString(width-1, 0, string(corner), border.Style)
 	}
 	if border.Bottom != BorderNone || border.Left != BorderNone {
 		corner := getCorner(border.Left, border.Bottom, "bottomLeft")
-		buf.SetCell(0, height-1, Cell{Rune: corner, Style: border.Style})
+		buf.SetString(0, height-1, string(corner), border.Style)
 	}
 	if border.Bottom != BorderNone || border.Right != BorderNone {
 		corner := getCorner(border.Right, border.Bottom, "bottomRight")
-		buf.SetCell(width-1, height-1, Cell{Rune: corner, Style: border.Style})
+		buf.SetString(width-1, height-1, string(corner), border.Style)
 	}
 
 	// Draw top edge
 	if border.Top != BorderNone {
-		for x := 1; x < width-1; x++ {
-			buf.SetCell(x, 0, Cell{Rune: topChars.horizontal, Style: border.Style})
-		}
+		buf.SetString(1, 0, strings.Repeat(string(topChars.horizontal), width-2), border.Style)
 	}
 
 	// Draw bottom edge
 	if border.Bottom != BorderNone {
-		for x := 1; x < width-1; x++ {
-			buf.SetCell(x, height-1, Cell{Rune: bottomChars.horizontal, Style: border.Style})
-		}
+		buf.SetString(1, height-1, strings.Repeat(string(bottomChars.horizontal), width-2), border.Style)
 	}
 
 	// Draw left edge
 	if border.Left != BorderNone {
 		for y := 1; y < height-1; y++ {
-			buf.SetCell(0, y, Cell{Rune: leftChars.vertical, Style: border.Style})
+			buf.SetString(0, y, string(leftChars.vertical), border.Style)
 		}
 	}
 
 	// Draw right edge
 	if border.Right != BorderNone {
 		for y := 1; y < height-1; y++ {
-			buf.SetCell(width-1, y, Cell{Rune: rightChars.vertical, Style: border.Style})
+			buf.SetString(width-1, y, string(rightChars.vertical), border.Style)
 		}
 	}
 }
@@ -274,13 +274,16 @@ func RenderBorderTitle(buf *SubBuffer, title string, style lipgloss.Style) {
 		titleX = 1
 	}
 
-	for i, r := range titleRunes {
-		x := titleX + i
-		if x >= width-1 {
-			break
-		}
-		buf.SetCell(x, 0, Cell{Rune: r, Style: style})
+	// Truncate if needed to fit within borders
+	maxWidth := width - 2 - titleX
+	if maxWidth <= 0 {
+		return
 	}
+	if len(titleRunes) > maxWidth {
+		titleRunes = titleRunes[:maxWidth]
+	}
+
+	buf.SetString(titleX, 0, string(titleRunes), style)
 }
 
 // RenderBorderFooter renders text centered on the bottom border.
@@ -298,11 +301,14 @@ func RenderBorderFooter(buf *SubBuffer, footer string, style lipgloss.Style) {
 		footerX = 1
 	}
 
-	for i, r := range footerRunes {
-		x := footerX + i
-		if x >= width-1 {
-			break
-		}
-		buf.SetCell(x, height-1, Cell{Rune: r, Style: style})
+	// Truncate if needed to fit within borders
+	maxWidth := width - 2 - footerX
+	if maxWidth <= 0 {
+		return
 	}
+	if len(footerRunes) > maxWidth {
+		footerRunes = footerRunes[:maxWidth]
+	}
+
+	buf.SetString(footerX, height-1, string(footerRunes), style)
 }

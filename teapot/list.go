@@ -1,6 +1,8 @@
 package teapot
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -200,8 +202,9 @@ func (l *SelectableList[T]) Render(buf *SubBuffer) {
 			lineBuf.SetStringTruncated(0, 0, text, buf.Width(), style)
 
 			// Fill remaining width with style background
-			for x := len(text); x < buf.Width(); x++ {
-				lineBuf.SetCell(x, 0, Cell{Rune: ' ', Style: style})
+			remaining := buf.Width() - len(text)
+			if remaining > 0 {
+				lineBuf.SetString(len(text), 0, strings.Repeat(" ", remaining), style)
 			}
 		}
 	}
@@ -382,13 +385,28 @@ func (s *ScrollView) Render(buf *SubBuffer) {
 		if srcY < 0 || srcY >= s.contentSize.Height {
 			continue
 		}
-		for x := 0; x < buf.Width(); x++ {
-			srcX := s.scrollX + x
-			if srcX < 0 || srcX >= s.contentSize.Width {
-				continue
-			}
-			buf.SetCell(x, y, contentBuf.GetCell(srcX, srcY))
+
+		// Calculate the range of cells to copy for this row
+		srcStartX := s.scrollX
+		if srcStartX < 0 {
+			srcStartX = 0
 		}
+		srcEndX := s.scrollX + buf.Width()
+		if srcEndX > s.contentSize.Width {
+			srcEndX = s.contentSize.Width
+		}
+		if srcStartX >= srcEndX {
+			continue
+		}
+
+		// Build a row of cells to copy
+		cells := make([]Cell, srcEndX-srcStartX)
+		for i := 0; i < len(cells); i++ {
+			cells[i] = contentBuf.GetCell(srcStartX+i, srcY)
+		}
+
+		destX := srcStartX - s.scrollX
+		buf.SetCells(destX, y, cells)
 	}
 }
 

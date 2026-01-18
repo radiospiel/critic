@@ -25,10 +25,12 @@ func (m *mockWidget) Render(buf *SubBuffer) {
 	// Fill with first char of id for visual debugging
 	if len(m.id) > 0 {
 		r := rune(m.id[0])
+		row := make([]Cell, buf.Width())
+		for i := range row {
+			row[i] = Cell{Rune: r}
+		}
 		for y := 0; y < buf.Height(); y++ {
-			for x := 0; x < buf.Width(); x++ {
-				buf.SetCell(x, y, Cell{Rune: r})
-			}
+			buf.SetCells(0, y, row)
 		}
 	}
 }

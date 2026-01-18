@@ -148,9 +148,7 @@ func (s *StatusBar) Render(buf *SubBuffer) {
 	width := buf.Width()
 
 	// Fill background
-	for x := 0; x < width; x++ {
-		buf.SetCell(x, 0, Cell{Rune: ' ', Style: s.style})
-	}
+	buf.SetString(0, 0, strings.Repeat(" ", width), s.style)
 
 	// Render left
 	if s.left != "" {

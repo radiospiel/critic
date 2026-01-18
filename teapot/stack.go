@@ -1,6 +1,8 @@
 package teapot
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -239,11 +241,12 @@ func (m *Modal) Render(buf *SubBuffer) {
 	if m.dimBackground {
 		dimStyle := lipgloss.NewStyle().Faint(true)
 		for y := 0; y < buf.Height(); y++ {
+			cells := make([]Cell, buf.Width())
 			for x := 0; x < buf.Width(); x++ {
-				cell := buf.GetCell(x, y)
-				cell.Style = dimStyle
-				buf.SetCell(x, y, cell)
+				cells[x] = buf.GetCell(x, y)
+				cells[x].Style = dimStyle
 			}
+			buf.SetCells(0, y, cells)
 		}
 	}
 
@@ -261,30 +264,30 @@ func (m *Modal) Render(buf *SubBuffer) {
 	}
 
 	// Fill background
+	bgRow := make([]Cell, modalRect.Width)
+	for i := range bgRow {
+		bgRow[i] = Cell{Rune: ' ', Style: m.bgStyle}
+	}
 	for y := modalRect.Y; y < modalRect.Y+modalRect.Height; y++ {
-		for x := modalRect.X; x < modalRect.X+modalRect.Width; x++ {
-			buf.SetCell(x, y, Cell{Rune: ' ', Style: m.bgStyle})
-		}
+		buf.SetCells(modalRect.X, y, bgRow)
 	}
 
 	// Draw border
 	if m.showBorder {
-		// Corners
-		buf.SetCell(modalRect.X, modalRect.Y, Cell{Rune: '┌', Style: m.borderStyle})
-		buf.SetCell(modalRect.X+modalRect.Width-1, modalRect.Y, Cell{Rune: '┐', Style: m.borderStyle})
-		buf.SetCell(modalRect.X, modalRect.Y+modalRect.Height-1, Cell{Rune: '└', Style: m.borderStyle})
-		buf.SetCell(modalRect.X+modalRect.Width-1, modalRect.Y+modalRect.Height-1, Cell{Rune: '┘', Style: m.borderStyle})
+		innerWidth := modalRect.Width - 2
 
-		// Top and bottom edges
-		for x := modalRect.X + 1; x < modalRect.X+modalRect.Width-1; x++ {
-			buf.SetCell(x, modalRect.Y, Cell{Rune: '─', Style: m.borderStyle})
-			buf.SetCell(x, modalRect.Y+modalRect.Height-1, Cell{Rune: '─', Style: m.borderStyle})
-		}
+		// Top edge: ┌───┐
+		topEdge := "┌" + strings.Repeat("─", innerWidth) + "┐"
+		buf.SetString(modalRect.X, modalRect.Y, topEdge, m.borderStyle)
+
+		// Bottom edge: └───┘
+		bottomEdge := "└" + strings.Repeat("─", innerWidth) + "┘"
+		buf.SetString(modalRect.X, modalRect.Y+modalRect.Height-1, bottomEdge, m.borderStyle)
 
 		// Left and right edges
 		for y := modalRect.Y + 1; y < modalRect.Y+modalRect.Height-1; y++ {
-			buf.SetCell(modalRect.X, y, Cell{Rune: '│', Style: m.borderStyle})
-			buf.SetCell(modalRect.X+modalRect.Width-1, y, Cell{Rune: '│', Style: m.borderStyle})
+			buf.SetString(modalRect.X, y, "│", m.borderStyle)
+			buf.SetString(modalRect.X+modalRect.Width-1, y, "│", m.borderStyle)
 		}
 
 		// Title

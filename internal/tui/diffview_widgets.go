@@ -149,16 +149,17 @@ func (w *HunkWidget) renderHeaderLine(buf *teapot.SubBuffer, y int, header strin
 	if y >= buf.Height() {
 		return
 	}
+	// Build cells for the header line, padding with spaces
+	cells := make([]teapot.Cell, width)
 	runes := []rune(header)
 	for x := 0; x < width; x++ {
-		var cell teapot.Cell
 		if x < len(runes) {
-			cell = teapot.Cell{Rune: runes[x], Style: hunkHeaderStyle}
+			cells[x] = teapot.Cell{Rune: runes[x], Style: hunkHeaderStyle}
 		} else {
-			cell = teapot.Cell{Rune: ' ', Style: hunkHeaderStyle}
+			cells[x] = teapot.Cell{Rune: ' ', Style: hunkHeaderStyle}
 		}
-		buf.SetCell(x, y, cell)
 	}
+	buf.SetCells(0, y, cells)
 }
 
 // renderDiffLine renders a single diff line (selection highlighting is done via overlay).
@@ -198,17 +199,19 @@ func (w *HunkWidget) renderDiffLine(buf *teapot.SubBuffer, y int, line *ctypes.L
 
 	// Render prefix + content
 	content := prefix + highlighted
-	cells := teapot.ParseANSILine(content)
+	parsedCells := teapot.ParseANSILine(content)
+
+	// Build row of cells, padding with spaces
+	rowCells := make([]teapot.Cell, width)
 	for x := 0; x < width; x++ {
-		var cell teapot.Cell
-		if x < len(cells) {
-			cell = cells[x]
-			cell.Style = cell.Style.Background(bgColor)
+		if x < len(parsedCells) {
+			rowCells[x] = parsedCells[x]
+			rowCells[x].Style = rowCells[x].Style.Background(bgColor)
 		} else {
-			cell = teapot.Cell{Rune: ' ', Style: style}
+			rowCells[x] = teapot.Cell{Rune: ' ', Style: style}
 		}
-		buf.SetCell(x, y, cell)
 	}
+	buf.SetCells(0, y, rowCells)
 }
 
 // renderComment renders an inline comment/conversation.
@@ -232,15 +235,17 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 		// Render the animation frame (first 12 chars)
 		animFrame := GetSeparatorFrame()
 		animCells := teapot.ParseANSILine(animFrame)
-		for x := 0; x < len(animCells) && x < width; x++ {
-			buf.SetCell(x, y, animCells[x])
+		if len(animCells) > width {
+			animCells = animCells[:width]
 		}
+		buf.SetCells(0, y, animCells)
+
 		// Render the rest of the separator (space + dashes)
 		if width > 12 {
-			buf.SetCell(12, y, teapot.Cell{Rune: ' ', Style: separatorStyle})
+			buf.SetString(12, y, " ", separatorStyle)
 		}
-		for x := 13; x < width; x++ {
-			buf.SetCell(x, y, teapot.Cell{Rune: '-', Style: separatorStyle})
+		if width > 13 {
+			buf.SetString(13, y, strings.Repeat("-", width-13), separatorStyle)
 		}
 		y++
 	}
@@ -283,17 +288,19 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 		}
 
 		content := " " + line
-		cells := teapot.ParseANSILine(content)
+		parsedCells := teapot.ParseANSILine(content)
+
+		// Build row of cells with padding
+		rowCells := make([]teapot.Cell, width)
 		for x := 0; x < width; x++ {
-			var cell teapot.Cell
-			if x < len(cells) {
-				cell = cells[x]
-				cell.Style = cell.Style.Background(lightBlueBg).Foreground(blackFg)
+			if x < len(parsedCells) {
+				rowCells[x] = parsedCells[x]
+				rowCells[x].Style = rowCells[x].Style.Background(lightBlueBg).Foreground(blackFg)
 			} else {
-				cell = teapot.Cell{Rune: ' ', Style: contentStyle}
+				rowCells[x] = teapot.Cell{Rune: ' ', Style: contentStyle}
 			}
-			buf.SetCell(x, y, cell)
 		}
+		buf.SetCells(0, y, rowCells)
 		y++
 	}
 
@@ -323,14 +330,11 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 			bottomLine = strings.Repeat("-", leftDashes) + " " + separatorText + " " + strings.Repeat("-", rightDashes)
 		}
 
-		runes := []rune(bottomLine)
-		for x := 0; x < width; x++ {
-			var r rune = '-'
-			if x < len(runes) {
-				r = runes[x]
-			}
-			buf.SetCell(x, y, teapot.Cell{Rune: r, Style: separatorStyle})
+		// Pad to width if needed
+		if len(bottomLine) < width {
+			bottomLine += strings.Repeat("-", width-len(bottomLine))
 		}
+		buf.SetString(0, y, bottomLine, separatorStyle)
 	}
 }
 
@@ -366,23 +370,22 @@ func NewFileHeaderWidget(file *ctypes.FileDiff) *FileHeaderWidget {
 func (w *FileHeaderWidget) Render(buf *teapot.SubBuffer) {
 	width := buf.Width()
 
+	// Build header cells with padding
+	cells := make([]teapot.Cell, width)
 	runes := []rune(w.header)
 	for x := 0; x < width; x++ {
-		var cell teapot.Cell
 		if x < len(runes) {
-			cell = teapot.Cell{Rune: runes[x], Style: hunkHeaderStyle}
+			cells[x] = teapot.Cell{Rune: runes[x], Style: hunkHeaderStyle}
 		} else {
-			cell = teapot.Cell{Rune: ' ', Style: hunkHeaderStyle}
+			cells[x] = teapot.Cell{Rune: ' ', Style: hunkHeaderStyle}
 		}
-		buf.SetCell(x, 0, cell)
 	}
+	buf.SetCells(0, 0, cells)
 
 	// Blank second line
 	if buf.Height() > 1 {
 		emptyStyle := lipgloss.NewStyle()
-		for x := 0; x < width; x++ {
-			buf.SetCell(x, 1, teapot.Cell{Rune: ' ', Style: emptyStyle})
-		}
+		buf.SetString(0, 1, strings.Repeat(" ", width), emptyStyle)
 	}
 }
 
@@ -563,9 +566,7 @@ func (w *DiffViewWidget) Render(buf *teapot.SubBuffer) {
 		if hunkIdx < len(w.hunks)-1 {
 			if renderY >= 0 && renderY < height {
 				emptyStyle := lipgloss.NewStyle()
-				for x := 0; x < width; x++ {
-					buf.SetCell(x, renderY, teapot.Cell{Rune: ' ', Style: emptyStyle})
-				}
+				buf.SetString(0, renderY, strings.Repeat(" ", width), emptyStyle)
 			}
 			renderY++
 		}

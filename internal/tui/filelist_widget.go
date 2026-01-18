@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/pkg/critic"
@@ -129,10 +130,9 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 		style = normalFileStyle
 	}
 
-	// Render indicator at column 0
-	buf.SetCell(0, 0, pot.Cell{Rune: indicatorRune, Style: indicatorStyle})
-	// Space after indicator at column 1
-	buf.SetCell(1, 0, pot.Cell{Rune: ' ', Style: style})
+	// Render indicator at column 0 and space at column 1
+	buf.SetString(0, 0, string(indicatorRune), indicatorStyle)
+	buf.SetString(1, 0, " ", style)
 
 	// Render content starting at column 2
 	content := fmt.Sprintf("%s %s", status, path)
@@ -149,14 +149,13 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 	}
 
 	// Write content starting at column 2
-	for i, r := range runes {
-		buf.SetCell(2+i, 0, pot.Cell{Rune: r, Style: style})
-	}
+	buf.SetString(2, 0, string(runes), style)
 
 	// Fill remaining width with style (for selection highlight)
 	if selected {
-		for x := 2 + len(runes); x < width; x++ {
-			buf.SetCell(x, 0, pot.Cell{Rune: ' ', Style: style})
+		remaining := width - 2 - len(runes)
+		if remaining > 0 {
+			buf.SetString(2+len(runes), 0, strings.Repeat(" ", remaining), style)
 		}
 	}
 }

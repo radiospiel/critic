@@ -1,6 +1,8 @@
 package teapot
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -365,16 +367,14 @@ func (s *Split) Render(buf *SubBuffer) {
 			dividerX = s.first.Bounds().Width
 		}
 		for y := 0; y < buf.Height(); y++ {
-			buf.SetCell(dividerX, y, Cell{Rune: '│', Style: s.dividerStyle})
+			buf.SetString(dividerX, y, "│", s.dividerStyle)
 		}
 	} else {
 		dividerY := 0
 		if s.first != nil {
 			dividerY = s.first.Bounds().Height
 		}
-		for x := 0; x < buf.Width(); x++ {
-			buf.SetCell(x, dividerY, Cell{Rune: '─', Style: s.dividerStyle})
-		}
+		buf.SetString(0, dividerY, strings.Repeat("─", buf.Width()), s.dividerStyle)
 	}
 
 	// Render children

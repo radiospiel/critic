@@ -38,7 +38,8 @@
       "Bash(go clean:*)",
       "Bash(go mod download:*)",
       "Bash(go list:*)",
-      "mcp__critic2__reply_to_critic_conversation"
+      "mcp__critic2__reply_to_critic_conversation",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

@@ -3,6 +3,7 @@ package tui
 import (
 	pot "git.15b.it/eno/critic/teapot"
 	"git.15b.it/eno/critic/simple-go/logger"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // MainLayout is the root layout widget containing the main content and status bar.
@@ -96,7 +97,7 @@ func (m *MainLayout) Render(buf *pot.SubBuffer) {
 	// Render separator
 	separatorX := leftWidth
 	for y := 0; y < contentHeight; y++ {
-		buf.SetCell(separatorX, y, pot.Cell{Rune: '│'})
+		buf.SetString(separatorX, y, "│", lipgloss.NewStyle())
 	}
 
 	// Render diff view

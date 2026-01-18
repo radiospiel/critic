@@ -139,15 +139,18 @@ func (h *conversationHistoryWidget) Render(buf *pot.SubBuffer) {
 
 		// Render with style
 		styled := historyStyle.Render(line)
-		cells := pot.ParseANSILine(styled)
+		parsedCells := pot.ParseANSILine(styled)
 
+		// Build row with padding
+		rowCells := make([]pot.Cell, width)
 		for x := 0; x < width; x++ {
-			if x < len(cells) {
-				buf.SetCell(x, y, cells[x])
+			if x < len(parsedCells) {
+				rowCells[x] = parsedCells[x]
 			} else {
-				buf.SetCell(x, y, pot.Cell{Rune: ' '})
+				rowCells[x] = pot.Cell{Rune: ' '}
 			}
 		}
+		buf.SetCells(0, y, rowCells)
 	}
 }
 
@@ -267,14 +270,18 @@ func (c *commentEditorContent) Render(buf *pot.SubBuffer) {
 	separatorStyle := lipgloss.NewStyle().Faint(true)
 	separator := strings.Repeat("─", width)
 	styled := separatorStyle.Render(separator)
-	cells := pot.ParseANSILine(styled)
+	parsedCells := pot.ParseANSILine(styled)
+
+	// Build row with padding
+	rowCells := make([]pot.Cell, width)
 	for x := 0; x < width; x++ {
-		if x < len(cells) {
-			buf.SetCell(x, separatorY, cells[x])
+		if x < len(parsedCells) {
+			rowCells[x] = parsedCells[x]
 		} else {
-			buf.SetCell(x, separatorY, pot.Cell{Rune: '─'})
+			rowCells[x] = pot.Cell{Rune: '─'}
 		}
 	}
+	buf.SetCells(0, separatorY, rowCells)
 
 	// Render textarea
 	textareaY := separatorY + 1
@@ -305,15 +312,18 @@ func (c *commentEditorContent) renderHistory(buf *pot.SubBuffer, startY, height,
 
 		// Render with style
 		styled := historyStyle.Render(line)
-		cells := pot.ParseANSILine(styled)
+		parsedCells := pot.ParseANSILine(styled)
 
+		// Build row with padding
+		rowCells := make([]pot.Cell, width)
 		for x := 0; x < width; x++ {
-			if x < len(cells) {
-				buf.SetCell(x, bufY, cells[x])
+			if x < len(parsedCells) {
+				rowCells[x] = parsedCells[x]
 			} else {
-				buf.SetCell(x, bufY, pot.Cell{Rune: ' '})
+				rowCells[x] = pot.Cell{Rune: ' '}
 			}
 		}
+		buf.SetCells(0, bufY, rowCells)
 	}
 }
 
@@ -334,15 +344,18 @@ func (c *commentEditorContent) renderTextarea(buf *pot.SubBuffer, startY, height
 			line = lines[y]
 		}
 
-		cells := pot.ParseANSILine(line)
+		parsedCells := pot.ParseANSILine(line)
 
+		// Build row with padding
+		rowCells := make([]pot.Cell, width)
 		for x := 0; x < width; x++ {
-			if x < len(cells) {
-				buf.SetCell(x, bufY, cells[x])
+			if x < len(parsedCells) {
+				rowCells[x] = parsedCells[x]
 			} else {
-				buf.SetCell(x, bufY, pot.Cell{Rune: ' '})
+				rowCells[x] = pot.Cell{Rune: ' '}
 			}
 		}
+		buf.SetCells(0, bufY, rowCells)
 	}
 }
 

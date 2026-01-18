@@ -18,18 +18,25 @@ func TestBufferBasics(t *testing.T) {
 	assert.Equals(t, cell.Rune, ' ')
 }
 
-func TestBufferSetCell(t *testing.T) {
+func TestBufferSetCells(t *testing.T) {
 	buf := NewBuffer(10, 5)
 	style := lipgloss.NewStyle().Bold(true)
 
-	buf.SetCell(3, 2, Cell{Rune: 'X', Style: style})
-	cell := buf.GetCell(3, 2)
-	assert.Equals(t, cell.Rune, 'X')
+	cells := []Cell{{Rune: 'X', Style: style}, {Rune: 'Y', Style: style}}
+	buf.SetCells(3, 2, cells)
+	assert.Equals(t, buf.GetCell(3, 2).Rune, 'X')
+	assert.Equals(t, buf.GetCell(4, 2).Rune, 'Y')
 
-	// Out of bounds writes should be silently ignored
-	buf.SetCell(-1, 0, Cell{Rune: 'Y'})
-	buf.SetCell(100, 0, Cell{Rune: 'Y'})
-	// Should not panic
+	// Out of bounds writes should be clipped
+	buf.SetCells(-1, 0, []Cell{{Rune: 'A'}, {Rune: 'B'}, {Rune: 'C'}})
+	assert.Equals(t, buf.GetCell(0, 0).Rune, 'B')
+	assert.Equals(t, buf.GetCell(1, 0).Rune, 'C')
+
+	// Writes extending past buffer width should be clipped
+	buf.SetCells(8, 0, []Cell{{Rune: 'P'}, {Rune: 'Q'}, {Rune: 'R'}})
+	assert.Equals(t, buf.GetCell(8, 0).Rune, 'P')
+	assert.Equals(t, buf.GetCell(9, 0).Rune, 'Q')
+	// 'R' should not be written
 }
 
 func TestBufferSetString(t *testing.T) {
@@ -124,7 +131,7 @@ func TestBufferClone(t *testing.T) {
 	assert.Equals(t, clone.GetCell(1, 0).Rune, 'e')
 
 	// Modifying clone shouldn't affect original
-	clone.SetCell(0, 0, Cell{Rune: 'X'})
+	clone.SetString(0, 0, "X", style)
 	assert.Equals(t, buf.GetCell(0, 0).Rune, 'H')
 	assert.Equals(t, clone.GetCell(0, 0).Rune, 'X')
 }

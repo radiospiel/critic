@@ -286,16 +286,6 @@ func (b *Buffer) Clear() {
 	}
 }
 
-// SetCell sets the cell at position (x, y).
-// Out of bounds writes are silently ignored.
-func (b *Buffer) SetCell(x, y int, cell Cell) {
-	if x < 0 || x >= b.width || y < 0 || y >= b.height {
-		return
-	}
-	b.markDirty()
-	b.cells[y][x] = cell
-}
-
 // GetCell returns the cell at position (x, y).
 // Out of bounds reads return an empty cell.
 func (b *Buffer) GetCell(x, y int) Cell {
@@ -305,23 +295,54 @@ func (b *Buffer) GetCell(x, y int) Cell {
 	return b.cells[y][x]
 }
 
-// SetString writes a string at position (x, y) with the given style.
-// Characters that extend beyond the buffer width are clipped.
-func (b *Buffer) SetString(x, y int, s string, style lipgloss.Style) {
-	if y < 0 || y >= b.height {
+// SetCells writes a slice of cells at position (x, y).
+// Cells that extend beyond the buffer width are clipped.
+// Uses copy for efficiency when possible.
+func (b *Buffer) SetCells(x, y int, cells []Cell) {
+	if y < 0 || y >= b.height || len(cells) == 0 {
 		return
 	}
 
 	b.markDirty()
-	for _, r := range s {
-		if x >= b.width {
-			break
+
+	// Handle negative x by skipping cells
+	if x < 0 {
+		skip := -x
+		if skip >= len(cells) {
+			return
 		}
-		if x >= 0 {
-			b.cells[y][x] = Cell{Rune: r, Style: style}
-		}
-		x++
+		cells = cells[skip:]
+		x = 0
 	}
+
+	// Clip to buffer width
+	available := b.width - x
+	if available <= 0 {
+		return
+	}
+	if len(cells) > available {
+		cells = cells[:available]
+	}
+
+	copy(b.cells[y][x:], cells)
+}
+
+// SetString writes a string at position (x, y) with the given style.
+// Characters that extend beyond the buffer width are clipped.
+func (b *Buffer) SetString(x, y int, s string, style lipgloss.Style) {
+	if y < 0 || y >= b.height || len(s) == 0 {
+		return
+	}
+
+	runes := []rune(s)
+
+	// Build cells slice
+	cells := make([]Cell, len(runes))
+	for i, r := range runes {
+		cells[i] = Cell{Rune: r, Style: style}
+	}
+
+	b.SetCells(x, y, cells)
 }
 
 // SetStringTruncated writes a string, truncating with ellipsis if needed.
@@ -376,37 +397,33 @@ func (b *Buffer) DrawBox(rect Rect, style lipgloss.Style) {
 		return
 	}
 
-	// Corners
-	b.SetCell(rect.X, rect.Y, Cell{Rune: '┌', Style: style})
-	b.SetCell(rect.X+rect.Width-1, rect.Y, Cell{Rune: '┐', Style: style})
-	b.SetCell(rect.X, rect.Y+rect.Height-1, Cell{Rune: '└', Style: style})
-	b.SetCell(rect.X+rect.Width-1, rect.Y+rect.Height-1, Cell{Rune: '┘', Style: style})
+	innerWidth := rect.Width - 2
 
-	// Top and bottom edges
-	for x := rect.X + 1; x < rect.X+rect.Width-1; x++ {
-		b.SetCell(x, rect.Y, Cell{Rune: '─', Style: style})
-		b.SetCell(x, rect.Y+rect.Height-1, Cell{Rune: '─', Style: style})
-	}
+	// Top edge: ┌───┐
+	topEdge := "┌" + strings.Repeat("─", innerWidth) + "┐"
+	b.SetString(rect.X, rect.Y, topEdge, style)
+
+	// Bottom edge: └───┘
+	bottomEdge := "└" + strings.Repeat("─", innerWidth) + "┘"
+	b.SetString(rect.X, rect.Y+rect.Height-1, bottomEdge, style)
 
 	// Left and right edges
 	for y := rect.Y + 1; y < rect.Y+rect.Height-1; y++ {
-		b.SetCell(rect.X, y, Cell{Rune: '│', Style: style})
-		b.SetCell(rect.X+rect.Width-1, y, Cell{Rune: '│', Style: style})
+		b.SetString(rect.X, y, "│", style)
+		b.SetString(rect.X+rect.Width-1, y, "│", style)
 	}
 }
 
 // DrawVerticalLine draws a vertical line at column x from y1 to y2.
 func (b *Buffer) DrawVerticalLine(x, y1, y2 int, style lipgloss.Style) {
 	for y := y1; y <= y2; y++ {
-		b.SetCell(x, y, Cell{Rune: '│', Style: style})
+		b.SetString(x, y, "│", style)
 	}
 }
 
 // DrawHorizontalLine draws a horizontal line at row y from x1 to x2.
 func (b *Buffer) DrawHorizontalLine(y, x1, x2 int, style lipgloss.Style) {
-	for x := x1; x <= x2; x++ {
-		b.SetCell(x, y, Cell{Rune: '─', Style: style})
-	}
+	b.SetString(x1, y, strings.Repeat("─", x2-x1+1), style)
 }
 
 // Blit copies the contents of another buffer into this one at the given offset.
@@ -484,14 +501,6 @@ func (s *SubBuffer) Bounds() Rect {
 	return Rect{X: 0, Y: 0, Width: s.offset.Width, Height: s.offset.Height}
 }
 
-// SetCell sets a cell at the given position (relative to sub-buffer origin).
-func (s *SubBuffer) SetCell(x, y int, cell Cell) {
-	if x < 0 || x >= s.offset.Width || y < 0 || y >= s.offset.Height {
-		return
-	}
-	s.parent.SetCell(s.offset.X+x, s.offset.Y+y, cell)
-}
-
 // GetCell returns the cell at the given position.
 func (s *SubBuffer) GetCell(x, y int) Cell {
 	if x < 0 || x >= s.offset.Width || y < 0 || y >= s.offset.Height {
@@ -500,20 +509,50 @@ func (s *SubBuffer) GetCell(x, y int) Cell {
 	return s.parent.GetCell(s.offset.X+x, s.offset.Y+y)
 }
 
-// SetString writes a string at the given position.
-func (s *SubBuffer) SetString(x, y int, str string, style lipgloss.Style) {
-	if y < 0 || y >= s.offset.Height {
+// SetCells writes a slice of cells at position (x, y) relative to sub-buffer origin.
+// Cells that extend beyond the sub-buffer width are clipped.
+func (s *SubBuffer) SetCells(x, y int, cells []Cell) {
+	if y < 0 || y >= s.offset.Height || len(cells) == 0 {
 		return
 	}
-	for _, r := range str {
-		if x >= s.offset.Width {
-			break
+
+	// Handle negative x by skipping cells
+	if x < 0 {
+		skip := -x
+		if skip >= len(cells) {
+			return
 		}
-		if x >= 0 {
-			s.SetCell(x, y, Cell{Rune: r, Style: style})
-		}
-		x++
+		cells = cells[skip:]
+		x = 0
 	}
+
+	// Clip to sub-buffer width
+	available := s.offset.Width - x
+	if available <= 0 {
+		return
+	}
+	if len(cells) > available {
+		cells = cells[:available]
+	}
+
+	s.parent.SetCells(s.offset.X+x, s.offset.Y+y, cells)
+}
+
+// SetString writes a string at the given position.
+func (s *SubBuffer) SetString(x, y int, str string, style lipgloss.Style) {
+	if y < 0 || y >= s.offset.Height || len(str) == 0 {
+		return
+	}
+
+	runes := []rune(str)
+
+	// Build cells slice
+	cells := make([]Cell, len(runes))
+	for i, r := range runes {
+		cells[i] = Cell{Rune: r, Style: style}
+	}
+
+	s.SetCells(x, y, cells)
 }
 
 // SetStringTruncated writes a string, truncating with ellipsis if needed.
@@ -537,10 +576,18 @@ func (s *SubBuffer) SetStringTruncated(x, y int, str string, maxWidth int, style
 // Fill fills a rectangular region.
 func (s *SubBuffer) Fill(rect Rect, cell Cell) {
 	clipped := rect.Intersect(s.Bounds())
+	if clipped.Width == 0 || clipped.Height == 0 {
+		return
+	}
+
+	// Build a row of cells to copy
+	row := make([]Cell, clipped.Width)
+	for i := range row {
+		row[i] = cell
+	}
+
 	for y := clipped.Y; y < clipped.Y+clipped.Height; y++ {
-		for x := clipped.X; x < clipped.X+clipped.Width; x++ {
-			s.SetCell(x, y, cell)
-		}
+		s.SetCells(clipped.X, y, row)
 	}
 }
 
@@ -596,11 +643,12 @@ func (s *SubBuffer) InvertRow(row int) {
 	if row < 0 || row >= s.offset.Height {
 		return
 	}
+	cells := make([]Cell, s.offset.Width)
 	for x := 0; x < s.offset.Width; x++ {
-		cell := s.GetCell(x, row)
-		cell.Style = cell.Style.Reverse(true)
-		s.SetCell(x, row, cell)
+		cells[x] = s.GetCell(x, row)
+		cells[x].Style = cells[x].Style.Reverse(true)
 	}
+	s.SetCells(0, row, cells)
 }
 
 // String renders the buffer to a string for terminal output.

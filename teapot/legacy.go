@@ -80,14 +80,7 @@ func (l *LegacyAdapter) renderString(buf *SubBuffer, s string) {
 
 		// For now, just render the raw characters
 		// In a full implementation, we'd parse ANSI escape sequences
-		x := 0
-		for _, r := range line {
-			if x >= buf.Width() {
-				break
-			}
-			buf.SetCell(x, y, Cell{Rune: r})
-			x++
-		}
+		buf.SetString(0, y, line, noStyle)
 	}
 }
 
@@ -157,15 +150,7 @@ func (s *StringWidget) Render(buf *SubBuffer) {
 		if y >= buf.Height() {
 			break
 		}
-
-		x := 0
-		for _, r := range line {
-			if x >= buf.Width() {
-				break
-			}
-			buf.SetCell(x, y, Cell{Rune: r})
-			x++
-		}
+		buf.SetString(0, y, line, noStyle)
 	}
 }
 

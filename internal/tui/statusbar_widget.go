@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"git.15b.it/eno/critic/teapot"
@@ -83,10 +84,9 @@ func (s *StatusBarWidget) Render(buf *teapot.SubBuffer) {
 	height := buf.Height()
 
 	// Fill background
+	bgRow := strings.Repeat(" ", width)
 	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			buf.SetCell(x, y, teapot.Cell{Rune: ' ', Style: s.cellStyle})
-		}
+		buf.SetString(0, y, bgRow, s.cellStyle)
 	}
 
 	// Build left section: [B]ase • [F]ilter • ? help
