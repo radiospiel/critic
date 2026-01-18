@@ -540,5 +540,5 @@ func revParse(ref string) string {
 
 	// Use git rev-parse to get the SHA1
 	output := must.Exec("git", "rev-parse", ref)
-	return string(output)
+	return strings.TrimSpace(string(output))
 }
