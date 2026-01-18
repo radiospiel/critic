@@ -200,13 +200,52 @@ type StyleID uint16
 // noStyleID is the StyleID for the default unstyled style (always ID 0).
 const noStyleID StyleID = 0
 
+// styleKey computes a string key for a style based on its visual properties.
+// Uses fmt.Sprintf with %p to get pointer identity for colors (no RGBA() allocation).
+// This is much faster than style.Render("").
+func styleKey(style lipgloss.Style) string {
+	// Pack attributes into a single byte (7 bits for 7 attributes)
+	var attrs byte
+	if style.GetBold() {
+		attrs |= 1 << 0
+	}
+	if style.GetItalic() {
+		attrs |= 1 << 1
+	}
+	if style.GetUnderline() {
+		attrs |= 1 << 2
+	}
+	if style.GetReverse() {
+		attrs |= 1 << 3
+	}
+	if style.GetFaint() {
+		attrs |= 1 << 4
+	}
+	if style.GetBlink() {
+		attrs |= 1 << 5
+	}
+	if style.GetStrikethrough() {
+		attrs |= 1 << 6
+	}
+
+	// Use %v for colors - this uses their String() method which doesn't allocate
+	// like RGBA() does. For lipgloss.Color this returns the color value string.
+	fg := style.GetForeground()
+	bg := style.GetBackground()
+
+	return fmt.Sprintf("%d|%v|%v", attrs, fg, bg)
+}
+
 // styleTable manages deduplicated styles for a buffer.
-// Styles are looked up by their rendered string representation to ensure
+// Styles are looked up by their properties to ensure
 // visually identical styles share the same ID.
 type styleTable struct {
 	styles []lipgloss.Style
 	lookup map[string]StyleID
 }
+
+// noStyleKey is the pre-computed key for noStyle for fast comparison.
+var noStyleKey = styleKey(noStyle)
 
 // newStyleTable creates a new style table with noStyle pre-registered at ID 0.
 func newStyleTable() *styleTable {
@@ -216,17 +255,15 @@ func newStyleTable() *styleTable {
 	}
 	// Register noStyle at ID 0
 	st.styles[0] = noStyle
-	st.lookup[noStyleStr] = noStyleID
+	st.lookup[noStyleKey] = noStyleID
 	return st
 }
 
 // intern returns the StyleID for a style, adding it to the table if new.
-// Performance note: This calls style.Render("") which can be expensive.
-// For hot paths, consider caching the StyleID result.
 func (st *styleTable) intern(style lipgloss.Style) StyleID {
-	key := style.Render("")
-	// Fast path: check if it's noStyle (very common)
-	if key == noStyleStr {
+	key := styleKey(style)
+	// Fast path for noStyle (very common)
+	if key == noStyleKey {
 		return noStyleID
 	}
 	if id, ok := st.lookup[key]; ok {
