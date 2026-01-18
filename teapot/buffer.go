@@ -177,6 +177,7 @@ func rgbToHex(r, g, b string) string {
 
 // Cell represents a single character cell in the terminal buffer.
 // Each cell has a rune and an associated style.
+// This type is used as the public API for widgets to pass styled characters.
 type Cell struct {
 	Rune  rune
 	Style lipgloss.Style
@@ -190,6 +191,120 @@ var noStyleStr = noStyle.Render("")
 
 // EmptyCell is a cell with a space and no styling.
 var EmptyCell = Cell{Rune: ' ', Style: noStyle}
+
+// StyleID is a compact reference to a style in the buffer's style table.
+// Using uint16 allows up to 65536 unique styles, which is more than sufficient
+// for any TUI application while reducing per-cell memory from 552 bytes to 2 bytes.
+type StyleID uint16
+
+// noStyleID is the StyleID for the default unstyled style (always ID 0).
+const noStyleID StyleID = 0
+
+// styleTable manages deduplicated styles for a buffer.
+// Styles are looked up by their rendered string representation to ensure
+// visually identical styles share the same ID.
+type styleTable struct {
+	styles []lipgloss.Style
+	lookup map[string]StyleID
+}
+
+// newStyleTable creates a new style table with noStyle pre-registered at ID 0.
+func newStyleTable() *styleTable {
+	st := &styleTable{
+		styles: make([]lipgloss.Style, 1, 32), // Pre-allocate for typical usage
+		lookup: make(map[string]StyleID, 32),
+	}
+	// Register noStyle at ID 0
+	st.styles[0] = noStyle
+	st.lookup[noStyleStr] = noStyleID
+	return st
+}
+
+// intern returns the StyleID for a style, adding it to the table if new.
+// Performance note: This calls style.Render("") which can be expensive.
+// For hot paths, consider caching the StyleID result.
+func (st *styleTable) intern(style lipgloss.Style) StyleID {
+	key := style.Render("")
+	// Fast path: check if it's noStyle (very common)
+	if key == noStyleStr {
+		return noStyleID
+	}
+	if id, ok := st.lookup[key]; ok {
+		return id
+	}
+	id := StyleID(len(st.styles))
+	st.styles = append(st.styles, style)
+	st.lookup[key] = id
+	return id
+}
+
+// get returns the style for a given StyleID.
+func (st *styleTable) get(id StyleID) lipgloss.Style {
+	if int(id) >= len(st.styles) {
+		return noStyle
+	}
+	return st.styles[id]
+}
+
+// getRendered returns the rendered string for a given StyleID (for fast comparison).
+func (st *styleTable) getRendered(id StyleID) string {
+	if int(id) >= len(st.styles) {
+		return noStyleStr
+	}
+	return st.styles[id].Render("")
+}
+
+// clone creates a deep copy of the style table.
+func (st *styleTable) clone() *styleTable {
+	newST := &styleTable{
+		styles: make([]lipgloss.Style, len(st.styles)),
+		lookup: make(map[string]StyleID, len(st.lookup)),
+	}
+	copy(newST.styles, st.styles)
+	for k, v := range st.lookup {
+		newST.lookup[k] = v
+	}
+	return newST
+}
+
+// Line represents a single row in the buffer.
+// It stores runes and style IDs separately for memory efficiency.
+type Line struct {
+	Runes    []rune
+	StyleIDs []StyleID
+}
+
+// newLine creates a new line with the given width, filled with spaces and noStyleID.
+func newLine(width int) Line {
+	line := Line{
+		Runes:    make([]rune, width),
+		StyleIDs: make([]StyleID, width),
+	}
+	for i := 0; i < width; i++ {
+		line.Runes[i] = ' '
+		// StyleIDs[i] is already 0 (noStyleID) from make()
+	}
+	return line
+}
+
+// clear resets the line to spaces with noStyleID.
+func (l *Line) clear() {
+	for i := range l.Runes {
+		l.Runes[i] = ' '
+		l.StyleIDs[i] = noStyleID
+	}
+}
+
+// clone creates a deep copy of the line.
+func (l *Line) clone() Line {
+	newLine := Line{
+		Runes:    make([]rune, len(l.Runes)),
+		StyleIDs: make([]StyleID, len(l.StyleIDs)),
+	}
+	copy(newLine.Runes, l.Runes)
+	copy(newLine.StyleIDs, l.StyleIDs)
+	return newLine
+}
 
 func emptyRow(width int) []Cell {
 	row := make([]Cell, width)
@@ -215,8 +330,14 @@ func EmptyRow(width int) []Cell {
 
 // Buffer is a 2D grid of cells representing the terminal display.
 // Widgets render into buffers, and the compositor combines them.
+//
+// Internally, the buffer stores Lines (runes + style IDs) for efficiency:
+// - runes: 4 bytes per cell (character content)
+// - styleIDs: 2 bytes per cell (compact reference to style table)
+// This reduces memory usage from ~560 bytes/cell to ~6 bytes/cell.
 type Buffer struct {
-	cells  [][]Cell
+	lines  []Line
+	styles *styleTable
 	width  int
 	height int
 }
@@ -224,19 +345,17 @@ type Buffer struct {
 // NewBuffer creates a new buffer with the given dimensions.
 func NewBuffer(width, height int) *Buffer {
 	if width <= 0 || height <= 0 {
-		return &Buffer{width: 0, height: 0}
+		return &Buffer{width: 0, height: 0, styles: newStyleTable()}
 	}
 
-	cells := make([][]Cell, height)
-	emptyRow := EmptyRow(width)
-
+	lines := make([]Line, height)
 	for y := 0; y < height; y++ {
-		cells[y] = make([]Cell, width)
-		copy(cells[y], emptyRow)
+		lines[y] = newLine(width)
 	}
 
 	return &Buffer{
-		cells:  cells,
+		lines:  lines,
+		styles: newStyleTable(),
 		width:  width,
 		height: height,
 	}
@@ -268,9 +387,8 @@ func (b *Buffer) Clear() {
 		return
 	}
 
-	emptyRow := EmptyRow(b.width)
 	for y := 0; y < b.height; y++ {
-		copy(b.cells[y], emptyRow)
+		b.lines[y].clear()
 	}
 }
 
@@ -280,12 +398,14 @@ func (b *Buffer) GetCell(x, y int) Cell {
 	if x < 0 || x >= b.width || y < 0 || y >= b.height {
 		return EmptyCell
 	}
-	return b.cells[y][x]
+	return Cell{
+		Rune:  b.lines[y].Runes[x],
+		Style: b.styles.get(b.lines[y].StyleIDs[x]),
+	}
 }
 
 // SetCells writes a slice of cells at position (x, y).
 // Cells that extend beyond the buffer width are clipped.
-// Uses copy for efficiency when possible.
 func (b *Buffer) SetCells(x, y int, cells []Cell) {
 	if y < 0 || y >= b.height || len(cells) == 0 {
 		return
@@ -310,7 +430,12 @@ func (b *Buffer) SetCells(x, y int, cells []Cell) {
 		cells = cells[:available]
 	}
 
-	copy(b.cells[y][x:], cells)
+	// Write runes and style IDs separately
+	line := &b.lines[y]
+	for i, cell := range cells {
+		line.Runes[x+i] = cell.Rune
+		line.StyleIDs[x+i] = b.styles.intern(cell.Style)
+	}
 }
 
 // SetString writes a string at position (x, y) with the given style.
@@ -320,15 +445,35 @@ func (b *Buffer) SetString(x, y int, s string, style lipgloss.Style) {
 		return
 	}
 
+	// Handle negative x by skipping runes
 	runes := []rune(s)
-
-	// Build cells slice
-	cells := make([]Cell, len(runes))
-	for i, r := range runes {
-		cells[i] = Cell{Rune: r, Style: style}
+	if x < 0 {
+		skip := -x
+		if skip >= len(runes) {
+			return
+		}
+		runes = runes[skip:]
+		x = 0
 	}
 
-	b.SetCells(x, y, cells)
+	// Clip to buffer width
+	available := b.width - x
+	if available <= 0 {
+		return
+	}
+	if len(runes) > available {
+		runes = runes[:available]
+	}
+
+	// Intern the style once for all characters
+	styleID := b.styles.intern(style)
+
+	// Write runes and styleIDs directly
+	line := &b.lines[y]
+	for i, r := range runes {
+		line.Runes[x+i] = r
+		line.StyleIDs[x+i] = styleID
+	}
 }
 
 // SetStringTruncated writes a string, truncating with ellipsis if needed.
@@ -355,9 +500,12 @@ func (b *Buffer) Fill(rect Rect, cell Cell) {
 	if clipped.Width == 0 || clipped.Height == 0 {
 		return
 	}
+	styleID := b.styles.intern(cell.Style)
 	for y := clipped.Y; y < clipped.Y+clipped.Height; y++ {
+		line := &b.lines[y]
 		for x := clipped.X; x < clipped.X+clipped.Width; x++ {
-			b.cells[y][x] = cell
+			line.Runes[x] = cell.Rune
+			line.StyleIDs[x] = styleID
 		}
 	}
 }
@@ -369,9 +517,12 @@ func (b *Buffer) FillStyle(rect Rect, style lipgloss.Style) {
 		return
 	}
 
+	// Intern the style once for the entire region
+	styleID := b.styles.intern(style)
 	for y := clipped.Y; y < clipped.Y+clipped.Height; y++ {
+		line := &b.lines[y]
 		for x := clipped.X; x < clipped.X+clipped.Width; x++ {
-			b.cells[y][x].Style = style
+			line.StyleIDs[x] = styleID
 		}
 	}
 }
@@ -419,12 +570,17 @@ func (b *Buffer) Blit(src *Buffer, destX, destY int) {
 		if dy < 0 || dy >= b.height {
 			continue
 		}
+		srcLine := &src.lines[y]
+		dstLine := &b.lines[dy]
 		for x := 0; x < src.width; x++ {
 			dx := destX + x
 			if dx < 0 || dx >= b.width {
 				continue
 			}
-			b.cells[dy][dx] = src.cells[y][x]
+			dstLine.Runes[dx] = srcLine.Runes[x]
+			// Re-intern the style from src into our style table
+			srcStyle := src.styles.get(srcLine.StyleIDs[x])
+			dstLine.StyleIDs[dx] = b.styles.intern(srcStyle)
 		}
 	}
 }
@@ -437,13 +593,18 @@ func (b *Buffer) BlitRect(src *Buffer, srcRect Rect, destX, destY int) {
 		if sy < 0 || sy >= src.height || dy < 0 || dy >= b.height {
 			continue
 		}
+		srcLine := &src.lines[sy]
+		dstLine := &b.lines[dy]
 		for x := 0; x < srcRect.Width; x++ {
 			sx := srcRect.X + x
 			dx := destX + x
 			if sx < 0 || sx >= src.width || dx < 0 || dx >= b.width {
 				continue
 			}
-			b.cells[dy][dx] = src.cells[sy][sx]
+			dstLine.Runes[dx] = srcLine.Runes[sx]
+			// Re-intern the style from src into our style table
+			srcStyle := src.styles.get(srcLine.StyleIDs[sx])
+			dstLine.StyleIDs[dx] = b.styles.intern(srcStyle)
 		}
 	}
 }
@@ -527,15 +688,35 @@ func (s *SubBuffer) SetString(x, y int, str string, style lipgloss.Style) {
 		return
 	}
 
+	// Handle negative x by skipping runes
 	runes := []rune(str)
-
-	// Build cells slice
-	cells := make([]Cell, len(runes))
-	for i, r := range runes {
-		cells[i] = Cell{Rune: r, Style: style}
+	if x < 0 {
+		skip := -x
+		if skip >= len(runes) {
+			return
+		}
+		runes = runes[skip:]
+		x = 0
 	}
 
-	s.SetCells(x, y, cells)
+	// Clip to sub-buffer width
+	available := s.offset.Width - x
+	if available <= 0 {
+		return
+	}
+	if len(runes) > available {
+		runes = runes[:available]
+	}
+
+	// Write directly to parent buffer (more efficient than creating Cell slice)
+	absX := s.offset.X + x
+	absY := s.offset.Y + y
+	styleID := s.parent.styles.intern(style)
+	line := &s.parent.lines[absY]
+	for i, r := range runes {
+		line.Runes[absX+i] = r
+		line.StyleIDs[absX+i] = styleID
+	}
 }
 
 // SetStringTruncated writes a string, truncating with ellipsis if needed.
@@ -614,8 +795,12 @@ func (b *Buffer) InvertRow(row int) {
 	if row < 0 || row >= b.height {
 		return
 	}
+	line := &b.lines[row]
 	for x := 0; x < b.width; x++ {
-		b.cells[row][x].Style = b.cells[row][x].Style.Reverse(true)
+		// Get the current style, apply reverse, and intern the new style
+		currentStyle := b.styles.get(line.StyleIDs[x])
+		invertedStyle := currentStyle.Reverse(true)
+		line.StyleIDs[x] = b.styles.intern(invertedStyle)
 	}
 }
 
@@ -625,12 +810,22 @@ func (s *SubBuffer) InvertRow(row int) {
 	if row < 0 || row >= s.offset.Height {
 		return
 	}
-	cells := make([]Cell, s.offset.Width)
-	for x := 0; x < s.offset.Width; x++ {
-		cells[x] = s.GetCell(x, row)
-		cells[x].Style = cells[x].Style.Reverse(true)
+	// Delegate to parent's row inversion for the absolute row
+	absY := s.offset.Y + row
+	if absY < 0 || absY >= s.parent.height {
+		return
 	}
-	s.SetCells(0, row, cells)
+	line := &s.parent.lines[absY]
+	// Only invert cells within our horizontal bounds
+	for x := 0; x < s.offset.Width; x++ {
+		absX := s.offset.X + x
+		if absX < 0 || absX >= s.parent.width {
+			continue
+		}
+		currentStyle := s.parent.styles.get(line.StyleIDs[absX])
+		invertedStyle := currentStyle.Reverse(true)
+		line.StyleIDs[absX] = s.parent.styles.intern(invertedStyle)
+	}
 }
 
 // RenderToString renders the buffer to a string for terminal output.
@@ -648,60 +843,91 @@ func (b *Buffer) RenderToString() string {
 		if y > 0 {
 			sb.WriteString("\n")
 		}
-		renderRow(b.cells[y], &sb)
+		b.renderRow(y, &sb)
 	}
 
 	return sb.String()
 }
 
-// renderRow renders a row of cells, grouping consecutive cells with the same style.
-func renderRow(row []Cell, sb *strings.Builder) {
-	if len(row) == 0 {
+// String returns the buffer content as a string (alias for RenderToString).
+func (b *Buffer) String() string {
+	return b.RenderToString()
+}
+
+// renderRow renders a row, grouping consecutive cells with the same style.
+// This is now a method on Buffer to access the style table.
+func (b *Buffer) renderRow(y int, sb *strings.Builder) {
+	if b.width == 0 {
 		return
 	}
 
-	var runes strings.Builder
-	runes.Grow(len(row)) // Preallocate for worst case (all same style)
-	currentStyleStr := row[0].Style.Render("")
-	currentStyle := row[0].Style
+	line := &b.lines[y]
+	var runesBuf strings.Builder
+	runesBuf.Grow(b.width) // Preallocate for worst case (all same style)
 
-	for _, cell := range row {
-		cellStyleStr := cell.Style.Render("")
-		if cellStyleStr != currentStyleStr {
+	currentStyleID := line.StyleIDs[0]
+
+	for x := 0; x < b.width; x++ {
+		styleID := line.StyleIDs[x]
+		if styleID != currentStyleID {
 			// Style changed - render accumulated runes and start new group
-			writeStyled(sb, currentStyleStr, currentStyle, runes.String())
-			runes.Reset()
-			currentStyle = cell.Style
-			currentStyleStr = cellStyleStr
+			b.writeStyledByID(sb, currentStyleID, runesBuf.String())
+			runesBuf.Reset()
+			currentStyleID = styleID
 		}
-		runes.WriteRune(cell.Rune)
+		runesBuf.WriteRune(line.Runes[x])
 	}
 
 	// Render final group
-	if runes.Len() > 0 {
-		writeStyled(sb, currentStyleStr, currentStyle, runes.String())
+	if runesBuf.Len() > 0 {
+		b.writeStyledByID(sb, currentStyleID, runesBuf.String())
 	}
 }
 
-// writeStyled writes text to sb, applying style only if it's not noStyle.
-func writeStyled(sb *strings.Builder, styleStr string, style lipgloss.Style, text string) {
-	if styleStr == noStyleStr {
+// writeStyledByID writes text to sb, applying style only if it's not noStyle.
+func (b *Buffer) writeStyledByID(sb *strings.Builder, styleID StyleID, text string) {
+	if styleID == noStyleID {
 		sb.WriteString(text)
 	} else {
+		style := b.styles.get(styleID)
 		sb.WriteString(style.Render(text))
 	}
 }
 
 // Equals compares two buffers for equality.
-// Used for differential rendering. Note: only compares runes, not styles,
-// since lipgloss.Style contains non-comparable fields.
+// Compares both runes and style IDs for complete equality.
 func (b *Buffer) Equals(other *Buffer) bool {
 	if b.width != other.width || b.height != other.height {
 		return false
 	}
 	for y := 0; y < b.height; y++ {
+		bLine := &b.lines[y]
+		oLine := &other.lines[y]
 		for x := 0; x < b.width; x++ {
-			if b.cells[y][x].Rune != other.cells[y][x].Rune {
+			if bLine.Runes[x] != oLine.Runes[x] {
+				return false
+			}
+			// Compare styles by their rendered representation
+			// (different style tables may have different IDs for the same style)
+			if b.styles.getRendered(bLine.StyleIDs[x]) != other.styles.getRendered(oLine.StyleIDs[x]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// EqualsRunes compares only the rune content of two buffers.
+// This is faster than Equals when style comparison is not needed.
+func (b *Buffer) EqualsRunes(other *Buffer) bool {
+	if b.width != other.width || b.height != other.height {
+		return false
+	}
+	for y := 0; y < b.height; y++ {
+		bLine := &b.lines[y]
+		oLine := &other.lines[y]
+		for x := 0; x < b.width; x++ {
+			if bLine.Runes[x] != oLine.Runes[x] {
 				return false
 			}
 		}
@@ -711,9 +937,20 @@ func (b *Buffer) Equals(other *Buffer) bool {
 
 // Clone creates a deep copy of the buffer.
 func (b *Buffer) Clone() *Buffer {
-	clone := NewBuffer(b.width, b.height)
-	for y := 0; y < b.height; y++ {
-		copy(clone.cells[y], b.cells[y])
+	if b.width <= 0 || b.height <= 0 {
+		return &Buffer{width: 0, height: 0, styles: newStyleTable()}
 	}
+
+	clone := &Buffer{
+		lines:  make([]Line, b.height),
+		styles: b.styles.clone(),
+		width:  b.width,
+		height: b.height,
+	}
+
+	for y := 0; y < b.height; y++ {
+		clone.lines[y] = b.lines[y].clone()
+	}
+
 	return clone
 }
