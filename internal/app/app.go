@@ -14,6 +14,7 @@ import (
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
+	"git.15b.it/eno/critic/simple-go/observable"
 	"git.15b.it/eno/critic/teapot"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -127,7 +128,8 @@ type Model struct {
 	statusBar     *tui.StatusBarWidget
 	mainLayout    *tui.MainLayout
 	compositor    *teapot.Compositor
-	layout        tui.LayoutModel // TODO: Remove after full migration
+	observable    *observable.Observable // Observable for widget state updates
+	layout        tui.LayoutModel        // TODO: Remove after full migration
 	diff          *ctypes.Diff
 	bases         []string          // List of base refs
 	currentBase   int               // Index of current base
@@ -179,6 +181,16 @@ func NewModel(args *Args) Model {
 	// Create compositor with main layout as root
 	compositor := teapot.NewCompositor(mainLayout)
 
+	// Create observable for widget state management
+	obs := observable.New()
+	compositor.SetObservable(obs)
+
+	// Subscribe widgets to their data dependencies
+	// When "files" changes, FileListWidget is invalidated
+	// When "diff" changes, DiffViewWidget is invalidated
+	compositor.SubscribeWidget(fileList, "files")
+	compositor.SubscribeWidget(diffView.Widget(), "diff")
+
 	return Model{
 		fileList:      fileList,
 		diffView:      diffView,
@@ -186,6 +198,7 @@ func NewModel(args *Args) Model {
 		statusBar:     statusBar,
 		mainLayout:    mainLayout,
 		compositor:    compositor,
+		observable:    obs,
 		layout:        tui.NewLayoutModel(),
 		bases:         args.Bases,
 		currentBase:   0, // Start with first base

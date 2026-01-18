@@ -351,7 +351,7 @@ func (o *Observable) DeleteValueAtKey(key string) {
 // OnKeyChange registers a callback to be notified when values at matching paths change.
 // Patterns use fnmatch-style matching (using path.Match).
 // Returns the subscriptions created (one per pattern) for later cleanup.
-// Deprecated: Use OnPathChange for new code.
+// Deprecated: Use OnChange for new code.
 func (o *Observable) OnKeyChange(patterns []string, callback ChangeCallback) []Subscription {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -370,11 +370,11 @@ func (o *Observable) OnKeyChange(patterns []string, callback ChangeCallback) []S
 	return []Subscription{id}
 }
 
-// OnPathChange registers a callback to be notified when values at matching paths change.
+// OnChange registers a callback to be notified when values at matching paths change.
 // The callback receives only the changed path, not the old/new values.
 // Patterns use fnmatch-style matching (using path.Match).
 // Returns a subscription ID for later cleanup.
-func (o *Observable) OnPathChange(patterns []string, callback PathChangeCallback) Subscription {
+func (o *Observable) OnChange(patterns []string, callback PathChangeCallback) Subscription {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 

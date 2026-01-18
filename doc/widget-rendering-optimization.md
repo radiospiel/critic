@@ -124,9 +124,9 @@ The observable interface supports path-only callbacks:
 // PathChangeCallback receives only the changed path, not old/new values.
 type PathChangeCallback func(path string)
 
-// OnPathChange subscribes to changes at matching paths.
+// OnChange subscribes to changes at matching paths.
 // Patterns use fnmatch-style matching.
-func (o *Observable) OnPathChange(patterns []string, callback PathChangeCallback) Subscription
+func (o *Observable) OnChange(patterns []string, callback PathChangeCallback) Subscription
 
 // Unsubscribe removes a subscription.
 func (o *Observable) Unsubscribe(sub Subscription)
@@ -182,7 +182,7 @@ obs.SetValueAtKey("diff", currentDiff) // DiffViewWidget auto-invalidated
 
 - [x] Rename `Repaint()` to `Invalidate()` across codebase
 - [x] Add `PathChangeCallback` type to Observable
-- [x] Add `OnPathChange()` method to Observable
+- [x] Add `OnChange()` method to Observable
 - [x] Add `needsRender` field and `MarkRendered()` to BaseWidget
 - [x] Add widget subscription management to Compositor
 - [ ] Wire up FileListWidget subscription in app
