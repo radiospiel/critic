@@ -22,23 +22,17 @@ const (
 )
 
 var (
-	logger      *log.Logger
-	once        sync.Once
-	level       Level = INFO // default log level
-	prefix      string
-	logFilePath string // stores the path to the current log file
+	once   sync.Once
+	level  Level = INFO // default log level
+	prefix string
 )
+
+// stores the path to the current log file
+var logFilePath = buildLogFilePath()
+var logger = newFileLogger(logFilePath)
 
 func SetPrefix(s string) {
 	prefix = s
-}
-
-// ensureLogger initializes the logger if not already set
-func ensureLogger() {
-	once.Do(func() {
-		logFilePath = buildLogFilePath()
-		logger = newFileLogger(logFilePath)
-	})
 }
 
 func Runtime[T any](msg string, fun func() T) T {
@@ -65,7 +59,6 @@ func buildLogFilePath() string {
 
 // LogFilePath returns the full path to the current log file
 func LogFilePath() string {
-	ensureLogger() // ensure the logger is initialized so logFilePath is set
 	return logFilePath
 }
 
@@ -104,16 +97,17 @@ func SetLevel(l Level) {
 
 // Printf writes a log message (compatibility)
 func Printf(format string, v ...interface{}) {
-	ensureLogger()
-	logger.Printf(format, v...)
-	if enableStdoutLog {
-		if prefix != "" {
-			v = append([]interface{}{prefix}, v...)
-			fmt.Printf("%s "+format+"\n", v...)
-		} else {
-			fmt.Printf(format+"\n", v...)
+	go func() {
+		logger.Printf(format, v...)
+		if enableStdoutLog {
+			if prefix != "" {
+				v = append([]interface{}{prefix}, v...)
+				fmt.Printf("%s "+format+"\n", v...)
+			} else {
+				fmt.Printf(format+"\n", v...)
+			}
 		}
-	}
+	}()
 }
 
 // Error writes an error log message
