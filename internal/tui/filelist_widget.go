@@ -190,7 +190,7 @@ func (w *FileListWidget) SetFiles(files []*ctypes.FileDiff) {
 		items[i] = FileItem{File: f}
 	}
 	w.list.SetItems(items)
-	w.Repaint() // Propagate dirty state to parent (MainLayout)
+	w.Invalidate() // Propagate dirty state to parent (MainLayout)
 }
 
 // GetActiveFile returns the currently selected file

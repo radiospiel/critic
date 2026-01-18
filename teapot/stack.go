@@ -28,7 +28,7 @@ func (s *Stack) Push(w Widget) {
 	s.AddChild(w)
 	// Give the new widget the same bounds as the stack
 	w.SetBounds(s.bounds)
-	s.Repaint() // Stack needs repainting
+	s.Invalidate() // Stack needs repainting
 }
 
 // Pop removes and returns the top widget from the stack.
@@ -38,7 +38,7 @@ func (s *Stack) Pop() Widget {
 	}
 	top := s.children[len(s.children)-1]
 	s.RemoveChild(top)
-	s.Repaint() // Stack needs repainting
+	s.Invalidate() // Stack needs repainting
 	return top
 }
 
@@ -135,32 +135,32 @@ func NewModal(content Widget, title string) *Modal {
 func (m *Modal) SetSize(width, height int) {
 	m.width = width
 	m.height = height
-	m.Repaint()
+	m.Invalidate()
 }
 
 // SetCentered sets whether the modal is centered.
 func (m *Modal) SetCentered(horizontal, vertical bool) {
 	m.centerH = horizontal
 	m.centerV = vertical
-	m.Repaint()
+	m.Invalidate()
 }
 
 // SetDimBackground sets whether to dim the background.
 func (m *Modal) SetDimBackground(dim bool) {
 	m.dimBackground = dim
-	m.Repaint()
+	m.Invalidate()
 }
 
 // SetBorderStyle sets the border style.
 func (m *Modal) SetBorderStyle(style lipgloss.Style) {
 	m.borderStyle = style
-	m.Repaint()
+	m.Invalidate()
 }
 
 // SetBackgroundStyle sets the background style inside the modal.
 func (m *Modal) SetBackgroundStyle(style lipgloss.Style) {
 	m.bgStyle = style
-	m.Repaint()
+	m.Invalidate()
 }
 
 // Children returns the modal's content widget.
@@ -340,5 +340,5 @@ func (m *Modal) SetContent(w Widget) {
 	if w != nil {
 		w.SetParent(m)
 	}
-	m.Repaint()
+	m.Invalidate()
 }
