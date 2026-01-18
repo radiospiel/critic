@@ -1,6 +1,7 @@
 package styleregistry
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -351,6 +352,151 @@ func TestStrikethroughStyle(t *testing.T) {
 	// Should match lipgloss output
 	expected := style.Render("Strike")
 	assert.Equals(t, result, expected)
+}
+
+func TestDeduplication_IdenticalStyles(t *testing.T) {
+	reg := New()
+
+	// Register the same style twice
+	style1 := lipgloss.NewStyle().Bold(true)
+	style2 := lipgloss.NewStyle().Bold(true)
+
+	id1 := reg.Register(style1)
+	id2 := reg.Register(style2)
+
+	// Should return the same ID (deduplicated)
+	assert.Equals(t, id1, id2, "identical styles should return same ID")
+	assert.Equals(t, reg.Len(), 1, "registry should only have 1 style")
+}
+
+func TestDeduplication_DifferentStyles(t *testing.T) {
+	reg := New()
+
+	style1 := lipgloss.NewStyle().Bold(true)
+	style2 := lipgloss.NewStyle().Italic(true)
+
+	id1 := reg.Register(style1)
+	id2 := reg.Register(style2)
+
+	// Should return different IDs
+	assert.NotEquals(t, id1, id2, "different styles should return different IDs")
+	assert.Equals(t, reg.Len(), 2, "registry should have 2 styles")
+}
+
+func TestDeduplication_ComplexStyles(t *testing.T) {
+	reg := New()
+
+	// Two complex styles that are identical
+	style1 := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FF0000")).
+		Background(lipgloss.Color("#00FF00"))
+	style2 := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FF0000")).
+		Background(lipgloss.Color("#00FF00"))
+
+	id1 := reg.Register(style1)
+	id2 := reg.Register(style2)
+
+	assert.Equals(t, id1, id2, "identical complex styles should return same ID")
+	assert.Equals(t, reg.Len(), 1, "registry should only have 1 style")
+}
+
+func TestDeduplication_MultipleRegistrations(t *testing.T) {
+	reg := New()
+
+	bold := lipgloss.NewStyle().Bold(true)
+	italic := lipgloss.NewStyle().Italic(true)
+
+	// Register multiple times in various orders
+	boldID1 := reg.Register(bold)
+	italicID1 := reg.Register(italic)
+	boldID2 := reg.Register(bold)
+	italicID2 := reg.Register(italic)
+	boldID3 := reg.Register(bold)
+
+	assert.Equals(t, boldID1, boldID2, "bold IDs should match")
+	assert.Equals(t, boldID2, boldID3, "bold IDs should match")
+	assert.Equals(t, italicID1, italicID2, "italic IDs should match")
+	assert.Equals(t, reg.Len(), 2, "registry should only have 2 unique styles")
+}
+
+func TestMaxCapacity(t *testing.T) {
+	reg := New()
+
+	// Register MaxStyles unique styles
+	for i := 0; i < MaxStyles; i++ {
+		// Create unique styles by using different colors (format as hex)
+		color := fmt.Sprintf("#%06X", i)
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
+		id := reg.Register(style)
+		assert.NotEquals(t, id, InvalidStyleID, "style %d should register successfully", i)
+	}
+
+	assert.Equals(t, reg.Len(), MaxStyles, "registry should be at max capacity")
+
+	// Try to register one more - should return InvalidStyleID
+	extraStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF"))
+	id := reg.Register(extraStyle)
+	assert.Equals(t, id, InvalidStyleID, "should return InvalidStyleID when full")
+
+	// Length should not change
+	assert.Equals(t, reg.Len(), MaxStyles, "registry length should not exceed max")
+}
+
+func TestMaxCapacity_WithDeduplication(t *testing.T) {
+	reg := New()
+
+	// Fill up the registry
+	for i := 0; i < MaxStyles; i++ {
+		color := fmt.Sprintf("#%06X", i)
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
+		reg.Register(style)
+	}
+
+	// Registering a duplicate should still work (returns existing ID)
+	existingStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#000000"))
+	id := reg.Register(existingStyle)
+	assert.Equals(t, id, StyleID(0), "duplicate should return existing ID even when full")
+}
+
+func TestMustRegister_Panic(t *testing.T) {
+	reg := New()
+
+	// Fill up the registry
+	for i := 0; i < MaxStyles; i++ {
+		color := fmt.Sprintf("#%06X", i)
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
+		reg.MustRegister(style)
+	}
+
+	// MustRegister should panic when full
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "MustRegister should panic when registry is full")
+	}()
+
+	extraStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF"))
+	reg.MustRegister(extraStyle)
+	t.Error("MustRegister should have panicked")
+}
+
+func TestNewWithCapacity_ExceedsMax(t *testing.T) {
+	// Creating with capacity > MaxStyles should cap at MaxStyles
+	reg := NewWithCapacity(MaxStyles + 1000)
+	assert.NotNil(t, reg)
+	// The registry should still work and enforce MaxStyles limit
+	for i := 0; i < MaxStyles; i++ {
+		color := fmt.Sprintf("#%06X", i)
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
+		id := reg.Register(style)
+		assert.NotEquals(t, id, InvalidStyleID)
+	}
+	// Should fail at MaxStyles + 1
+	extraStyle := lipgloss.NewStyle().Background(lipgloss.Color("#FFFFFF"))
+	id := reg.Register(extraStyle)
+	assert.Equals(t, id, InvalidStyleID)
 }
 
 // Benchmark tests

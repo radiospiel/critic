@@ -10,6 +10,7 @@
 package styleregistry
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -21,6 +22,9 @@ type StyleID uint16
 
 // InvalidStyleID represents an unregistered or invalid style.
 const InvalidStyleID StyleID = 0xFFFF
+
+// MaxStyles is the maximum number of styles the registry can hold.
+const MaxStyles = 1024
 
 // CompiledStyle holds pre-computed rendering data for a style.
 type CompiledStyle struct {
@@ -44,41 +48,66 @@ type CompiledStyle struct {
 	isEmpty bool
 }
 
-// StyleRegistry manages compiled styles.
+// StyleRegistry manages compiled styles with deduplication.
 type StyleRegistry struct {
 	styles []CompiledStyle
+	hashes map[string]StyleID // maps style hash to existing StyleID for deduplication
 }
 
 // New creates a new StyleRegistry with pre-allocated capacity.
 func New() *StyleRegistry {
 	return &StyleRegistry{
 		styles: make([]CompiledStyle, 0, 64),
+		hashes: make(map[string]StyleID, 64),
 	}
 }
 
 // NewWithCapacity creates a new StyleRegistry with the specified initial capacity.
 func NewWithCapacity(capacity int) *StyleRegistry {
+	if capacity > MaxStyles {
+		capacity = MaxStyles
+	}
 	return &StyleRegistry{
 		styles: make([]CompiledStyle, 0, capacity),
+		hashes: make(map[string]StyleID, capacity),
 	}
 }
 
 // Register compiles a lipgloss.Style and returns its ID.
 // The style is analyzed once during registration, and subsequent renders
 // use the pre-computed ANSI sequences.
+//
+// If an identical style has already been registered, the existing StyleID
+// is returned (deduplication). Returns InvalidStyleID if the registry is full.
 func (r *StyleRegistry) Register(s lipgloss.Style) StyleID {
+	// Compute hash for deduplication
+	hash := hashStyle(s)
+
+	// Check for existing identical style
+	if existingID, ok := r.hashes[hash]; ok {
+		return existingID
+	}
+
+	// Check capacity
+	if len(r.styles) >= MaxStyles {
+		return InvalidStyleID
+	}
+
+	// Compile and store new style
 	compiled := compile(s)
 	id := StyleID(len(r.styles))
 	r.styles = append(r.styles, compiled)
+	r.hashes[hash] = id
 	return id
 }
 
 // MustRegister is like Register but panics if the registry is full.
 func (r *StyleRegistry) MustRegister(s lipgloss.Style) StyleID {
-	if len(r.styles) >= int(InvalidStyleID) {
-		panic("styleregistry: registry is full")
+	id := r.Register(s)
+	if id == InvalidStyleID {
+		panic("styleregistry: registry is full (max 1024 styles)")
 	}
-	return r.Register(s)
+	return id
 }
 
 // Render applies a compiled style to a string.
@@ -233,4 +262,62 @@ func extractANSICodes(s lipgloss.Style) (prefix, suffix string) {
 	suffix = rendered[idx+len(marker):]
 
 	return prefix, suffix
+}
+
+// hashStyle computes a hash string for a style based on its properties.
+// Two styles with identical properties produce the same hash.
+func hashStyle(s lipgloss.Style) string {
+	// Build hash from all style properties to ensure uniqueness
+	// even in non-TTY environments where ANSI codes aren't produced
+	var sb strings.Builder
+
+	// Text attributes
+	if s.GetBold() {
+		sb.WriteString("B")
+	}
+	if s.GetItalic() {
+		sb.WriteString("I")
+	}
+	if s.GetUnderline() {
+		sb.WriteString("U")
+	}
+	if s.GetStrikethrough() {
+		sb.WriteString("S")
+	}
+	if s.GetReverse() {
+		sb.WriteString("R")
+	}
+	if s.GetBlink() {
+		sb.WriteString("K")
+	}
+	if s.GetFaint() {
+		sb.WriteString("F")
+	}
+
+	// Colors - include the rendered output which captures color values
+	// This works because even without ANSI output, the color values differ
+	sb.WriteString("|fg:")
+	sb.WriteString(fmt.Sprintf("%v", s.GetForeground()))
+	sb.WriteString("|bg:")
+	sb.WriteString(fmt.Sprintf("%v", s.GetBackground()))
+
+	// Layout properties
+	sb.WriteString(fmt.Sprintf("|p:%d,%d,%d,%d",
+		s.GetPaddingTop(), s.GetPaddingRight(), s.GetPaddingBottom(), s.GetPaddingLeft()))
+	sb.WriteString(fmt.Sprintf("|m:%d,%d,%d,%d",
+		s.GetMarginTop(), s.GetMarginRight(), s.GetMarginBottom(), s.GetMarginLeft()))
+	sb.WriteString(fmt.Sprintf("|w:%d|h:%d|mw:%d|mh:%d",
+		s.GetWidth(), s.GetHeight(), s.GetMaxWidth(), s.GetMaxHeight()))
+
+	// Border
+	if s.GetBorderTop() || s.GetBorderBottom() || s.GetBorderLeft() || s.GetBorderRight() {
+		sb.WriteString(fmt.Sprintf("|border:%v,%v,%v,%v",
+			s.GetBorderTop(), s.GetBorderRight(), s.GetBorderBottom(), s.GetBorderLeft()))
+		sb.WriteString(fmt.Sprintf("|bstyle:%v", s.GetBorderStyle()))
+	}
+
+	// Alignment
+	sb.WriteString(fmt.Sprintf("|align:%v,%v", s.GetAlign(), s.GetAlignVertical()))
+
+	return sb.String()
 }
