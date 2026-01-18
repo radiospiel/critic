@@ -7,6 +7,9 @@ rm -rf repo
 mkdir repo
 cd repo
 git init
+git config user.name "Test User"
+git config user.email "test@example.com"
+git config commit.gpgsign false
 for file in ../v*.txt ; do
 	cp $file data.txt
 	version=$(basename $file | sed 's-\..*--')

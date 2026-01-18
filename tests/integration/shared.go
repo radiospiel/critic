@@ -34,6 +34,7 @@ func SetupGitRepo(t *testing.T) {
 	// Configure git
 	must.Exec("git", "config", "user.name", "Test User")
 	must.Exec("git", "config", "user.email", "test@example.com")
+	must.Exec("git", "config", "commit.gpgsign", "false")
 }
 
 // CommitFile commits an existing file in the current directory
