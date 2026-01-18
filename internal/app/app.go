@@ -121,28 +121,28 @@ func Run(args *Args) error {
 
 // Model represents the main application model
 type Model struct {
-	fileList        *tui.FileListWidget
-	diffView        *tui.DiffViewModel
-	commentEditor   tui.CommentEditor
-	statusBar       *tui.StatusBarWidget
-	mainLayout      *tui.MainLayout
-	compositor      *teapot.Compositor
-	layout          tui.LayoutModel // TODO: Remove after full migration
-	diff            *ctypes.Diff
-	bases           []string          // List of base refs
-	currentBase     int               // Index of current base
-	paths           []string          // Paths to diff
-	extensions      []string          // File extensions to include
-	resolver        *git.BaseResolver // Base resolver with polling
-	messaging       critic.Messaging           // Messaging interface for conversations
-	filterMode      FilterMode                 // Current filter mode (None, WithComments, WithUnresolved)
-	noAnimation     bool                       // Whether animations are disabled
-	tickCount       int                        // Debug: count of animation ticks
-	err             error
-	width           int
-	height          int
-	ready           bool
-	showHelp        bool // Whether to show help screen
+	fileList      *tui.FileListWidget
+	diffView      *tui.DiffViewModel
+	commentEditor tui.CommentEditor
+	statusBar     *tui.StatusBarWidget
+	mainLayout    *tui.MainLayout
+	compositor    *teapot.Compositor
+	layout        tui.LayoutModel // TODO: Remove after full migration
+	diff          *ctypes.Diff
+	bases         []string          // List of base refs
+	currentBase   int               // Index of current base
+	paths         []string          // Paths to diff
+	extensions    []string          // File extensions to include
+	resolver      *git.BaseResolver // Base resolver with polling
+	messaging     critic.Messaging  // Messaging interface for conversations
+	filterMode    FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
+	noAnimation   bool              // Whether animations are disabled
+	tickCount     int               // Debug: count of animation ticks
+	err           error
+	width         int
+	height        int
+	ready         bool
+	showHelp      bool // Whether to show help screen
 }
 
 // NewModel creates a new application model
@@ -521,7 +521,7 @@ func (m Model) View() string {
 		editorBuf := teapot.NewBuffer(m.commentEditor.Width(), m.commentEditor.Height())
 		editorSub := editorBuf.Sub(editorBuf.Bounds())
 		m.commentEditor.Render(editorSub)
-		editorView := editorBuf.String()
+		editorView := editorBuf.RenderToString()
 		editorLines := strings.Split(editorView, "\n")
 
 		// Calculate horizontal padding for centering (80% width means 10% padding on each side)

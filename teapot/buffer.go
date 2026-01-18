@@ -633,9 +633,9 @@ func (s *SubBuffer) InvertRow(row int) {
 	s.SetCells(0, row, cells)
 }
 
-// String renders the buffer to a string for terminal output.
+// RenderToString renders the buffer to a string for terminal output.
 // This is the final step before sending to the terminal.
-func (b *Buffer) String() string {
+func (b *Buffer) RenderToString() string {
 	if b.height == 0 || b.width == 0 {
 		return ""
 	}

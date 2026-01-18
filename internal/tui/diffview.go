@@ -55,13 +55,13 @@ type DiffViewModel struct {
 	gotoBottomOnLoad     bool           // If true, go to bottom after next file load
 	filterMode           FilterMode     // Current filter mode for hunk filtering
 	// Widget-based rendering
-	diffWidget           *DiffViewWidget // The widget that renders the vertical layout of hunks
+	diffWidget *DiffViewWidget // The widget that renders the vertical layout of hunks
 
 	// Cached syntax highlighting (expensive to compute, reused across renders)
-	cachedHighlightFile  *ctypes.FileDiff   // File the cached highlights are for
-	cachedOldFileDeleted map[int]string     // Cached highlighted deleted lines
-	cachedNewFileAdded   map[int]string     // Cached highlighted added lines
-	cachedNewFileContext map[int]string     // Cached highlighted context lines
+	cachedHighlightFile  *ctypes.FileDiff // File the cached highlights are for
+	cachedOldFileDeleted map[int]string   // Cached highlighted deleted lines
+	cachedNewFileAdded   map[int]string   // Cached highlighted added lines
+	cachedNewFileContext map[int]string   // Cached highlighted context lines
 }
 
 // NewDiffViewModel creates a new diff viewer model
@@ -914,7 +914,7 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	}
 
 	// Convert buffer to string
-	result := buffer.String()
+	result := buffer.RenderToString()
 
 	totalTime := time.Since(startTime)
 	renderTime := totalTime - m.highlightTime
@@ -1317,7 +1317,7 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 		animFrame := GetSeparatorFrame()
 
 		// Calculate dashes needed to fill the rest of the line
-		animWidth := 12 // snake animation is 12 chars
+		animWidth := 12                                // snake animation is 12 chars
 		dashesNeeded := availableWidth - animWidth - 1 // -1 for space after animation
 		if dashesNeeded < 0 {
 			dashesNeeded = 0
