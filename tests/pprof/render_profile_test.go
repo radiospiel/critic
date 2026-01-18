@@ -223,3 +223,113 @@ func BenchmarkLargeDiffViewRender(b *testing.B) {
 		widget.Render(buf.Sub(teapot.Rect{X: 0, Y: 0, Width: 200, Height: 100}))
 	}
 }
+
+// BenchmarkCompositorView benchmarks the compositor rendering both widgets together.
+// This measures the full rendering pipeline including caching and buffer composition.
+func BenchmarkCompositorView(b *testing.B) {
+	files := createSampleFiles(50)
+	fileDiff := createSampleFileDiff(10, 30)
+
+	// Create widgets
+	fileListWidget := tui.NewFileListWidget()
+	fileListWidget.SetFiles(files)
+
+	diffViewWidget := tui.NewDiffViewWidget()
+	diffViewWidget.SetFile(fileDiff, nil, nil, nil, nil)
+
+	// Create an HSplit layout with file list on left, diff view on right
+	split := teapot.NewHSplit(fileListWidget, diffViewWidget, 0.25)
+
+	// Create compositor with the split as root
+	compositor := teapot.NewCompositor(split)
+	compositor.Resize(160, 50)
+
+	// First render (warmup / cache population)
+	_ = compositor.View()
+
+	// Mark dirty to force re-render for second call
+	compositor.MarkDirty()
+
+	// Second render (still establishing baseline)
+	_ = compositor.View()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Mark dirty to ensure actual rendering happens
+		compositor.MarkDirty()
+		_ = compositor.View()
+	}
+}
+
+// BenchmarkCompositorViewCached benchmarks compositor with caching (no dirty marking).
+// This measures the performance when widgets don't need re-rendering.
+func BenchmarkCompositorViewCached(b *testing.B) {
+	files := createSampleFiles(50)
+	fileDiff := createSampleFileDiff(10, 30)
+
+	fileListWidget := tui.NewFileListWidget()
+	fileListWidget.SetFiles(files)
+
+	diffViewWidget := tui.NewDiffViewWidget()
+	diffViewWidget.SetFile(fileDiff, nil, nil, nil, nil)
+
+	split := teapot.NewHSplit(fileListWidget, diffViewWidget, 0.25)
+	compositor := teapot.NewCompositor(split)
+	compositor.Resize(160, 50)
+
+	// First render (warmup)
+	_ = compositor.View()
+
+	// Second render (cache populated)
+	_ = compositor.View()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Don't mark dirty - test cached path
+		_ = compositor.View()
+	}
+}
+
+// TestCompositorRenderProfile profiles the compositor View() with both widgets.
+func TestCompositorRenderProfile(t *testing.T) {
+	files := createSampleFiles(50)
+	fileDiff := createSampleFileDiff(10, 30)
+
+	fileListWidget := tui.NewFileListWidget()
+	fileListWidget.SetFiles(files)
+
+	diffViewWidget := tui.NewDiffViewWidget()
+	diffViewWidget.SetFile(fileDiff, nil, nil, nil, nil)
+
+	split := teapot.NewHSplit(fileListWidget, diffViewWidget, 0.25)
+	compositor := teapot.NewCompositor(split)
+	compositor.Resize(160, 50)
+
+	// First render (warmup)
+	_ = compositor.View()
+
+	// Second render (rerender before profiling)
+	compositor.MarkDirty()
+	_ = compositor.View()
+
+	// Profile the subsequent rerenders
+	profileFile, err := os.Create("compositor_profile.prof")
+	if err != nil {
+		t.Fatalf("failed to create profile file: %v", err)
+	}
+	defer profileFile.Close()
+
+	if err := pprof.StartCPUProfile(profileFile); err != nil {
+		t.Fatalf("failed to start CPU profile: %v", err)
+	}
+
+	for i := 0; i < 10; i++ {
+		compositor.MarkDirty()
+		_ = compositor.View()
+	}
+
+	pprof.StopCPUProfile()
+
+	t.Logf("CPU profile written to compositor_profile.prof")
+	t.Logf("Analyze with: go tool pprof compositor_profile.prof")
+}
