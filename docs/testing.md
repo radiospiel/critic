@@ -11,6 +11,7 @@ Critic has multiple levels of testing:
 | Unit Tests | `*_test.go` files | Test individual functions |
 | Integration Tests | `tests/integration/` | Test component interactions |
 | E2E Tests | `tests/e2e/` | Test Web UI in browser |
+| Profile Tests | `tests/pprof/` | Profile rendering performance |
 
 ## Go Tests
 
@@ -173,6 +174,40 @@ await runner.test('My new test', async () => {
   const text = await page.$eval('.expected-element', el => el.textContent);
   assertEqual(text, 'expected value');
 });
+```
+
+## Profile Tests (pprof)
+
+Profile tests in `tests/pprof/` generate CPU profiles to analyze rendering performance.
+
+### Running Profile Tests
+
+```bash
+# Run only TestRenderProfile
+go test -v -run TestRenderProfile ./tests/pprof/
+
+# Run all profile tests
+go test -v ./tests/pprof/
+```
+
+The test generates a `render_profile.prof` file in the `tests/pprof/` directory. Analyze it with:
+
+```bash
+# Interactive CLI
+go tool pprof tests/pprof/render_profile.prof
+
+# Web UI (opens browser)
+go tool pprof -http=:8080 tests/pprof/render_profile.prof
+```
+
+### Running Benchmarks
+
+```bash
+# Run all benchmarks
+go test -bench=. ./tests/pprof/
+
+# Run a specific benchmark
+go test -bench=BenchmarkDiffViewWidgetRender ./tests/pprof/
 ```
 
 ## Integration Tests

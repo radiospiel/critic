@@ -2,9 +2,11 @@ package pprof
 
 import (
 	"os"
+	"os/exec"
 	"runtime/pprof"
 	"testing"
 
+	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/tui"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/teapot"
@@ -83,58 +85,93 @@ func createSampleFiles(count int) []*ctypes.FileDiff {
 	return files
 }
 
-// TestRenderProfile profiles rendering of FileListWidget and DiffViewWidget.
-// It builds the widgets, renders once, then profiles the second rerender 10 times.
-func TestRenderProfile(t *testing.T) {
-	// Create sample data
-	files := createSampleFiles(50)
-	fileDiff := createSampleFileDiff(10, 30) // 10 hunks, 30 lines each
-
-	// Create widgets
-	fileListWidget := tui.NewFileListWidget()
-	fileListWidget.SetFiles(files)
-	fileListWidget.SetBounds(teapot.NewRect(0, 0, 40, 50))
-
-	diffViewWidget := tui.NewDiffViewWidget()
-	diffViewWidget.SetFile(fileDiff, nil, nil, nil, nil)
-	diffViewWidget.SetBounds(teapot.NewRect(0, 0, 120, 50))
-
-	// Create buffers
-	fileListBuf := teapot.NewBuffer(40, 50)
-	diffViewBuf := teapot.NewBuffer(120, 50)
-
-	// First render (warmup)
-	fileListWidget.Render(fileListBuf.Sub(teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
-	diffViewWidget.Render(diffViewBuf.Sub(teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
-
-	// Second render (rerender before profiling)
-	fileListBuf.Clear()
-	diffViewBuf.Clear()
-	fileListWidget.Render(fileListBuf.Sub(teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
-	diffViewWidget.Render(diffViewBuf.Sub(teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
-
-	// Now profile the second rerender 10 times
-	profileFile, err := os.Create("render_profile.prof")
+// getGitDiffBetweenTags returns the raw diff output between two git tags.
+func getGitDiffBetweenTags(fromTag, toTag string) (string, error) {
+	cmd := exec.Command("git", "diff", fromTag+".."+toTag, "--patch", "--no-color")
+	output, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("failed to create profile file: %v", err)
+		return "", err
+	}
+	return string(output), nil
+}
+
+// cpuProfile runs a function while capturing a CPU profile to the specified file.
+// It logs the message before profiling and writes analysis instructions after.
+func cpuProfile(t *testing.T, filename string, msg string, fn func()) {
+	t.Helper()
+
+	profileFile, err := os.Create(filename)
+	if err != nil {
+		t.Fatalf("failed to create profile file %s: %v", filename, err)
 	}
 	defer profileFile.Close()
+
+	t.Logf("Profiling: %s", msg)
 
 	if err := pprof.StartCPUProfile(profileFile); err != nil {
 		t.Fatalf("failed to start CPU profile: %v", err)
 	}
 
-	for i := 0; i < 10; i++ {
-		fileListBuf.Clear()
-		diffViewBuf.Clear()
-		fileListWidget.Render(fileListBuf.Sub(teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
-		diffViewWidget.Render(diffViewBuf.Sub(teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
-	}
+	fn()
 
 	pprof.StopCPUProfile()
 
-	t.Logf("CPU profile written to render_profile.prof")
-	t.Logf("Analyze with: go tool pprof render_profile.prof")
+	t.Logf("CPU profile written to %s", filename)
+	t.Logf("Analyze with: go tool pprof %s", filename)
+}
+
+// TestRenderProfile profiles rendering of FileListWidget and DiffViewWidget in a compositor.
+// It loads a real git diff between ex1 and ex2 tags and profiles the initial render.
+func TestRenderProfile(t *testing.T) {
+	// Get real diff between ex1 and ex2 tags
+	diffOutput, err := getGitDiffBetweenTags("ex1", "ex2")
+	if err != nil {
+		t.Fatalf("failed to get git diff: %v", err)
+	}
+
+	diff, err := git.ParseDiff(diffOutput)
+	if err != nil {
+		t.Fatalf("failed to parse diff: %v", err)
+	}
+
+	if len(diff.Files) == 0 {
+		t.Fatal("no files in diff between ex1 and ex2")
+	}
+
+	// Find internal/app/app.go in the diff
+	var appFile *ctypes.FileDiff
+	for _, f := range diff.Files {
+		if f.NewPath == "internal/app/app.go" {
+			appFile = f
+			break
+		}
+	}
+	if appFile == nil {
+		t.Fatal("internal/app/app.go not found in diff between ex1 and ex2")
+	}
+
+	// Create widgets
+	fileListWidget := tui.NewFileListWidget()
+	fileListWidget.SetFiles(diff.Files)
+
+	diffViewWidget := tui.NewDiffViewWidget()
+	// Load internal/app/app.go into the diff view
+	diffViewWidget.SetFile(appFile, nil, nil, nil, nil)
+
+	// Create an HSplit layout with file list on left, diff view on right
+	split := teapot.NewHSplit(fileListWidget, diffViewWidget, 0.25)
+
+	// Create compositor with the split as root
+	compositor := teapot.NewCompositor(split)
+	compositor.Resize(160, 50)
+
+	t.Logf("Diff contains %d files", len(diff.Files))
+	t.Logf("Loaded file: %s with %d hunks", appFile.NewPath, len(appFile.Hunks))
+
+	// Profile the initial render
+	cpuProfile(t, "initial_render_profile.prof", "initial compositor render", func() {
+		_ = compositor.View()
+	})
 }
 
 // BenchmarkFileListWidgetRender benchmarks FileListWidget rendering.
@@ -313,23 +350,10 @@ func TestCompositorRenderProfile(t *testing.T) {
 	_ = compositor.View()
 
 	// Profile the subsequent rerenders
-	profileFile, err := os.Create("compositor_profile.prof")
-	if err != nil {
-		t.Fatalf("failed to create profile file: %v", err)
-	}
-	defer profileFile.Close()
-
-	if err := pprof.StartCPUProfile(profileFile); err != nil {
-		t.Fatalf("failed to start CPU profile: %v", err)
-	}
-
-	for i := 0; i < 10; i++ {
-		compositor.MarkDirty()
-		_ = compositor.View()
-	}
-
-	pprof.StopCPUProfile()
-
-	t.Logf("CPU profile written to compositor_profile.prof")
-	t.Logf("Analyze with: go tool pprof compositor_profile.prof")
+	cpuProfile(t, "compositor_profile.prof", "compositor rerenders (10x)", func() {
+		for i := 0; i < 10; i++ {
+			compositor.MarkDirty()
+			_ = compositor.View()
+		}
+	})
 }
