@@ -1,9 +1,9 @@
-# Binary
+# critic files
 /critic
 critic.bin
+critic.prof
+.critic.db*
 
-# critic files
-.critic*
 
 # Build artifacts
 *.exe
@@ -16,4 +16,6 @@ critic.bin
 
 # Go workspace file
 go.work
-critic.prof
+
+/tmp
+/package-lock.json
