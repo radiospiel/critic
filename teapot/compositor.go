@@ -127,7 +127,7 @@ func (c *Compositor) SubscribeWidget(widget Widget, paths ...string) {
 
 	for _, path := range paths {
 		// Subscribe to the observable
-		subID := c.observable.OnPathChange([]string{path}, func(changedPath string) {
+		subID := c.observable.OnChange([]string{path}, func(changedPath string) {
 			// Find and invalidate the widget for this path
 			c.onPathChange(changedPath)
 		})

@@ -706,6 +706,11 @@ func (m *DiffViewModel) GetFile() *ctypes.FileDiff {
 	return m.file
 }
 
+// Widget returns the underlying DiffViewWidget for compositor subscription.
+func (m *DiffViewModel) Widget() teapot.Widget {
+	return m.diffWidget
+}
+
 // GetCursorLine returns the current cursor line number
 func (m *DiffViewModel) GetCursorLine() int {
 	return m.cursorLine
