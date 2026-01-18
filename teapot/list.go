@@ -62,7 +62,7 @@ func (l *SelectableList[T]) SetItems(items []T) {
 		l.selected = max(0, len(items)-1)
 	}
 	l.ensureVisible()
-	l.Repaint() // Mark as dirty for compositor re-render
+	l.Invalidate() // Mark as dirty for compositor re-render
 	if l.onChange != nil {
 		l.onChange(items)
 	}
@@ -97,7 +97,7 @@ func (l *SelectableList[T]) SetSelectedIndex(index int) {
 	}
 	l.selected = index
 	l.ensureVisible()
-	l.Repaint() // Mark as dirty for compositor re-render
+	l.Invalidate() // Mark as dirty for compositor re-render
 	if l.onSelect != nil && len(l.items) > 0 {
 		l.onSelect(l.items[l.selected])
 	}
@@ -250,7 +250,7 @@ func (l *SelectableList[T]) moveUp() {
 	if l.selected > 0 {
 		l.selected--
 		l.ensureVisible()
-		l.Repaint()
+		l.Invalidate()
 		if l.onSelect != nil {
 			l.onSelect(l.items[l.selected])
 		}
@@ -261,7 +261,7 @@ func (l *SelectableList[T]) moveDown() {
 	if l.selected < len(l.items)-1 {
 		l.selected++
 		l.ensureVisible()
-		l.Repaint()
+		l.Invalidate()
 		if l.onSelect != nil {
 			l.onSelect(l.items[l.selected])
 		}

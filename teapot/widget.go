@@ -30,7 +30,7 @@ type Widget interface {
 
 	// Dirty tracking
 	IsDirty() bool      // Returns true if widget needs repainting
-	Repaint()           // Marks widget as needing repaint (propagates to parents)
+	Invalidate()        // Marks widget as needing repaint (propagates to parents)
 	MightBeDirty() bool // Returns true if widget might need repainting (animated widgets override to return true)
 
 	// Focus and input handling
@@ -58,7 +58,7 @@ type BaseWidget struct {
 	border       Border
 	borderTitle  string
 	borderFooter string
-	dirty        bool // True if widget needs repainting
+	needsRender  bool // True if widget needs repainting
 }
 
 // NewBaseWidget creates a new base widget with the given z-order.
@@ -66,7 +66,7 @@ func NewBaseWidget() BaseWidget {
 	return BaseWidget{
 		constraints: DefaultConstraints(),
 		focusable:   true,
-		dirty:       true, // Widgets start dirty so they're rendered initially
+		needsRender: true, // Widgets start dirty so they're rendered initially
 	}
 }
 
@@ -152,25 +152,37 @@ func (b *BaseWidget) SetParent(parent Widget) {
 
 // IsDirty returns true if the widget needs repainting.
 func (b *BaseWidget) IsDirty() bool {
-	return b.dirty
+	return b.needsRender
 }
 
-// Repaint marks this widget as needing repaint and propagates to parents.
-func (b *BaseWidget) Repaint() {
-	if b.dirty {
+// NeedsRender returns true if the widget needs repainting.
+// This is an alias for IsDirty() with clearer semantics.
+func (b *BaseWidget) NeedsRender() bool {
+	return b.needsRender
+}
+
+// Invalidate marks this widget as needing repaint and propagates to parents.
+func (b *BaseWidget) Invalidate() {
+	if b.needsRender {
 		return // Already dirty, no need to propagate
 	}
-	b.dirty = true
+	b.needsRender = true
 	if b.parent != nil {
-		b.parent.Repaint()
+		b.parent.Invalidate()
 	}
+}
+
+// MarkRendered clears the needsRender flag after the widget has been rendered.
+// This should be called by the compositor or caching layer after rendering.
+func (b *BaseWidget) MarkRendered() {
+	b.needsRender = false
 }
 
 // MightBeDirty returns true if the widget might need repainting.
 // For normal widgets, this returns true only if dirty.
 // Animated widgets should override this to always return true.
 func (b *BaseWidget) MightBeDirty() bool {
-	return b.dirty
+	return b.needsRender
 }
 
 // Border returns the widget's border configuration.

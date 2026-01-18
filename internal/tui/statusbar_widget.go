@@ -47,25 +47,25 @@ func (s *StatusBarWidget) SetBase(base string) {
 	} else {
 		s.base = ""
 	}
-	s.Repaint()
+	s.Invalidate()
 }
 
 // SetFilter sets the filter section text.
 func (s *StatusBarWidget) SetFilter(filter string) {
 	s.filter = fmt.Sprintf("[F]ilter: %s", filter)
-	s.Repaint()
+	s.Invalidate()
 }
 
 // SetDiffStats sets the diff statistics section.
 func (s *StatusBarWidget) SetDiffStats(added, deleted, moved int) {
 	s.diffStats = fmt.Sprintf("+%d/-%d/~%d", added, deleted, moved)
-	s.Repaint()
+	s.Invalidate()
 }
 
 // ClearDiffStats clears the diff statistics.
 func (s *StatusBarWidget) ClearDiffStats() {
 	s.diffStats = ""
-	s.Repaint()
+	s.Invalidate()
 }
 
 // HandleTick implements teapot.TickHandler.
@@ -74,7 +74,7 @@ func (s *StatusBarWidget) HandleTick() {
 	newClock := time.Now().UTC().Format("15:04:05")
 	if newClock != s.clock {
 		s.clock = newClock
-		s.Repaint()
+		s.Invalidate()
 	}
 }
 
