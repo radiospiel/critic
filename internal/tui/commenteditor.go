@@ -11,18 +11,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// CommentEditor represents the comment editing UI using a teapot Dialog.
+// CommentEditor represents the comment editing UI using a teapot ModalDialog.
 // It shows the conversation history at the top and a textarea for replies at the bottom.
+// CommentEditor embeds ModalDialog to inherit its Close() method for proper modal cleanup.
 type CommentEditor struct {
-	dialog       *pot.Dialog
-	historyView  *conversationHistoryView
-	textarea     textarea.Model
-	active       bool
-	lineNum      int
-	width        int
-	height       int
-	conversation *critic.Conversation
-	isNewComment bool // true if creating a new comment (no history to show)
+	*pot.ModalDialog // embedded - inherits Close() and other dialog methods
+	historyView      *conversationHistoryView
+	textarea         textarea.Model
+	active           bool
+	lineNum          int
+	width            int
+	height           int
+	conversation     *critic.Conversation
+	isNewComment     bool // true if creating a new comment (no history to show)
 }
 
 // NewCommentEditor creates a new comment editor
@@ -55,12 +56,12 @@ func NewCommentEditor() CommentEditor {
 		textarea:    ta,
 	}
 
-	dialog := pot.NewDialog(contentWidget, "Reply to Comment")
+	dialog := pot.NewModalDialog(contentWidget, "Reply to Comment")
 	dialog.SetLabels("Save", "Cancel")
 	dialog.SetBorderFooter("Ctrl+S: Save │ Esc: Cancel")
 
 	return CommentEditor{
-		dialog:      dialog,
+		ModalDialog: dialog,
 		historyView: historyView,
 		textarea:    ta,
 		active:      false,
@@ -390,6 +391,38 @@ func (m CommentEditor) Init() tea.Cmd {
 	return nil
 }
 
+// HandleKey implements teapot.ModalKeyHandler for routing keys via the focus manager.
+// When the comment editor is active as a modal, all keys are routed through this method.
+func (m *CommentEditor) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
+	if !m.active {
+		return false, nil
+	}
+
+	switch msg.Type {
+	case tea.KeyCtrlS:
+		// Ctrl+S saves and exits
+		return true, m.saveComment()
+
+	case tea.KeyEsc:
+		// Cancel - just close without saving
+		m.Deactivate()
+		return true, nil
+
+	default:
+		// Pass other keys to content widget
+		if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
+			handled, cmd := content.HandleKey(msg)
+			if handled {
+				// Sync textarea state
+				m.textarea = content.textarea
+			}
+			return true, cmd // Modal captures all keys when active
+		}
+	}
+
+	return true, nil // Modal captures all keys
+}
+
 // Update handles messages for the comment editor
 func (m *CommentEditor) Update(msg tea.Msg) tea.Cmd {
 	if !m.active {
@@ -398,27 +431,8 @@ func (m *CommentEditor) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyCtrlS:
-			// Ctrl+S saves and exits
-			return m.saveComment()
-
-		case tea.KeyEsc:
-			// Cancel - just close without saving
-			m.Deactivate()
-			return nil
-
-		default:
-			// Pass other keys to content widget
-			if content, ok := m.dialog.Content().(*commentEditorContent); ok {
-				handled, cmd := content.HandleKey(msg)
-				if handled {
-					// Sync textarea state
-					m.textarea = content.textarea
-				}
-				return cmd
-			}
-		}
+		_, cmd := m.HandleKey(msg)
+		return cmd
 	}
 
 	return nil
@@ -431,7 +445,7 @@ func (m *CommentEditor) Render(buf *pot.SubBuffer) {
 	}
 
 	// Sync textarea state to widget
-	if content, ok := m.dialog.Content().(*commentEditorContent); ok {
+	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
 		content.textarea = m.textarea
 	}
 
@@ -450,15 +464,15 @@ func (m *CommentEditor) ActivateWithConversation(lineNum int, conv *critic.Conve
 
 	// Update dialog title
 	if m.isNewComment {
-		m.dialog.SetTitle("New Comment")
+		m.ModalDialog.SetTitle("New Comment")
 		m.textarea.Placeholder = "Enter your comment..."
 	} else {
-		m.dialog.SetTitle(fmt.Sprintf("Reply to Comment (line %d)", lineNum))
+		m.ModalDialog.SetTitle(fmt.Sprintf("Reply to Comment (line %d)", lineNum))
 		m.textarea.Placeholder = "Enter your reply..."
 	}
 
 	// Update content widget
-	if content, ok := m.dialog.Content().(*commentEditorContent); ok {
+	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
 		content.historyView.SetConversation(conv)
 		content.showHistory = !m.isNewComment
 		content.focusOnInput = true
@@ -478,10 +492,10 @@ func (m *CommentEditor) Activate(lineNum int, existingComment string) tea.Cmd {
 	m.textarea.SetValue(existingComment)
 	m.textarea.Focus()
 
-	m.dialog.SetTitle("Edit Comment")
+	m.ModalDialog.SetTitle("Edit Comment")
 	m.textarea.Placeholder = "Enter your comment..."
 
-	if content, ok := m.dialog.Content().(*commentEditorContent); ok {
+	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
 		content.historyView.SetConversation(nil)
 		content.showHistory = false
 		content.focusOnInput = true
@@ -491,12 +505,13 @@ func (m *CommentEditor) Activate(lineNum int, existingComment string) tea.Cmd {
 	return textarea.Blink
 }
 
-// Deactivate deactivates the comment editor
+// Deactivate deactivates the comment editor and clears it from the focus manager's modal.
 func (m *CommentEditor) Deactivate() {
 	m.active = false
 	m.textarea.Blur()
 	m.textarea.SetValue("")
 	m.conversation = nil
+	m.Close() // Clear modal from focus manager (inherited from ModalDialog)
 }
 
 // IsActive returns whether the editor is active
@@ -536,10 +551,10 @@ func (m *CommentEditor) SetSize(width, height int) {
 	innerHeight := height - 4
 	m.textarea.SetWidth(innerWidth)
 	m.textarea.SetHeight(innerHeight)
-	m.dialog.SetBounds(pot.NewRect(0, 0, width, height))
+	m.ModalDialog.SetBounds(pot.NewRect(0, 0, width, height))
 
 	// Update content widget bounds
-	if content, ok := m.dialog.Content().(*commentEditorContent); ok {
+	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
 		content.SetBounds(pot.NewRect(0, 0, innerWidth, innerHeight))
 	}
 }

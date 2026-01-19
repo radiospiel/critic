@@ -60,10 +60,10 @@ type TickHandler interface {
 
 // Compositor manages the root widget tree and orchestrates rendering.
 // It owns the screen buffer and handles the render loop.
+// Note: Focus management is handled separately by the application, not the compositor.
 type Compositor struct {
 	root          View
 	width, height int
-	focusManager  *FocusManager
 	dirty         bool // True if a re-render is needed
 
 	// Layer management: top-level widgets sorted by z-order
@@ -85,7 +85,6 @@ func NewCompositor(root View) *Compositor {
 		startTime: time.Now(),
 	}
 	if root != nil {
-		c.focusManager = NewFocusManager(root)
 		c.rebuildTopLevelWidgets()
 	}
 	return c
@@ -168,10 +167,8 @@ func (c *Compositor) SetRoot(root View) {
 	c.root = root
 	if root != nil {
 		root.SetBounds(Rect{X: 0, Y: 0, Width: c.width, Height: c.height})
-		c.focusManager = NewFocusManager(root)
 		c.rebuildTopLevelWidgets()
 	} else {
-		c.focusManager = nil
 		c.topLevelWidgets = nil
 	}
 	c.dirty = true
@@ -331,14 +328,6 @@ func (c *Compositor) View() string {
 	return c.Render()
 }
 
-// HandleKey routes key events through the focus manager.
-func (c *Compositor) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	if c.focusManager != nil {
-		return c.focusManager.HandleKey(msg)
-	}
-	return false, nil
-}
-
 // HandleMouse routes mouse events to the widget under the cursor.
 func (c *Compositor) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 	if c.root == nil {
@@ -365,45 +354,14 @@ func (c *Compositor) routeMouseEvent(w View, msg tea.MouseMsg) (bool, tea.Cmd) {
 	return w.HandleMouse(msg)
 }
 
-// FocusManager returns the focus manager.
-func (c *Compositor) FocusManager() *FocusManager {
-	return c.focusManager
-}
-
-// SetFocused sets focus to a specific widget.
-func (c *Compositor) SetFocused(w View) {
-	if c.focusManager != nil {
-		c.focusManager.SetFocused(w)
-	}
-}
-
-// Focused returns the currently focused widget.
-func (c *Compositor) Focused() View {
-	if c.focusManager != nil {
-		return c.focusManager.Focused()
-	}
-	return nil
-}
-
-// RebuildFocusChain rebuilds the focus chain after widget tree changes.
-func (c *Compositor) RebuildFocusChain() {
-	if c.focusManager != nil {
-		c.focusManager.RebuildFocusChain()
-	}
-}
-
 // Update handles BubbleTea messages and returns commands.
 // This is the main integration point with BubbleTea.
+// Note: Key events should be handled by the application's focus manager, not the compositor.
 func (c *Compositor) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		c.Resize(msg.Width, msg.Height)
 		return nil
-
-	case tea.KeyMsg:
-		_, cmd := c.HandleKey(msg)
-		c.dirty = true
-		return cmd
 
 	case tea.MouseMsg:
 		_, cmd := c.HandleMouse(msg)

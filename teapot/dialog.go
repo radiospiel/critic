@@ -14,15 +14,17 @@ const (
 	DialogCancel
 )
 
-// Dialog is a modal dialog with OK and Cancel buttons.
+// ModalDialog is a modal dialog with OK and Cancel buttons.
 // OK is triggered by Enter/Return, Cancel by Escape.
-type Dialog struct {
+// When closed, it automatically clears itself from the focus manager's modal.
+type ModalDialog struct {
 	BaseView
-	content     View
-	title       string
-	okLabel     string
-	cancelLabel string
-	result      DialogResult
+	content      View
+	title        string
+	okLabel      string
+	cancelLabel  string
+	result       DialogResult
+	focusManager *FocusManager // Reference to clear modal on close
 
 	// Callbacks
 	onOK     func()
@@ -36,9 +38,9 @@ type Dialog struct {
 	borderStyle     lipgloss.Style
 }
 
-// NewDialog creates a new dialog with the given content and title.
-func NewDialog(content View, title string) *Dialog {
-	d := &Dialog{
+// NewModalDialog creates a new modal dialog with the given content and title.
+func NewModalDialog(content View, title string) *ModalDialog {
+	d := &ModalDialog{
 		BaseView:  NewBaseView(),
 		content:     content,
 		title:       title,
@@ -69,51 +71,65 @@ func NewDialog(content View, title string) *Dialog {
 }
 
 // SetTitle sets the dialog title.
-func (d *Dialog) SetTitle(title string) {
+func (d *ModalDialog) SetTitle(title string) {
 	d.title = title
 	d.SetBorderTitle(title)
 }
 
 // SetLabels sets the OK and Cancel button labels.
-func (d *Dialog) SetLabels(ok, cancel string) {
+func (d *ModalDialog) SetLabels(ok, cancel string) {
 	d.okLabel = ok
 	d.cancelLabel = cancel
 	d.updateFooter()
 }
 
 // updateFooter updates the border footer with button hints.
-func (d *Dialog) updateFooter() {
+func (d *ModalDialog) updateFooter() {
 	footer := "Enter: " + d.okLabel + " │ Esc: " + d.cancelLabel
 	d.SetBorderFooter(footer)
 }
 
 // OnOK sets the callback for when OK is pressed.
-func (d *Dialog) OnOK(fn func()) {
+func (d *ModalDialog) OnOK(fn func()) {
 	d.onOK = fn
 }
 
 // OnCancel sets the callback for when Cancel is pressed.
-func (d *Dialog) OnCancel(fn func()) {
+func (d *ModalDialog) OnCancel(fn func()) {
 	d.onCancel = fn
 }
 
 // Result returns the last dialog result.
-func (d *Dialog) Result() DialogResult {
+func (d *ModalDialog) Result() DialogResult {
 	return d.result
 }
 
 // ResetResult resets the dialog result to None.
-func (d *Dialog) ResetResult() {
+func (d *ModalDialog) ResetResult() {
 	d.result = DialogNone
 }
 
+// SetFocusManager sets the focus manager reference.
+// This is called when the dialog is shown as a modal.
+func (d *ModalDialog) SetFocusManager(fm *FocusManager) {
+	d.focusManager = fm
+}
+
+// Close closes the modal dialog and clears it from the focus manager.
+// This should be called when the dialog is dismissed (OK or Cancel).
+func (d *ModalDialog) Close() {
+	if d.focusManager != nil {
+		d.focusManager.ClearModal()
+	}
+}
+
 // Content returns the dialog's content widget.
-func (d *Dialog) Content() View {
+func (d *ModalDialog) Content() View {
 	return d.content
 }
 
 // SetContent sets the dialog's content widget.
-func (d *Dialog) SetContent(w View) {
+func (d *ModalDialog) SetContent(w View) {
 	if d.content != nil {
 		d.content.SetParent(nil)
 	}
@@ -124,7 +140,7 @@ func (d *Dialog) SetContent(w View) {
 }
 
 // Children returns the content widget.
-func (d *Dialog) Children() []View {
+func (d *ModalDialog) Children() []View {
 	if d.content != nil {
 		return []View{d.content}
 	}
@@ -132,7 +148,7 @@ func (d *Dialog) Children() []View {
 }
 
 // SetBounds sets the dialog bounds and layouts the content.
-func (d *Dialog) SetBounds(bounds Rect) {
+func (d *ModalDialog) SetBounds(bounds Rect) {
 	d.BaseView.SetBounds(bounds)
 
 	if d.content == nil {
@@ -147,7 +163,7 @@ func (d *Dialog) SetBounds(bounds Rect) {
 
 // Render renders the dialog content.
 // The border, title, and footer are rendered by RenderWidget.
-func (d *Dialog) Render(buf *SubBuffer) {
+func (d *ModalDialog) Render(buf *SubBuffer) {
 	// Render content - the buf is already the content area inside the border
 	if d.content != nil {
 		RenderWidget(d.content, buf)
@@ -155,7 +171,7 @@ func (d *Dialog) Render(buf *SubBuffer) {
 }
 
 // HandleKey handles keyboard input.
-func (d *Dialog) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+func (d *ModalDialog) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEnter:
 		d.result = DialogOK
@@ -181,16 +197,16 @@ func (d *Dialog) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 }
 
 // SetTitleStyle sets the title style.
-func (d *Dialog) SetTitleStyle(style lipgloss.Style) {
+func (d *ModalDialog) SetTitleStyle(style lipgloss.Style) {
 	d.titleStyle = style
 }
 
 // SetButtonStyle sets the button label style.
-func (d *Dialog) SetButtonStyle(style lipgloss.Style) {
+func (d *ModalDialog) SetButtonStyle(style lipgloss.Style) {
 	d.buttonStyle = style
 }
 
 // SetButtonHintStyle sets the button hint style (for Enter/Esc).
-func (d *Dialog) SetButtonHintStyle(style lipgloss.Style) {
+func (d *ModalDialog) SetButtonHintStyle(style lipgloss.Style) {
 	d.buttonHintStyle = style
 }

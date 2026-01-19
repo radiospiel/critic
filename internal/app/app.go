@@ -127,7 +127,8 @@ type Model struct {
 	statusBar     *tui.StatusBarView
 	mainLayout    *tui.MainView
 	compositor    *teapot.Compositor
-	layout        tui.LayoutView // TODO: Remove after full migration
+	focusManager  *teapot.FocusManager // Manages focus and modal routing
+	layout        tui.LayoutView       // TODO: Remove after full migration
 	diff          *ctypes.Diff
 	bases         []string          // List of base refs
 	currentBase   int               // Index of current base
@@ -178,6 +179,9 @@ func NewModel(args *Args) Model {
 	// Create compositor with main layout as root
 	compositor := teapot.NewCompositor(mainLayout)
 
+	// Create focus manager for the widget tree
+	focusManager := teapot.NewFocusManager(mainLayout)
+
 	return Model{
 		fileList:      fileList,
 		diffView:      diffView,
@@ -185,6 +189,7 @@ func NewModel(args *Args) Model {
 		statusBar:     statusBar,
 		mainLayout:    mainLayout,
 		compositor:    compositor,
+		focusManager:  focusManager,
 		layout:        tui.NewLayoutView(),
 		bases:         args.Bases,
 		currentBase:   0, // Start with first base
@@ -224,9 +229,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// If comment editor is active, route all keys to it
-		if m.commentEditor.IsActive() {
-			cmd := m.commentEditor.Update(msg)
+		// If a modal is active, route all keys through the focus manager
+		if m.focusManager.HasModal() {
+			_, cmd := m.focusManager.HandleKey(msg)
 			cmds = append(cmds, cmd)
 			return m, tea.Batch(cmds...)
 		}
@@ -314,6 +319,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 
 					cmd := m.commentEditor.ActivateWithConversation(lineNum, conv)
+					// Set the focus manager on the dialog and register as modal
+					fm := m.focusManager
+					m.commentEditor.SetFocusManager(fm)
+					fm.SetModal(&m.commentEditor)
 					cmds = append(cmds, cmd)
 					return m, tea.Batch(cmds...)
 				}
