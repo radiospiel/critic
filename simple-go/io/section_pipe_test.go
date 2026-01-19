@@ -121,6 +121,9 @@ func TestSectionPipe_TakeZero(t *testing.T) {
 	}
 }
 
+// command to generate a large number of lines. Must work on both linux and macOS.
+const gen_random_lines = "cat /dev/urandom | base64 -w 72 | head -c 1024768"
+
 func TestSectionPipe_LargeInput(t *testing.T) {
 	// Test with ~1MB of base64 encoded random data piped through SectionPipe
 	// base64 output has 76 chars per line + newline = 77 bytes per line
@@ -131,7 +134,7 @@ func TestSectionPipe_LargeInput(t *testing.T) {
 		pipe := NewSectionPipe(4, 6)
 		pr, pw := pipe.Pipe()
 
-		cmd := exec.Command("bash", "-c", "base64 /dev/urandom | head -c 1024768")
+		cmd := exec.Command("bash", "-c", gen_random_lines)
 		cmd.Stdout = pw
 
 		go func() {
@@ -165,7 +168,7 @@ func TestSectionPipe_LargeInput(t *testing.T) {
 		pipe := NewSectionPipe(9999, 6)
 		pr, pw := pipe.Pipe()
 
-		cmd := exec.Command("bash", "-c", "base64 /dev/urandom | head -c 1024768")
+		cmd := exec.Command("bash", "-c", gen_random_lines)
 		cmd.Stdout = pw
 
 		go func() {
