@@ -42,11 +42,10 @@ type DiffView struct {
 	width                int
 	height               int
 	ready                bool
-	highlighter          *highlight.Highlighter
-	cachedContent        string
-	cachedFile           *ctypes.FileDiff
-	highlightingEnabled  bool
-	highlightTime        time.Duration // Accumulated syntax highlighting time
+	highlighter     *highlight.Highlighter
+	cachedContent   string
+	cachedFile      *ctypes.FileDiff
+	highlightTime   time.Duration // Accumulated syntax highlighting time
 	cursorLine           int           // Current active line (0-based)
 	totalLines           int           // Total number of lines in rendered diff
 	navigableLines       []int         // Line numbers that can have cursor (diff lines only)
@@ -70,10 +69,9 @@ type DiffView struct {
 // NewDiffView creates a new diff viewer model
 func NewDiffView() *DiffView {
 	m := &DiffView{
-		BaseView:            teapot.NewBaseView(),
-		highlighter:         highlight.NewHighlighter(),
-		highlightingEnabled: true, // Default to enabled
-		diffWidget:          NewDiffContentView(),
+		BaseView:    teapot.NewBaseView(),
+		highlighter: highlight.NewHighlighter(),
+		diffWidget:  NewDiffContentView(),
 	}
 	m.SetFocusable(true)
 	m.SetName("DiffView")
@@ -287,37 +285,10 @@ func (m *DiffView) renderMessage(buf *teapot.SubBuffer, msg string) {
 func (m *DiffView) SetFile(file *ctypes.FileDiff) tea.Cmd {
 	m.file = file
 
-	// Pre-render and cache the diff content
+	// Pre-render and cache the diff content with syntax highlighting
 	if file != nil && (m.cachedFile != file) {
 		m.cachedFile = file
-
-		// Return command to render in background if highlighting is enabled
-		// Don't set up the widget here - let renderDiff() do it with highlighting
-		if m.highlightingEnabled {
-			return m.renderDiffAsync(file)
-		}
-
-		// Only set up widget immediately when highlighting is disabled
-		// Get conversations for comment display
-		conversationsByLine := make(map[int]*critic.Conversation)
-		if m.messaging != nil {
-			convs, _ := m.messaging.GetConversationsForFile(file.NewPath)
-			for _, conv := range convs {
-				conversationsByLine[conv.LineNumber] = conv
-			}
-		}
-		m.diffWidget.SetFilterMode(m.filterMode)
-		m.diffWidget.SetFile(file, conversationsByLine, nil, nil, nil)
-
-		// Render immediately (no highlighting)
-		content, totalLines, navigableLines := m.renderDiff()
-		m.cachedContent = content
-		m.totalLines = totalLines
-		m.navigableLines = navigableLines
-		if m.ready {
-			m.viewport.SetContent(m.cachedContent)
-			m.viewport.GotoTop()
-		}
+		return m.renderDiffAsync(file)
 	}
 	return nil
 }
@@ -341,44 +312,8 @@ func (m *DiffView) RefreshFile() tea.Cmd {
 	// Clear cache to force re-render
 	m.cachedFile = nil
 
-	// Re-render with highlighting if enabled
-	if m.highlightingEnabled {
-		return m.renderDiffAsync(m.file)
-	}
-
-	// Otherwise render immediately (non-async path)
-	content, totalLines, navigableLines := m.renderDiff()
-	m.cachedContent = content
-	m.totalLines = totalLines
-	m.navigableLines = navigableLines
-	if m.ready {
-		m.viewport.SetContent(m.cachedContent)
-
-		// Restore cursor position for synchronous render
-		if m.preserveCursorLine > 0 {
-			restored := false
-			for renderedLine, sourceLine := range m.sourceLines {
-				if sourceLine == m.preserveCursorLine {
-					m.cursorLine = renderedLine
-					m.ensureCursorVisible()
-					restored = true
-					break
-				}
-			}
-			if !restored {
-				for renderedLine, sourceLine := range m.commentLines {
-					if sourceLine == m.preserveCursorLine {
-						m.cursorLine = renderedLine
-						m.ensureCursorVisible()
-						restored = true
-						break
-					}
-				}
-			}
-			m.preserveCursorLine = 0
-		}
-	}
-	return nil
+	// Re-render with syntax highlighting
+	return m.renderDiffAsync(m.file)
 }
 
 // diffRenderedMsg is sent when async rendering completes
@@ -742,14 +677,6 @@ func (m *DiffView) Children() []teapot.View {
 	return nil
 }
 
-// SetHighlightingEnabled enables or disables syntax highlighting
-func (m *DiffView) SetHighlightingEnabled(enabled bool) {
-	m.highlightingEnabled = enabled
-	// Clear cache to force re-render with new setting
-	m.cachedContent = ""
-	m.cachedFile = nil
-}
-
 // SetMessaging sets the messaging interface for conversations
 func (m *DiffView) SetMessaging(messaging critic.Messaging) {
 	m.messaging = messaging
@@ -858,27 +785,25 @@ func (m *DiffView) renderDiff() (string, int, []int) {
 
 	// Build highlighted content maps (cached - only recompute when file changes)
 	var oldFileDeleted, newFileAdded, newFileContext map[int]string
-	if m.highlightingEnabled {
-		// Check if we can reuse cached highlights
-		if m.cachedHighlightFile == m.file && m.cachedOldFileDeleted != nil {
-			// Reuse cached highlights
-			oldFileDeleted = m.cachedOldFileDeleted
-			newFileAdded = m.cachedNewFileAdded
-			newFileContext = m.cachedNewFileContext
-		} else {
-			// Compute and cache highlights
-			hlStart := time.Now()
-			oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
-			newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
-			newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
-			m.highlightTime += time.Since(hlStart)
+	// Check if we can reuse cached highlights
+	if m.cachedHighlightFile == m.file && m.cachedOldFileDeleted != nil {
+		// Reuse cached highlights
+		oldFileDeleted = m.cachedOldFileDeleted
+		newFileAdded = m.cachedNewFileAdded
+		newFileContext = m.cachedNewFileContext
+	} else {
+		// Compute and cache highlights
+		hlStart := time.Now()
+		oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
+		newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
+		newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
+		m.highlightTime += time.Since(hlStart)
 
-			// Cache for reuse
-			m.cachedHighlightFile = m.file
-			m.cachedOldFileDeleted = oldFileDeleted
-			m.cachedNewFileAdded = newFileAdded
-			m.cachedNewFileContext = newFileContext
-		}
+		// Cache for reuse
+		m.cachedHighlightFile = m.file
+		m.cachedOldFileDeleted = oldFileDeleted
+		m.cachedNewFileAdded = newFileAdded
+		m.cachedNewFileContext = newFileContext
 	}
 
 	// Configure the widget - set filter mode BEFORE SetFile

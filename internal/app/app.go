@@ -149,7 +149,6 @@ type Model struct {
 func NewModel(args *Args) Model {
 	logger.Info("NewModel: Creating model with %d paths, %d bases", len(args.Paths), len(args.Bases))
 	diffView := tui.NewDiffView()
-	diffView.SetHighlightingEnabled(true) // Always enable highlighting
 
 	fileList := tui.NewFileListView()
 	fileList.SetFocused(true) // Start with file list focused
