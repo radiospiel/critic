@@ -134,9 +134,19 @@ func (w *FileListView) renderItem(buf *pot.SubBuffer, item FileItem, selected bo
 	buf.SetString(0, 0, string(indicatorRune), indicatorStyle)
 	buf.SetString(1, 0, " ", style)
 
-	// Render content starting at column 2
-	content := fmt.Sprintf("%s %s", status, path)
+	// When selected and focused, show chevrons: "> content <"
+	showChevrons := selected && focused
+	contentStart := 2
 	availableWidth := width - 2 // -2 for indicator + space
+
+	if showChevrons {
+		buf.SetString(2, 0, ">", style)
+		contentStart = 3
+		availableWidth -= 2 // -2 for "> " and " <"
+	}
+
+	// Render content
+	content := fmt.Sprintf("%s %s", status, path)
 
 	// Truncate if needed
 	runes := []rune(content)
@@ -148,14 +158,21 @@ func (w *FileListView) renderItem(buf *pot.SubBuffer, item FileItem, selected bo
 		}
 	}
 
-	// Write content starting at column 2
-	buf.SetString(2, 0, string(runes), style)
+	// Write content
+	buf.SetString(contentStart, 0, string(runes), style)
 
-	// Fill remaining width with style (for selection highlight)
+	// Fill remaining width with style (for selection highlight) and add closing chevron
 	if selected {
-		remaining := width - 2 - len(runes)
-		if remaining > 0 {
-			buf.SetString(2+len(runes), 0, strings.Repeat(" ", remaining), style)
+		contentEnd := contentStart + len(runes)
+		remaining := width - contentEnd
+		if showChevrons && remaining > 0 {
+			// Fill with spaces up to the last character, then put "<"
+			if remaining > 1 {
+				buf.SetString(contentEnd, 0, strings.Repeat(" ", remaining-1), style)
+			}
+			buf.SetString(width-1, 0, "<", style)
+		} else if remaining > 0 {
+			buf.SetString(contentEnd, 0, strings.Repeat(" ", remaining), style)
 		}
 	}
 }

@@ -13,9 +13,9 @@ type mockView struct {
 }
 
 func newMockWidget(id string, minW, minH, stretch int) *mockView {
-	w := &mockWidget{
+	w := &mockView{
 		BaseView: NewBaseView(),
-		id:         id,
+		id:       id,
 	}
 	w.SetConstraints(DefaultConstraints().WithMinSize(minW, minH).WithStretch(stretch, stretch))
 	return w
@@ -206,8 +206,8 @@ func TestContainerViewChildren(t *testing.T) {
 	container.AddChild(child2)
 
 	assert.Equals(t, len(container.Children()), 2)
-	assert.Equals(t, child1.Parent(), Widget(&container))
-	assert.Equals(t, child2.Parent(), Widget(&container))
+	assert.Equals(t, child1.Parent(), View(&container))
+	assert.Equals(t, child2.Parent(), View(&container))
 
 	container.RemoveChild(child1)
 	assert.Equals(t, len(container.Children()), 1)

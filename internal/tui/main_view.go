@@ -54,14 +54,16 @@ func (m *MainView) SetBounds(bounds pot.Rect) {
 	}
 
 	// Calculate split widths (30% for file list, 70% for diff view)
+	// File list is indented by 1 space on the left
+	fileListIndent := 1
 	splitRatio := 0.3
 	leftWidth := int(float64(bounds.Width) * splitRatio)
 	rightWidth := bounds.Width - leftWidth - 1 // -1 for separator
 
-	// Set file list bounds
-	m.fileList.SetBounds(pot.NewRect(bounds.X, bounds.Y, leftWidth, contentHeight))
+	// Set file list bounds (indented by 1 space)
+	m.fileList.SetBounds(pot.NewRect(bounds.X+fileListIndent, bounds.Y, leftWidth-fileListIndent, contentHeight))
 
-	// Set diff view bounds (using SetSize for compatibility)
+	// Set diff view bounds
 	m.diffView.SetBounds(pot.NewRect(bounds.X+leftWidth+1, bounds.Y, rightWidth, contentHeight))
 
 	// Set status bar bounds
@@ -78,6 +80,8 @@ func (m *MainView) Render(buf *pot.SubBuffer) {
 	}
 
 	// Calculate split widths
+	// File list is indented by 1 space on the left
+	fileListIndent := 1
 	splitRatio := 0.3
 	leftWidth := int(float64(bounds.Width) * splitRatio)
 	rightWidth := bounds.Width - leftWidth - 1
@@ -86,9 +90,10 @@ func (m *MainView) Render(buf *pot.SubBuffer) {
 	logger.Info("MainView.Render: bounds=%dx%d, buf=%dx%d, left=%d, right=%d, content=%d, files=%d/%d",
 		bounds.Width, bounds.Height, buf.Width(), buf.Height(), leftWidth, rightWidth, contentHeight, filteredCount, totalCount)
 
-	// Render file list
-	if leftWidth > 0 && contentHeight > 0 {
-		fileListBuf := buf.Sub(pot.Rect{X: 0, Y: 0, Width: leftWidth, Height: contentHeight})
+	// Render file list (indented by 1 space)
+	fileListWidth := leftWidth - fileListIndent
+	if fileListWidth > 0 && contentHeight > 0 {
+		fileListBuf := buf.Sub(pot.Rect{X: fileListIndent, Y: 0, Width: fileListWidth, Height: contentHeight})
 		m.fileList.Render(fileListBuf)
 		logger.Info("MainView.Render: fileList rendered")
 	}

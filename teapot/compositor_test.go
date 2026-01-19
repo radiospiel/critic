@@ -47,31 +47,7 @@ func TestCompositorDirtyFlag(t *testing.T) {
 	assert.True(t, comp.IsDirty(), "should be dirty after MarkDirty")
 }
 
-func TestCompositorFocusManagement(t *testing.T) {
-	widget1 := newMockWidget("A", 0, 0, 0)
-	widget2 := newMockWidget("B", 0, 0, 0)
-
-	vbox := NewVBox(0)
-	vbox.AddChild(widget1)
-	vbox.AddChild(widget2)
-
-	comp := NewCompositor(vbox)
-	comp.Resize(80, 24)
-
-	// Initially no focus
-	assert.Nil(t, comp.Focused())
-
-	// Set focus
-	comp.SetFocused(widget1)
-	assert.Equals(t, comp.Focused(), Widget(widget1))
-	assert.True(t, widget1.Focused(), "widget1 should be focused")
-
-	// Switch focus
-	comp.SetFocused(widget2)
-	assert.Equals(t, comp.Focused(), Widget(widget2))
-	assert.False(t, widget1.Focused(), "widget1 should not be focused")
-	assert.True(t, widget2.Focused(), "widget2 should be focused")
-}
+// TestCompositorFocusManagement removed - focus management is now handled by FocusManager
 
 func TestFocusManager(t *testing.T) {
 	widget1 := newMockWidget("A", 0, 0, 0)
@@ -87,22 +63,22 @@ func TestFocusManager(t *testing.T) {
 
 	// Set initial focus
 	fm.SetFocused(widget1)
-	assert.Equals(t, fm.Focused(), Widget(widget1))
+	assert.Equals(t, fm.Focused(), View(widget1))
 
 	// Focus next
 	fm.FocusNext()
-	assert.Equals(t, fm.Focused(), Widget(widget2))
+	assert.Equals(t, fm.Focused(), View(widget2))
 
 	fm.FocusNext()
-	assert.Equals(t, fm.Focused(), Widget(widget3))
+	assert.Equals(t, fm.Focused(), View(widget3))
 
 	// Wrap around
 	fm.FocusNext()
-	assert.Equals(t, fm.Focused(), Widget(widget1))
+	assert.Equals(t, fm.Focused(), View(widget1))
 
 	// Focus prev
 	fm.FocusPrev()
-	assert.Equals(t, fm.Focused(), Widget(widget3))
+	assert.Equals(t, fm.Focused(), View(widget3))
 }
 
 func TestStackPushPop(t *testing.T) {
@@ -112,16 +88,16 @@ func TestStackPushPop(t *testing.T) {
 	widget2 := newMockWidget("B", 0, 0, 0)
 
 	stack.Push(widget1)
-	assert.Equals(t, stack.Top(), Widget(widget1))
-	assert.Equals(t, stack.Base(), Widget(widget1))
+	assert.Equals(t, stack.Top(), View(widget1))
+	assert.Equals(t, stack.Base(), View(widget1))
 
 	stack.Push(widget2)
-	assert.Equals(t, stack.Top(), Widget(widget2))
-	assert.Equals(t, stack.Base(), Widget(widget1))
+	assert.Equals(t, stack.Top(), View(widget2))
+	assert.Equals(t, stack.Base(), View(widget1))
 
 	popped := stack.Pop()
-	assert.Equals(t, popped, Widget(widget2))
-	assert.Equals(t, stack.Top(), Widget(widget1))
+	assert.Equals(t, popped, View(widget2))
+	assert.Equals(t, stack.Top(), View(widget1))
 }
 
 func TestStackRenderOrder(t *testing.T) {

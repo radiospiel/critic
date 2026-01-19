@@ -450,7 +450,7 @@ func (m *CommentEditor) Render(buf *pot.SubBuffer) {
 	}
 
 	// Render the dialog using RenderWidget for proper border handling
-	pot.RenderWidget(m.dialog, buf)
+	pot.RenderWidget(m.ModalDialog, buf)
 }
 
 // ActivateWithConversation activates the comment editor with a full conversation

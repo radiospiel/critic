@@ -174,7 +174,7 @@ func TestBufferString(t *testing.T) {
 	buf.SetString(0, 0, "Hello", style)
 	buf.SetString(0, 1, "World", style)
 
-	output := buf.String()
+	output := buf.RenderToString()
 	// The output should contain both lines
 	assert.Contains(t, output, "H")
 	assert.Contains(t, output, "W")
