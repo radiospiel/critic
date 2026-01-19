@@ -166,7 +166,7 @@ func (c *Compositor) rebuildTopLevelWidgets() {
 func (c *Compositor) SetRoot(root View) {
 	c.root = root
 	if root != nil {
-		root.SetBounds(Rect{X: 0, Y: 0, Width: c.width, Height: c.height})
+		root.SetBounds(Rect{Position{X: 0, Y: 0}, Size{Width: c.width, Height: c.height}})
 		c.rebuildTopLevelWidgets()
 	} else {
 		c.topLevelWidgets = nil
@@ -186,7 +186,7 @@ func (c *Compositor) Resize(width, height int) {
 
 	// Propagate size to root
 	if c.root != nil {
-		c.root.SetBounds(Rect{X: 0, Y: 0, Width: width, Height: height})
+		c.root.SetBounds(Rect{Position{X: 0, Y: 0}, Size{Width: width, Height: height}})
 	}
 
 	c.dirty = true
@@ -302,18 +302,26 @@ func renderWidgetWoLogging(w View, buf *SubBuffer) {
 
 		// Get content bounds for the widget's render
 		contentBounds := Rect{
-			X:      border.LeftWidth(),
-			Y:      border.TopWidth(),
-			Width:  buf.Width() - border.LeftWidth() - border.RightWidth(),
-			Height: buf.Height() - border.TopWidth() - border.BottomWidth(),
+			Position{
+				X: border.LeftWidth(),
+				Y: border.TopWidth(),
+			},
+			Size{
+				Width:  buf.Width() - border.LeftWidth() - border.RightWidth(),
+				Height: buf.Height() - border.TopWidth() - border.BottomWidth(),
+			},
 		}
 
 		if contentBounds.Width > 0 && contentBounds.Height > 0 {
 			contentSub := buf.parent.Sub(Rect{
-				X:      buf.offset.X + contentBounds.X,
-				Y:      buf.offset.Y + contentBounds.Y,
-				Width:  contentBounds.Width,
-				Height: contentBounds.Height,
+				Position{
+					X: buf.offset.X + contentBounds.X,
+					Y: buf.offset.Y + contentBounds.Y,
+				},
+				Size{
+					Width:  contentBounds.Width,
+					Height: contentBounds.Height,
+				},
 			})
 			w.Render(contentSub)
 		}

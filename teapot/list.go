@@ -42,7 +42,7 @@ type SelectableList[T ListItem] struct {
 func NewSelectableList[T ListItem](renderer ItemRenderer[T]) *SelectableList[T] {
 	list := &SelectableList[T]{
 		BaseView: NewBaseView(),
-		renderer:   renderer,
+		renderer: renderer,
 		selectedStyle: lipgloss.NewStyle().
 			Bold(true).
 			Reverse(true),
@@ -177,10 +177,14 @@ func (l *SelectableList[T]) Render(buf *SubBuffer) {
 
 		// Create a sub-buffer for this line
 		lineBuf := buf.parent.Sub(Rect{
-			X:      buf.offset.X,
-			Y:      buf.offset.Y + i,
-			Width:  buf.Width(),
-			Height: 1,
+			Position{
+				X: buf.offset.X,
+				Y: buf.offset.Y + i,
+			},
+			Size{
+				Width:  buf.Width(),
+				Height: 1,
+			},
 		})
 
 		// Use renderer if provided
@@ -293,7 +297,7 @@ type ScrollView struct {
 func NewScrollView(content View) *ScrollView {
 	sv := &ScrollView{
 		BaseView: NewBaseView(),
-		content:    content,
+		content:  content,
 	}
 	if content != nil {
 		content.SetParent(sv)
@@ -359,10 +363,14 @@ func (s *ScrollView) SetBounds(bounds Rect) {
 	if s.content != nil {
 		// Content gets virtual bounds at the scroll offset
 		s.content.SetBounds(Rect{
-			X:      -s.scrollX,
-			Y:      -s.scrollY,
-			Width:  s.contentSize.Width,
-			Height: s.contentSize.Height,
+			Position{
+				X: -s.scrollX,
+				Y: -s.scrollY,
+			},
+			Size{
+				Width:  s.contentSize.Width,
+				Height: s.contentSize.Height,
+			},
 		})
 	}
 }

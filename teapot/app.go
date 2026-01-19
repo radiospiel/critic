@@ -46,9 +46,6 @@ type App struct {
 	compositor   *Compositor
 	focusManager *FocusManager
 	delegate     AppDelegate
-
-	width, height int
-	ready         bool
 }
 
 // NewApp creates a new App with the given root view and delegate.
@@ -76,7 +73,7 @@ func (a *App) FocusManager() *FocusManager {
 
 // Size returns the current terminal size.
 func (a *App) Size() (width, height int) {
-	return a.width, a.height
+	return a.compositor.Size()
 }
 
 // Init implements tea.Model. Sets up terminal and starts tick loop.
@@ -136,13 +133,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.WindowSizeMsg:
-		a.width = msg.Width
-		a.height = msg.Height
 		a.compositor.Resize(msg.Width, msg.Height)
-
-		if !a.ready {
-			a.ready = true
-		}
 
 		// Clear screen on resize to avoid artifacts
 		return a, tea.ClearScreen
@@ -171,10 +162,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model. Renders using the compositor.
 func (a *App) View() string {
-	if !a.ready {
-		return "Initializing..."
-	}
-
 	view := a.compositor.Render()
 
 	// If delegate implements ViewDecorator, let it add overlays

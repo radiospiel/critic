@@ -209,11 +209,15 @@ func (b *BaseView) ContentBounds() Rect {
 	bounds := b.bounds
 	border := b.border
 
-	return Rect{
-		X:      bounds.X + border.LeftWidth(),
-		Y:      bounds.Y + border.TopWidth(),
-		Width:  bounds.Width - border.LeftWidth() - border.RightWidth(),
-		Height: bounds.Height - border.TopWidth() - border.BottomWidth(),
+	return NewRect{
+		Position{
+			X: bounds.X + border.LeftWidth(),
+			Y: bounds.Y + border.TopWidth(),
+		},
+		Size{
+			Width:  bounds.Width - border.LeftWidth() - border.RightWidth(),
+			Height: bounds.Height - border.TopWidth() - border.BottomWidth(),
+		},
 	}
 }
 

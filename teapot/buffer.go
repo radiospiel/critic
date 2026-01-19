@@ -259,7 +259,8 @@ func (b *Buffer) Size() Size {
 
 // Bounds returns the full buffer area as a Rect.
 func (b *Buffer) Bounds() Rect {
-	return Rect{X: 0, Y: 0, Width: b.width, Height: b.height}
+	// TODO(bot) store bounds as rect
+	return Rect{Position{X: 0, Y: 0}, Size{Width: b.width, Height: b.height}}
 }
 
 // Clear fills the entire buffer with empty cells.
@@ -476,12 +477,14 @@ func (s *SubBuffer) Height() int {
 
 // Size returns the sub-buffer dimensions.
 func (s *SubBuffer) Size() Size {
+	// TODO(bot) store bounds as rect
 	return Size{Width: s.offset.Width, Height: s.offset.Height}
 }
 
 // Bounds returns the sub-buffer area (relative coordinates starting at 0,0).
 func (s *SubBuffer) Bounds() Rect {
-	return Rect{X: 0, Y: 0, Width: s.offset.Width, Height: s.offset.Height}
+	// TODO(bot) store bounds as rect
+	return Rect{Position{X: 0, Y: 0}, Size{Width: s.offset.Width, Height: s.offset.Height}}
 }
 
 // GetCell returns the cell at the given position.
@@ -590,17 +593,25 @@ func (s *SubBuffer) AbsoluteOffset() (x, y int) {
 func (s *SubBuffer) Sub(rect Rect) *SubBuffer {
 	// Convert relative coordinates to absolute coordinates in the parent buffer
 	absRect := Rect{
-		X:      s.offset.X + rect.X,
-		Y:      s.offset.Y + rect.Y,
-		Width:  rect.Width,
-		Height: rect.Height,
+		Position{
+			X: s.offset.X + rect.X,
+			Y: s.offset.Y + rect.Y,
+		},
+		Size{
+			Width:  rect.Width,
+			Height: rect.Height,
+		},
 	}
 	// Clip to our bounds
 	clipped := absRect.Intersect(Rect{
-		X:      s.offset.X,
-		Y:      s.offset.Y,
-		Width:  s.offset.Width,
-		Height: s.offset.Height,
+		Position{
+			X: s.offset.X,
+			Y: s.offset.Y,
+		},
+		Size{
+			Width:  s.offset.Width,
+			Height: s.offset.Height,
+		},
 	})
 	return &SubBuffer{
 		parent: s.parent,

@@ -23,10 +23,10 @@ type MainView struct {
 // NewMainView creates a new main layout with the given widgets.
 func NewMainView(fileList *FileListView, diffView *DiffView, statusBar *StatusBarView) *MainView {
 	m := &MainView{
-		BaseView: pot.NewBaseView(),
-		fileList:   fileList,
-		diffView:   diffView,
-		statusBar:  statusBar,
+		BaseView:  pot.NewBaseView(),
+		fileList:  fileList,
+		diffView:  diffView,
+		statusBar: statusBar,
 	}
 	m.SetFocusable(false)
 
@@ -93,7 +93,7 @@ func (m *MainView) Render(buf *pot.SubBuffer) {
 	// Render file list (indented by 1 space)
 	fileListWidth := leftWidth - fileListIndent
 	if fileListWidth > 0 && contentHeight > 0 {
-		fileListBuf := buf.Sub(pot.Rect{X: fileListIndent, Y: 0, Width: fileListWidth, Height: contentHeight})
+		fileListBuf := buf.Sub(pot.NewRect(fileListIndent, 0, fileListWidth, contentHeight))
 		m.fileList.Render(fileListBuf)
 		logger.Info("MainView.Render: fileList rendered")
 	}
@@ -106,14 +106,14 @@ func (m *MainView) Render(buf *pot.SubBuffer) {
 
 	// Render diff view
 	if rightWidth > 0 && contentHeight > 0 {
-		diffBuf := buf.Sub(pot.Rect{X: leftWidth + 1, Y: 0, Width: rightWidth, Height: contentHeight})
+		diffBuf := buf.Sub(pot.NewRect(leftWidth+1, 0, rightWidth, contentHeight))
 		m.diffView.Render(diffBuf)
 		logger.Info("MainView.Render: diffView rendered")
 	}
 
 	// Render status bar
 	if bounds.Width > 0 && statusBarHeight > 0 {
-		statusBuf := buf.Sub(pot.Rect{X: 0, Y: contentHeight, Width: bounds.Width, Height: statusBarHeight})
+		statusBuf := buf.Sub(pot.NewRect(0, contentHeight, bounds.Width, statusBarHeight))
 		m.statusBar.Render(statusBuf)
 		logger.Info("MainView.Render: statusBar rendered")
 	}

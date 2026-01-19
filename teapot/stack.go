@@ -115,7 +115,7 @@ type Modal struct {
 // NewModal creates a new modal dialog with the given content.
 func NewModal(content View, title string) *Modal {
 	m := &Modal{
-		BaseView:    NewBaseView(),
+		BaseView:      NewBaseView(),
 		content:       content,
 		title:         title,
 		centerH:       true,
@@ -228,10 +228,8 @@ func (m *Modal) SetBounds(bounds Rect) {
 	contentHeight := modalHeight - 2
 
 	m.content.SetBounds(Rect{
-		X:      contentX,
-		Y:      contentY,
-		Width:  contentWidth,
-		Height: contentHeight,
+		Position{X: contentX, Y: contentY},
+		Size{Width: contentWidth, Height: contentHeight},
 	})
 }
 
@@ -257,10 +255,14 @@ func (m *Modal) Render(buf *SubBuffer) {
 	// Calculate modal bounds
 	contentBounds := m.content.Bounds()
 	modalRect := Rect{
-		X:      contentBounds.X - m.bounds.X - 1,
-		Y:      contentBounds.Y - m.bounds.Y - 1,
-		Width:  contentBounds.Width + 2,
-		Height: contentBounds.Height + 2,
+		Position{
+			X: contentBounds.X - m.bounds.X - 1,
+			Y: contentBounds.Y - m.bounds.Y - 1,
+		},
+		Size{
+			Width:  contentBounds.Width + 2,
+			Height: contentBounds.Height + 2,
+		},
 	}
 
 	// Fill background
@@ -299,12 +301,12 @@ func (m *Modal) Render(buf *SubBuffer) {
 	}
 
 	// Render content
-	contentSub := buf.parent.Sub(Rect{
-		X:      buf.offset.X + contentBounds.X - m.bounds.X,
-		Y:      buf.offset.Y + contentBounds.Y - m.bounds.Y,
-		Width:  contentBounds.Width,
-		Height: contentBounds.Height,
-	})
+	contentSub := buf.parent.Sub(NewRect(
+		buf.offset.X+contentBounds.X-m.bounds.X,
+		buf.offset.Y+contentBounds.Y-m.bounds.Y,
+		contentBounds.Width,
+		contentBounds.Height,
+	))
 	RenderWidget(m.content, contentSub)
 }
 

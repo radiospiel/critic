@@ -539,7 +539,7 @@ func (w *DiffContentView) Render(buf *teapot.SubBuffer) {
 
 	// Render file header (fixed at top)
 	fileHeader := NewFileHeaderView(w.file)
-	headerBuf := buf.Sub(teapot.Rect{X: 0, Y: 0, Width: width, Height: 2})
+	headerBuf := buf.Sub(teapot.NewRect(0, 0, width, 2))
 	fileHeader.Render(headerBuf)
 
 	// Render hunks with scroll offset
@@ -557,7 +557,7 @@ func (w *DiffContentView) Render(buf *teapot.SubBuffer) {
 
 		// Render if any part is visible
 		if renderY+hunkHeight > 0 && renderY < height {
-			hunkBuf := buf.Sub(teapot.Rect{X: 0, Y: renderY, Width: width, Height: hunkHeight})
+			hunkBuf := buf.Sub(teapot.NewRect(0, renderY, width, hunkHeight))
 			hw.Render(hunkBuf)
 		}
 		renderY += hunkHeight

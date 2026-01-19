@@ -4,15 +4,24 @@
 // the hierarchy.
 package teapot
 
+type Position struct {
+	X, Y int
+}
+
+// Size represents dimensions without position.
+type Size struct {
+	Width, Height int
+}
+
 // Rect represents a rectangular area with position and size.
 type Rect struct {
-	X, Y          int
-	Width, Height int
+	Position
+	Size
 }
 
 // NewRect creates a new rectangle.
 func NewRect(x, y, width, height int) Rect {
-	return Rect{X: x, Y: y, Width: width, Height: height}
+	return Rect{Position{X: x, Y: y}, Size{Width: width, Height: height}}
 }
 
 // Contains returns true if the point (px, py) is inside the rectangle.
@@ -31,7 +40,7 @@ func (r Rect) Intersect(other Rect) Rect {
 	if x2 <= x1 || y2 <= y1 {
 		return Rect{}
 	}
-	return Rect{X: x1, Y: y1, Width: x2 - x1, Height: y2 - y1}
+	return Rect{Position{X: x1, Y: y1}, Size{Width: x2 - x1, Height: y2 - y1}}
 }
 
 // IsEmpty returns true if the rectangle has no area.
@@ -41,33 +50,24 @@ func (r Rect) IsEmpty() bool {
 
 // Inset returns a new rectangle shrunk by the given margins.
 func (r Rect) Inset(top, right, bottom, left int) Rect {
+	width := max(0, r.Width-left-right)
+	height := max(0, r.Height-top-bottom)
+
 	return Rect{
-		X:      r.X + left,
-		Y:      r.Y + top,
-		Width:  max(0, r.Width-left-right),
-		Height: max(0, r.Height-top-bottom),
+		Position{X: r.X + left, Y: r.Y + top},
+		Size{Width: width, Height: height},
 	}
-}
-
-// Size returns just the width and height as a Size.
-func (r Rect) Size() Size {
-	return Size{Width: r.Width, Height: r.Height}
-}
-
-// Size represents dimensions without position.
-type Size struct {
-	Width, Height int
 }
 
 // Constraints represents layout constraints for a widget.
 // Zero values mean "no constraint".
 type Constraints struct {
-	MinWidth, MinHeight   int
-	MaxWidth, MaxHeight   int
-	PreferredWidth        int
-	PreferredHeight       int
-	HorizontalStretch     int // Stretch factor for flexible sizing (0 = fixed)
-	VerticalStretch       int
+	MinWidth, MinHeight int
+	MaxWidth, MaxHeight int
+	PreferredWidth      int
+	PreferredHeight     int
+	HorizontalStretch   int // Stretch factor for flexible sizing (0 = fixed)
+	VerticalStretch     int
 }
 
 // DefaultConstraints returns constraints with no limits.

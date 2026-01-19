@@ -27,8 +27,8 @@ type BoxLayout struct {
 func NewVBox(spacing int) *BoxLayout {
 	box := &BoxLayout{
 		ContainerView: NewContainerView(),
-		orientation:     Vertical,
-		spacing:         spacing,
+		orientation:   Vertical,
+		spacing:       spacing,
 	}
 	box.SetFocusable(false)
 	return box
@@ -38,8 +38,8 @@ func NewVBox(spacing int) *BoxLayout {
 func NewHBox(spacing int) *BoxLayout {
 	box := &BoxLayout{
 		ContainerView: NewContainerView(),
-		orientation:     Horizontal,
-		spacing:         spacing,
+		orientation:   Horizontal,
+		spacing:       spacing,
 	}
 	box.SetFocusable(false)
 	return box
@@ -102,10 +102,14 @@ func (b *BoxLayout) layoutHorizontal(availableWidth, availableHeight int) {
 
 		// Set bounds
 		child.SetBounds(Rect{
-			X:      x,
-			Y:      b.bounds.Y,
-			Width:  width,
-			Height: availableHeight,
+			Position{
+				X: x,
+				Y: b.bounds.Y,
+			},
+			Size{
+				Width:  width,
+				Height: availableHeight,
+			},
 		})
 
 		x += width
@@ -146,10 +150,14 @@ func (b *BoxLayout) layoutVertical(availableWidth, availableHeight int) {
 
 		// Set bounds
 		child.SetBounds(Rect{
-			X:      b.bounds.X,
-			Y:      y,
-			Width:  availableWidth,
-			Height: height,
+			Position{
+				X: b.bounds.X,
+				Y: y,
+			},
+			Size{
+				Width:  availableWidth,
+				Height: height,
+			},
 		})
 
 		y += height
@@ -167,10 +175,14 @@ func (b *BoxLayout) Render(buf *SubBuffer) {
 		relX := childBounds.X - b.bounds.X
 		relY := childBounds.Y - b.bounds.Y
 		childSub := buf.parent.Sub(Rect{
-			X:      buf.offset.X + relX,
-			Y:      buf.offset.Y + relY,
-			Width:  childBounds.Width,
-			Height: childBounds.Height,
+			Position{
+				X: buf.offset.X + relX,
+				Y: buf.offset.Y + relY,
+			},
+			Size{
+				Width:  childBounds.Width,
+				Height: childBounds.Height,
+			},
 		})
 		RenderWidget(child, childSub)
 	}
@@ -209,9 +221,9 @@ type Split struct {
 	orientation  Orientation
 	first        View
 	second       View
-	ratio        float64   // 0.0 to 1.0, proportion of space for first pane
-	fixedSize    int       // If > 0, first pane has fixed size
-	dividerWidth int       // Width of the divider (default 1)
+	ratio        float64 // 0.0 to 1.0, proportion of space for first pane
+	fixedSize    int     // If > 0, first pane has fixed size
+	dividerWidth int     // Width of the divider (default 1)
 	dividerStyle lipgloss.Style
 }
 
@@ -219,12 +231,12 @@ type Split struct {
 func NewHSplit(left, right View, ratio float64) *Split {
 	s := &Split{
 		ContainerView: NewContainerView(),
-		orientation:     Horizontal,
-		first:           left,
-		second:          right,
-		ratio:           ratio,
-		dividerWidth:    1,
-		dividerStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		orientation:   Horizontal,
+		first:         left,
+		second:        right,
+		ratio:         ratio,
+		dividerWidth:  1,
+		dividerStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 	}
 	s.SetFocusable(false)
 	if left != nil {
@@ -240,12 +252,12 @@ func NewHSplit(left, right View, ratio float64) *Split {
 func NewVSplit(top, bottom View, ratio float64) *Split {
 	s := &Split{
 		ContainerView: NewContainerView(),
-		orientation:     Vertical,
-		first:           top,
-		second:          bottom,
-		ratio:           ratio,
-		dividerWidth:    1,
-		dividerStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		orientation:   Vertical,
+		first:         top,
+		second:        bottom,
+		ratio:         ratio,
+		dividerWidth:  1,
+		dividerStyle:  lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
 	}
 	s.SetFocusable(false)
 	if top != nil {
@@ -311,19 +323,27 @@ func (s *Split) layoutHorizontal() {
 
 	if s.first != nil {
 		s.first.SetBounds(Rect{
-			X:      s.bounds.X,
-			Y:      s.bounds.Y,
-			Width:  firstWidth,
-			Height: s.bounds.Height,
+			Position{
+				X: s.bounds.X,
+				Y: s.bounds.Y,
+			},
+			Size{
+				Width:  firstWidth,
+				Height: s.bounds.Height,
+			},
 		})
 	}
 
 	if s.second != nil {
 		s.second.SetBounds(Rect{
-			X:      s.bounds.X + firstWidth + s.dividerWidth,
-			Y:      s.bounds.Y,
-			Width:  secondWidth,
-			Height: s.bounds.Height,
+			Position{
+				X: s.bounds.X + firstWidth + s.dividerWidth,
+				Y: s.bounds.Y,
+			},
+			Size{
+				Width:  secondWidth,
+				Height: s.bounds.Height,
+			},
 		})
 	}
 }
@@ -341,19 +361,27 @@ func (s *Split) layoutVertical() {
 
 	if s.first != nil {
 		s.first.SetBounds(Rect{
-			X:      s.bounds.X,
-			Y:      s.bounds.Y,
-			Width:  s.bounds.Width,
-			Height: firstHeight,
+			Position{
+				X: s.bounds.X,
+				Y: s.bounds.Y,
+			},
+			Size{
+				Width:  s.bounds.Width,
+				Height: firstHeight,
+			},
 		})
 	}
 
 	if s.second != nil {
 		s.second.SetBounds(Rect{
-			X:      s.bounds.X,
-			Y:      s.bounds.Y + firstHeight + s.dividerWidth,
-			Width:  s.bounds.Width,
-			Height: secondHeight,
+			Position{
+				X: s.bounds.X,
+				Y: s.bounds.Y + firstHeight + s.dividerWidth,
+			},
+			Size{
+				Width:  s.bounds.Width,
+				Height: secondHeight,
+			},
 		})
 	}
 }
@@ -381,10 +409,14 @@ func (s *Split) Render(buf *SubBuffer) {
 	if s.first != nil {
 		firstBounds := s.first.Bounds()
 		firstSub := buf.parent.Sub(Rect{
-			X:      buf.offset.X + firstBounds.X - s.bounds.X,
-			Y:      buf.offset.Y + firstBounds.Y - s.bounds.Y,
-			Width:  firstBounds.Width,
-			Height: firstBounds.Height,
+			Position{
+				X: buf.offset.X + firstBounds.X - s.bounds.X,
+				Y: buf.offset.Y + firstBounds.Y - s.bounds.Y,
+			},
+			Size{
+				Width:  firstBounds.Width,
+				Height: firstBounds.Height,
+			},
 		})
 		RenderWidget(s.first, firstSub)
 	}
@@ -392,10 +424,14 @@ func (s *Split) Render(buf *SubBuffer) {
 	if s.second != nil {
 		secondBounds := s.second.Bounds()
 		secondSub := buf.parent.Sub(Rect{
-			X:      buf.offset.X + secondBounds.X - s.bounds.X,
-			Y:      buf.offset.Y + secondBounds.Y - s.bounds.Y,
-			Width:  secondBounds.Width,
-			Height: secondBounds.Height,
+			Position{
+				X: buf.offset.X + secondBounds.X - s.bounds.X,
+				Y: buf.offset.Y + secondBounds.Y - s.bounds.Y,
+			},
+			Size{
+				Width:  secondBounds.Width,
+				Height: secondBounds.Height,
+			},
 		})
 		RenderWidget(s.second, secondSub)
 	}
