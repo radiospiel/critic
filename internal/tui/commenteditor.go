@@ -20,16 +20,20 @@ type CommentEditor struct {
 	textarea         textarea.Model
 	active           bool
 	lineNum          int
-	width            int
-	height           int
-	conversation     *critic.Conversation
-	isNewComment     bool // true if creating a new comment (no history to show)
+	// TODO(bot): width and height belong to the ModalDialog. Maybe reuse the
+	// BaseView's bounds that is available in ModalDialog
+	width        int
+	height       int
+	conversation *critic.Conversation
+	// TODO(bot): is this really necessary?
+	isNewComment bool // true if creating a new comment (no history to show)
 }
 
 // NewCommentEditor creates a new comment editor
 func NewCommentEditor() CommentEditor {
 	ta := textarea.New()
 	ta.Placeholder = "Enter your reply..."
+	// TODO(bot): add this to config
 	ta.CharLimit = 10000
 	ta.ShowLineNumbers = false
 
@@ -204,6 +208,7 @@ func truncateString(s string, width int) string {
 }
 
 // commentEditorContent combines history view and textarea
+// TODO(bot) render history view and textarea in a vertically scrollable container.
 type commentEditorContent struct {
 	pot.BaseView
 	historyView  *conversationHistoryView
@@ -225,7 +230,7 @@ func (c *commentEditorContent) SetBounds(bounds pot.Rect) {
 	// Split: history gets top portion, textarea gets bottom
 	historyLines := c.historyView.LineCount()
 	maxHistoryHeight := bounds.Height * 2 / 3 // Max 2/3 for history
-	minTextareaHeight := 3                     // Minimum textarea height
+	minTextareaHeight := 3                    // Minimum textarea height
 
 	historyHeight := min(historyLines+1, maxHistoryHeight) // +1 for separator
 	textareaHeight := bounds.Height - historyHeight - 1    // -1 for separator
@@ -384,7 +389,6 @@ func (c *commentEditorContent) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	c.textarea, cmd = c.textarea.Update(msg)
 	return true, cmd
 }
-
 
 // Init initializes the comment editor
 func (m CommentEditor) Init() tea.Cmd {

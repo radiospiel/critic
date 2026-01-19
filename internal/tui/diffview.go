@@ -23,12 +23,12 @@ import (
 type FilterMode int
 
 const (
-	// FilterModeNone shows all files and hunks (default)
-	FilterModeNone FilterMode = iota
-	// FilterModeWithComments shows only files with comments, and only hunks with comments
-	FilterModeWithComments
-	// FilterModeWithUnresolved shows only files with unresolved comments, and only hunks with unresolved comments
-	FilterModeWithUnresolved
+	// FILTER_MODE_NONE shows all files and hunks (default)
+	FILTER_MODE_NONE FilterMode = iota
+	// FILTER_MODE_COMMENTED shows only files with comments, and only hunks with comments
+	FILTER_MODE_COMMENTED
+	// FILTER_MODE_UNRESOLVED shows only files with unresolved comments, and only hunks with unresolved comments
+	FILTER_MODE_UNRESOLVED
 )
 
 // DiffView represents the diff viewer pane.
@@ -37,18 +37,18 @@ const (
 type DiffView struct {
 	teapot.BaseView // Embed BaseWidget to implement the Widget interface
 
-	file                 *ctypes.FileDiff
-	viewport             viewport.Model
+	file     *ctypes.FileDiff
+	viewport viewport.Model
+	// TODO(bot): why do we have width and height here? Reuse the baseView's bounds?
 	width                int
 	height               int
 	ready                bool
-	highlighter     *highlight.Highlighter
-	cachedContent   string
-	cachedFile      *ctypes.FileDiff
-	highlightTime   time.Duration // Accumulated syntax highlighting time
-	cursorLine           int           // Current active line (0-based)
-	totalLines           int           // Total number of lines in rendered diff
-	navigableLines       []int         // Line numbers that can have cursor (diff lines only)
+	highlighter          *highlight.Highlighter
+	cachedContent        string
+	cachedFile           *ctypes.FileDiff
+	cursorLine           int   // Current active line (0-based)
+	totalLines           int   // Total number of lines in rendered diff
+	navigableLines       []int // Line numbers that can have cursor (diff lines only)
 	messaging            critic.Messaging
 	commentLines         map[int]int    // Maps rendered line number to source line number for comment lines
 	sourceLines          map[int]int    // Maps rendered line number to source line number for all diff lines
@@ -700,7 +700,7 @@ func (m *DiffView) SetFilterMode(mode FilterMode) {
 // filterHunks filters hunks based on the current filter mode
 func (m *DiffView) filterHunks(hunks []*ctypes.Hunk, conversationsByLine map[int]*critic.Conversation) []*ctypes.Hunk {
 	// If no filter, return all hunks
-	if m.filterMode == FilterModeNone {
+	if m.filterMode == FILTER_MODE_NONE {
 		return hunks
 	}
 
@@ -723,10 +723,10 @@ func (m *DiffView) hunkMatchesFilter(hunk *ctypes.Hunk, conversationsByLine map[
 		if line.NewNum > 0 {
 			if conv, exists := conversationsByLine[line.NewNum]; exists {
 				switch m.filterMode {
-				case FilterModeWithComments:
+				case FILTER_MODE_COMMENTED:
 					// Any comment matches
 					return true
-				case FilterModeWithUnresolved:
+				case FILTER_MODE_UNRESOLVED:
 					// Only unresolved comments match
 					if conv.Status != critic.StatusResolved {
 						return true
@@ -770,7 +770,6 @@ func (m *DiffView) GetSourceLine(renderedLine int) int {
 // Returns the rendered content, total line count, and navigable line numbers.
 func (m *DiffView) renderDiff() (string, int, []int) {
 	startTime := time.Now()
-	m.highlightTime = 0 // Reset accumulated highlight time
 
 	if m.file == nil {
 		return "", 0, nil
@@ -799,11 +798,13 @@ func (m *DiffView) renderDiff() (string, int, []int) {
 		newFileContext = m.cachedNewFileContext
 	} else {
 		// Compute and cache highlights
-		hlStart := time.Now()
-		oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
-		newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
-		newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
-		m.highlightTime += time.Since(hlStart)
+		logger.Runtime("highlight  "+m.file.NewPath, func() bool {
+			oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
+			newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
+			newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
+
+			return true
+		})
 
 		// Cache for reuse
 		m.cachedHighlightFile = m.file
@@ -862,11 +863,8 @@ func (m *DiffView) renderDiff() (string, int, []int) {
 	result := buffer.RenderToString()
 
 	totalTime := time.Since(startTime)
-	renderTime := totalTime - m.highlightTime
-	logger.Info("renderDiff (widget): total=%.1fms, highlight=%.1fms, render=%.1fms, lines=%d, navigable=%d",
+	logger.Info("renderDiff (widget): total=%.1fms, lines=%d, navigable=%d",
 		float64(totalTime.Microseconds())/1000.0,
-		float64(m.highlightTime.Microseconds())/1000.0,
-		float64(renderTime.Microseconds())/1000.0,
 		m.countLines(), len(navigableLines))
 
 	return result, contentHeight, navigableLines

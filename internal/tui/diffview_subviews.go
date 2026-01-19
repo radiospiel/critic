@@ -30,7 +30,7 @@ func NewHunkView(
 	highlightedOld, highlightedNew, highlightedCtx map[int]string,
 ) *HunkView {
 	w := &HunkView{
-		BaseView:      teapot.NewBaseView(),
+		BaseView:        teapot.NewBaseView(),
 		hunk:            hunk,
 		conversationMap: conversationMap,
 		highlightedOld:  highlightedOld,
@@ -359,7 +359,7 @@ func NewFileHeaderView(file *ctypes.FileDiff) *FileHeaderView {
 
 	w := &FileHeaderView{
 		BaseView: teapot.NewBaseView(),
-		header:     header,
+		header:   header,
 	}
 	w.SetFocusable(false)
 	w.SetConstraints(teapot.DefaultConstraints().WithMinSize(1, 2).WithPreferredSize(0, 2))
@@ -454,7 +454,7 @@ func (w *DiffContentView) rebuildHunks() {
 
 // filterHunks filters hunks based on the current filter mode.
 func (w *DiffContentView) filterHunks(hunks []*ctypes.Hunk) []*ctypes.Hunk {
-	if w.filterMode == FilterModeNone {
+	if w.filterMode == FILTER_MODE_NONE {
 		return hunks
 	}
 
@@ -473,9 +473,9 @@ func (w *DiffContentView) hunkMatchesFilter(hunk *ctypes.Hunk) bool {
 		if line.NewNum > 0 {
 			if conv, exists := w.conversationMap[line.NewNum]; exists {
 				switch w.filterMode {
-				case FilterModeWithComments:
+				case FILTER_MODE_COMMENTED:
 					return true
-				case FilterModeWithUnresolved:
+				case FILTER_MODE_UNRESOLVED:
 					if conv.Status != critic.StatusResolved {
 						return true
 					}
