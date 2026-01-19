@@ -130,19 +130,24 @@ func (w *FileListView) renderItem(buf *pot.SubBuffer, item FileItem, selected bo
 		style = normalFileStyle
 	}
 
-	// Render indicator at column 0 and space at column 1
-	buf.SetString(0, 0, string(indicatorRune), indicatorStyle)
-	buf.SetString(1, 0, " ", style)
+	// Render indicator at column 0 with selection background if selected
+	if selected {
+		// Combine indicator foreground with selection background
+		combinedStyle := style.Foreground(indicatorStyle.GetForeground())
+		buf.SetString(0, 0, string(indicatorRune), combinedStyle)
+	} else {
+		buf.SetString(0, 0, string(indicatorRune), indicatorStyle)
+	}
 
 	// When selected and focused, show chevrons: "> content <"
 	showChevrons := selected && focused
-	contentStart := 2
-	availableWidth := width - 2 // -2 for indicator + space
+	contentStart := 1
+	availableWidth := width - 1 // -1 for indicator
 
 	if showChevrons {
-		buf.SetString(2, 0, ">", style)
-		contentStart = 3
-		availableWidth -= 2 // -2 for "> " and " <"
+		buf.SetString(1, 0, ">", style)
+		contentStart = 2
+		availableWidth -= 2 // -2 for ">" and " <"
 	}
 
 	// Render content
