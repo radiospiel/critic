@@ -31,8 +31,12 @@ const (
 	FilterModeWithUnresolved
 )
 
-// DiffViewModel represents the diff viewer pane
+// DiffViewModel represents the diff viewer pane.
+// It is a proper teapot Widget that wraps DiffViewWidget with additional
+// functionality like syntax highlighting, cursor management, and scrolling.
 type DiffViewModel struct {
+	teapot.BaseWidget // Embed BaseWidget to implement the Widget interface
+
 	file                 *ctypes.FileDiff
 	viewport             viewport.Model
 	width                int
@@ -45,7 +49,6 @@ type DiffViewModel struct {
 	highlightTime        time.Duration // Accumulated syntax highlighting time
 	cursorLine           int           // Current active line (0-based)
 	totalLines           int           // Total number of lines in rendered diff
-	focused              bool          // Whether this pane is focused
 	navigableLines       []int         // Line numbers that can have cursor (diff lines only)
 	messaging            critic.Messaging
 	commentLines         map[int]int    // Maps rendered line number to source line number for comment lines
@@ -66,11 +69,15 @@ type DiffViewModel struct {
 
 // NewDiffViewModel creates a new diff viewer model
 func NewDiffViewModel() DiffViewModel {
-	return DiffViewModel{
+	m := DiffViewModel{
+		BaseWidget:          teapot.NewBaseWidget(),
 		highlighter:         highlight.NewHighlighter(),
 		highlightingEnabled: true, // Default to enabled
 		diffWidget:          NewDiffViewWidget(),
 	}
+	m.SetFocusable(true)
+	m.SetName("DiffViewModel")
+	return m
 }
 
 // NewDiffViewModelPtr creates a new diff viewer model and returns a pointer to it.
@@ -259,13 +266,13 @@ func (m *DiffViewModel) Render(buf *teapot.SubBuffer) {
 
 	// Apply selection overlay - invert the current line if focused and navigable
 	// Convert from content coordinates to screen coordinates (account for scroll offset)
-	if m.focused && m.isNavigableLine(m.cursorLine) {
+	if m.Focused() && m.isNavigableLine(m.cursorLine) {
 		screenRow := m.cursorLine - m.diffWidget.GetYOffset()
 		if screenRow >= 0 && screenRow < height {
 			buf.InvertRow(screenRow)
 		}
 	}
-	logger.Info("DiffViewModel.Render: complete, cursorLine=%d, screenRow=%d, focused=%v", m.cursorLine, m.cursorLine-m.diffWidget.GetYOffset(), m.focused)
+	logger.Info("DiffViewModel.Render: complete, cursorLine=%d, screenRow=%d, focused=%v", m.cursorLine, m.cursorLine-m.diffWidget.GetYOffset(), m.Focused())
 }
 
 // renderMessage renders a centered message in the buffer
@@ -694,10 +701,11 @@ func (m *DiffViewModel) ScrollPageUp() tea.Cmd {
 
 // SetFocused sets whether this pane is focused
 func (m *DiffViewModel) SetFocused(focused bool) {
-	if m.focused != focused {
-		m.focused = focused
+	if m.Focused() != focused {
+		m.BaseWidget.SetFocused(focused)
 		// Re-render to update cursor visibility
 		m.refreshContent()
+		m.Repaint()
 	}
 }
 
@@ -731,7 +739,14 @@ func (m *DiffViewModel) SetSize(width, height int) {
 
 // SetBounds sets the bounds for widget-based rendering
 func (m *DiffViewModel) SetBounds(bounds teapot.Rect) {
+	m.BaseWidget.SetBounds(bounds)
 	m.SetSize(bounds.Width, bounds.Height)
+}
+
+// Children returns the child widgets.
+// The internal diffWidget is an implementation detail and not exposed as a child.
+func (m *DiffViewModel) Children() []teapot.Widget {
+	return nil
 }
 
 // SetHighlightingEnabled enables or disables syntax highlighting
@@ -909,7 +924,7 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	m.diffWidget.Render(subBuf)
 
 	// Apply selection overlay - invert the current line if focused and navigable
-	if m.focused && m.isNavigableLine(m.cursorLine) {
+	if m.Focused() && m.isNavigableLine(m.cursorLine) {
 		buffer.InvertRow(m.cursorLine)
 	}
 
@@ -1279,7 +1294,7 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 		blockSize = 1 + maxLines + 1 + 1 // top separator + truncated content + "more" indicator + bottom separator
 	}
 
-	cursorInBlock := m.focused && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize
+	cursorInBlock := m.Focused() && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize
 
 	// If cursor is in the block, show full content
 	if cursorInBlock {
@@ -1499,7 +1514,7 @@ func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string,
 // renderLineWithCursor applies cursor highlighting if this is the active line
 func (m *DiffViewModel) renderLineWithCursor(content string, currentLineNum int) string {
 	// Only show cursor when pane is focused and line is navigable
-	if m.focused && currentLineNum == m.cursorLine && m.isNavigableLine(currentLineNum) {
+	if m.Focused() && currentLineNum == m.cursorLine && m.isNavigableLine(currentLineNum) {
 		// Apply full reverse highlighting
 		return lipgloss.NewStyle().Reverse(true).Render(content)
 	}

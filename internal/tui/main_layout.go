@@ -32,9 +32,8 @@ func NewMainLayout(fileList *FileListWidget, diffView *DiffViewModel, statusBar 
 
 	// Set up parent relationships for dirty propagation
 	fileList.SetParent(m)
+	diffView.SetParent(m)
 	statusBar.SetParent(m)
-	// Note: diffView is a model, not a widget, so it can't have a parent.
-	// Instead, we'll make MainLayout repaint when diffView changes.
 
 	// Create placeholder widgets for the split
 	// (actual rendering is done directly to avoid double-buffering)
@@ -118,7 +117,7 @@ func (m *MainLayout) Render(buf *pot.SubBuffer) {
 
 // Children returns the child widgets for focus traversal.
 func (m *MainLayout) Children() []pot.Widget {
-	return []pot.Widget{m.fileList, m.statusBar}
+	return []pot.Widget{m.fileList, m.diffView, m.statusBar}
 }
 
 // FileList returns the file list widget.
