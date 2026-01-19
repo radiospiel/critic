@@ -4,116 +4,40 @@
 
 - Go 1.24 or later
 - Git
-- A terminal with ANSI color support
+- Terminal with ANSI color support (iTerm2, Alacritty, Kitty, Windows Terminal)
 
 ## Building from Source
 
 ```bash
-# Clone the repository
 git clone git@git.15b.it:eno/critic.git
 cd critic
-
-# Build
 go build -o critic ./cmd/critic
-
-# Install to $GOPATH/bin
-go install ./cmd/critic
 ```
 
-## Verifying Installation
+To install globally:
 
 ```bash
-# Check version
-critic --help
-
-# Run in a git repository
-cd /path/to/your/repo
-critic
+go install ./cmd/critic
 ```
 
 ## MCP Server Configuration
 
-To use Critic with Claude Code for human-in-the-loop reviews, add the MCP server using the Claude CLI:
+To integrate Critic with Claude Code for AI-assisted code review:
 
 ```bash
-# Add critic as an MCP server (use full path to the binary)
 claude mcp add critic -- /path/to/critic mcp
-
-# Verify it was added
-claude mcp list
 ```
 
-To remove the server:
-```bash
-claude mcp remove critic
-```
+This enables Claude to read and respond to code review comments.
 
-## Prompting Claude to Use Critic
+## Database
 
-Add to your `CLAUDE.md`:
-
-```markdown
-Before completing any significant code changes, call get_review_feedback with
-a summary of what you've done. Wait for reviewer approval before proceeding.
-Address any feedback in subsequent iterations.
-```
-
-## Database Location
-
-Critic stores comments in `.critic.db` at the git repository root. This file:
-- Uses SQLite with WAL mode
-- Can be committed to version control (optional)
-- Is automatically created on first comment
+Comments are stored in `.critic.db` (SQLite) at the git repository root. This file can be committed to share comments with collaborators or added to `.gitignore` for local-only comments.
 
 ## Logging
 
-Debug logs are written to `/tmp/critic.log`. Control verbosity:
+Debug logs are written to `/tmp/critic.log`. Control log level with the environment variable:
 
 ```bash
-# Enable debug logging
 CRITIC_LOG_LEVEL=DEBUG critic
-
-# Available levels: DEBUG, INFO, WARN, ERROR
-```
-
-## Terminal Compatibility
-
-Critic works best with terminals that support:
-- 256 colors or true color
-- Unicode characters
-- Alternate screen buffer
-
-Tested terminals:
-- iTerm2 (macOS)
-- Terminal.app (macOS)
-- Alacritty
-- Kitty
-- Windows Terminal
-
-## Troubleshooting
-
-### "Not a git repository"
-
-Critic must be run from within a git repository:
-```bash
-cd /path/to/git/repo
-critic
-```
-
-### Database errors
-
-If you encounter SQLite errors, try removing the database:
-```bash
-rm .critic.db
-```
-
-### File watcher issues
-
-If file changes aren't detected, check:
-- File descriptor limits (`ulimit -n`)
-- That you're diffing against `current` (working directory)
-
-Increase file descriptor limit if needed:
-```bash
-ulimit -n 10240
 ```
