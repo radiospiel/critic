@@ -121,13 +121,13 @@ func Run(args *Args) error {
 
 // Model represents the main application model
 type Model struct {
-	fileList      *tui.FileListWidget
-	diffView      *tui.DiffViewModel
+	fileList      *tui.FileListView
+	diffView      *tui.DiffView
 	commentEditor tui.CommentEditor
-	statusBar     *tui.StatusBarWidget
-	mainLayout    *tui.MainLayout
+	statusBar     *tui.StatusBarView
+	mainLayout    *tui.MainView
 	compositor    *teapot.Compositor
-	layout        tui.LayoutModel // TODO: Remove after full migration
+	layout        tui.LayoutView // TODO: Remove after full migration
 	diff          *ctypes.Diff
 	bases         []string          // List of base refs
 	currentBase   int               // Index of current base
@@ -148,10 +148,10 @@ type Model struct {
 // NewModel creates a new application model
 func NewModel(args *Args) Model {
 	logger.Info("NewModel: Creating model with %d paths, %d bases", len(args.Paths), len(args.Bases))
-	diffView := tui.NewDiffViewModelPtr()
+	diffView := tui.NewDiffViewPtr()
 	diffView.SetHighlightingEnabled(true) // Always enable highlighting
 
-	fileList := tui.NewFileListWidget()
+	fileList := tui.NewFileListView()
 	fileList.SetFocused(true) // Start with file list focused
 
 	// Initialize message database
@@ -167,14 +167,14 @@ func NewModel(args *Args) Model {
 	diffView.SetMessaging(mdb)
 	fileList.SetMessaging(mdb)
 
-	statusBar := tui.NewStatusBarWidget()
+	statusBar := tui.NewStatusBarView()
 	statusBar.SetFilter("All") // Default filter mode
 
 	// Subscribe statusbar to receive tick notifications for clock updates
 	teapot.SubscribeToGlobalTicks(statusBar)
 
 	// Create the main layout (VBox with HSplit and StatusBar)
-	mainLayout := tui.NewMainLayout(fileList, diffView, statusBar)
+	mainLayout := tui.NewMainView(fileList, diffView, statusBar)
 
 	// Create compositor with main layout as root
 	compositor := teapot.NewCompositor(mainLayout)
@@ -186,7 +186,7 @@ func NewModel(args *Args) Model {
 		statusBar:     statusBar,
 		mainLayout:    mainLayout,
 		compositor:    compositor,
-		layout:        tui.NewLayoutModel(),
+		layout:        tui.NewLayoutView(),
 		bases:         args.Bases,
 		currentBase:   0, // Start with first base
 		paths:         args.Paths,

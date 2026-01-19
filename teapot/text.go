@@ -8,7 +8,7 @@ import (
 
 // Text is a simple widget that displays styled text.
 type Text struct {
-	BaseWidget
+	BaseView
 	content string
 	style   lipgloss.Style
 	align   Alignment
@@ -26,7 +26,7 @@ const (
 // NewText creates a new text widget.
 func NewText(content string) *Text {
 	t := &Text{
-		BaseWidget: NewBaseWidget(),
+		BaseView: NewBaseView(),
 		content:    content,
 		style:      lipgloss.NewStyle(),
 		align:      AlignLeft,
@@ -103,7 +103,7 @@ func (t *Text) Render(buf *SubBuffer) {
 
 // StatusBar is a widget that displays status information.
 type StatusBar struct {
-	BaseWidget
+	BaseView
 	left   string
 	center string
 	right  string
@@ -113,7 +113,7 @@ type StatusBar struct {
 // NewStatusBar creates a new status bar.
 func NewStatusBar() *StatusBar {
 	sb := &StatusBar{
-		BaseWidget: NewBaseWidget(),
+		BaseView: NewBaseView(),
 		style: lipgloss.NewStyle().
 			Background(lipgloss.Color("236")).
 			Foreground(lipgloss.Color("252")),
@@ -177,13 +177,13 @@ func (s *StatusBar) Render(buf *SubBuffer) {
 // Spacer is a widget that takes up space but renders nothing.
 // Useful for flexible spacing in layouts.
 type Spacer struct {
-	BaseWidget
+	BaseView
 }
 
 // NewSpacer creates a new spacer with the given stretch factor.
 func NewSpacer(stretch int) *Spacer {
 	s := &Spacer{
-		BaseWidget: NewBaseWidget(),
+		BaseView: NewBaseView(),
 	}
 	s.SetFocusable(false)
 	s.SetConstraints(DefaultConstraints().WithStretch(stretch, stretch))
@@ -193,7 +193,7 @@ func NewSpacer(stretch int) *Spacer {
 // NewHSpacer creates a horizontal spacer.
 func NewHSpacer(stretch int) *Spacer {
 	s := &Spacer{
-		BaseWidget: NewBaseWidget(),
+		BaseView: NewBaseView(),
 	}
 	s.SetFocusable(false)
 	s.SetConstraints(DefaultConstraints().WithStretch(stretch, 0))
@@ -203,7 +203,7 @@ func NewHSpacer(stretch int) *Spacer {
 // NewVSpacer creates a vertical spacer.
 func NewVSpacer(stretch int) *Spacer {
 	s := &Spacer{
-		BaseWidget: NewBaseWidget(),
+		BaseView: NewBaseView(),
 	}
 	s.SetFocusable(false)
 	s.SetConstraints(DefaultConstraints().WithStretch(0, stretch))

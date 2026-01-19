@@ -25,9 +25,9 @@ func (f FileItem) FilterValue() string {
 	return f.File.NewPath
 }
 
-// FileListWidget is a teapot-based file list widget.
-type FileListWidget struct {
-	pot.BaseWidget
+// FileListView is a teapot-based file list widget.
+type FileListView struct {
+	pot.BaseView
 	list       *pot.SelectableList[FileItem]
 	messaging  critic.Messaging
 	width      int
@@ -36,9 +36,9 @@ type FileListWidget struct {
 	totalFiles int // Total files before filtering (for "No files match filter" message)
 }
 
-// NewFileListWidget creates a new file list widget
-func NewFileListWidget() *FileListWidget {
-	w := &FileListWidget{}
+// NewFileListView creates a new file list widget
+func NewFileListView() *FileListView {
+	w := &FileListView{}
 
 	// Create the SelectableList with a custom renderer
 	w.list = pot.NewSelectableList[FileItem](w.renderItem)
@@ -54,7 +54,7 @@ func NewFileListWidget() *FileListWidget {
 }
 
 // renderItem renders a single file item
-func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected bool, focused bool, width int) {
+func (w *FileListView) renderItem(buf *pot.SubBuffer, item FileItem, selected bool, focused bool, width int) {
 	file := item.File
 
 	// Get the git-relative path for checking conversations
@@ -161,7 +161,7 @@ func (w *FileListWidget) renderItem(buf *pot.SubBuffer, item FileItem, selected 
 }
 
 // getFileAnimationSummary calculates the animation summary for a file
-func (w *FileListWidget) getFileAnimationSummary(gitPath string) FileAnimationSummary {
+func (w *FileListView) getFileAnimationSummary(gitPath string) FileAnimationSummary {
 	var summary FileAnimationSummary
 	if w.messaging == nil {
 		return summary
@@ -184,17 +184,17 @@ func (w *FileListWidget) getFileAnimationSummary(gitPath string) FileAnimationSu
 }
 
 // SetFiles updates the file list
-func (w *FileListWidget) SetFiles(files []*ctypes.FileDiff) {
+func (w *FileListView) SetFiles(files []*ctypes.FileDiff) {
 	items := make([]FileItem, len(files))
 	for i, f := range files {
 		items[i] = FileItem{File: f}
 	}
 	w.list.SetItems(items)
-	w.Repaint() // Propagate dirty state to parent (MainLayout)
+	w.Repaint() // Propagate dirty state to parent (MainView)
 }
 
 // GetActiveFile returns the currently selected file
-func (w *FileListWidget) GetActiveFile() *ctypes.FileDiff {
+func (w *FileListView) GetActiveFile() *ctypes.FileDiff {
 	if item, ok := w.list.Selected(); ok {
 		return item.File
 	}
@@ -202,7 +202,7 @@ func (w *FileListWidget) GetActiveFile() *ctypes.FileDiff {
 }
 
 // SelectByPath selects a file by its path
-func (w *FileListWidget) SelectByPath(path string) bool {
+func (w *FileListView) SelectByPath(path string) bool {
 	return w.list.SelectByPredicate(func(item FileItem) bool {
 		filePath := item.File.NewPath
 		if filePath == "" {
@@ -213,7 +213,7 @@ func (w *FileListWidget) SelectByPath(path string) bool {
 }
 
 // SelectNext moves to the next file
-func (w *FileListWidget) SelectNext() bool {
+func (w *FileListView) SelectNext() bool {
 	idx := w.list.SelectedIndex()
 	if idx < len(w.list.Items())-1 {
 		w.list.SetSelectedIndex(idx + 1)
@@ -223,7 +223,7 @@ func (w *FileListWidget) SelectNext() bool {
 }
 
 // SelectPrev moves to the previous file
-func (w *FileListWidget) SelectPrev() bool {
+func (w *FileListView) SelectPrev() bool {
 	idx := w.list.SelectedIndex()
 	if idx > 0 {
 		w.list.SetSelectedIndex(idx - 1)
@@ -233,46 +233,46 @@ func (w *FileListWidget) SelectPrev() bool {
 }
 
 // OnSelect sets a callback for when selection changes
-func (w *FileListWidget) OnSelect(fn func(*ctypes.FileDiff)) {
+func (w *FileListView) OnSelect(fn func(*ctypes.FileDiff)) {
 	w.list.OnSelect(func(item FileItem) {
 		fn(item.File)
 	})
 }
 
 // SetMessaging sets the messaging interface
-func (w *FileListWidget) SetMessaging(messaging critic.Messaging) {
+func (w *FileListView) SetMessaging(messaging critic.Messaging) {
 	w.messaging = messaging
 }
 
 // SetFilterMode sets the current filter mode and total files count
 // filterMode: 0 = all, 1 = with comments, 2 = unresolved only
-func (w *FileListWidget) SetFilterMode(filterMode int, totalFiles int) {
+func (w *FileListView) SetFilterMode(filterMode int, totalFiles int) {
 	w.filterMode = filterMode
 	w.totalFiles = totalFiles
 }
 
 // GetFilterInfo returns the current filtered file count and total file count
 // This is used by the status bar to avoid re-filtering on every render
-func (w *FileListWidget) GetFilterInfo() (filteredCount, totalCount int) {
+func (w *FileListView) GetFilterInfo() (filteredCount, totalCount int) {
 	return len(w.list.Items()), w.totalFiles
 }
 
-// SetBounds implements pot.Widget
-func (w *FileListWidget) SetBounds(bounds pot.Rect) {
-	w.BaseWidget.SetBounds(bounds)
+// SetBounds implements pot.View
+func (w *FileListView) SetBounds(bounds pot.Rect) {
+	w.BaseView.SetBounds(bounds)
 	w.width = bounds.Width
 	w.height = bounds.Height
 	w.list.SetBounds(bounds)
 }
 
-// SetFocused implements pot.Widget
-func (w *FileListWidget) SetFocused(focused bool) {
-	w.BaseWidget.SetFocused(focused)
+// SetFocused implements pot.View
+func (w *FileListView) SetFocused(focused bool) {
+	w.BaseView.SetFocused(focused)
 	w.list.SetFocused(focused)
 }
 
-// Render implements pot.Widget.
-func (w *FileListWidget) Render(buf *pot.SubBuffer) {
+// Render implements pot.View.
+func (w *FileListView) Render(buf *pot.SubBuffer) {
 	if len(w.list.Items()) == 0 {
 		style := lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"})
@@ -290,17 +290,17 @@ func (w *FileListWidget) Render(buf *pot.SubBuffer) {
 	w.list.Render(buf)
 }
 
-// HandleKey implements pot.Widget
-func (w *FileListWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+// HandleKey implements pot.View
+func (w *FileListView) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	return w.list.HandleKey(msg)
 }
 
 // Children returns the child widgets
-func (w *FileListWidget) Children() []pot.Widget {
+func (w *FileListView) Children() []pot.View {
 	return nil
 }
 
 // SetSize sets the size (for compatibility)
-func (w *FileListWidget) SetSize(width, height int) {
+func (w *FileListView) SetSize(width, height int) {
 	w.SetBounds(pot.NewRect(0, 0, width, height))
 }

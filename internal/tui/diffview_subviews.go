@@ -10,10 +10,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// HunkWidget renders a complete hunk: header + lines + inline comments.
+// HunkView renders a complete hunk: header + lines + inline comments.
 // This is the primary building block of the diff view.
-type HunkWidget struct {
-	teapot.BaseWidget
+type HunkView struct {
+	teapot.BaseView
 	hunk            *ctypes.Hunk
 	conversationMap map[int]*critic.Conversation
 	highlightedOld  map[int]string // Pre-highlighted content for deleted lines
@@ -23,14 +23,14 @@ type HunkWidget struct {
 	startRow        int            // Global row number where this hunk starts (for selection mapping)
 }
 
-// NewHunkWidget creates a new hunk widget.
-func NewHunkWidget(
+// NewHunkView creates a new hunk widget.
+func NewHunkView(
 	hunk *ctypes.Hunk,
 	conversationMap map[int]*critic.Conversation,
 	highlightedOld, highlightedNew, highlightedCtx map[int]string,
-) *HunkWidget {
-	w := &HunkWidget{
-		BaseWidget:      teapot.NewBaseWidget(),
+) *HunkView {
+	w := &HunkView{
+		BaseView:      teapot.NewBaseView(),
 		hunk:            hunk,
 		conversationMap: conversationMap,
 		highlightedOld:  highlightedOld,
@@ -47,7 +47,7 @@ func NewHunkWidget(
 }
 
 // calculateHeight returns the total height of this hunk.
-func (w *HunkWidget) calculateHeight() int {
+func (w *HunkView) calculateHeight() int {
 	height := 1 // Hunk header
 	for _, line := range w.hunk.Lines {
 		height++ // Line
@@ -71,22 +71,22 @@ func calculateCommentHeight(conv *critic.Conversation) int {
 }
 
 // SetSelectedRow sets which row within this hunk is selected.
-func (w *HunkWidget) SetSelectedRow(row int) {
+func (w *HunkView) SetSelectedRow(row int) {
 	w.selectedRow = row
 }
 
 // SetStartRow sets the global row number where this hunk starts.
-func (w *HunkWidget) SetStartRow(row int) {
+func (w *HunkView) SetStartRow(row int) {
 	w.startRow = row
 }
 
 // Hunk returns the underlying hunk.
-func (w *HunkWidget) Hunk() *ctypes.Hunk {
+func (w *HunkView) Hunk() *ctypes.Hunk {
 	return w.hunk
 }
 
 // Render renders the hunk to the buffer.
-func (w *HunkWidget) Render(buf *teapot.SubBuffer) {
+func (w *HunkView) Render(buf *teapot.SubBuffer) {
 	width := buf.Width()
 	if width <= 0 {
 		return
@@ -126,7 +126,7 @@ func (w *HunkWidget) Render(buf *teapot.SubBuffer) {
 }
 
 // getHighlightedContent returns the highlighted content for a line.
-func (w *HunkWidget) getHighlightedContent(line *ctypes.Line) string {
+func (w *HunkView) getHighlightedContent(line *ctypes.Line) string {
 	switch line.Type {
 	case ctypes.LineAdded:
 		if hl, ok := w.highlightedNew[line.NewNum]; ok {
@@ -145,7 +145,7 @@ func (w *HunkWidget) getHighlightedContent(line *ctypes.Line) string {
 }
 
 // renderHeaderLine renders the hunk header line.
-func (w *HunkWidget) renderHeaderLine(buf *teapot.SubBuffer, y int, header string, width int) {
+func (w *HunkView) renderHeaderLine(buf *teapot.SubBuffer, y int, header string, width int) {
 	if y >= buf.Height() {
 		return
 	}
@@ -163,7 +163,7 @@ func (w *HunkWidget) renderHeaderLine(buf *teapot.SubBuffer, y int, header strin
 }
 
 // renderDiffLine renders a single diff line (selection highlighting is done via overlay).
-func (w *HunkWidget) renderDiffLine(buf *teapot.SubBuffer, y int, line *ctypes.Line, highlighted string, width int) {
+func (w *HunkView) renderDiffLine(buf *teapot.SubBuffer, y int, line *ctypes.Line, highlighted string, width int) {
 	if y >= buf.Height() {
 		return
 	}
@@ -215,7 +215,7 @@ func (w *HunkWidget) renderDiffLine(buf *teapot.SubBuffer, y int, line *ctypes.L
 }
 
 // renderComment renders an inline comment/conversation.
-func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *critic.Conversation, width, height int, selected bool) {
+func (w *HunkView) renderComment(buf *teapot.SubBuffer, startY int, conv *critic.Conversation, width, height int, selected bool) {
 	if startY >= buf.Height() {
 		return
 	}
@@ -338,14 +338,14 @@ func (w *HunkWidget) renderComment(buf *teapot.SubBuffer, startY int, conv *crit
 	}
 }
 
-// FileHeaderWidget displays the file header.
-type FileHeaderWidget struct {
-	teapot.BaseWidget
+// FileHeaderView displays the file header.
+type FileHeaderView struct {
+	teapot.BaseView
 	header string
 }
 
-// NewFileHeaderWidget creates a new file header widget.
-func NewFileHeaderWidget(file *ctypes.FileDiff) *FileHeaderWidget {
+// NewFileHeaderView creates a new file header widget.
+func NewFileHeaderView(file *ctypes.FileDiff) *FileHeaderView {
 	var header string
 	if file.IsDeleted {
 		header = file.OldPath + " (deleted)"
@@ -357,8 +357,8 @@ func NewFileHeaderWidget(file *ctypes.FileDiff) *FileHeaderWidget {
 		header = file.NewPath
 	}
 
-	w := &FileHeaderWidget{
-		BaseWidget: teapot.NewBaseWidget(),
+	w := &FileHeaderView{
+		BaseView: teapot.NewBaseView(),
 		header:     header,
 	}
 	w.SetFocusable(false)
@@ -367,7 +367,7 @@ func NewFileHeaderWidget(file *ctypes.FileDiff) *FileHeaderWidget {
 }
 
 // Render renders the file header.
-func (w *FileHeaderWidget) Render(buf *teapot.SubBuffer) {
+func (w *FileHeaderView) Render(buf *teapot.SubBuffer) {
 	width := buf.Width()
 
 	// Build header cells with padding
@@ -389,12 +389,12 @@ func (w *FileHeaderWidget) Render(buf *teapot.SubBuffer) {
 	}
 }
 
-// DiffViewWidget is the main widget that displays the entire diff view.
-// It stacks HunkWidgets vertically.
-type DiffViewWidget struct {
-	teapot.BaseWidget
+// DiffContentView is the main widget that displays the entire diff view.
+// It stacks HunkViews vertically.
+type DiffContentView struct {
+	teapot.BaseView
 	file            *ctypes.FileDiff
-	hunks           []*HunkWidget
+	hunks           []*HunkView
 	conversationMap map[int]*critic.Conversation
 	highlightedOld  map[int]string
 	highlightedNew  map[int]string
@@ -404,17 +404,17 @@ type DiffViewWidget struct {
 	yOffset         int // Scroll offset
 }
 
-// NewDiffViewWidget creates a new diff view widget.
-func NewDiffViewWidget() *DiffViewWidget {
-	w := &DiffViewWidget{
-		BaseWidget: teapot.NewBaseWidget(),
+// NewDiffContentView creates a new diff view widget.
+func NewDiffContentView() *DiffContentView {
+	w := &DiffContentView{
+		BaseView: teapot.NewBaseView(),
 	}
 	w.SetFocusable(true)
 	return w
 }
 
 // SetFile sets the file to display and rebuilds the hunk widgets.
-func (w *DiffViewWidget) SetFile(
+func (w *DiffContentView) SetFile(
 	file *ctypes.FileDiff,
 	conversationMap map[int]*critic.Conversation,
 	highlightedOld, highlightedNew, highlightedCtx map[int]string,
@@ -430,12 +430,12 @@ func (w *DiffViewWidget) SetFile(
 }
 
 // SetFilterMode sets the filter mode.
-func (w *DiffViewWidget) SetFilterMode(mode FilterMode) {
+func (w *DiffContentView) SetFilterMode(mode FilterMode) {
 	w.filterMode = mode
 }
 
-// rebuildHunks creates HunkWidgets for each hunk.
-func (w *DiffViewWidget) rebuildHunks() {
+// rebuildHunks creates HunkViews for each hunk.
+func (w *DiffContentView) rebuildHunks() {
 	w.hunks = nil
 	if w.file == nil {
 		return
@@ -445,7 +445,7 @@ func (w *DiffViewWidget) rebuildHunks() {
 	currentRow := 2 // After file header
 
 	for _, hunk := range hunksToRender {
-		hw := NewHunkWidget(hunk, w.conversationMap, w.highlightedOld, w.highlightedNew, w.highlightedCtx)
+		hw := NewHunkView(hunk, w.conversationMap, w.highlightedOld, w.highlightedNew, w.highlightedCtx)
 		hw.SetStartRow(currentRow)
 		w.hunks = append(w.hunks, hw)
 		currentRow += hw.calculateHeight() + 1 // +1 for spacing
@@ -453,7 +453,7 @@ func (w *DiffViewWidget) rebuildHunks() {
 }
 
 // filterHunks filters hunks based on the current filter mode.
-func (w *DiffViewWidget) filterHunks(hunks []*ctypes.Hunk) []*ctypes.Hunk {
+func (w *DiffContentView) filterHunks(hunks []*ctypes.Hunk) []*ctypes.Hunk {
 	if w.filterMode == FilterModeNone {
 		return hunks
 	}
@@ -468,7 +468,7 @@ func (w *DiffViewWidget) filterHunks(hunks []*ctypes.Hunk) []*ctypes.Hunk {
 }
 
 // hunkMatchesFilter checks if a hunk matches the current filter.
-func (w *DiffViewWidget) hunkMatchesFilter(hunk *ctypes.Hunk) bool {
+func (w *DiffContentView) hunkMatchesFilter(hunk *ctypes.Hunk) bool {
 	for _, line := range hunk.Lines {
 		if line.NewNum > 0 {
 			if conv, exists := w.conversationMap[line.NewNum]; exists {
@@ -487,27 +487,27 @@ func (w *DiffViewWidget) hunkMatchesFilter(hunk *ctypes.Hunk) bool {
 }
 
 // GetSelectedRow returns the currently selected row.
-func (w *DiffViewWidget) GetSelectedRow() int {
+func (w *DiffContentView) GetSelectedRow() int {
 	return w.selectedRow
 }
 
 // SetSelectedRow sets the selected row.
-func (w *DiffViewWidget) SetSelectedRow(row int) {
+func (w *DiffContentView) SetSelectedRow(row int) {
 	w.selectedRow = row
 }
 
 // GetYOffset returns the current scroll offset.
-func (w *DiffViewWidget) GetYOffset() int {
+func (w *DiffContentView) GetYOffset() int {
 	return w.yOffset
 }
 
 // GetFile returns the current file.
-func (w *DiffViewWidget) GetFile() *ctypes.FileDiff {
+func (w *DiffContentView) GetFile() *ctypes.FileDiff {
 	return w.file
 }
 
 // CalculateTotalHeight returns the total content height.
-func (w *DiffViewWidget) CalculateTotalHeight() int {
+func (w *DiffContentView) CalculateTotalHeight() int {
 	if w.file == nil {
 		return 0
 	}
@@ -523,7 +523,7 @@ func (w *DiffViewWidget) CalculateTotalHeight() int {
 }
 
 // Render renders the entire diff view.
-func (w *DiffViewWidget) Render(buf *teapot.SubBuffer) {
+func (w *DiffContentView) Render(buf *teapot.SubBuffer) {
 	if w.file == nil {
 		return
 	}
@@ -538,7 +538,7 @@ func (w *DiffViewWidget) Render(buf *teapot.SubBuffer) {
 	w.ensureSelectedVisible(height, contentHeight)
 
 	// Render file header (fixed at top)
-	fileHeader := NewFileHeaderWidget(w.file)
+	fileHeader := NewFileHeaderView(w.file)
 	headerBuf := buf.Sub(teapot.Rect{X: 0, Y: 0, Width: width, Height: 2})
 	fileHeader.Render(headerBuf)
 
@@ -574,7 +574,7 @@ func (w *DiffViewWidget) Render(buf *teapot.SubBuffer) {
 }
 
 // ensureSelectedVisible adjusts yOffset to keep the selected row visible.
-func (w *DiffViewWidget) ensureSelectedVisible(viewHeight, contentHeight int) {
+func (w *DiffContentView) ensureSelectedVisible(viewHeight, contentHeight int) {
 	// Ensure selected row is in view
 	if w.selectedRow < w.yOffset+2 { // +2 for header
 		w.yOffset = w.selectedRow - 2
@@ -596,7 +596,7 @@ func (w *DiffViewWidget) ensureSelectedVisible(viewHeight, contentHeight int) {
 }
 
 // IsRowNavigable returns true if the given row is navigable (a diff line or comment).
-func (w *DiffViewWidget) IsRowNavigable(row int) bool {
+func (w *DiffContentView) IsRowNavigable(row int) bool {
 	if row < 2 { // Header
 		return false
 	}
@@ -631,7 +631,7 @@ func (w *DiffViewWidget) IsRowNavigable(row int) bool {
 }
 
 // GetNextNavigableRow returns the next navigable row after the given row.
-func (w *DiffViewWidget) GetNextNavigableRow(currentRow int) int {
+func (w *DiffContentView) GetNextNavigableRow(currentRow int) int {
 	totalHeight := w.CalculateTotalHeight()
 	for row := currentRow + 1; row < totalHeight; row++ {
 		if w.IsRowNavigable(row) {
@@ -642,7 +642,7 @@ func (w *DiffViewWidget) GetNextNavigableRow(currentRow int) int {
 }
 
 // GetPrevNavigableRow returns the previous navigable row before the given row.
-func (w *DiffViewWidget) GetPrevNavigableRow(currentRow int) int {
+func (w *DiffContentView) GetPrevNavigableRow(currentRow int) int {
 	for row := currentRow - 1; row >= 0; row-- {
 		if w.IsRowNavigable(row) {
 			return row
@@ -652,7 +652,7 @@ func (w *DiffViewWidget) GetPrevNavigableRow(currentRow int) int {
 }
 
 // GetSourceLineForRow returns the source line number for a given row.
-func (w *DiffViewWidget) GetSourceLineForRow(row int) int {
+func (w *DiffContentView) GetSourceLineForRow(row int) int {
 	if row < 2 {
 		return 0
 	}
@@ -689,7 +689,7 @@ func (w *DiffViewWidget) GetSourceLineForRow(row int) int {
 }
 
 // GetConversationUUIDForRow returns the conversation UUID for a row (if it's a comment row).
-func (w *DiffViewWidget) GetConversationUUIDForRow(row int) string {
+func (w *DiffContentView) GetConversationUUIDForRow(row int) string {
 	if row < 2 {
 		return ""
 	}
@@ -720,6 +720,6 @@ func (w *DiffViewWidget) GetConversationUUIDForRow(row int) string {
 }
 
 // IsCommentRow returns true if the given row is part of a comment.
-func (w *DiffViewWidget) IsCommentRow(row int) bool {
+func (w *DiffContentView) IsCommentRow(row int) bool {
 	return w.GetConversationUUIDForRow(row) != ""
 }

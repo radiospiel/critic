@@ -6,24 +6,24 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// MainLayout is the root layout widget containing the main content and status bar.
+// MainView is the root layout widget containing the main content and status bar.
 // Structure: VBox with [HSplit(fileList, diffView), StatusBar]
-type MainLayout struct {
-	pot.BaseWidget
+type MainView struct {
+	pot.BaseView
 
 	// Child widgets
-	fileList  *FileListWidget
-	diffView  *DiffViewModel
-	statusBar *StatusBarWidget
+	fileList  *FileListView
+	diffView  *DiffView
+	statusBar *StatusBarView
 
 	// Layout containers
 	hsplit *pot.Split
 }
 
-// NewMainLayout creates a new main layout with the given widgets.
-func NewMainLayout(fileList *FileListWidget, diffView *DiffViewModel, statusBar *StatusBarWidget) *MainLayout {
-	m := &MainLayout{
-		BaseWidget: pot.NewBaseWidget(),
+// NewMainView creates a new main layout with the given widgets.
+func NewMainView(fileList *FileListView, diffView *DiffView, statusBar *StatusBarView) *MainView {
+	m := &MainView{
+		BaseView: pot.NewBaseView(),
 		fileList:   fileList,
 		diffView:   diffView,
 		statusBar:  statusBar,
@@ -43,8 +43,8 @@ func NewMainLayout(fileList *FileListWidget, diffView *DiffViewModel, statusBar 
 }
 
 // SetBounds sets the layout bounds and propagates to children.
-func (m *MainLayout) SetBounds(bounds pot.Rect) {
-	m.BaseWidget.SetBounds(bounds)
+func (m *MainView) SetBounds(bounds pot.Rect) {
+	m.BaseView.SetBounds(bounds)
 
 	// StatusBar takes 1 row at the bottom
 	statusBarHeight := 1
@@ -69,7 +69,7 @@ func (m *MainLayout) SetBounds(bounds pot.Rect) {
 }
 
 // Render renders the main layout to the buffer.
-func (m *MainLayout) Render(buf *pot.SubBuffer) {
+func (m *MainView) Render(buf *pot.SubBuffer) {
 	bounds := m.Bounds()
 	statusBarHeight := 1
 	contentHeight := bounds.Height - statusBarHeight
@@ -83,14 +83,14 @@ func (m *MainLayout) Render(buf *pot.SubBuffer) {
 	rightWidth := bounds.Width - leftWidth - 1
 
 	filteredCount, totalCount := m.fileList.GetFilterInfo()
-	logger.Info("MainLayout.Render: bounds=%dx%d, buf=%dx%d, left=%d, right=%d, content=%d, files=%d/%d",
+	logger.Info("MainView.Render: bounds=%dx%d, buf=%dx%d, left=%d, right=%d, content=%d, files=%d/%d",
 		bounds.Width, bounds.Height, buf.Width(), buf.Height(), leftWidth, rightWidth, contentHeight, filteredCount, totalCount)
 
 	// Render file list
 	if leftWidth > 0 && contentHeight > 0 {
 		fileListBuf := buf.Sub(pot.Rect{X: 0, Y: 0, Width: leftWidth, Height: contentHeight})
 		m.fileList.Render(fileListBuf)
-		logger.Info("MainLayout.Render: fileList rendered")
+		logger.Info("MainView.Render: fileList rendered")
 	}
 
 	// Render separator
@@ -103,34 +103,34 @@ func (m *MainLayout) Render(buf *pot.SubBuffer) {
 	if rightWidth > 0 && contentHeight > 0 {
 		diffBuf := buf.Sub(pot.Rect{X: leftWidth + 1, Y: 0, Width: rightWidth, Height: contentHeight})
 		m.diffView.Render(diffBuf)
-		logger.Info("MainLayout.Render: diffView rendered")
+		logger.Info("MainView.Render: diffView rendered")
 	}
 
 	// Render status bar
 	if bounds.Width > 0 && statusBarHeight > 0 {
 		statusBuf := buf.Sub(pot.Rect{X: 0, Y: contentHeight, Width: bounds.Width, Height: statusBarHeight})
 		m.statusBar.Render(statusBuf)
-		logger.Info("MainLayout.Render: statusBar rendered")
+		logger.Info("MainView.Render: statusBar rendered")
 	}
-	logger.Info("MainLayout.Render: complete")
+	logger.Info("MainView.Render: complete")
 }
 
 // Children returns the child widgets for focus traversal.
-func (m *MainLayout) Children() []pot.Widget {
-	return []pot.Widget{m.fileList, m.diffView, m.statusBar}
+func (m *MainView) Children() []pot.View {
+	return []pot.View{m.fileList, m.diffView, m.statusBar}
 }
 
 // FileList returns the file list widget.
-func (m *MainLayout) FileList() *FileListWidget {
+func (m *MainView) FileList() *FileListView {
 	return m.fileList
 }
 
 // DiffView returns the diff view model.
-func (m *MainLayout) DiffView() *DiffViewModel {
+func (m *MainView) DiffView() *DiffView {
 	return m.diffView
 }
 
 // StatusBar returns the status bar widget.
-func (m *MainLayout) StatusBar() *StatusBarWidget {
+func (m *MainView) StatusBar() *StatusBarView {
 	return m.statusBar
 }

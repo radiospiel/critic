@@ -18,7 +18,7 @@ const (
 // BoxLayout is a container that arranges children in a line (horizontal or vertical).
 // It distributes space based on constraints and stretch factors.
 type BoxLayout struct {
-	ContainerWidget
+	ContainerView
 	orientation Orientation
 	spacing     int
 }
@@ -26,7 +26,7 @@ type BoxLayout struct {
 // NewVBox creates a vertical box layout.
 func NewVBox(spacing int) *BoxLayout {
 	box := &BoxLayout{
-		ContainerWidget: NewContainerWidget(),
+		ContainerView: NewContainerView(),
 		orientation:     Vertical,
 		spacing:         spacing,
 	}
@@ -37,7 +37,7 @@ func NewVBox(spacing int) *BoxLayout {
 // NewHBox creates a horizontal box layout.
 func NewHBox(spacing int) *BoxLayout {
 	box := &BoxLayout{
-		ContainerWidget: NewContainerWidget(),
+		ContainerView: NewContainerView(),
 		orientation:     Horizontal,
 		spacing:         spacing,
 	}
@@ -190,7 +190,7 @@ func (b *BoxLayout) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-func (b *BoxLayout) routeToFocusedDescendant(w Widget, msg tea.KeyMsg) (bool, tea.Cmd) {
+func (b *BoxLayout) routeToFocusedDescendant(w View, msg tea.KeyMsg) (bool, tea.Cmd) {
 	for _, child := range w.Children() {
 		if child.Focused() {
 			return child.HandleKey(msg)
@@ -205,10 +205,10 @@ func (b *BoxLayout) routeToFocusedDescendant(w Widget, msg tea.KeyMsg) (bool, te
 // Split is a container with two panes separated by a divider.
 // It supports both fixed-size and proportional layouts.
 type Split struct {
-	ContainerWidget
+	ContainerView
 	orientation  Orientation
-	first        Widget
-	second       Widget
+	first        View
+	second       View
 	ratio        float64   // 0.0 to 1.0, proportion of space for first pane
 	fixedSize    int       // If > 0, first pane has fixed size
 	dividerWidth int       // Width of the divider (default 1)
@@ -216,9 +216,9 @@ type Split struct {
 }
 
 // NewHSplit creates a horizontal split (left | right).
-func NewHSplit(left, right Widget, ratio float64) *Split {
+func NewHSplit(left, right View, ratio float64) *Split {
 	s := &Split{
-		ContainerWidget: NewContainerWidget(),
+		ContainerView: NewContainerView(),
 		orientation:     Horizontal,
 		first:           left,
 		second:          right,
@@ -237,9 +237,9 @@ func NewHSplit(left, right Widget, ratio float64) *Split {
 }
 
 // NewVSplit creates a vertical split (top / bottom).
-func NewVSplit(top, bottom Widget, ratio float64) *Split {
+func NewVSplit(top, bottom View, ratio float64) *Split {
 	s := &Split{
-		ContainerWidget: NewContainerWidget(),
+		ContainerView: NewContainerView(),
 		orientation:     Vertical,
 		first:           top,
 		second:          bottom,
@@ -276,8 +276,8 @@ func (s *Split) SetDividerStyle(style lipgloss.Style) {
 }
 
 // Children returns the split's children.
-func (s *Split) Children() []Widget {
-	var children []Widget
+func (s *Split) Children() []View {
+	var children []View
 	if s.first != nil {
 		children = append(children, s.first)
 	}
@@ -426,7 +426,7 @@ func (s *Split) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-func (s *Split) routeToFocused(w Widget, msg tea.KeyMsg) (bool, tea.Cmd) {
+func (s *Split) routeToFocused(w View, msg tea.KeyMsg) (bool, tea.Cmd) {
 	for _, child := range w.Children() {
 		if child.Focused() {
 			return child.HandleKey(msg)
@@ -439,17 +439,17 @@ func (s *Split) routeToFocused(w Widget, msg tea.KeyMsg) (bool, tea.Cmd) {
 }
 
 // First returns the first pane widget.
-func (s *Split) First() Widget {
+func (s *Split) First() View {
 	return s.first
 }
 
 // Second returns the second pane widget.
-func (s *Split) Second() Widget {
+func (s *Split) Second() View {
 	return s.second
 }
 
 // SetFirst sets the first pane widget.
-func (s *Split) SetFirst(w Widget) {
+func (s *Split) SetFirst(w View) {
 	if s.first != nil {
 		s.first.SetParent(nil)
 	}
@@ -462,7 +462,7 @@ func (s *Split) SetFirst(w Widget) {
 }
 
 // SetSecond sets the second pane widget.
-func (s *Split) SetSecond(w Widget) {
+func (s *Split) SetSecond(w View) {
 	if s.second != nil {
 		s.second.SetParent(nil)
 	}

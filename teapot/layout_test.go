@@ -6,22 +6,22 @@ import (
 	"git.15b.it/eno/critic/simple-go/assert"
 )
 
-// mockWidget is a simple widget for testing layouts
-type mockWidget struct {
-	BaseWidget
+// mockView is a simple widget for testing layouts
+type mockView struct {
+	BaseView
 	id string
 }
 
-func newMockWidget(id string, minW, minH, stretch int) *mockWidget {
+func newMockWidget(id string, minW, minH, stretch int) *mockView {
 	w := &mockWidget{
-		BaseWidget: NewBaseWidget(),
+		BaseView: NewBaseView(),
 		id:         id,
 	}
 	w.SetConstraints(DefaultConstraints().WithMinSize(minW, minH).WithStretch(stretch, stretch))
 	return w
 }
 
-func (m *mockWidget) Render(buf *SubBuffer) {
+func (m *mockView) Render(buf *SubBuffer) {
 	// Fill with first char of id for visual debugging
 	if len(m.id) > 0 {
 		r := rune(m.id[0])
@@ -196,8 +196,8 @@ func TestSplitRender(t *testing.T) {
 	assert.Equals(t, buf.GetCell(20, 0).Rune, 'R')
 }
 
-func TestContainerWidgetChildren(t *testing.T) {
-	container := NewContainerWidget()
+func TestContainerViewChildren(t *testing.T) {
+	container := NewContainerView()
 
 	child1 := newMockWidget("A", 0, 0, 0)
 	child2 := newMockWidget("B", 0, 0, 0)

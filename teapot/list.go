@@ -21,7 +21,7 @@ type ItemRenderer[T ListItem] func(buf *SubBuffer, item T, selected bool, focuse
 // SelectableList is a generic scrollable list with selection.
 // It can be used for file lists, branch selectors, commit selectors, etc.
 type SelectableList[T ListItem] struct {
-	BaseWidget
+	BaseView
 	items        []T
 	selected     int // Index of selected item
 	scrollOffset int // First visible item index
@@ -41,7 +41,7 @@ type SelectableList[T ListItem] struct {
 // NewSelectableList creates a new selectable list with the given renderer.
 func NewSelectableList[T ListItem](renderer ItemRenderer[T]) *SelectableList[T] {
 	list := &SelectableList[T]{
-		BaseWidget: NewBaseWidget(),
+		BaseView: NewBaseView(),
 		renderer:   renderer,
 		selectedStyle: lipgloss.NewStyle().
 			Bold(true).
@@ -282,17 +282,17 @@ func (l *SelectableList[T]) pageDown() {
 
 // ScrollView is a widget that provides scrolling for content larger than its bounds.
 type ScrollView struct {
-	BaseWidget
-	content     Widget
+	BaseView
+	content     View
 	scrollX     int
 	scrollY     int
 	contentSize Size
 }
 
 // NewScrollView creates a new scroll view with the given content.
-func NewScrollView(content Widget) *ScrollView {
+func NewScrollView(content View) *ScrollView {
 	sv := &ScrollView{
-		BaseWidget: NewBaseWidget(),
+		BaseView: NewBaseView(),
 		content:    content,
 	}
 	if content != nil {
@@ -302,7 +302,7 @@ func NewScrollView(content Widget) *ScrollView {
 }
 
 // SetContent sets the scroll view's content.
-func (s *ScrollView) SetContent(w Widget) {
+func (s *ScrollView) SetContent(w View) {
 	if s.content != nil {
 		s.content.SetParent(nil)
 	}
@@ -346,16 +346,16 @@ func (s *ScrollView) ScrollPosition() (x, y int) {
 }
 
 // Children returns the content widget.
-func (s *ScrollView) Children() []Widget {
+func (s *ScrollView) Children() []View {
 	if s.content != nil {
-		return []Widget{s.content}
+		return []View{s.content}
 	}
 	return nil
 }
 
 // SetBounds sets the scroll view's bounds.
 func (s *ScrollView) SetBounds(bounds Rect) {
-	s.BaseWidget.SetBounds(bounds)
+	s.BaseView.SetBounds(bounds)
 	if s.content != nil {
 		// Content gets virtual bounds at the scroll offset
 		s.content.SetBounds(Rect{
