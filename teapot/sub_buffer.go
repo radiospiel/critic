@@ -48,6 +48,13 @@ func (s *SubBuffer) GetCell(x, y int) Cell {
 	return s.parent.GetCell(s.offset.X+x, s.offset.Y+y)
 }
 
+// setCells is the internal implementation that writes cells without validation.
+// Preconditions: y is valid (0 <= y < height), x is valid (0 <= x < width),
+// cells is non-empty and fits within width.
+func (s *SubBuffer) setCells(x, y int, cells []Cell) {
+	s.parent.setCells(s.offset.X+x, s.offset.Y+y, cells)
+}
+
 // SetCells writes a slice of cells at position (x, y) relative to sub-buffer origin.
 // Cells that extend beyond the sub-buffer width are clipped.
 func (s *SubBuffer) SetCells(x, y int, cells []Cell) {
@@ -74,7 +81,41 @@ func (s *SubBuffer) SetCells(x, y int, cells []Cell) {
 		cells = cells[:available]
 	}
 
-	s.parent.SetCells(s.offset.X+x, s.offset.Y+y, cells)
+	s.setCells(x, y, cells)
+}
+
+// setString is the internal implementation that writes a string without validation.
+// Preconditions: y is valid (0 <= y < height), str is non-empty.
+// Handles x clipping internally.
+func (s *SubBuffer) setString(x, y int, str string, style lipgloss.Style) {
+	runes := []rune(str)
+
+	// Handle negative x by skipping runes
+	if x < 0 {
+		skip := -x
+		if skip >= len(runes) {
+			return
+		}
+		runes = runes[skip:]
+		x = 0
+	}
+
+	// Clip to sub-buffer width
+	available := s.offset.Width - x
+	if available <= 0 {
+		return
+	}
+	if len(runes) > available {
+		runes = runes[:available]
+	}
+
+	// Build cells slice
+	cells := make([]Cell, len(runes))
+	for i, r := range runes {
+		cells[i] = Cell{Rune: r, Style: style}
+	}
+
+	s.setCells(x, y, cells)
 }
 
 // SetString writes a string at the given position.
@@ -83,15 +124,7 @@ func (s *SubBuffer) SetString(x, y int, str string, style lipgloss.Style) {
 		return
 	}
 
-	runes := []rune(str)
-
-	// Build cells slice
-	cells := make([]Cell, len(runes))
-	for i, r := range runes {
-		cells[i] = Cell{Rune: r, Style: style}
-	}
-
-	s.SetCells(x, y, cells)
+	s.setString(x, y, str, style)
 }
 
 // SetStringTruncated writes a string, truncating with ellipsis if needed.
@@ -109,7 +142,11 @@ func (s *SubBuffer) SetStringTruncated(x, y int, str string, maxWidth int, style
 		}
 	}
 
-	s.SetString(x, y, string(runes), style)
+	if len(runes) == 0 {
+		return
+	}
+
+	s.setString(x, y, string(runes), style)
 }
 
 // Fill fills a rectangular region.
@@ -125,8 +162,9 @@ func (s *SubBuffer) Fill(rect Rect, cell Cell) {
 		row[i] = cell
 	}
 
+	// After clipping, all coordinates are known to be valid
 	for y := clipped.Y; y < clipped.Y+clipped.Height; y++ {
-		s.SetCells(clipped.X, y, row)
+		s.setCells(clipped.X, y, row)
 	}
 }
 
@@ -178,10 +216,14 @@ func (s *SubBuffer) InvertRow(row int) {
 	if row < 0 || row >= s.offset.Height {
 		return
 	}
+	if s.offset.Width == 0 {
+		return
+	}
 	cells := make([]Cell, s.offset.Width)
 	for x := 0; x < s.offset.Width; x++ {
 		cells[x] = s.GetCell(x, row)
 		cells[x].Style = cells[x].Style.Reverse(true)
 	}
-	s.SetCells(0, row, cells)
+	// After validation, row and cells are known to be valid
+	s.setCells(0, row, cells)
 }
