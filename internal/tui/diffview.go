@@ -31,21 +31,23 @@ const (
 	FilterModeWithUnresolved
 )
 
-// DiffViewModel represents the diff viewer pane
-type DiffViewModel struct {
+// DiffView represents the diff viewer pane.
+// It is a proper teapot Widget that wraps DiffContentView with additional
+// functionality like syntax highlighting, cursor management, and scrolling.
+type DiffView struct {
+	teapot.BaseView // Embed BaseWidget to implement the Widget interface
+
 	file                 *ctypes.FileDiff
 	viewport             viewport.Model
 	width                int
 	height               int
 	ready                bool
-	highlighter          *highlight.Highlighter
-	cachedContent        string
-	cachedFile           *ctypes.FileDiff
-	highlightingEnabled  bool
-	highlightTime        time.Duration // Accumulated syntax highlighting time
+	highlighter     *highlight.Highlighter
+	cachedContent   string
+	cachedFile      *ctypes.FileDiff
+	highlightTime   time.Duration // Accumulated syntax highlighting time
 	cursorLine           int           // Current active line (0-based)
 	totalLines           int           // Total number of lines in rendered diff
-	focused              bool          // Whether this pane is focused
 	navigableLines       []int         // Line numbers that can have cursor (diff lines only)
 	messaging            critic.Messaging
 	commentLines         map[int]int    // Maps rendered line number to source line number for comment lines
@@ -55,7 +57,7 @@ type DiffViewModel struct {
 	gotoBottomOnLoad     bool           // If true, go to bottom after next file load
 	filterMode           FilterMode     // Current filter mode for hunk filtering
 	// Widget-based rendering
-	diffWidget *DiffViewWidget // The widget that renders the vertical layout of hunks
+	diffWidget *DiffContentView // The widget that renders the vertical layout of hunks
 
 	// Cached syntax highlighting (expensive to compute, reused across renders)
 	cachedHighlightFile  *ctypes.FileDiff // File the cached highlights are for
@@ -64,29 +66,25 @@ type DiffViewModel struct {
 	cachedNewFileContext map[int]string   // Cached highlighted context lines
 }
 
-// NewDiffViewModel creates a new diff viewer model
-func NewDiffViewModel() DiffViewModel {
-	return DiffViewModel{
-		highlighter:         highlight.NewHighlighter(),
-		highlightingEnabled: true, // Default to enabled
-		diffWidget:          NewDiffViewWidget(),
+// NewDiffView creates a new diff viewer model
+func NewDiffView() *DiffView {
+	m := &DiffView{
+		BaseView:    teapot.NewBaseView(),
+		highlighter: highlight.NewHighlighter(),
+		diffWidget:  NewDiffContentView(),
 	}
-}
-
-// NewDiffViewModelPtr creates a new diff viewer model and returns a pointer to it.
-// Use this when the model needs to be shared across multiple components.
-func NewDiffViewModelPtr() *DiffViewModel {
-	m := NewDiffViewModel()
-	return &m
+	m.SetFocusable(true)
+	m.SetName("DiffView")
+	return m
 }
 
 // Init initializes the diff view model
-func (m DiffViewModel) Init() tea.Cmd {
+func (m DiffView) Init() tea.Cmd {
 	return nil
 }
 
 // Update updates the diff view model
-func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
+func (m *DiffView) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -211,24 +209,24 @@ func (m *DiffViewModel) Update(msg tea.Msg) tea.Cmd {
 }
 
 // Render renders the diff view to a buffer (widget-based rendering)
-func (m *DiffViewModel) Render(buf *teapot.SubBuffer) {
+func (m *DiffView) Render(buf *teapot.SubBuffer) {
 	width := buf.Width()
 	height := buf.Height()
 
-	logger.Info("DiffViewModel.Render: buf=%dx%d, file=%v", width, height, m.file != nil)
+	logger.Info("DiffView.Render: buf=%dx%d, file=%v", width, height, m.file != nil)
 
 	// Update widget bounds
 	m.diffWidget.SetBounds(teapot.NewRect(0, 0, width, height))
 
 	if m.file == nil {
-		logger.Info("DiffViewModel.Render: no file, showing message")
+		logger.Info("DiffView.Render: no file, showing message")
 		m.renderMessage(buf, "Select a file to view diff")
 		return
 	}
 
 	// Check if widget is ready (async highlighting may still be in progress)
 	if m.diffWidget.GetFile() == nil {
-		logger.Info("DiffViewModel.Render: waiting for syntax highlighting")
+		logger.Info("DiffView.Render: waiting for syntax highlighting")
 		m.renderMessage(buf, "Loading...")
 		return
 	}
@@ -245,7 +243,7 @@ func (m *DiffViewModel) Render(buf *teapot.SubBuffer) {
 		} else if m.file.IsDeleted {
 			msg = "File deleted"
 		}
-		logger.Info("DiffViewModel.Render: no hunks, showing: %s", msg)
+		logger.Info("DiffView.Render: no hunks, showing: %s", msg)
 		m.renderMessage(buf, msg)
 		return
 	}
@@ -254,22 +252,22 @@ func (m *DiffViewModel) Render(buf *teapot.SubBuffer) {
 	m.diffWidget.SetSelectedRow(m.cursorLine)
 
 	// Delegate to the diffWidget
-	logger.Info("DiffViewModel.Render: rendering %d hunks via diffWidget", len(m.file.Hunks))
+	logger.Info("DiffView.Render: rendering %d hunks via diffWidget", len(m.file.Hunks))
 	m.diffWidget.Render(buf)
 
 	// Apply selection overlay - invert the current line if focused and navigable
 	// Convert from content coordinates to screen coordinates (account for scroll offset)
-	if m.focused && m.isNavigableLine(m.cursorLine) {
+	if m.Focused() && m.isNavigableLine(m.cursorLine) {
 		screenRow := m.cursorLine - m.diffWidget.GetYOffset()
 		if screenRow >= 0 && screenRow < height {
 			buf.InvertRow(screenRow)
 		}
 	}
-	logger.Info("DiffViewModel.Render: complete, cursorLine=%d, screenRow=%d, focused=%v", m.cursorLine, m.cursorLine-m.diffWidget.GetYOffset(), m.focused)
+	logger.Info("DiffView.Render: complete, cursorLine=%d, screenRow=%d, focused=%v", m.cursorLine, m.cursorLine-m.diffWidget.GetYOffset(), m.Focused())
 }
 
 // renderMessage renders a centered message in the buffer
-func (m *DiffViewModel) renderMessage(buf *teapot.SubBuffer, msg string) {
+func (m *DiffView) renderMessage(buf *teapot.SubBuffer, msg string) {
 	style := lipgloss.NewStyle().
 		Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"})
 
@@ -284,46 +282,19 @@ func (m *DiffViewModel) renderMessage(buf *teapot.SubBuffer, msg string) {
 }
 
 // SetFile sets the current file to display
-func (m *DiffViewModel) SetFile(file *ctypes.FileDiff) tea.Cmd {
+func (m *DiffView) SetFile(file *ctypes.FileDiff) tea.Cmd {
 	m.file = file
 
-	// Pre-render and cache the diff content
+	// Pre-render and cache the diff content with syntax highlighting
 	if file != nil && (m.cachedFile != file) {
 		m.cachedFile = file
-
-		// Return command to render in background if highlighting is enabled
-		// Don't set up the widget here - let renderDiff() do it with highlighting
-		if m.highlightingEnabled {
-			return m.renderDiffAsync(file)
-		}
-
-		// Only set up widget immediately when highlighting is disabled
-		// Get conversations for comment display
-		conversationsByLine := make(map[int]*critic.Conversation)
-		if m.messaging != nil {
-			convs, _ := m.messaging.GetConversationsForFile(file.NewPath)
-			for _, conv := range convs {
-				conversationsByLine[conv.LineNumber] = conv
-			}
-		}
-		m.diffWidget.SetFilterMode(m.filterMode)
-		m.diffWidget.SetFile(file, conversationsByLine, nil, nil, nil)
-
-		// Render immediately (no highlighting)
-		content, totalLines, navigableLines := m.renderDiff()
-		m.cachedContent = content
-		m.totalLines = totalLines
-		m.navigableLines = navigableLines
-		if m.ready {
-			m.viewport.SetContent(m.cachedContent)
-			m.viewport.GotoTop()
-		}
+		return m.renderDiffAsync(file)
 	}
 	return nil
 }
 
 // RefreshFile forces a re-render of the current file (used when comments change)
-func (m *DiffViewModel) RefreshFile() tea.Cmd {
+func (m *DiffView) RefreshFile() tea.Cmd {
 	if m.file == nil {
 		return nil
 	}
@@ -341,44 +312,8 @@ func (m *DiffViewModel) RefreshFile() tea.Cmd {
 	// Clear cache to force re-render
 	m.cachedFile = nil
 
-	// Re-render with highlighting if enabled
-	if m.highlightingEnabled {
-		return m.renderDiffAsync(m.file)
-	}
-
-	// Otherwise render immediately (non-async path)
-	content, totalLines, navigableLines := m.renderDiff()
-	m.cachedContent = content
-	m.totalLines = totalLines
-	m.navigableLines = navigableLines
-	if m.ready {
-		m.viewport.SetContent(m.cachedContent)
-
-		// Restore cursor position for synchronous render
-		if m.preserveCursorLine > 0 {
-			restored := false
-			for renderedLine, sourceLine := range m.sourceLines {
-				if sourceLine == m.preserveCursorLine {
-					m.cursorLine = renderedLine
-					m.ensureCursorVisible()
-					restored = true
-					break
-				}
-			}
-			if !restored {
-				for renderedLine, sourceLine := range m.commentLines {
-					if sourceLine == m.preserveCursorLine {
-						m.cursorLine = renderedLine
-						m.ensureCursorVisible()
-						restored = true
-						break
-					}
-				}
-			}
-			m.preserveCursorLine = 0
-		}
-	}
-	return nil
+	// Re-render with syntax highlighting
+	return m.renderDiffAsync(m.file)
 }
 
 // diffRenderedMsg is sent when async rendering completes
@@ -396,7 +331,7 @@ type RequestNextFileMsg struct{}
 type RequestPrevFileMsg struct{}
 
 // renderDiffAsync renders the diff in a background goroutine
-func (m *DiffViewModel) renderDiffAsync(file *ctypes.FileDiff) tea.Cmd {
+func (m *DiffView) renderDiffAsync(file *ctypes.FileDiff) tea.Cmd {
 	return func() tea.Msg {
 		// Render with highlighting in background
 		content, totalLines, navigableLines := m.renderDiff()
@@ -410,7 +345,7 @@ func (m *DiffViewModel) renderDiffAsync(file *ctypes.FileDiff) tea.Cmd {
 }
 
 // refreshContent re-renders the diff with current cursor position
-func (m *DiffViewModel) refreshContent() tea.Cmd {
+func (m *DiffView) refreshContent() tea.Cmd {
 	if m.file == nil {
 		return nil
 	}
@@ -425,7 +360,7 @@ func (m *DiffViewModel) refreshContent() tea.Cmd {
 }
 
 // moveCursorUp moves cursor to previous navigable line
-func (m *DiffViewModel) moveCursorUp() bool {
+func (m *DiffView) moveCursorUp() bool {
 	if len(m.navigableLines) == 0 {
 		return false
 	}
@@ -440,7 +375,7 @@ func (m *DiffViewModel) moveCursorUp() bool {
 }
 
 // moveCursorDown moves cursor to next navigable line
-func (m *DiffViewModel) moveCursorDown() bool {
+func (m *DiffView) moveCursorDown() bool {
 	if len(m.navigableLines) == 0 {
 		return false
 	}
@@ -455,7 +390,7 @@ func (m *DiffViewModel) moveCursorDown() bool {
 }
 
 // moveCursorUpN moves cursor up by n navigable lines
-func (m *DiffViewModel) moveCursorUpN(n int) bool {
+func (m *DiffView) moveCursorUpN(n int) bool {
 	if len(m.navigableLines) == 0 {
 		return false
 	}
@@ -494,7 +429,7 @@ func (m *DiffViewModel) moveCursorUpN(n int) bool {
 }
 
 // moveCursorDownN moves cursor down by n navigable lines
-func (m *DiffViewModel) moveCursorDownN(n int) bool {
+func (m *DiffView) moveCursorDownN(n int) bool {
 	if len(m.navigableLines) == 0 {
 		return false
 	}
@@ -532,7 +467,7 @@ func (m *DiffViewModel) moveCursorDownN(n int) bool {
 }
 
 // isAtTop returns true if the cursor is at the first navigable line
-func (m *DiffViewModel) isAtTop() bool {
+func (m *DiffView) isAtTop() bool {
 	if len(m.navigableLines) == 0 {
 		return true
 	}
@@ -540,7 +475,7 @@ func (m *DiffViewModel) isAtTop() bool {
 }
 
 // isAtBottom returns true if the cursor is at the last navigable line
-func (m *DiffViewModel) isAtBottom() bool {
+func (m *DiffView) isAtBottom() bool {
 	if len(m.navigableLines) == 0 {
 		return true
 	}
@@ -548,7 +483,7 @@ func (m *DiffViewModel) isAtBottom() bool {
 }
 
 // GotoBottom moves the cursor to the last navigable line and scrolls to bottom
-func (m *DiffViewModel) GotoBottom() tea.Cmd {
+func (m *DiffView) GotoBottom() tea.Cmd {
 	if len(m.navigableLines) > 0 {
 		m.cursorLine = m.navigableLines[len(m.navigableLines)-1]
 		if m.ready {
@@ -560,12 +495,12 @@ func (m *DiffViewModel) GotoBottom() tea.Cmd {
 }
 
 // SetGotoBottomOnLoad sets a flag to go to bottom after the next file load
-func (m *DiffViewModel) SetGotoBottomOnLoad() {
+func (m *DiffView) SetGotoBottomOnLoad() {
 	m.gotoBottomOnLoad = true
 }
 
 // ensureCursorVisible scrolls the viewport to keep cursor visible
-func (m *DiffViewModel) ensureCursorVisible() {
+func (m *DiffView) ensureCursorVisible() {
 	if !m.ready {
 		return
 	}
@@ -586,7 +521,7 @@ func (m *DiffViewModel) ensureCursorVisible() {
 // ScrollPageDown scrolls down by viewport height minus 3 (but at least 1 row)
 // and positions cursor on the second navigable line in the viewport
 // If already at the bottom, returns RequestNextFileMsg to load the next file
-func (m *DiffViewModel) ScrollPageDown() tea.Cmd {
+func (m *DiffView) ScrollPageDown() tea.Cmd {
 	if !m.ready || len(m.navigableLines) == 0 {
 		return nil
 	}
@@ -622,7 +557,7 @@ func (m *DiffViewModel) ScrollPageDown() tea.Cmd {
 }
 
 // positionCursorInViewport moves cursor to the nth navigable line in the current viewport
-func (m *DiffViewModel) positionCursorInViewport(nth int) {
+func (m *DiffView) positionCursorInViewport(nth int) {
 	if len(m.navigableLines) == 0 {
 		return
 	}
@@ -661,7 +596,7 @@ func (m *DiffViewModel) positionCursorInViewport(nth int) {
 // ScrollPageUp scrolls up by viewport height minus 3 (but at least 1 row)
 // and positions cursor on the second navigable line in the viewport
 // If already at the top, returns RequestPrevFileMsg to load the previous file
-func (m *DiffViewModel) ScrollPageUp() tea.Cmd {
+func (m *DiffView) ScrollPageUp() tea.Cmd {
 	if !m.ready || len(m.navigableLines) == 0 {
 		return nil
 	}
@@ -693,26 +628,27 @@ func (m *DiffViewModel) ScrollPageUp() tea.Cmd {
 }
 
 // SetFocused sets whether this pane is focused
-func (m *DiffViewModel) SetFocused(focused bool) {
-	if m.focused != focused {
-		m.focused = focused
+func (m *DiffView) SetFocused(focused bool) {
+	if m.Focused() != focused {
+		m.BaseView.SetFocused(focused)
 		// Re-render to update cursor visibility
 		m.refreshContent()
+		m.Repaint()
 	}
 }
 
 // GetFile returns the currently displayed file
-func (m *DiffViewModel) GetFile() *ctypes.FileDiff {
+func (m *DiffView) GetFile() *ctypes.FileDiff {
 	return m.file
 }
 
 // GetCursorLine returns the current cursor line number
-func (m *DiffViewModel) GetCursorLine() int {
+func (m *DiffView) GetCursorLine() int {
 	return m.cursorLine
 }
 
 // SetSize sets the size of the diff view pane
-func (m *DiffViewModel) SetSize(width, height int) {
+func (m *DiffView) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 
@@ -730,25 +666,24 @@ func (m *DiffViewModel) SetSize(width, height int) {
 }
 
 // SetBounds sets the bounds for widget-based rendering
-func (m *DiffViewModel) SetBounds(bounds teapot.Rect) {
+func (m *DiffView) SetBounds(bounds teapot.Rect) {
+	m.BaseView.SetBounds(bounds)
 	m.SetSize(bounds.Width, bounds.Height)
 }
 
-// SetHighlightingEnabled enables or disables syntax highlighting
-func (m *DiffViewModel) SetHighlightingEnabled(enabled bool) {
-	m.highlightingEnabled = enabled
-	// Clear cache to force re-render with new setting
-	m.cachedContent = ""
-	m.cachedFile = nil
+// Children returns the child widgets.
+// The internal diffWidget is an implementation detail and not exposed as a child.
+func (m *DiffView) Children() []teapot.View {
+	return nil
 }
 
 // SetMessaging sets the messaging interface for conversations
-func (m *DiffViewModel) SetMessaging(messaging critic.Messaging) {
+func (m *DiffView) SetMessaging(messaging critic.Messaging) {
 	m.messaging = messaging
 }
 
 // SetFilterMode sets the filter mode for hunk filtering
-func (m *DiffViewModel) SetFilterMode(mode FilterMode) {
+func (m *DiffView) SetFilterMode(mode FilterMode) {
 	if m.filterMode != mode {
 		m.filterMode = mode
 		// Clear cache to force re-render with new filter
@@ -757,7 +692,7 @@ func (m *DiffViewModel) SetFilterMode(mode FilterMode) {
 }
 
 // filterHunks filters hunks based on the current filter mode
-func (m *DiffViewModel) filterHunks(hunks []*ctypes.Hunk, conversationsByLine map[int]*critic.Conversation) []*ctypes.Hunk {
+func (m *DiffView) filterHunks(hunks []*ctypes.Hunk, conversationsByLine map[int]*critic.Conversation) []*ctypes.Hunk {
 	// If no filter, return all hunks
 	if m.filterMode == FilterModeNone {
 		return hunks
@@ -777,7 +712,7 @@ func (m *DiffViewModel) filterHunks(hunks []*ctypes.Hunk, conversationsByLine ma
 }
 
 // hunkMatchesFilter checks if a hunk should be included based on the current filter mode
-func (m *DiffViewModel) hunkMatchesFilter(hunk *ctypes.Hunk, conversationsByLine map[int]*critic.Conversation) bool {
+func (m *DiffView) hunkMatchesFilter(hunk *ctypes.Hunk, conversationsByLine map[int]*critic.Conversation) bool {
 	for _, line := range hunk.Lines {
 		if line.NewNum > 0 {
 			if conv, exists := conversationsByLine[line.NewNum]; exists {
@@ -798,7 +733,7 @@ func (m *DiffViewModel) hunkMatchesFilter(hunk *ctypes.Hunk, conversationsByLine
 }
 
 // GetConversationUUIDAtLine returns the conversation UUID for a rendered line
-func (m *DiffViewModel) GetConversationUUIDAtLine(renderedLine int) string {
+func (m *DiffView) GetConversationUUIDAtLine(renderedLine int) string {
 	if m.lineConversationUUID == nil {
 		return ""
 	}
@@ -807,7 +742,7 @@ func (m *DiffViewModel) GetConversationUUIDAtLine(renderedLine int) string {
 
 // IsCommentLine returns true if the given line number is a comment line
 // and returns the source line number for that comment
-func (m *DiffViewModel) IsCommentLine(lineNum int) (bool, int) {
+func (m *DiffView) IsCommentLine(lineNum int) (bool, int) {
 	if m.commentLines == nil {
 		return false, 0
 	}
@@ -817,7 +752,7 @@ func (m *DiffViewModel) IsCommentLine(lineNum int) (bool, int) {
 
 // GetSourceLine returns the source line number for a rendered line number
 // Returns 0 if the line doesn't map to a source line
-func (m *DiffViewModel) GetSourceLine(renderedLine int) int {
+func (m *DiffView) GetSourceLine(renderedLine int) int {
 	if m.sourceLines == nil {
 		return 0
 	}
@@ -827,7 +762,7 @@ func (m *DiffViewModel) GetSourceLine(renderedLine int) int {
 // renderDiff renders the diff content using widget-based vertical layout.
 // Each hunk is a vertical layout containing lines and their associated comments.
 // Returns the rendered content, total line count, and navigable line numbers.
-func (m *DiffViewModel) renderDiff() (string, int, []int) {
+func (m *DiffView) renderDiff() (string, int, []int) {
 	startTime := time.Now()
 	m.highlightTime = 0 // Reset accumulated highlight time
 
@@ -850,27 +785,25 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 
 	// Build highlighted content maps (cached - only recompute when file changes)
 	var oldFileDeleted, newFileAdded, newFileContext map[int]string
-	if m.highlightingEnabled {
-		// Check if we can reuse cached highlights
-		if m.cachedHighlightFile == m.file && m.cachedOldFileDeleted != nil {
-			// Reuse cached highlights
-			oldFileDeleted = m.cachedOldFileDeleted
-			newFileAdded = m.cachedNewFileAdded
-			newFileContext = m.cachedNewFileContext
-		} else {
-			// Compute and cache highlights
-			hlStart := time.Now()
-			oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
-			newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
-			newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
-			m.highlightTime += time.Since(hlStart)
+	// Check if we can reuse cached highlights
+	if m.cachedHighlightFile == m.file && m.cachedOldFileDeleted != nil {
+		// Reuse cached highlights
+		oldFileDeleted = m.cachedOldFileDeleted
+		newFileAdded = m.cachedNewFileAdded
+		newFileContext = m.cachedNewFileContext
+	} else {
+		// Compute and cache highlights
+		hlStart := time.Now()
+		oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
+		newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
+		newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
+		m.highlightTime += time.Since(hlStart)
 
-			// Cache for reuse
-			m.cachedHighlightFile = m.file
-			m.cachedOldFileDeleted = oldFileDeleted
-			m.cachedNewFileAdded = newFileAdded
-			m.cachedNewFileContext = newFileContext
-		}
+		// Cache for reuse
+		m.cachedHighlightFile = m.file
+		m.cachedOldFileDeleted = oldFileDeleted
+		m.cachedNewFileAdded = newFileAdded
+		m.cachedNewFileContext = newFileContext
 	}
 
 	// Configure the widget - set filter mode BEFORE SetFile
@@ -909,7 +842,7 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 	m.diffWidget.Render(subBuf)
 
 	// Apply selection overlay - invert the current line if focused and navigable
-	if m.focused && m.isNavigableLine(m.cursorLine) {
+	if m.Focused() && m.isNavigableLine(m.cursorLine) {
 		buffer.InvertRow(m.cursorLine)
 	}
 
@@ -928,7 +861,7 @@ func (m *DiffViewModel) renderDiff() (string, int, []int) {
 }
 
 // loadConversationsForFile loads and returns conversations indexed by line number
-func (m *DiffViewModel) loadConversationsForFile() map[int]*critic.Conversation {
+func (m *DiffView) loadConversationsForFile() map[int]*critic.Conversation {
 	conversationsByLine := make(map[int]*critic.Conversation)
 	if m.messaging == nil || m.file == nil {
 		return conversationsByLine
@@ -948,7 +881,7 @@ func (m *DiffViewModel) loadConversationsForFile() map[int]*critic.Conversation 
 }
 
 // calculateContentHeight calculates the total height needed for the content
-func (m *DiffViewModel) calculateContentHeight(conversationsByLine map[int]*critic.Conversation) int {
+func (m *DiffView) calculateContentHeight(conversationsByLine map[int]*critic.Conversation) int {
 	if m.file == nil {
 		return 0
 	}
@@ -975,7 +908,7 @@ func (m *DiffViewModel) calculateContentHeight(conversationsByLine map[int]*crit
 }
 
 // buildLineMappingsFromWidget builds the line mappings from the widget structure
-func (m *DiffViewModel) buildLineMappingsFromWidget(conversationsByLine map[int]*critic.Conversation) []int {
+func (m *DiffView) buildLineMappingsFromWidget(conversationsByLine map[int]*critic.Conversation) []int {
 	var navigableLines []int
 
 	if m.file == nil {
@@ -1021,7 +954,7 @@ func (m *DiffViewModel) buildLineMappingsFromWidget(conversationsByLine map[int]
 }
 
 // updateWidgetSelection updates the widget's selection based on cursorLine
-func (m *DiffViewModel) updateWidgetSelection() {
+func (m *DiffView) updateWidgetSelection() {
 	if m.diffWidget == nil {
 		return
 	}
@@ -1031,7 +964,7 @@ func (m *DiffViewModel) updateWidgetSelection() {
 }
 
 // findSelectableItemForLine finds the selectable item index for a given line number
-func (m *DiffViewModel) findSelectableItemForLine(lineNum int) int {
+func (m *DiffView) findSelectableItemForLine(lineNum int) int {
 	if m.file == nil || m.diffWidget == nil {
 		return -1
 	}
@@ -1074,7 +1007,7 @@ func (m *DiffViewModel) findSelectableItemForLine(lineNum int) int {
 }
 
 // countLines returns the total number of lines in the current file
-func (m *DiffViewModel) countLines() int {
+func (m *DiffView) countLines() int {
 	if m.file == nil {
 		return 0
 	}
@@ -1086,7 +1019,7 @@ func (m *DiffViewModel) countLines() int {
 }
 
 // highlightFullFileWithStyle highlights a file with a specific chroma style
-func (m *DiffViewModel) highlightFullFileWithStyle(file *ctypes.FileDiff, filename string, useOldVersion bool, style *chroma.Style) map[int]string {
+func (m *DiffView) highlightFullFileWithStyle(file *ctypes.FileDiff, filename string, useOldVersion bool, style *chroma.Style) map[int]string {
 	result := make(map[int]string)
 
 	if file == nil {
@@ -1144,12 +1077,12 @@ func (m *DiffViewModel) highlightFullFileWithStyle(file *ctypes.FileDiff, filena
 
 // HighlightFullFileWithStyle highlights a full file with syntax highlighting.
 // Exported for testing purposes.
-func (m *DiffViewModel) HighlightFullFileWithStyle(file *ctypes.FileDiff, filename string, useOldVersion bool, style *chroma.Style) map[int]string {
+func (m *DiffView) HighlightFullFileWithStyle(file *ctypes.FileDiff, filename string, useOldVersion bool, style *chroma.Style) map[int]string {
 	return m.highlightFullFileWithStyle(file, filename, useOldVersion, style)
 }
 
 // highlightFromHunks is a fallback that reconstructs partial file from hunks
-func (m *DiffViewModel) highlightFromHunks(file *ctypes.FileDiff, filename string, useOldVersion bool) map[int]string {
+func (m *DiffView) highlightFromHunks(file *ctypes.FileDiff, filename string, useOldVersion bool) map[int]string {
 	result := make(map[int]string)
 
 	if file == nil || len(file.Hunks) == 0 {
@@ -1198,7 +1131,7 @@ func (m *DiffViewModel) highlightFromHunks(file *ctypes.FileDiff, filename strin
 }
 
 // renderConversationPreview renders a conversation preview with all messages
-func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, startLineNum int) []string {
+func (m *DiffView) renderConversationPreview(conv *critic.Conversation, startLineNum int) []string {
 	// Build the complete text including all messages
 	var allLines []string
 
@@ -1279,7 +1212,7 @@ func (m *DiffViewModel) renderConversationPreview(conv *critic.Conversation, sta
 		blockSize = 1 + maxLines + 1 + 1 // top separator + truncated content + "more" indicator + bottom separator
 	}
 
-	cursorInBlock := m.focused && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize
+	cursorInBlock := m.Focused() && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize
 
 	// If cursor is in the block, show full content
 	if cursorInBlock {
@@ -1467,7 +1400,7 @@ func wrapLine(line string, maxWidth int) []string {
 }
 
 // renderLine renders a single diff line with pre-highlighted content
-func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string, currentLineNum int) string {
+func (m *DiffView) renderLine(line *ctypes.Line, highlightedContent string, currentLineNum int) string {
 	// Build line number prefix: " 123 + "
 	var lineNum int
 	var indicator string
@@ -1497,9 +1430,9 @@ func (m *DiffViewModel) renderLine(line *ctypes.Line, highlightedContent string,
 }
 
 // renderLineWithCursor applies cursor highlighting if this is the active line
-func (m *DiffViewModel) renderLineWithCursor(content string, currentLineNum int) string {
+func (m *DiffView) renderLineWithCursor(content string, currentLineNum int) string {
 	// Only show cursor when pane is focused and line is navigable
-	if m.focused && currentLineNum == m.cursorLine && m.isNavigableLine(currentLineNum) {
+	if m.Focused() && currentLineNum == m.cursorLine && m.isNavigableLine(currentLineNum) {
 		// Apply full reverse highlighting
 		return lipgloss.NewStyle().Reverse(true).Render(content)
 	}
@@ -1507,7 +1440,7 @@ func (m *DiffViewModel) renderLineWithCursor(content string, currentLineNum int)
 }
 
 // isNavigableLine checks if a line number is navigable (can have cursor)
-func (m *DiffViewModel) isNavigableLine(lineNum int) bool {
+func (m *DiffView) isNavigableLine(lineNum int) bool {
 	for _, navLine := range m.navigableLines {
 		if navLine == lineNum {
 			return true
@@ -1517,7 +1450,7 @@ func (m *DiffViewModel) isNavigableLine(lineNum int) bool {
 }
 
 // truncateToWidth truncates or pads a line to exactly match viewport width
-func (m *DiffViewModel) truncateToWidth(line string) string {
+func (m *DiffView) truncateToWidth(line string) string {
 	visibleWidth := lipgloss.Width(line)
 	if visibleWidth > m.width {
 		return truncateANSI(line, m.width)
@@ -1536,7 +1469,7 @@ func (m *DiffViewModel) truncateToWidth(line string) string {
 }
 
 // ensureFullLineBackground strips chroma's backgrounds and applies our own for full width
-func (m *DiffViewModel) ensureFullLineBackground(line string, lineType ctypes.LineType) string {
+func (m *DiffView) ensureFullLineBackground(line string, lineType ctypes.LineType) string {
 	// Strip all background codes from chroma
 	cleaned := stripAllStyleCodes(line)
 
@@ -1579,7 +1512,7 @@ func extractLastBackground(s string) string {
 }
 
 // applyLineBackgroundWithStyle applies background using lipgloss style (supports adaptive colors)
-func (m *DiffViewModel) applyLineBackgroundWithStyle(line string, style lipgloss.Style) string {
+func (m *DiffView) applyLineBackgroundWithStyle(line string, style lipgloss.Style) string {
 	// Strip all style codes except foreground colors
 	cleaned := stripAllStyleCodes(line)
 
@@ -1600,7 +1533,7 @@ func (m *DiffViewModel) applyLineBackgroundWithStyle(line string, style lipgloss
 }
 
 // applyLineBackground wraps a line with background color spanning full width (legacy)
-func (m *DiffViewModel) applyLineBackground(line string, bgColor string) string {
+func (m *DiffView) applyLineBackground(line string, bgColor string) string {
 	// Strip any background ANSI codes and reset codes from syntax highlighting
 	cleaned := stripBackgroundCodes(line)
 	cleaned = stripResetCodes(cleaned)
@@ -1635,7 +1568,7 @@ func min(a, b int) int {
 }
 
 // resolveCommentAtCursor toggles the resolved status of the comment at the current cursor position
-func (m *DiffViewModel) resolveCommentAtCursor() tea.Cmd {
+func (m *DiffView) resolveCommentAtCursor() tea.Cmd {
 	// Check if cursor is on a comment line
 	if isComment, _ := m.IsCommentLine(m.cursorLine); isComment {
 		// Get conversation UUID for this line

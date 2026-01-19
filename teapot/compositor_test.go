@@ -128,9 +128,9 @@ func TestStackRenderOrder(t *testing.T) {
 	stack := NewStack()
 	stack.SetBounds(NewRect(0, 0, 10, 5))
 
-	// Widget that fills with 'A'
+	// View that fills with 'A'
 	widgetA := newMockWidget("A", 0, 0, 0)
-	// Widget that fills with 'B' (will be on top)
+	// View that fills with 'B' (will be on top)
 	widgetB := newMockWidget("B", 0, 0, 0)
 
 	stack.Push(widgetA)
@@ -150,8 +150,8 @@ func TestStackKeyEventRouting(t *testing.T) {
 
 	var handledBy string
 
-	// Widget A - handles 'a' key
-	widgetA := NewCallbackWidget(nil)
+	// View A - handles 'a' key
+	widgetA := NewCallbackView(nil)
 	widgetA.SetKeyFunc(func(msg tea.KeyMsg) (bool, tea.Cmd) {
 		if msg.String() == "a" {
 			handledBy = "A"
@@ -160,8 +160,8 @@ func TestStackKeyEventRouting(t *testing.T) {
 		return false, nil
 	})
 
-	// Widget B - handles 'b' key
-	widgetB := NewCallbackWidget(nil)
+	// View B - handles 'b' key
+	widgetB := NewCallbackView(nil)
 	widgetB.SetKeyFunc(func(msg tea.KeyMsg) (bool, tea.Cmd) {
 		if msg.String() == "b" {
 			handledBy = "B"

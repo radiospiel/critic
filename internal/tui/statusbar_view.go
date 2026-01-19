@@ -9,10 +9,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// StatusBarWidget is a widget that displays the application status bar.
+// StatusBarView is a widget that displays the application status bar.
 // Layout: [B]ase; [F]ilter; ? help -- diff stats: +/-/* NN/NN/NN -- clock
-type StatusBarWidget struct {
-	teapot.BaseWidget
+type StatusBarView struct {
+	teapot.BaseView
 	cellStyle lipgloss.Style // Style for individual cells (no padding)
 
 	// Content sections
@@ -23,15 +23,15 @@ type StatusBarWidget struct {
 	clock     string
 }
 
-// NewStatusBarWidget creates a new status bar widget.
-func NewStatusBarWidget() *StatusBarWidget {
+// NewStatusBarView creates a new status bar widget.
+func NewStatusBarView() *StatusBarView {
 	// Use a cell style without padding for buffer rendering
 	cellStyle := lipgloss.NewStyle().
 		Background(lipgloss.Color("#6B95D8")).
 		Foreground(lipgloss.Color("#000000"))
 
-	sb := &StatusBarWidget{
-		BaseWidget: teapot.NewBaseWidget(),
+	sb := &StatusBarView{
+		BaseView: teapot.NewBaseView(),
 		cellStyle:  cellStyle,
 		help:       "[?] help",
 	}
@@ -41,7 +41,7 @@ func NewStatusBarWidget() *StatusBarWidget {
 }
 
 // SetBase sets the base section text.
-func (s *StatusBarWidget) SetBase(base string) {
+func (s *StatusBarView) SetBase(base string) {
 	if base != "" {
 		s.base = fmt.Sprintf("[B]ase: %s → HEAD", base)
 	} else {
@@ -51,26 +51,26 @@ func (s *StatusBarWidget) SetBase(base string) {
 }
 
 // SetFilter sets the filter section text.
-func (s *StatusBarWidget) SetFilter(filter string) {
+func (s *StatusBarView) SetFilter(filter string) {
 	s.filter = fmt.Sprintf("[F]ilter: %s", filter)
 	s.Repaint()
 }
 
 // SetDiffStats sets the diff statistics section.
-func (s *StatusBarWidget) SetDiffStats(added, deleted, moved int) {
+func (s *StatusBarView) SetDiffStats(added, deleted, moved int) {
 	s.diffStats = fmt.Sprintf("+%d/-%d/~%d", added, deleted, moved)
 	s.Repaint()
 }
 
 // ClearDiffStats clears the diff statistics.
-func (s *StatusBarWidget) ClearDiffStats() {
+func (s *StatusBarView) ClearDiffStats() {
 	s.diffStats = ""
 	s.Repaint()
 }
 
 // HandleTick implements teapot.TickHandler.
 // Updates the clock and repaints only if the time changed.
-func (s *StatusBarWidget) HandleTick() {
+func (s *StatusBarView) HandleTick() {
 	newClock := time.Now().UTC().Format("15:04:05")
 	if newClock != s.clock {
 		s.clock = newClock
@@ -79,7 +79,7 @@ func (s *StatusBarWidget) HandleTick() {
 }
 
 // Render renders the status bar to the buffer.
-func (s *StatusBarWidget) Render(buf *teapot.SubBuffer) {
+func (s *StatusBarView) Render(buf *teapot.SubBuffer) {
 	width := buf.Width()
 	height := buf.Height()
 

@@ -5,9 +5,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Widget is the core interface for all UI components.
+// View is the core interface for all UI components.
 // Widgets form a tree structure where containers manage their children's layout.
-type Widget interface {
+type View interface {
 	// Identity
 	Name() string // Returns the widget's name (typically the struct type name)
 
@@ -41,29 +41,29 @@ type Widget interface {
 	HandleMouse(msg tea.MouseMsg) (handled bool, cmd tea.Cmd)
 
 	// Tree structure
-	Children() []Widget
-	Parent() Widget
-	SetParent(parent Widget)
+	Children() []View
+	Parent() View
+	SetParent(parent View)
 }
 
-// BaseWidget provides a default implementation of Widget.
+// BaseView provides a default implementation of Widget.
 // Embed this in concrete widget types to get sensible defaults.
-type BaseWidget struct {
-	name         string // Widget name (typically the struct type name)
+type BaseView struct {
+	name         string // View name (typically the struct type name)
 	bounds       Rect
 	constraints  Constraints
 	focused      bool
 	focusable    bool
-	parent       Widget
+	parent       View
 	border       Border
 	borderTitle  string
 	borderFooter string
 	dirty        bool // True if widget needs repainting
 }
 
-// NewBaseWidget creates a new base widget with the given z-order.
-func NewBaseWidget() BaseWidget {
-	return BaseWidget{
+// NewBaseView creates a new base widget with the given z-order.
+func NewBaseView() BaseView {
+	return BaseView{
 		constraints: DefaultConstraints(),
 		focusable:   true,
 		dirty:       true, // Widgets start dirty so they're rendered initially
@@ -71,92 +71,92 @@ func NewBaseWidget() BaseWidget {
 }
 
 // Name returns the widget's name.
-func (b *BaseWidget) Name() string {
+func (b *BaseView) Name() string {
 	return b.name
 }
 
 // SetName sets the widget's name.
-func (b *BaseWidget) SetName(name string) {
+func (b *BaseView) SetName(name string) {
 	b.name = name
 }
 
 // Constraints returns the widget's size constraints.
-func (b *BaseWidget) Constraints() Constraints {
+func (b *BaseView) Constraints() Constraints {
 	return b.constraints
 }
 
 // SetConstraints updates the widget's size constraints.
-func (b *BaseWidget) SetConstraints(c Constraints) {
+func (b *BaseView) SetConstraints(c Constraints) {
 	b.constraints = c
 }
 
 // SetBounds sets the widget's position and size.
-func (b *BaseWidget) SetBounds(bounds Rect) {
+func (b *BaseView) SetBounds(bounds Rect) {
 	b.bounds = bounds
 }
 
 // Bounds returns the widget's current bounds.
-func (b *BaseWidget) Bounds() Rect {
+func (b *BaseView) Bounds() Rect {
 	return b.bounds
 }
 
 // Render is a no-op in the base widget.
-func (b *BaseWidget) Render(buf *SubBuffer) {
+func (b *BaseView) Render(buf *SubBuffer) {
 	// No-op: override in concrete implementations
 }
 
 // Focusable returns whether this widget can receive focus.
-func (b *BaseWidget) Focusable() bool {
+func (b *BaseView) Focusable() bool {
 	return b.focusable
 }
 
 // SetFocusable sets whether this widget can receive focus.
-func (b *BaseWidget) SetFocusable(focusable bool) {
+func (b *BaseView) SetFocusable(focusable bool) {
 	b.focusable = focusable
 }
 
 // Focused returns whether this widget currently has focus.
-func (b *BaseWidget) Focused() bool {
+func (b *BaseView) Focused() bool {
 	return b.focused
 }
 
 // SetFocused sets the focus state.
-func (b *BaseWidget) SetFocused(focused bool) {
+func (b *BaseView) SetFocused(focused bool) {
 	b.focused = focused
 }
 
 // HandleKey handles keyboard input.
-func (b *BaseWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+func (b *BaseView) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
 // HandleMouse handles mouse input.
-func (b *BaseWidget) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
+func (b *BaseView) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
 // Children returns the widget's children (none for base widget).
-func (b *BaseWidget) Children() []Widget {
+func (b *BaseView) Children() []View {
 	return nil
 }
 
 // Parent returns the widget's parent.
-func (b *BaseWidget) Parent() Widget {
+func (b *BaseView) Parent() View {
 	return b.parent
 }
 
 // SetParent sets the widget's parent.
-func (b *BaseWidget) SetParent(parent Widget) {
+func (b *BaseView) SetParent(parent View) {
 	b.parent = parent
 }
 
 // IsDirty returns true if the widget needs repainting.
-func (b *BaseWidget) IsDirty() bool {
+func (b *BaseView) IsDirty() bool {
 	return b.dirty
 }
 
 // Repaint marks this widget as needing repaint and propagates to parents.
-func (b *BaseWidget) Repaint() {
+func (b *BaseView) Repaint() {
 	if b.dirty {
 		return // Already dirty, no need to propagate
 	}
@@ -169,43 +169,43 @@ func (b *BaseWidget) Repaint() {
 // MightBeDirty returns true if the widget might need repainting.
 // For normal widgets, this returns true only if dirty.
 // Animated widgets should override this to always return true.
-func (b *BaseWidget) MightBeDirty() bool {
+func (b *BaseView) MightBeDirty() bool {
 	return b.dirty
 }
 
 // Border returns the widget's border configuration.
-func (b *BaseWidget) Border() Border {
+func (b *BaseView) Border() Border {
 	return b.border
 }
 
 // SetBorder sets the widget's border configuration.
-func (b *BaseWidget) SetBorder(border Border) {
+func (b *BaseView) SetBorder(border Border) {
 	b.border = border
 }
 
 // BorderTitle returns the widget's border title.
-func (b *BaseWidget) BorderTitle() string {
+func (b *BaseView) BorderTitle() string {
 	return b.borderTitle
 }
 
 // SetBorderTitle sets the widget's border title.
-func (b *BaseWidget) SetBorderTitle(title string) {
+func (b *BaseView) SetBorderTitle(title string) {
 	b.borderTitle = title
 }
 
 // BorderFooter returns the widget's border footer.
-func (b *BaseWidget) BorderFooter() string {
+func (b *BaseView) BorderFooter() string {
 	return b.borderFooter
 }
 
 // SetBorderFooter sets the widget's border footer.
-func (b *BaseWidget) SetBorderFooter(footer string) {
+func (b *BaseView) SetBorderFooter(footer string) {
 	b.borderFooter = footer
 }
 
 // ContentBounds returns the bounds inside the border.
 // If no border is set, returns the full bounds.
-func (b *BaseWidget) ContentBounds() Rect {
+func (b *BaseView) ContentBounds() Rect {
 	bounds := b.bounds
 	border := b.border
 
@@ -217,32 +217,32 @@ func (b *BaseWidget) ContentBounds() Rect {
 	}
 }
 
-// ContainerWidget extends BaseWidget with child management.
-type ContainerWidget struct {
-	BaseWidget
-	children []Widget
+// ContainerView extends BaseView with child management.
+type ContainerView struct {
+	BaseView
+	children []View
 }
 
-// NewContainerWidget creates a new container widget.
-func NewContainerWidget() ContainerWidget {
-	return ContainerWidget{
-		BaseWidget: NewBaseWidget(),
+// NewContainerView creates a new container widget.
+func NewContainerView() ContainerView {
+	return ContainerView{
+		BaseView: NewBaseView(),
 	}
 }
 
 // Children returns the container's children.
-func (c *ContainerWidget) Children() []Widget {
+func (c *ContainerView) Children() []View {
 	return c.children
 }
 
 // AddChild adds a child widget to this container.
-func (c *ContainerWidget) AddChild(child Widget) {
+func (c *ContainerView) AddChild(child View) {
 	child.SetParent(c)
 	c.children = append(c.children, child)
 }
 
 // RemoveChild removes a child widget from this container.
-func (c *ContainerWidget) RemoveChild(child Widget) {
+func (c *ContainerView) RemoveChild(child View) {
 	for i, ch := range c.children {
 		if ch == child {
 			child.SetParent(nil)
@@ -253,7 +253,7 @@ func (c *ContainerWidget) RemoveChild(child Widget) {
 }
 
 // ClearChildren removes all children from this container.
-func (c *ContainerWidget) ClearChildren() {
+func (c *ContainerView) ClearChildren() {
 	for _, child := range c.children {
 		child.SetParent(nil)
 	}
@@ -262,25 +262,25 @@ func (c *ContainerWidget) ClearChildren() {
 
 // FocusManager handles focus traversal within a widget tree.
 type FocusManager struct {
-	root       Widget
-	focused    Widget
-	focusChain []Widget
+	root       View
+	focused    View
+	focusChain []View
 }
 
 // NewFocusManager creates a new focus manager for the given widget tree.
-func NewFocusManager(root Widget) *FocusManager {
+func NewFocusManager(root View) *FocusManager {
 	fm := &FocusManager{root: root}
 	fm.rebuildFocusChain()
 	return fm
 }
 
 // Focused returns the currently focused widget.
-func (fm *FocusManager) Focused() Widget {
+func (fm *FocusManager) Focused() View {
 	return fm.focused
 }
 
 // SetFocused sets focus to the given widget.
-func (fm *FocusManager) SetFocused(w Widget) {
+func (fm *FocusManager) SetFocused(w View) {
 	if fm.focused != nil {
 		fm.focused.SetFocused(false)
 	}
@@ -340,7 +340,7 @@ func (fm *FocusManager) rebuildFocusChain() {
 	fm.collectFocusable(fm.root)
 }
 
-func (fm *FocusManager) collectFocusable(w Widget) {
+func (fm *FocusManager) collectFocusable(w View) {
 	if w == nil {
 		return
 	}

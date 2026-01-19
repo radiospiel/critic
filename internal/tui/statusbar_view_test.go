@@ -8,8 +8,8 @@ import (
 	"git.15b.it/eno/critic/teapot"
 )
 
-func TestStatusBarWidget_Render(t *testing.T) {
-	sb := NewStatusBarWidget()
+func TestStatusBarView_Render(t *testing.T) {
+	sb := NewStatusBarView()
 	sb.SetBase("origin/master")
 	sb.SetFilter("All")
 	sb.SetDiffStats(10, 5, 2)
@@ -42,8 +42,8 @@ func TestStatusBarWidget_Render(t *testing.T) {
 	assert.Contains(t, content, "+10/-5/~2", "should contain diff stats")
 }
 
-func TestStatusBarWidget_ClockAtRight(t *testing.T) {
-	sb := NewStatusBarWidget()
+func TestStatusBarView_ClockAtRight(t *testing.T) {
+	sb := NewStatusBarView()
 	sb.SetBase("main")
 	sb.SetFilter("All")
 	sb.HandleTick()
@@ -72,8 +72,8 @@ func TestStatusBarWidget_ClockAtRight(t *testing.T) {
 	assert.Equals(t, clockPart[5], byte(':'), "clock should have : at position 5")
 }
 
-func TestStatusBarWidget_NoDoubleSpaces(t *testing.T) {
-	sb := NewStatusBarWidget()
+func TestStatusBarView_NoDoubleSpaces(t *testing.T) {
+	sb := NewStatusBarView()
 	sb.SetBase("origin/master")
 	sb.SetFilter("With Comments")
 	sb.SetDiffStats(100, 50, 25)
@@ -102,8 +102,8 @@ func TestStatusBarWidget_NoDoubleSpaces(t *testing.T) {
 	assert.False(t, hasDoublePadding, "should not have padding around each character: %s", content)
 }
 
-func TestStatusBarWidget_EmptySections(t *testing.T) {
-	sb := NewStatusBarWidget()
+func TestStatusBarView_EmptySections(t *testing.T) {
+	sb := NewStatusBarView()
 	// Don't set any sections except clock
 	sb.HandleTick()
 
@@ -124,8 +124,8 @@ func TestStatusBarWidget_EmptySections(t *testing.T) {
 	assert.Contains(t, content, "[?] help", "should contain help section even with empty base/filter")
 }
 
-func TestStatusBarWidget_Truncation(t *testing.T) {
-	sb := NewStatusBarWidget()
+func TestStatusBarView_Truncation(t *testing.T) {
+	sb := NewStatusBarView()
 	sb.SetBase("very-long-branch-name-that-will-need-truncation")
 	sb.SetFilter("With Comments")
 	sb.SetDiffStats(100, 50, 25)

@@ -15,7 +15,7 @@ import (
 // It shows the conversation history at the top and a textarea for replies at the bottom.
 type CommentEditor struct {
 	dialog       *pot.Dialog
-	historyView  *conversationHistoryWidget
+	historyView  *conversationHistoryView
 	textarea     textarea.Model
 	active       bool
 	lineNum      int
@@ -67,18 +67,18 @@ func NewCommentEditor() CommentEditor {
 	}
 }
 
-// conversationHistoryWidget displays the conversation history in a scrollable view
-type conversationHistoryWidget struct {
-	pot.BaseWidget
+// conversationHistoryView displays the conversation history in a scrollable view
+type conversationHistoryView struct {
+	pot.BaseView
 	lines        []string
 	scrollOffset int
 }
 
-func newConversationHistoryWidget() *conversationHistoryWidget {
-	return &conversationHistoryWidget{}
+func newConversationHistoryWidget() *conversationHistoryView {
+	return &conversationHistoryView{}
 }
 
-func (h *conversationHistoryWidget) SetConversation(conv *critic.Conversation) {
+func (h *conversationHistoryView) SetConversation(conv *critic.Conversation) {
 	h.lines = nil
 	h.scrollOffset = 0
 
@@ -117,7 +117,7 @@ func (h *conversationHistoryWidget) SetConversation(conv *critic.Conversation) {
 	}
 }
 
-func (h *conversationHistoryWidget) Render(buf *pot.SubBuffer) {
+func (h *conversationHistoryView) Render(buf *pot.SubBuffer) {
 	width := buf.Width()
 	height := buf.Height()
 
@@ -154,7 +154,7 @@ func (h *conversationHistoryWidget) Render(buf *pot.SubBuffer) {
 	}
 }
 
-func (h *conversationHistoryWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+func (h *conversationHistoryView) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	// History view handles scroll keys
 	height := h.Bounds().Height
 	maxScroll := max(0, len(h.lines)-height)
@@ -186,7 +186,7 @@ func (h *conversationHistoryWidget) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-func (h *conversationHistoryWidget) LineCount() int {
+func (h *conversationHistoryView) LineCount() int {
 	return len(h.lines)
 }
 
@@ -204,15 +204,15 @@ func truncateString(s string, width int) string {
 
 // commentEditorContent combines history view and textarea
 type commentEditorContent struct {
-	pot.BaseWidget
-	historyView  *conversationHistoryWidget
+	pot.BaseView
+	historyView  *conversationHistoryView
 	textarea     textarea.Model
 	focusOnInput bool // true when focus is on textarea
 	showHistory  bool // true when there's history to show
 }
 
 func (c *commentEditorContent) SetBounds(bounds pot.Rect) {
-	c.BaseWidget.SetBounds(bounds)
+	c.BaseView.SetBounds(bounds)
 
 	if !c.showHistory {
 		// No history - textarea takes full height

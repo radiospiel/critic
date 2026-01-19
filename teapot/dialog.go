@@ -17,8 +17,8 @@ const (
 // Dialog is a modal dialog with OK and Cancel buttons.
 // OK is triggered by Enter/Return, Cancel by Escape.
 type Dialog struct {
-	BaseWidget
-	content     Widget
+	BaseView
+	content     View
 	title       string
 	okLabel     string
 	cancelLabel string
@@ -37,9 +37,9 @@ type Dialog struct {
 }
 
 // NewDialog creates a new dialog with the given content and title.
-func NewDialog(content Widget, title string) *Dialog {
+func NewDialog(content View, title string) *Dialog {
 	d := &Dialog{
-		BaseWidget:  NewBaseWidget(),
+		BaseView:  NewBaseView(),
 		content:     content,
 		title:       title,
 		okLabel:     "OK",
@@ -108,12 +108,12 @@ func (d *Dialog) ResetResult() {
 }
 
 // Content returns the dialog's content widget.
-func (d *Dialog) Content() Widget {
+func (d *Dialog) Content() View {
 	return d.content
 }
 
 // SetContent sets the dialog's content widget.
-func (d *Dialog) SetContent(w Widget) {
+func (d *Dialog) SetContent(w View) {
 	if d.content != nil {
 		d.content.SetParent(nil)
 	}
@@ -124,23 +124,23 @@ func (d *Dialog) SetContent(w Widget) {
 }
 
 // Children returns the content widget.
-func (d *Dialog) Children() []Widget {
+func (d *Dialog) Children() []View {
 	if d.content != nil {
-		return []Widget{d.content}
+		return []View{d.content}
 	}
 	return nil
 }
 
 // SetBounds sets the dialog bounds and layouts the content.
 func (d *Dialog) SetBounds(bounds Rect) {
-	d.BaseWidget.SetBounds(bounds)
+	d.BaseView.SetBounds(bounds)
 
 	if d.content == nil {
 		return
 	}
 
 	// Content gets the inner area (inside border)
-	// The border rendering is handled by RenderWidget
+	// The border rendering is handled by RenderView
 	contentBounds := d.ContentBounds()
 	d.content.SetBounds(contentBounds)
 }

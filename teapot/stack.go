@@ -11,20 +11,20 @@ import (
 // The last widget in the stack is rendered on top and receives input first.
 // Useful for modal dialogs, overlays, and popups.
 type Stack struct {
-	ContainerWidget
+	ContainerView
 }
 
 // NewStack creates a new stack container.
 func NewStack() *Stack {
 	s := &Stack{
-		ContainerWidget: NewContainerWidget(),
+		ContainerView: NewContainerView(),
 	}
 	s.SetFocusable(false)
 	return s
 }
 
 // Push adds a widget to the top of the stack.
-func (s *Stack) Push(w Widget) {
+func (s *Stack) Push(w View) {
 	s.AddChild(w)
 	// Give the new widget the same bounds as the stack
 	w.SetBounds(s.bounds)
@@ -32,7 +32,7 @@ func (s *Stack) Push(w Widget) {
 }
 
 // Pop removes and returns the top widget from the stack.
-func (s *Stack) Pop() Widget {
+func (s *Stack) Pop() View {
 	if len(s.children) == 0 {
 		return nil
 	}
@@ -43,7 +43,7 @@ func (s *Stack) Pop() Widget {
 }
 
 // Top returns the top widget without removing it.
-func (s *Stack) Top() Widget {
+func (s *Stack) Top() View {
 	if len(s.children) == 0 {
 		return nil
 	}
@@ -51,7 +51,7 @@ func (s *Stack) Top() Widget {
 }
 
 // Base returns the bottom (first) widget.
-func (s *Stack) Base() Widget {
+func (s *Stack) Base() View {
 	if len(s.children) == 0 {
 		return nil
 	}
@@ -99,8 +99,8 @@ func (s *Stack) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 // Modal is a widget that displays a dialog box over other content.
 // It captures all input and prevents interaction with content below.
 type Modal struct {
-	BaseWidget
-	content       Widget
+	BaseView
+	content       View
 	title         string
 	width         int  // 0 = auto
 	height        int  // 0 = auto
@@ -113,9 +113,9 @@ type Modal struct {
 }
 
 // NewModal creates a new modal dialog with the given content.
-func NewModal(content Widget, title string) *Modal {
+func NewModal(content View, title string) *Modal {
 	m := &Modal{
-		BaseWidget:    NewBaseWidget(),
+		BaseView:    NewBaseView(),
 		content:       content,
 		title:         title,
 		centerH:       true,
@@ -164,16 +164,16 @@ func (m *Modal) SetBackgroundStyle(style lipgloss.Style) {
 }
 
 // Children returns the modal's content widget.
-func (m *Modal) Children() []Widget {
+func (m *Modal) Children() []View {
 	if m.content != nil {
-		return []Widget{m.content}
+		return []View{m.content}
 	}
 	return nil
 }
 
 // SetBounds sets the modal's bounds and calculates content position.
 func (m *Modal) SetBounds(bounds Rect) {
-	m.BaseWidget.SetBounds(bounds)
+	m.BaseView.SetBounds(bounds)
 
 	if m.content == nil {
 		return
@@ -327,12 +327,12 @@ func (m *Modal) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 }
 
 // Content returns the modal's content widget.
-func (m *Modal) Content() Widget {
+func (m *Modal) Content() View {
 	return m.content
 }
 
 // SetContent sets the modal's content widget.
-func (m *Modal) SetContent(w Widget) {
+func (m *Modal) SetContent(w View) {
 	if m.content != nil {
 		m.content.SetParent(nil)
 	}

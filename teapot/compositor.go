@@ -61,13 +61,13 @@ type TickHandler interface {
 // Compositor manages the root widget tree and orchestrates rendering.
 // It owns the screen buffer and handles the render loop.
 type Compositor struct {
-	root          Widget
+	root          View
 	width, height int
 	focusManager  *FocusManager
 	dirty         bool // True if a re-render is needed
 
 	// Layer management: top-level widgets sorted by z-order
-	topLevelWidgets []Widget
+	topLevelWidgets []View
 
 	// Tick subscribers: widgets that want to receive tick notifications
 	tickSubscribers []TickHandler
@@ -78,7 +78,7 @@ type Compositor struct {
 }
 
 // NewCompositor creates a new compositor with the given root widget.
-func NewCompositor(root Widget) *Compositor {
+func NewCompositor(root View) *Compositor {
 	c := &Compositor{
 		root:      root,
 		dirty:     true,
@@ -127,7 +127,7 @@ func (c *Compositor) HandleTick() tea.Cmd {
 }
 
 // checkDirtyWidgets recursively checks widgets for MightBeDirty status.
-func (c *Compositor) checkDirtyWidgets(w Widget) {
+func (c *Compositor) checkDirtyWidgets(w View) {
 	if w == nil {
 		return
 	}
@@ -139,13 +139,13 @@ func (c *Compositor) checkDirtyWidgets(w Widget) {
 	}
 }
 
-// RegisterTopLevelWidget adds a widget to the top-level widget list.
-func (c *Compositor) RegisterTopLevelWidget(w Widget) {
+// RegisterTopLevelView adds a widget to the top-level widget list.
+func (c *Compositor) RegisterTopLevelWidget(w View) {
 	c.topLevelWidgets = append(c.topLevelWidgets, w)
 }
 
-// UnregisterTopLevelWidget removes a widget from the top-level widget list.
-func (c *Compositor) UnregisterTopLevelWidget(w Widget) {
+// UnregisterTopLevelView removes a widget from the top-level widget list.
+func (c *Compositor) UnregisterTopLevelWidget(w View) {
 	for i := range c.topLevelWidgets {
 		existing := c.topLevelWidgets[i]
 		if existing == w {
@@ -164,7 +164,7 @@ func (c *Compositor) rebuildTopLevelWidgets() {
 }
 
 // SetRoot sets the root widget.
-func (c *Compositor) SetRoot(root Widget) {
+func (c *Compositor) SetRoot(root View) {
 	c.root = root
 	if root != nil {
 		root.SetBounds(Rect{X: 0, Y: 0, Width: c.width, Height: c.height})
@@ -178,7 +178,7 @@ func (c *Compositor) SetRoot(root Widget) {
 }
 
 // Root returns the root widget.
-func (c *Compositor) Root() Widget {
+func (c *Compositor) Root() View {
 	return c.root
 }
 
@@ -255,7 +255,7 @@ func compositorLog(format string, args ...interface{}) {
 
 // widgetTypeName returns the type name of a widget using reflection.
 // If the widget has a non-empty Name(), that is returned instead.
-func widgetTypeName(w Widget) string {
+func widgetTypeName(w View) string {
 	if name := w.Name(); name != "" {
 		return name
 	}
@@ -266,29 +266,29 @@ func widgetTypeName(w Widget) string {
 	return t.Name()
 }
 
-// RenderWidget renders a widget with its border (if any) to the given buffer.
+// RenderView renders a widget with its border (if any) to the given buffer.
 // This is the main rendering function that should be used to render widgets.
 // It handles:
 // 1. Rendering the widget's border (if configured)
 // 2. Rendering the border title and footer
 // 3. Calling the widget's Render method for the content area
-func renderWidgetIntoBuffer(w Widget, bounds Rect) *Buffer {
+func renderWidgetIntoBuffer(w View, bounds Rect) *Buffer {
 	wb := NewBuffer(bounds.Width, bounds.Height)
 	// TODO: do we really need a Sub here?
 	RenderWidget(w, wb.Sub(bounds))
 	return wb
 }
 
-func RenderWidget(w Widget, buf *SubBuffer) {
+func RenderWidget(w View, buf *SubBuffer) {
 	// TODO: this method should probably be refactored into an instance
 	// method, but various implementations are using it.
-	logger.Runtime("RenderWidget "+widgetTypeName(w), func() bool {
+	logger.Runtime("RenderView "+widgetTypeName(w), func() bool {
 		renderWidgetWoLogging(w, buf)
 		return true
 	})
 }
 
-func renderWidgetWoLogging(w Widget, buf *SubBuffer) {
+func renderWidgetWoLogging(w View, buf *SubBuffer) {
 	border := w.Border()
 
 	// Render border if configured
@@ -347,7 +347,7 @@ func (c *Compositor) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 	return c.routeMouseEvent(c.root, msg)
 }
 
-func (c *Compositor) routeMouseEvent(w Widget, msg tea.MouseMsg) (bool, tea.Cmd) {
+func (c *Compositor) routeMouseEvent(w View, msg tea.MouseMsg) (bool, tea.Cmd) {
 	bounds := w.Bounds()
 	if !bounds.Contains(msg.X, msg.Y) {
 		return false, nil
@@ -371,14 +371,14 @@ func (c *Compositor) FocusManager() *FocusManager {
 }
 
 // SetFocused sets focus to a specific widget.
-func (c *Compositor) SetFocused(w Widget) {
+func (c *Compositor) SetFocused(w View) {
 	if c.focusManager != nil {
 		c.focusManager.SetFocused(w)
 	}
 }
 
 // Focused returns the currently focused widget.
-func (c *Compositor) Focused() Widget {
+func (c *Compositor) Focused() View {
 	if c.focusManager != nil {
 		return c.focusManager.Focused()
 	}
@@ -424,7 +424,7 @@ type CompositorModel struct {
 }
 
 // NewCompositorModel creates a new BubbleTea model wrapping a compositor.
-func NewCompositorModel(root Widget) CompositorModel {
+func NewCompositorModel(root View) CompositorModel {
 	return CompositorModel{
 		compositor: NewCompositor(root),
 	}
