@@ -32,14 +32,12 @@ func (s *SubBuffer) Height() int {
 
 // Size returns the sub-buffer dimensions.
 func (s *SubBuffer) Size() Size {
-	// TODO(bot) store bounds as rect
-	return Size{Width: s.offset.Width, Height: s.offset.Height}
+	return s.offset.Size
 }
 
 // Bounds returns the sub-buffer area (relative coordinates starting at 0,0).
 func (s *SubBuffer) Bounds() Rect {
-	// TODO(bot) store bounds as rect
-	return Rect{Position{X: 0, Y: 0}, Size{Width: s.offset.Width, Height: s.offset.Height}}
+	return Rect{Position{X: 0, Y: 0}, s.offset.Size}
 }
 
 // GetCell returns the cell at the given position.
