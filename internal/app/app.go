@@ -148,7 +148,7 @@ type Model struct {
 // NewModel creates a new application model
 func NewModel(args *Args) Model {
 	logger.Info("NewModel: Creating model with %d paths, %d bases", len(args.Paths), len(args.Bases))
-	diffView := tui.NewDiffViewPtr()
+	diffView := tui.NewDiffView()
 	diffView.SetHighlightingEnabled(true) // Always enable highlighting
 
 	fileList := tui.NewFileListView()

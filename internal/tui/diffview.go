@@ -68,9 +68,9 @@ type DiffView struct {
 }
 
 // NewDiffView creates a new diff viewer model
-func NewDiffView() DiffView {
-	m := DiffView{
-		BaseView:          teapot.NewBaseView(),
+func NewDiffView() *DiffView {
+	m := &DiffView{
+		BaseView:            teapot.NewBaseView(),
 		highlighter:         highlight.NewHighlighter(),
 		highlightingEnabled: true, // Default to enabled
 		diffWidget:          NewDiffContentView(),
@@ -78,13 +78,6 @@ func NewDiffView() DiffView {
 	m.SetFocusable(true)
 	m.SetName("DiffView")
 	return m
-}
-
-// NewDiffViewPtr creates a new diff viewer model and returns a pointer to it.
-// Use this when the model needs to be shared across multiple components.
-func NewDiffViewPtr() *DiffView {
-	m := NewDiffView()
-	return &m
 }
 
 // Init initializes the diff view model
