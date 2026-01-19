@@ -151,12 +151,12 @@ func TestRenderProfile(t *testing.T) {
 	}
 
 	// Create widgets
-	fileListWidget := tui.NewFileListWidget()
+	fileListWidget := tui.NewFileListView()
 	fileListWidget.SetFiles(diff.Files)
 
-	diffViewWidget := tui.NewDiffViewWidget()
+	diffViewWidget := tui.NewDiffView()
 	// Load internal/app/app.go into the diff view
-	diffViewWidget.SetFile(appFile, nil, nil, nil, nil)
+	diffViewWidget.SetFile(appFile)
 
 	// Create an HSplit layout with file list on left, diff view on right
 	split := teapot.NewHSplit(fileListWidget, diffViewWidget, 0.25)
@@ -177,38 +177,38 @@ func TestRenderProfile(t *testing.T) {
 // BenchmarkFileListWidgetRender benchmarks FileListWidget rendering.
 func BenchmarkFileListWidgetRender(b *testing.B) {
 	files := createSampleFiles(50)
-	widget := tui.NewFileListWidget()
+	widget := tui.NewFileListView()
 	widget.SetFiles(files)
 	widget.SetBounds(teapot.NewRect(0, 0, 40, 50))
 
 	buf := teapot.NewBuffer(40, 50)
 
 	// Warmup
-	widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
+	widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 40, 50)))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		buf.Clear()
-		widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
+		widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 40, 50)))
 	}
 }
 
 // BenchmarkDiffViewWidgetRender benchmarks DiffViewWidget rendering.
 func BenchmarkDiffViewWidgetRender(b *testing.B) {
 	fileDiff := createSampleFileDiff(10, 30)
-	widget := tui.NewDiffViewWidget()
-	widget.SetFile(fileDiff, nil, nil, nil, nil)
+	widget := tui.NewDiffView()
+	widget.SetFile(fileDiff)
 	widget.SetBounds(teapot.NewRect(0, 0, 120, 50))
 
 	buf := teapot.NewBuffer(120, 50)
 
 	// Warmup
-	widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
+	widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 120, 50)))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		buf.Clear()
-		widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
+		widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 120, 50)))
 	}
 }
 
@@ -217,27 +217,27 @@ func BenchmarkCombinedRender(b *testing.B) {
 	files := createSampleFiles(50)
 	fileDiff := createSampleFileDiff(10, 30)
 
-	fileListWidget := tui.NewFileListWidget()
+	fileListWidget := tui.NewFileListView()
 	fileListWidget.SetFiles(files)
 	fileListWidget.SetBounds(teapot.NewRect(0, 0, 40, 50))
 
-	diffViewWidget := tui.NewDiffViewWidget()
-	diffViewWidget.SetFile(fileDiff, nil, nil, nil, nil)
+	diffViewWidget := tui.NewDiffView()
+	diffViewWidget.SetFile(fileDiff)
 	diffViewWidget.SetBounds(teapot.NewRect(0, 0, 120, 50))
 
 	fileListBuf := teapot.NewBuffer(40, 50)
 	diffViewBuf := teapot.NewBuffer(120, 50)
 
 	// Warmup
-	fileListWidget.Render(teapot.NewSubBuffer(fileListBuf, teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
-	diffViewWidget.Render(teapot.NewSubBuffer(diffViewBuf, teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
+	fileListWidget.Render(teapot.NewSubBuffer(fileListBuf, teapot.NewRect(0, 0, 40, 50)))
+	diffViewWidget.Render(teapot.NewSubBuffer(diffViewBuf, teapot.NewRect(0, 0, 120, 50)))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		fileListBuf.Clear()
 		diffViewBuf.Clear()
-		fileListWidget.Render(teapot.NewSubBuffer(fileListBuf, teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
-		diffViewWidget.Render(teapot.NewSubBuffer(diffViewBuf, teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
+		fileListWidget.Render(teapot.NewSubBuffer(fileListBuf, teapot.NewRect(0, 0, 40, 50)))
+		diffViewWidget.Render(teapot.NewSubBuffer(diffViewBuf, teapot.NewRect(0, 0, 120, 50)))
 	}
 }
 
@@ -245,19 +245,19 @@ func BenchmarkCombinedRender(b *testing.B) {
 func BenchmarkLargeDiffViewRender(b *testing.B) {
 	// Large file: 50 hunks, 100 lines each = 5000 lines
 	fileDiff := createSampleFileDiff(50, 100)
-	widget := tui.NewDiffViewWidget()
-	widget.SetFile(fileDiff, nil, nil, nil, nil)
+	widget := tui.NewDiffView()
+	widget.SetFile(fileDiff)
 	widget.SetBounds(teapot.NewRect(0, 0, 200, 100))
 
 	buf := teapot.NewBuffer(200, 100)
 
 	// Warmup
-	widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 200, Height: 100}))
+	widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 200, 100)))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		buf.Clear()
-		widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 200, Height: 100}))
+		widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 200, 100)))
 	}
 }
 
@@ -268,11 +268,11 @@ func BenchmarkCompositorView(b *testing.B) {
 	fileDiff := createSampleFileDiff(10, 30)
 
 	// Create widgets
-	fileListWidget := tui.NewFileListWidget()
+	fileListWidget := tui.NewFileListView()
 	fileListWidget.SetFiles(files)
 
-	diffViewWidget := tui.NewDiffViewWidget()
-	diffViewWidget.SetFile(fileDiff, nil, nil, nil, nil)
+	diffViewWidget := tui.NewDiffView()
+	diffViewWidget.SetFile(fileDiff)
 
 	// Create an HSplit layout with file list on left, diff view on right
 	split := teapot.NewHSplit(fileListWidget, diffViewWidget, 0.25)
@@ -304,11 +304,11 @@ func BenchmarkCompositorViewCached(b *testing.B) {
 	files := createSampleFiles(50)
 	fileDiff := createSampleFileDiff(10, 30)
 
-	fileListWidget := tui.NewFileListWidget()
+	fileListWidget := tui.NewFileListView()
 	fileListWidget.SetFiles(files)
 
-	diffViewWidget := tui.NewDiffViewWidget()
-	diffViewWidget.SetFile(fileDiff, nil, nil, nil, nil)
+	diffViewWidget := tui.NewDiffView()
+	diffViewWidget.SetFile(fileDiff)
 
 	split := teapot.NewHSplit(fileListWidget, diffViewWidget, 0.25)
 	compositor := teapot.NewCompositor(split)
@@ -332,11 +332,11 @@ func TestCompositorRenderProfile(t *testing.T) {
 	files := createSampleFiles(50)
 	fileDiff := createSampleFileDiff(10, 30)
 
-	fileListWidget := tui.NewFileListWidget()
+	fileListWidget := tui.NewFileListView()
 	fileListWidget.SetFiles(files)
 
-	diffViewWidget := tui.NewDiffViewWidget()
-	diffViewWidget.SetFile(fileDiff, nil, nil, nil, nil)
+	diffViewWidget := tui.NewDiffView()
+	diffViewWidget.SetFile(fileDiff)
 
 	split := teapot.NewHSplit(fileListWidget, diffViewWidget, 0.25)
 	compositor := teapot.NewCompositor(split)
