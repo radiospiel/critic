@@ -184,12 +184,12 @@ func BenchmarkFileListWidgetRender(b *testing.B) {
 	buf := teapot.NewBuffer(40, 50)
 
 	// Warmup
-	widget.Render(buf.Sub(teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
+	widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		buf.Clear()
-		widget.Render(buf.Sub(teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
+		widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
 	}
 }
 
@@ -203,12 +203,12 @@ func BenchmarkDiffViewWidgetRender(b *testing.B) {
 	buf := teapot.NewBuffer(120, 50)
 
 	// Warmup
-	widget.Render(buf.Sub(teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
+	widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		buf.Clear()
-		widget.Render(buf.Sub(teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
+		widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
 	}
 }
 
@@ -229,15 +229,15 @@ func BenchmarkCombinedRender(b *testing.B) {
 	diffViewBuf := teapot.NewBuffer(120, 50)
 
 	// Warmup
-	fileListWidget.Render(fileListBuf.Sub(teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
-	diffViewWidget.Render(diffViewBuf.Sub(teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
+	fileListWidget.Render(teapot.NewSubBuffer(fileListBuf, teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
+	diffViewWidget.Render(teapot.NewSubBuffer(diffViewBuf, teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		fileListBuf.Clear()
 		diffViewBuf.Clear()
-		fileListWidget.Render(fileListBuf.Sub(teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
-		diffViewWidget.Render(diffViewBuf.Sub(teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
+		fileListWidget.Render(teapot.NewSubBuffer(fileListBuf, teapot.Rect{X: 0, Y: 0, Width: 40, Height: 50}))
+		diffViewWidget.Render(teapot.NewSubBuffer(diffViewBuf, teapot.Rect{X: 0, Y: 0, Width: 120, Height: 50}))
 	}
 }
 
@@ -252,12 +252,12 @@ func BenchmarkLargeDiffViewRender(b *testing.B) {
 	buf := teapot.NewBuffer(200, 100)
 
 	// Warmup
-	widget.Render(buf.Sub(teapot.Rect{X: 0, Y: 0, Width: 200, Height: 100}))
+	widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 200, Height: 100}))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		buf.Clear()
-		widget.Render(buf.Sub(teapot.Rect{X: 0, Y: 0, Width: 200, Height: 100}))
+		widget.Render(teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: 200, Height: 100}))
 	}
 }
 

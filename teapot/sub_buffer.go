@@ -11,8 +11,8 @@ type SubBuffer struct {
 	offset Rect
 }
 
-// Sub creates a sub-buffer view into a region of this buffer.
-func (b *Buffer) Sub(rect Rect) *SubBuffer {
+// NewSubBuffer creates a sub-buffer view into a region of this buffer.
+func NewSubBuffer(b *Buffer, rect Rect) *SubBuffer {
 	clipped := rect.Intersect(b.Bounds())
 	return &SubBuffer{
 		parent: b,

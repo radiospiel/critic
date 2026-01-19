@@ -179,7 +179,7 @@ func TestSplitRender(t *testing.T) {
 	split.SetBounds(NewRect(0, 0, 21, 3)) // 21 - 1 divider = 20, split 10|10
 
 	buf := NewBuffer(21, 3)
-	sub := buf.Sub(buf.Bounds())
+	sub := NewSubBuffer(buf, buf.Bounds())
 	split.Render(sub)
 
 	// Left side should have 'L'

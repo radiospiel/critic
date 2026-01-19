@@ -18,7 +18,7 @@ func TestStatusBarView_Render(t *testing.T) {
 	// Render to a buffer (use 100 width to fit all content)
 	width := 100
 	buf := teapot.NewBuffer(width, 1)
-	subBuf := buf.Sub(teapot.Rect{X: 0, Y: 0, Width: width, Height: 1})
+	subBuf := teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: width, Height: 1})
 	sb.Render(subBuf)
 
 	// Extract text content from buffer (runes only, no ANSI codes)
@@ -51,7 +51,7 @@ func TestStatusBarView_ClockAtRight(t *testing.T) {
 	// Render to a buffer
 	width := 60
 	buf := teapot.NewBuffer(width, 1)
-	subBuf := buf.Sub(teapot.Rect{X: 0, Y: 0, Width: width, Height: 1})
+	subBuf := teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: width, Height: 1})
 	sb.Render(subBuf)
 
 	// Extract text content from buffer
@@ -82,7 +82,7 @@ func TestStatusBarView_NoDoubleSpaces(t *testing.T) {
 	// Render to buffer and check cell by cell
 	width := 100
 	buf := teapot.NewBuffer(width, 1)
-	subBuf := buf.Sub(teapot.Rect{X: 0, Y: 0, Width: width, Height: 1})
+	subBuf := teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: width, Height: 1})
 	sb.Render(subBuf)
 
 	// Check that we don't have the pattern "char space char space char"
@@ -109,7 +109,7 @@ func TestStatusBarView_EmptySections(t *testing.T) {
 
 	width := 40
 	buf := teapot.NewBuffer(width, 1)
-	subBuf := buf.Sub(teapot.Rect{X: 0, Y: 0, Width: width, Height: 1})
+	subBuf := teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: width, Height: 1})
 	sb.Render(subBuf)
 
 	// Should still render without panic
@@ -134,7 +134,7 @@ func TestStatusBarView_Truncation(t *testing.T) {
 	// Use narrow width to force truncation
 	width := 60
 	buf := teapot.NewBuffer(width, 1)
-	subBuf := buf.Sub(teapot.Rect{X: 0, Y: 0, Width: width, Height: 1})
+	subBuf := teapot.NewSubBuffer(buf, teapot.Rect{X: 0, Y: 0, Width: width, Height: 1})
 	sb.Render(subBuf)
 
 	var runes []rune

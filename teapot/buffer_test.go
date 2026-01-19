@@ -3,8 +3,8 @@ package teapot
 import (
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
 	"git.15b.it/eno/critic/simple-go/assert"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestBufferBasics(t *testing.T) {
@@ -103,7 +103,7 @@ func TestBufferBlit(t *testing.T) {
 
 func TestSubBuffer(t *testing.T) {
 	buf := NewBuffer(20, 10)
-	sub := buf.Sub(NewRect(5, 3, 8, 4))
+	sub := NewSubBuffer(buf, NewRect(5, 3, 8, 4))
 
 	assert.Equals(t, sub.Width(), 8)
 	assert.Equals(t, sub.Height(), 4)

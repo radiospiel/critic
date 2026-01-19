@@ -3,8 +3,8 @@ package teapot
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"git.15b.it/eno/critic/simple-go/assert"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // testItem implements ListItem for testing
@@ -182,7 +182,7 @@ func TestSelectableListRender(t *testing.T) {
 	list.SetItems(items)
 
 	buf := NewBuffer(20, 5)
-	sub := buf.Sub(buf.Bounds())
+	sub := NewSubBuffer(buf, buf.Bounds())
 	list.Render(sub)
 
 	// First item should have selection prefix

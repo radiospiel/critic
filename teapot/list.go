@@ -176,7 +176,7 @@ func (l *SelectableList[T]) Render(buf *SubBuffer) {
 		isSelected := itemIdx == l.selected
 
 		// Create a sub-buffer for this line
-		lineBuf := buf.parent.Sub(Rect{
+		lineBuf := NewSubBuffer(buf.parent, Rect{
 			Position{
 				X: buf.offset.X,
 				Y: buf.offset.Y + i,
@@ -384,7 +384,7 @@ func (s *ScrollView) Render(buf *SubBuffer) {
 	// Render content with scroll offset applied
 	// The content renders to its own buffer, then we blit the visible portion
 	contentBuf := NewBuffer(s.contentSize.Width, s.contentSize.Height)
-	contentSub := contentBuf.Sub(contentBuf.Bounds())
+	contentSub := NewSubBuffer(contentBuf, contentBuf.Bounds())
 	RenderWidget(s.content, contentSub)
 
 	// Copy visible portion

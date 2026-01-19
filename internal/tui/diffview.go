@@ -833,7 +833,7 @@ func (m *DiffView) renderDiff() (string, int, []int) {
 
 	// Create and render to buffer
 	buffer := teapot.NewBuffer(bufferWidth, bufferHeight)
-	subBuf := buffer.Sub(teapot.NewRect(0, 0, bufferWidth, bufferHeight))
+	subBuf := teapot.NewSubBuffer(buffer, teapot.NewRect(0, 0, bufferWidth, bufferHeight))
 
 	// Render the widget - this creates the vertical layout of hunks
 	m.diffWidget.Render(subBuf)

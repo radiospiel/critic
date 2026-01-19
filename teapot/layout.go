@@ -174,7 +174,7 @@ func (b *BoxLayout) Render(buf *SubBuffer) {
 		// Create a sub-buffer for the child, relative to our position
 		relX := childBounds.X - b.bounds.X
 		relY := childBounds.Y - b.bounds.Y
-		childSub := buf.parent.Sub(Rect{
+		childSub := NewSubBuffer(buf.parent, Rect{
 			Position{
 				X: buf.offset.X + relX,
 				Y: buf.offset.Y + relY,
@@ -408,7 +408,7 @@ func (s *Split) Render(buf *SubBuffer) {
 	// Render children
 	if s.first != nil {
 		firstBounds := s.first.Bounds()
-		firstSub := buf.parent.Sub(Rect{
+		firstSub := NewSubBuffer(buf.parent, Rect{
 			Position{
 				X: buf.offset.X + firstBounds.X - s.bounds.X,
 				Y: buf.offset.Y + firstBounds.Y - s.bounds.Y,
@@ -423,7 +423,7 @@ func (s *Split) Render(buf *SubBuffer) {
 
 	if s.second != nil {
 		secondBounds := s.second.Bounds()
-		secondSub := buf.parent.Sub(Rect{
+		secondSub := NewSubBuffer(buf.parent, Rect{
 			Position{
 				X: buf.offset.X + secondBounds.X - s.bounds.X,
 				Y: buf.offset.Y + secondBounds.Y - s.bounds.Y,

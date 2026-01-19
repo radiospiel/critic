@@ -3,8 +3,8 @@ package teapot
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"git.15b.it/eno/critic/simple-go/assert"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestCompositorResize(t *testing.T) {
@@ -113,7 +113,7 @@ func TestStackRenderOrder(t *testing.T) {
 	stack.Push(widgetB)
 
 	buf := NewBuffer(10, 5)
-	sub := buf.Sub(buf.Bounds())
+	sub := NewSubBuffer(buf, buf.Bounds())
 	stack.Render(sub)
 
 	// B should be on top, overwriting A

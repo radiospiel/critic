@@ -450,7 +450,7 @@ func (d *Delegate) View(baseView string) string {
 	// Overlay comment editor if active
 	if d.commentEditor.IsActive() {
 		editorBuf := teapot.NewBuffer(d.commentEditor.Width(), d.commentEditor.Height())
-		editorSub := editorBuf.Sub(editorBuf.Bounds())
+		editorSub := teapot.NewSubBuffer(editorBuf, editorBuf.Bounds())
 		d.commentEditor.Render(editorSub)
 		editorView := editorBuf.RenderToString()
 		editorLines := strings.Split(editorView, "\n")

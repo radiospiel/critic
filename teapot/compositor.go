@@ -272,7 +272,7 @@ func widgetTypeName(w View) string {
 func renderWidgetIntoBuffer(w View, bounds Rect) *Buffer {
 	wb := NewBuffer(bounds.Width, bounds.Height)
 	// TODO: do we really need a Sub here?
-	RenderWidget(w, wb.Sub(bounds))
+	RenderWidget(w, NewSubBuffer(wb, bounds))
 	return wb
 }
 
@@ -313,7 +313,7 @@ func renderWidgetWoLogging(w View, buf *SubBuffer) {
 		}
 
 		if contentBounds.Width > 0 && contentBounds.Height > 0 {
-			contentSub := buf.parent.Sub(Rect{
+			contentSub := NewSubBuffer(buf.parent, Rect{
 				Position{
 					X: buf.offset.X + contentBounds.X,
 					Y: buf.offset.Y + contentBounds.Y,

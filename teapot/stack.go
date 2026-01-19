@@ -301,7 +301,7 @@ func (m *Modal) Render(buf *SubBuffer) {
 	}
 
 	// Render content
-	contentSub := buf.parent.Sub(NewRect(
+	contentSub := NewSubBuffer(buf.parent, NewRect(
 		buf.offset.X+contentBounds.X-m.bounds.X,
 		buf.offset.Y+contentBounds.Y-m.bounds.Y,
 		contentBounds.Width,
