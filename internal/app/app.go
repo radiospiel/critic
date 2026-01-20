@@ -8,6 +8,7 @@ import (
 
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/internal/matrix"
 	"git.15b.it/eno/critic/internal/messagedb"
 	"git.15b.it/eno/critic/internal/tui"
 	"git.15b.it/eno/critic/internal/version"
@@ -138,7 +139,7 @@ type Delegate struct {
 	noAnimation   bool              // Whether animations are disabled
 	err           error
 	showHelp      bool // Whether to show help screen
-	screensaver   *tui.MatrixScreensaver // Matrix screensaver
+	screensaver   *matrix.Screensaver // Matrix screensaver
 	gitRoot       string                 // Git repository root path
 }
 
@@ -173,7 +174,7 @@ func NewDelegate(args *Args) *Delegate {
 	mainLayout := tui.NewMainView(fileList, diffView, statusBar)
 
 	// Create the Matrix screensaver
-	screensaver := tui.NewMatrixScreensaver()
+	screensaver := matrix.NewScreensaver()
 
 	// Check if this is the first run for this version
 	showScreensaver := version.IsFirstRunForVersion(gitRoot)
