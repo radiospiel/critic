@@ -3,6 +3,7 @@ package teapot
 import (
 	"strings"
 
+	"git.15b.it/eno/critic/simple-go/utils"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -323,8 +324,8 @@ func (s *ScrollView) SetContentSize(size Size) {
 
 // SetScroll sets the scroll position.
 func (s *ScrollView) SetScroll(x, y int) {
-	s.scrollX = max(0, min(x, s.contentSize.Width-s.bounds.Width))
-	s.scrollY = max(0, min(y, s.contentSize.Height-s.bounds.Height))
+	s.scrollX = utils.Clamp(x, 0, s.contentSize.Width-s.bounds.Width)
+	s.scrollY = utils.Clamp(y, 0, s.contentSize.Height-s.bounds.Height)
 }
 
 // ScrollTo ensures the given position is visible.
