@@ -3,6 +3,7 @@
 critic.bin
 *.prof
 .critic.db*
+.critic.version
 
 
 # Build artifacts
