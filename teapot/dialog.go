@@ -1,6 +1,8 @@
 package teapot
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -209,4 +211,90 @@ func (d *ModalDialog) SetButtonStyle(style lipgloss.Style) {
 // SetButtonHintStyle sets the button hint style (for Enter/Esc).
 func (d *ModalDialog) SetButtonHintStyle(style lipgloss.Style) {
 	d.buttonHintStyle = style
+}
+
+// RenderOverlay renders the modal dialog centered over a base view with the background dimmed.
+// This is the standard way to display a modal dialog - it handles dimming automatically.
+// The baseView is the underlying content that will be dimmed, and screenWidth/screenHeight
+// are the dimensions of the full screen.
+func (d *ModalDialog) RenderOverlay(baseView string, screenWidth, screenHeight int) string {
+	// Render the dialog to its own buffer
+	dialogBuf := NewBuffer(d.bounds.Width, d.bounds.Height)
+	dialogSub := NewSubBuffer(dialogBuf, dialogBuf.Bounds())
+	RenderWidget(d, dialogSub)
+	dialogView := dialogBuf.RenderToString()
+	dialogLines := strings.Split(dialogView, "\n")
+
+	// Calculate horizontal padding for centering
+	leftPadding := (screenWidth - d.bounds.Width) / 2
+	if leftPadding < 0 {
+		leftPadding = 0
+	}
+
+	// Split base view into lines
+	lines := strings.Split(baseView, "\n")
+
+	// Calculate vertical centering
+	startLine := (len(lines) - len(dialogLines)) / 2
+	if startLine < 0 {
+		startLine = 0
+	}
+	endLine := startLine + len(dialogLines)
+
+	// Style for dimming underlying content
+	dimStyle := lipgloss.NewStyle().Faint(true)
+
+	// Process each line: dim everything, overlay the dialog in the middle
+	for lineIdx := 0; lineIdx < len(lines); lineIdx++ {
+		originalLine := lines[lineIdx]
+
+		// Check if this line is within the dialog area
+		if lineIdx >= startLine && lineIdx < endLine {
+			dialogLineIdx := lineIdx - startLine
+			dialogLine := dialogLines[dialogLineIdx]
+			dialogWidth := lipgloss.Width(dialogLine)
+
+			// Extract left portion of original line (dimmed)
+			leftPart := extractVisibleCharsForOverlay(originalLine, 0, leftPadding)
+			dimmedLeft := dimStyle.Render(leftPart)
+
+			// Extract right portion of original line (dimmed)
+			rightStart := leftPadding + dialogWidth
+			rightPart := extractVisibleCharsForOverlay(originalLine, rightStart, screenWidth-rightStart)
+			dimmedRight := dimStyle.Render(rightPart)
+
+			lines[lineIdx] = dimmedLeft + dialogLine + dimmedRight
+		} else {
+			// Lines outside the dialog area - just dim them
+			dimmedLine := extractVisibleCharsForOverlay(originalLine, 0, screenWidth)
+			lines[lineIdx] = dimStyle.Render(dimmedLine)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// extractVisibleCharsForOverlay extracts visible characters from a string with ANSI codes.
+// It returns characters from position start to start+length (by visible position).
+func extractVisibleCharsForOverlay(s string, start, length int) string {
+	if length <= 0 {
+		return ""
+	}
+
+	// Parse the ANSI line to get cells
+	cells := ParseANSILine(s)
+
+	// Extract the requested range
+	var result strings.Builder
+	for i := start; i < start+length; i++ {
+		if i < len(cells) {
+			if cells[i].Rune != 0 {
+				result.WriteRune(cells[i].Rune)
+			}
+		} else {
+			result.WriteRune(' ') // Pad with spaces if line is shorter
+		}
+	}
+
+	return result.String()
 }

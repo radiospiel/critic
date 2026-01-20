@@ -510,52 +510,9 @@ func (d *Delegate) View(baseView string) string {
 	// Debug: log compositor output
 	logger.Info("View: size=%dx%d, view len=%d, lines=%d", width, height, len(view), len(strings.Split(view, "\n")))
 
-	// Overlay comment editor if active
+	// Overlay comment editor if active (dimming is handled by ModalDialog)
 	if d.commentEditor.IsActive() {
-		editorBuf := teapot.NewBuffer(d.commentEditor.Width(), d.commentEditor.Height())
-		editorSub := teapot.NewSubBuffer(editorBuf, editorBuf.Bounds())
-		d.commentEditor.Render(editorSub)
-		editorView := editorBuf.RenderToString()
-		editorLines := strings.Split(editorView, "\n")
-
-		leftPadding := width * 10 / 100
-		lines := strings.Split(view, "\n")
-		startLine := (len(lines) - len(editorLines)) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-		endLine := startLine + len(editorLines)
-
-		// Style for dimming underlying content
-		dimStyle := lipgloss.NewStyle().Faint(true)
-
-		// Dim all lines, overlaying the editor in the middle
-		for lineIdx := 0; lineIdx < len(lines); lineIdx++ {
-			originalLine := lines[lineIdx]
-
-			// Check if this line is within the editor area
-			if lineIdx >= startLine && lineIdx < endLine {
-				editorLineIdx := lineIdx - startLine
-				editorLine := editorLines[editorLineIdx]
-				editorWidth := lipgloss.Width(editorLine)
-
-				// Extract left portion of original line (dimmed)
-				leftPart := extractVisibleChars(originalLine, 0, leftPadding)
-				dimmedLeft := dimStyle.Render(leftPart)
-
-				// Extract right portion of original line (dimmed)
-				rightStart := leftPadding + editorWidth
-				rightPart := extractVisibleChars(originalLine, rightStart, width-rightStart)
-				dimmedRight := dimStyle.Render(rightPart)
-
-				lines[lineIdx] = dimmedLeft + editorLine + dimmedRight
-			} else {
-				// Lines outside the editor area - just dim them
-				dimmedLine := extractVisibleChars(originalLine, 0, width)
-				lines[lineIdx] = dimStyle.Render(dimmedLine)
-			}
-		}
-		return strings.Join(lines, "\n")
+		return d.commentEditor.RenderOverlay(view, width, height)
 	}
 
 	// Overlay help screen if showing
@@ -675,31 +632,6 @@ func resolveBase(base string) (string, error) {
 	}
 
 	return mergeBase, nil
-}
-
-// extractVisibleChars extracts visible characters from a string with ANSI codes.
-// It returns characters from position start to start+length (by visible position).
-func extractVisibleChars(s string, start, length int) string {
-	if length <= 0 {
-		return ""
-	}
-
-	// Parse the ANSI line to get cells
-	cells := teapot.ParseANSILine(s)
-
-	// Extract the requested range
-	var result strings.Builder
-	for i := start; i < start+length; i++ {
-		if i < len(cells) {
-			if cells[i].Rune != 0 {
-				result.WriteRune(cells[i].Rune)
-			}
-		} else {
-			result.WriteRune(' ') // Pad with spaces if line is shorter
-		}
-	}
-
-	return result.String()
 }
 
 // renderError renders an error message

@@ -625,12 +625,31 @@ func (m *CommentEditor) Render(buf *pot.SubBuffer) {
 	}
 
 	// Sync textarea state to widget
-	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
-		content.textarea = m.textarea
-	}
+	m.syncTextareaState()
 
 	// Render the dialog using RenderWidget for proper border handling
 	pot.RenderWidget(m.ModalDialog, buf)
+}
+
+// RenderOverlay renders the comment editor as an overlay on top of the base view
+// with the background dimmed. This is the standard way to display the editor.
+func (m *CommentEditor) RenderOverlay(baseView string, screenWidth, screenHeight int) string {
+	if !m.active {
+		return baseView
+	}
+
+	// Sync textarea state to widget
+	m.syncTextareaState()
+
+	// Use the ModalDialog's RenderOverlay for dimming and centering
+	return m.ModalDialog.RenderOverlay(baseView, screenWidth, screenHeight)
+}
+
+// syncTextareaState syncs the textarea state to the content widget
+func (m *CommentEditor) syncTextareaState() {
+	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
+		content.textarea = m.textarea
+	}
 }
 
 // ActivateWithConversation activates the comment editor with a full conversation
