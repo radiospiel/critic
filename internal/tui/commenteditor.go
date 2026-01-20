@@ -20,13 +20,8 @@ type CommentEditor struct {
 	textarea         textarea.Model
 	active           bool
 	lineNum          int
-	// TODO(bot): width and height belong to the ModalDialog. Maybe reuse the
-	// BaseView's bounds that is available in ModalDialog
-	width        int
-	height       int
-	conversation *critic.Conversation
-	// TODO(bot): is this really necessary?
-	isNewComment bool // true if creating a new comment (no history to show)
+	conversation     *critic.Conversation
+	isNewComment     bool // true if creating a new comment (no history to show)
 }
 
 // NewCommentEditor creates a new comment editor
@@ -548,8 +543,6 @@ func (m CommentEditor) IsReply() bool {
 
 // SetSize sets the size of the comment editor
 func (m *CommentEditor) SetSize(width, height int) {
-	m.width = width
-	m.height = height
 	// Reserve space for border
 	innerWidth := width - 4
 	innerHeight := height - 4
@@ -565,12 +558,12 @@ func (m *CommentEditor) SetSize(width, height int) {
 
 // Width returns the width of the comment editor
 func (m *CommentEditor) Width() int {
-	return m.width
+	return m.Bounds().Width
 }
 
 // Height returns the height of the comment editor
 func (m *CommentEditor) Height() int {
-	return m.height
+	return m.Bounds().Height
 }
 
 // CommentSavedMsg is sent when a comment is saved

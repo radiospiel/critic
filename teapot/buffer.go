@@ -90,8 +90,7 @@ func (b *Buffer) Size() Size {
 
 // Bounds returns the full buffer area as a Rect.
 func (b *Buffer) Bounds() Rect {
-	// TODO(bot) store bounds as rect
-	return Rect{Position{X: 0, Y: 0}, Size{Width: b.width, Height: b.height}}
+	return Rect{Position{}, b.Size()}
 }
 
 // Clear fills the entire buffer with empty cells.

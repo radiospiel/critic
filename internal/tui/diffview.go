@@ -39,10 +39,7 @@ type DiffView struct {
 
 	file     *ctypes.FileDiff
 	viewport viewport.Model
-	// TODO(bot): why do we have width and height here? Reuse the baseView's bounds?
-	width                int
-	height               int
-	ready                bool
+	ready    bool
 	highlighter          *highlight.Highlighter
 	cachedContent        string
 	cachedFile           *ctypes.FileDiff
@@ -655,9 +652,6 @@ func (m *DiffView) GetCursorLine() int {
 
 // SetSize sets the size of the diff view pane
 func (m *DiffView) SetSize(width, height int) {
-	m.width = width
-	m.height = height
-
 	// Initialize viewport if not ready
 	if !m.ready {
 		m.viewport = viewport.New(width, height)
@@ -822,7 +816,7 @@ func (m *DiffView) renderDiff() (string, int, []int) {
 	contentHeight := m.calculateContentHeight(conversationsByLine)
 
 	// Create buffer with appropriate dimensions
-	bufferWidth := m.width
+	bufferWidth := m.Bounds().Width
 	if bufferWidth <= 0 {
 		bufferWidth = 80 // default width
 	}
@@ -1197,7 +1191,7 @@ func (m *DiffView) renderConversationPreview(conv *critic.Conversation, startLin
 	const reset = "\x1b[0m"
 
 	// Available width for content (full width, no animation prefix on content)
-	availableWidth := m.width
+	availableWidth := m.Bounds().Width
 
 	// Wrap long lines instead of truncating
 	var wrappedLines []string
@@ -1462,13 +1456,13 @@ func (m *DiffView) isNavigableLine(lineNum int) bool {
 // truncateToWidth truncates or pads a line to exactly match viewport width
 func (m *DiffView) truncateToWidth(line string) string {
 	visibleWidth := lipgloss.Width(line)
-	if visibleWidth > m.width {
-		return truncateANSI(line, m.width)
-	} else if visibleWidth < m.width {
+	if visibleWidth > m.Bounds().Width {
+		return truncateANSI(line, m.Bounds().Width)
+	} else if visibleWidth < m.Bounds().Width {
 		// Pad to full width - need to preserve the last background color for padding
 		// Extract the last background color from the line (if any)
 		lastBg := extractLastBackground(line)
-		padding := strings.Repeat(" ", m.width-visibleWidth)
+		padding := strings.Repeat(" ", m.Bounds().Width-visibleWidth)
 		if lastBg != "" {
 			// Apply the background color to padding spaces
 			return line + lastBg + padding + "\x1b[0m"
@@ -1496,14 +1490,14 @@ func (m *DiffView) ensureFullLineBackground(line string, lineType ctypes.LineTyp
 
 	// Calculate width and pad if needed
 	visibleWidth := lipgloss.Width(cleaned)
-	if visibleWidth > m.width {
-		cleaned = truncateANSI(cleaned, m.width)
-		visibleWidth = m.width
+	if visibleWidth > m.Bounds().Width {
+		cleaned = truncateANSI(cleaned, m.Bounds().Width)
+		visibleWidth = m.Bounds().Width
 	}
 
 	padding := ""
-	if visibleWidth < m.width {
-		padding = strings.Repeat(" ", m.width-visibleWidth)
+	if visibleWidth < m.Bounds().Width {
+		padding = strings.Repeat(" ", m.Bounds().Width-visibleWidth)
 	}
 
 	// Wrap entire line with background: bg + content + padding + reset
@@ -1531,15 +1525,15 @@ func (m *DiffView) applyLineBackgroundWithStyle(line string, style lipgloss.Styl
 
 	// Truncate if too long, pad if too short
 	var processed string
-	if visibleWidth > m.width {
-		processed = truncateANSI(cleaned, m.width)
+	if visibleWidth > m.Bounds().Width {
+		processed = truncateANSI(cleaned, m.Bounds().Width)
 	} else {
-		paddingWidth := m.width - visibleWidth
+		paddingWidth := m.Bounds().Width - visibleWidth
 		processed = cleaned + strings.Repeat(" ", paddingWidth)
 	}
 
 	// Use lipgloss style to render with proper background (handles adaptive colors)
-	return style.Width(m.width).Render(processed)
+	return style.Width(m.Bounds().Width).Render(processed)
 }
 
 // applyLineBackground wraps a line with background color spanning full width (legacy)
@@ -1555,12 +1549,12 @@ func (m *DiffView) applyLineBackground(line string, bgColor string) string {
 
 	// Truncate if too long, pad if too short
 	var processed string
-	if visibleWidth > m.width {
+	if visibleWidth > m.Bounds().Width {
 		// Line is too long - truncate it to exact width
-		processed = truncateANSI(cleaned, m.width)
+		processed = truncateANSI(cleaned, m.Bounds().Width)
 	} else {
 		// Add padding to reach exact width
-		paddingWidth := m.width - visibleWidth
+		paddingWidth := m.Bounds().Width - visibleWidth
 		processed = cleaned + strings.Repeat(" ", paddingWidth)
 	}
 
