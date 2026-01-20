@@ -9,7 +9,9 @@ Before completing any significant code changes affecting the TUI, run a manual t
 
 ### Ask for human reviewer approval
 
-- Before completing any significant code changes, call get_review_feedback with a summary of what you've done. Wait for reviewer approval before proceeding. Address any feedback in subsequent iterations.
+If a critic or critic2 MCP server is available, but not on claude code for web:
+
+- Before committing any significant code changes, call the get_review_feedback tool with a summary of what you've done, if a critic or critic2 MCP server is available. Wait for reviewer approval before proceeding. Address any feedback in subsequent iterations.
 
 ### Test
 
