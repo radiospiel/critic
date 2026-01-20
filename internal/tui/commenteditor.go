@@ -20,13 +20,7 @@ type CommentEditor struct {
 	textarea         textarea.Model
 	active           bool
 	lineNum          int
-	// TODO(bot): width and height belong to the ModalDialog. Maybe reuse the
-	// BaseView's bounds that is available in ModalDialog
-	width        int
-	height       int
-	conversation *critic.Conversation
-	// TODO(bot): is this really necessary?
-	isNewComment bool // true if creating a new comment (no history to show)
+	conversation     *critic.Conversation
 }
 
 // NewCommentEditor creates a new comment editor
@@ -462,12 +456,13 @@ func (m *CommentEditor) ActivateWithConversation(lineNum int, conv *critic.Conve
 	m.active = true
 	m.lineNum = lineNum
 	m.conversation = conv
-	m.isNewComment = conv == nil || len(conv.Messages) == 0
 	m.textarea.SetValue("")
 	m.textarea.Focus()
 
+	isNewComment := conv == nil || len(conv.Messages) == 0
+
 	// Update dialog title
-	if m.isNewComment {
+	if isNewComment {
 		m.ModalDialog.SetTitle("New Comment")
 		m.textarea.Placeholder = "Enter your comment..."
 	} else {
@@ -478,30 +473,7 @@ func (m *CommentEditor) ActivateWithConversation(lineNum int, conv *critic.Conve
 	// Update content widget
 	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
 		content.historyView.SetConversation(conv)
-		content.showHistory = !m.isNewComment
-		content.focusOnInput = true
-		content.textarea = m.textarea
-	}
-
-	return textarea.Blink
-}
-
-// Activate activates the comment editor for a specific line (legacy, creates new comment)
-func (m *CommentEditor) Activate(lineNum int, existingComment string) tea.Cmd {
-	// Legacy behavior - treat as new comment or editing existing
-	m.active = true
-	m.lineNum = lineNum
-	m.conversation = nil
-	m.isNewComment = true
-	m.textarea.SetValue(existingComment)
-	m.textarea.Focus()
-
-	m.ModalDialog.SetTitle("Edit Comment")
-	m.textarea.Placeholder = "Enter your comment..."
-
-	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
-		content.historyView.SetConversation(nil)
-		content.showHistory = false
+		content.showHistory = !isNewComment
 		content.focusOnInput = true
 		content.textarea = m.textarea
 	}
@@ -548,8 +520,6 @@ func (m CommentEditor) IsReply() bool {
 
 // SetSize sets the size of the comment editor
 func (m *CommentEditor) SetSize(width, height int) {
-	m.width = width
-	m.height = height
 	// Reserve space for border
 	innerWidth := width - 4
 	innerHeight := height - 4
@@ -565,12 +535,12 @@ func (m *CommentEditor) SetSize(width, height int) {
 
 // Width returns the width of the comment editor
 func (m *CommentEditor) Width() int {
-	return m.width
+	return m.Bounds().Width
 }
 
 // Height returns the height of the comment editor
 func (m *CommentEditor) Height() int {
-	return m.height
+	return m.Bounds().Height
 }
 
 // CommentSavedMsg is sent when a comment is saved
