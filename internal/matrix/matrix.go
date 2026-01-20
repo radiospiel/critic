@@ -19,7 +19,6 @@ type Screensaver struct {
 	onDone   func() // Callback when screensaver is dismissed
 	rng      *rand.Rand
 	lastTick int64
-	offset   int // 0 or 1 - grid offset for visual variety
 }
 
 // rainStreak represents a single streak of falling characters.
@@ -77,25 +76,18 @@ func (m *Screensaver) Start(width, height int) {
 	m.active = true
 	m.lastTick = teapot.GlobalTickCount
 
-	// Pick a random grid offset (0 or 1) for visual variety between runs
-	m.offset = m.rng.Intn(2)
-
 	// Calculate number of slots available.
 	// Each slot is 2 columns wide (for double-width characters).
-	// Slots are positioned at: offset, offset+2, offset+4, ...
-	// This ensures no overlapping between streaks.
-	numSlots := (width - m.offset) / 2
+	// Slots are at even positions: 0, 2, 4, 6, ...
+	numSlots := width / 2
 	if numSlots < 1 {
 		numSlots = 1
 	}
 
-	// Use about 1/3 of available slots for good visual density
+	// Use about half of available slots for good visual density
 	numStreaks := numSlots / 2
 	if numStreaks < 1 {
 		numStreaks = 1
-	}
-	if numStreaks > numSlots {
-		numStreaks = numSlots
 	}
 
 	m.streaks = make([]*rainStreak, numStreaks)
@@ -103,21 +95,17 @@ func (m *Screensaver) Start(width, height int) {
 	// Randomly select which slots to use
 	slots := make([]int, numSlots)
 	for i := range slots {
-		slots[i] = m.offset + i*2 // positions: offset, offset+2, offset+4, ...
+		slots[i] = i * 2 // even positions: 0, 2, 4, 6, ...
 	}
-	// Shuffle slots
 	m.rng.Shuffle(len(slots), func(i, j int) {
 		slots[i], slots[j] = slots[j], slots[i]
 	})
 
-	// Assign streaks to the first numStreaks slots
 	for i := 0; i < numStreaks; i++ {
 		m.streaks[i] = m.newStreak(slots[i])
-		// Stagger the start times for a more natural effect
 		m.streaks[i].startDelay = m.rng.Intn(height)
 	}
 
-	// Subscribe to global ticks for animation
 	teapot.SubscribeToGlobalTicks(m)
 }
 
@@ -161,13 +149,12 @@ func (m *Screensaver) resetStreak(streak *rainStreak) {
 	streak.speed = 1 + m.rng.Intn(2)
 	streak.startDelay = m.rng.Intn(m.height / 2)
 
-	// Pick a new random slot position (aligned to the grid)
-	numSlots := (m.width - m.offset) / 2
+	// Pick a new random even position
+	numSlots := m.width / 2
 	if numSlots < 1 {
 		numSlots = 1
 	}
-	slotIndex := m.rng.Intn(numSlots)
-	streak.xPos = m.offset + slotIndex*2
+	streak.xPos = m.rng.Intn(numSlots) * 2
 
 	// Regenerate characters
 	for i := range streak.chars {
