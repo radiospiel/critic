@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	sio "git.15b.it/eno/critic/simple-go/io"
 	"git.15b.it/eno/critic/simple-go/must"
 	"git.15b.it/eno/critic/simple-go/preconditions"
 	"git.15b.it/eno/critic/simple-go/utils"
@@ -478,12 +477,9 @@ func readLinesFromGitShow(path string, ref string, startLine int, endLine int) s
 		startLine = 1
 	}
 
-	// Use SectionPipe to extract only the relevant lines from git show output
-	// skip = startLine - 1, take = endLine - startLine + 1
-	skip := startLine - 1
-	take := endLine - startLine + 1
-	pipe := sio.NewSectionPipe(skip, take)
-	output := must.PipeInto(pipe, "git", "show", ref+":"+path)
+	// Use git show piped to sed to extract lines (equivalent to `sed -n '5,10p'`)
+	cmd := fmt.Sprintf("git show %s:%s | sed -n '%d,%dp'", ref, path, startLine, endLine)
+	output := must.Exec("bash", "-c", cmd)
 	return string(output)
 }
 
@@ -522,8 +518,8 @@ func GetLineContext(path string, lineNum int, ref string) string {
 // readLinesFromWorkingDir reads a range of lines from a file in the working directory.
 // It reads from startLine to endLine (inclusive).
 func readLinesFromWorkingDir(path string, startLine int, endLine int) string {
-	// Use ReadFileLines to extract only the relevant lines from the file
-	output, err := sio.ReadFileLines(path, startLine, endLine)
+	// Use readFileLines to extract only the relevant lines from the file
+	output, err := readFileLines(path, startLine, endLine)
 	if err != nil {
 		panic(fmt.Sprintf("readLinesFromWorkingDir(%s, %d, %d): %v", path, startLine, endLine, err))
 	}
