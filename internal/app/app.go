@@ -8,8 +8,10 @@ import (
 
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/internal/matrix"
 	"git.15b.it/eno/critic/internal/messagedb"
 	"git.15b.it/eno/critic/internal/tui"
+	"git.15b.it/eno/critic/internal/version"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
@@ -137,6 +139,8 @@ type Delegate struct {
 	noAnimation   bool              // Whether animations are disabled
 	err           error
 	showHelp      bool // Whether to show help screen
+	screensaver   *matrix.Screensaver // Matrix screensaver
+	gitRoot       string                 // Git repository root path
 }
 
 // NewDelegate creates a new critic delegate
@@ -169,7 +173,16 @@ func NewDelegate(args *Args) *Delegate {
 	// Create the main layout (VBox with HSplit and StatusBar)
 	mainLayout := tui.NewMainView(fileList, diffView, statusBar)
 
-	return &Delegate{
+	// Create the Matrix screensaver
+	screensaver := matrix.NewScreensaver()
+
+	// Check if this is the first run for this version
+	showScreensaver := version.IsFirstRunForVersion(gitRoot)
+	if showScreensaver {
+		logger.Info("First run for version %s, will show screensaver", version.Version)
+	}
+
+	d := &Delegate{
 		fileList:      fileList,
 		diffView:      diffView,
 		commentEditor: tui.NewCommentEditor(),
@@ -182,7 +195,18 @@ func NewDelegate(args *Args) *Delegate {
 		extensions:    args.Extensions,
 		messaging:     mdb,
 		noAnimation:   args.NoAnimation,
+		screensaver:   screensaver,
+		gitRoot:       gitRoot,
 	}
+
+	// Set up screensaver done callback to mark version as seen
+	screensaver.SetOnDone(func() {
+		if err := version.MarkVersionSeen(gitRoot); err != nil {
+			logger.Warn("Failed to mark version as seen: %v", err)
+		}
+	})
+
+	return d
 }
 
 // Init implements teapot.AppDelegate
@@ -195,6 +219,16 @@ func (d *Delegate) Init() tea.Cmd {
 	// Check terminal color support
 	checkTerminalColors()
 
+	// Check if we should show the screensaver on startup
+	if version.IsFirstRunForVersion(d.gitRoot) {
+		// We'll start the screensaver after we get the window size
+		d.screensaver.SetOnDone(func() {
+			if err := version.MarkVersionSeen(d.gitRoot); err != nil {
+				logger.Warn("Failed to mark version as seen: %v", err)
+			}
+		})
+	}
+
 	return tea.Batch(
 		initBaseResolverCmd(d),
 		loadDiffCmd(d),
@@ -204,6 +238,11 @@ func (d *Delegate) Init() tea.Cmd {
 // HandleKey implements teapot.AppDelegate - handles critic-specific keys
 func (d *Delegate) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	var cmds []tea.Cmd
+
+	// If screensaver is active, route keys to it (any key dismisses it)
+	if d.screensaver.IsActive() {
+		return d.screensaver.HandleKey(msg)
+	}
 
 	switch msg.String() {
 	case "tab", "shift+tab":
@@ -247,6 +286,16 @@ func (d *Delegate) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	case "?":
 		// Toggle help screen
 		d.showHelp = !d.showHelp
+		return true, nil
+
+	case "m":
+		// Toggle Matrix screensaver
+		if d.screensaver.IsActive() {
+			d.screensaver.Stop()
+		} else {
+			width, height := d.app.Size()
+			d.screensaver.Start(width, height)
+		}
 		return true, nil
 
 	case "enter":
@@ -327,6 +376,11 @@ func (d *Delegate) HandleMessage(msg tea.Msg) tea.Cmd {
 		editorWidth := msg.Width * 80 / 100
 		editorHeight := msg.Height - 6
 		d.commentEditor.SetSize(editorWidth, editorHeight)
+
+		// Start screensaver on first window size message if this is first run
+		if version.IsFirstRunForVersion(d.gitRoot) && !d.screensaver.IsActive() {
+			d.screensaver.Start(msg.Width, msg.Height)
+		}
 
 	case diffLoadedMsg:
 		logger.Info("Update: Received diffLoadedMsg")
@@ -440,6 +494,11 @@ func (d *Delegate) View(baseView string) string {
 
 	if d.err != nil {
 		return renderError(d.err)
+	}
+
+	// If screensaver is active, render it instead of the base view
+	if d.screensaver.IsActive() {
+		return d.renderScreensaver(width, height)
 	}
 
 	view := baseView
@@ -603,6 +662,14 @@ func renderError(err error) string {
 		Render(fmt.Sprintf("Error: %s", err))
 }
 
+// renderScreensaver renders the Matrix screensaver
+func (d *Delegate) renderScreensaver(width, height int) string {
+	buf := teapot.NewBuffer(width, height)
+	sub := teapot.NewSubBuffer(buf, buf.Bounds())
+	d.screensaver.Render(sub)
+	return buf.RenderToString()
+}
+
 // renderHelpOverlay renders the help screen overlay
 func (d *Delegate) renderHelpOverlay(underlay string, width, height int) string {
 	helpContent := `
@@ -635,6 +702,7 @@ func (d *Delegate) renderHelpOverlay(underlay string, width, height int) string 
 
   OTHER
     r             Reload diff
+    m             Matrix screensaver
     ?             Toggle this help screen
     q             Quit
 

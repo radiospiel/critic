@@ -349,20 +349,30 @@ func (b *Buffer) RenderToString() string {
 }
 
 // renderRow renders a row of cells, grouping consecutive cells with the same style.
+// Cells with Rune == 0 are skipped (used as placeholders for wide character continuations).
 func renderRow(row []Cell, sb *strings.Builder) {
 	if len(row) == 0 {
 		return
 	}
 
 	var runes strings.Builder
-	runes.Grow(len(row)) // Preallocate for worst case (all same style)
-	currentStyleStr := row[0].Style.Render("")
-	currentStyle := row[0].Style
+	runes.Grow(len(row))
+	var currentStyleStr string
+	var currentStyle lipgloss.Style
+	started := false
 
 	for _, cell := range row {
+		// Skip null runes (wide char continuation placeholders)
+		if cell.Rune == 0 {
+			continue
+		}
+
 		cellStyleStr := cell.Style.Render("")
-		if cellStyleStr != currentStyleStr {
-			// Style changed - render accumulated runes and start new group
+		if !started {
+			currentStyleStr = cellStyleStr
+			currentStyle = cell.Style
+			started = true
+		} else if cellStyleStr != currentStyleStr {
 			writeStyled(sb, currentStyleStr, currentStyle, runes.String())
 			runes.Reset()
 			currentStyle = cell.Style
@@ -371,7 +381,6 @@ func renderRow(row []Cell, sb *strings.Builder) {
 		runes.WriteRune(cell.Rune)
 	}
 
-	// Render final group
 	if runes.Len() > 0 {
 		writeStyled(sb, currentStyleStr, currentStyle, runes.String())
 	}
