@@ -3,6 +3,7 @@ package teapot
 import (
 	"strings"
 
+	"git.15b.it/eno/critic/simple-go/utils"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -271,7 +272,7 @@ func NewVSplit(top, bottom View, ratio float64) *Split {
 
 // SetRatio sets the split ratio (0.0 to 1.0).
 func (s *Split) SetRatio(ratio float64) {
-	s.ratio = max(0.0, min(1.0, ratio))
+	s.ratio = utils.Clamp(ratio, 0.0, 1.0)
 	s.Repaint()
 }
 

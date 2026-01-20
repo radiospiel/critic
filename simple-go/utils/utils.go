@@ -3,6 +3,8 @@ package utils
 import (
 	"cmp"
 	"slices"
+
+	"git.15b.it/eno/critic/simple-go/preconditions"
 )
 
 // SortBy returns a sorted copy of the slice, sorted by the key returned by the iteratee.
@@ -40,6 +42,7 @@ func IfElse[T any](condition bool, ifTrue T, ifFalse T) T {
 
 // Clamp constrains a value to be within the range [minVal, maxVal].
 func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
+	preconditions.Check(minVal <= maxVal, "Clamp: minVal (%v) must be <= maxVal (%v)", minVal, maxVal)
 	if value < minVal {
 		return minVal
 	}
