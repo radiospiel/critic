@@ -6,6 +6,7 @@ import (
 	"git.15b.it/eno/critic/teapot"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 )
 
 // Screensaver displays a Matrix-style rain effect with kanji characters.
@@ -253,8 +254,13 @@ func (m *Screensaver) Render(buf *teapot.SubBuffer) {
 			style := m.getCharStyle(distFromHead, streak.length)
 
 			// Write the character at the streak's x position
-			// The character is 2 columns wide, SetString handles this
-			buf.SetString(streak.xPos, y, string(char), style)
+			// Always render 2 columns: if char is single-width, add a space
+			charWidth := runewidth.RuneWidth(char)
+			if charWidth == 1 {
+				buf.SetString(streak.xPos, y, string(char)+" ", style)
+			} else {
+				buf.SetString(streak.xPos, y, string(char), style)
+			}
 		}
 	}
 }
