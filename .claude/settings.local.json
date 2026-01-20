@@ -42,7 +42,8 @@
       "mcp__ide__getDiagnostics",
       "Bash(ls:*)",
       "mcp__gopls__go_diagnostics",
-      "mcp__gopls__go_file_context"
+      "mcp__gopls__go_file_context",
+      "mcp__gopls__go_package_api"
     ]
   }
 }

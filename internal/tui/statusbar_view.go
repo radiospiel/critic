@@ -57,8 +57,22 @@ func (s *StatusBarView) SetFilter(filter string) {
 }
 
 // SetDiffStats sets the diff statistics section.
-func (s *StatusBarView) SetDiffStats(added, deleted, moved int) {
-	s.diffStats = fmt.Sprintf("+%d/-%d/~%d", added, deleted, moved)
+func (s *StatusBarView) SetDiffStats(added, deleted, changed int) {
+	var parts []string
+	if added > 0 {
+		parts = append(parts, fmt.Sprintf("+%d", added))
+	}
+	if changed > 0 {
+		parts = append(parts, fmt.Sprintf("~%d", changed))
+	}
+	if deleted > 0 {
+		parts = append(parts, fmt.Sprintf("-%d", deleted))
+	}
+	if len(parts) > 0 {
+		s.diffStats = strings.Join(parts, " ")
+	} else {
+		s.diffStats = ""
+	}
 	s.Repaint()
 }
 

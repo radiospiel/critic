@@ -39,7 +39,7 @@ func TestStatusBarView_Render(t *testing.T) {
 	assert.Contains(t, content, "[F]ilter:", "should contain filter section")
 	assert.Contains(t, content, "All", "should contain filter value")
 	assert.Contains(t, content, "[?] help", "should contain help section")
-	assert.Contains(t, content, "+10/-5/~2", "should contain diff stats")
+	assert.Contains(t, content, "+10 ~2 -5", "should contain diff stats")
 }
 
 func TestStatusBarView_ClockAtRight(t *testing.T) {

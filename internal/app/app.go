@@ -399,7 +399,7 @@ func (d *Delegate) HandleMessage(msg tea.Msg) tea.Cmd {
 			}
 			d.statusBar.SetFilter(d.filterMode.String())
 			stats := computeDiffStats(d.diff)
-			d.statusBar.SetDiffStats(stats.Added, stats.Deleted, stats.Moved)
+			d.statusBar.SetDiffStats(stats.Added, stats.Deleted, stats.Changed)
 
 			cmd := d.diffView.SetFile(d.fileList.GetActiveFile())
 			cmds = append(cmds, cmd)
@@ -801,7 +801,7 @@ func (d *Delegate) getCurrentCodeVersion() string {
 type diffStats struct {
 	Added   int
 	Deleted int
-	Moved   int
+	Changed int
 }
 
 // computeDiffStats computes line statistics for a diff
@@ -832,16 +832,16 @@ func computeDiffStats(diff *ctypes.Diff) diffStats {
 
 	for content, deletedCount := range deletedLines {
 		if addedCount, ok := addedLines[content]; ok {
-			moved := deletedCount
-			if addedCount < moved {
-				moved = addedCount
+			changed := deletedCount
+			if addedCount < changed {
+				changed = addedCount
 			}
-			stats.Moved += moved
+			stats.Changed += changed
 		}
 	}
 
-	stats.Added -= stats.Moved
-	stats.Deleted -= stats.Moved
+	stats.Added -= stats.Changed
+	stats.Deleted -= stats.Changed
 
 	return stats
 }

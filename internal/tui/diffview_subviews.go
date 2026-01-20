@@ -497,61 +497,224 @@ func (w *HunkView) renderCommentWithYOffset(buf *teapot.SubBuffer, startY int, c
 	}
 }
 
-// FileHeaderView displays the file header.
+// FileHeaderView displays the file header with change statistics.
 type FileHeaderView struct {
 	teapot.BaseView
-	header string
+	file *ctypes.FileDiff
 }
 
 // NewFileHeaderView creates a new file header widget.
 func NewFileHeaderView(file *ctypes.FileDiff) *FileHeaderView {
-	var header string
-	if file.IsDeleted {
-		header = file.OldPath + " (deleted)"
-	} else if file.IsNew {
-		header = file.NewPath + " (new)"
-	} else if file.IsRenamed {
-		header = file.OldPath + " -> " + file.NewPath + " (renamed)"
-	} else {
-		header = file.NewPath
-	}
-
 	w := &FileHeaderView{
 		BaseView: teapot.NewBaseView(),
-		header:   header,
+		file:     file,
 	}
 	w.SetFocusable(false)
 	w.SetConstraints(teapot.DefaultConstraints().WithMinSize(1, 2).WithPreferredSize(0, 2))
 	return w
 }
 
-// Render renders the file header.
+// calculateStats returns added, deleted, and changed line counts.
+// Changed lines are estimated as min(added, deleted) - representing modifications.
+// Pure added = total added - changed, pure deleted = total deleted - changed.
+func (w *FileHeaderView) calculateStats() (added, deleted, changed int) {
+	if w.file == nil {
+		return 0, 0, 0
+	}
+	var totalAdded, totalDeleted int
+	for _, hunk := range w.file.Hunks {
+		for _, line := range hunk.Lines {
+			switch line.Type {
+			case ctypes.LineAdded:
+				totalAdded++
+			case ctypes.LineDeleted:
+				totalDeleted++
+			}
+		}
+	}
+	// Changed = lines that were modified (paired add+delete)
+	changed = min(totalAdded, totalDeleted)
+	added = totalAdded - changed
+	deleted = totalDeleted - changed
+	return added, deleted, changed
+}
+
+// Render renders the file header with stats.
 func (w *FileHeaderView) Render(buf *teapot.SubBuffer) {
 	width := buf.Width()
+	if width <= 0 || w.file == nil {
+		return
+	}
 
-	// Build header cells with padding
-	cells := make([]teapot.Cell, width)
-	runes := []rune(w.header)
-	for x := 0; x < width; x++ {
-		if x < len(runes) {
-			cells[x] = teapot.Cell{Rune: runes[x], Style: hunkHeaderStyle}
-		} else {
-			cells[x] = teapot.Cell{Rune: ' ', Style: hunkHeaderStyle}
+	// Build file path display
+	var filePath string
+	if w.file.IsDeleted {
+		filePath = w.file.OldPath + " (deleted)"
+	} else if w.file.IsNew {
+		filePath = w.file.NewPath + " (new)"
+	} else if w.file.IsRenamed {
+		filePath = w.file.OldPath + " → " + w.file.NewPath
+	} else {
+		filePath = w.file.NewPath
+	}
+
+	// Calculate stats
+	added, deleted, changed := w.calculateStats()
+	total := added + deleted + changed
+
+	// Build stats string
+	var statsStr string
+	if total > 0 {
+		var parts []string
+		if added > 0 {
+			parts = append(parts, fmt.Sprintf("+%d", added))
 		}
+		if changed > 0 {
+			parts = append(parts, fmt.Sprintf("~%d", changed))
+		}
+		if deleted > 0 {
+			parts = append(parts, fmt.Sprintf("-%d", deleted))
+		}
+		statsStr = strings.Join(parts, " ")
+	} else {
+		statsStr = "no changes"
+	}
+
+	// Style similar to status bar - solid background
+	headerStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#4A6FA5")). // Slightly darker blue than status bar
+		Foreground(lipgloss.Color("#FFFFFF")). // White text
+		Bold(true)
+
+	statsStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#4A6FA5")).
+		Foreground(lipgloss.Color("#CCCCCC")) // Slightly dimmer for stats
+
+	// First line: file path on left, stats on right
+	// Calculate spacing
+	pathLen := len([]rune(filePath))
+	statsLen := len(statsStr)
+	padding := width - pathLen - statsLen - 2 // -2 for margins
+	if padding < 1 {
+		padding = 1
+	}
+
+	// Build first line with proper padding
+	line1 := " " + filePath + strings.Repeat(" ", padding) + statsStr + " "
+	if len([]rune(line1)) > width {
+		// Truncate path if needed
+		runes := []rune(line1)
+		line1 = string(runes[:width])
+	} else if len([]rune(line1)) < width {
+		// Pad to full width
+		line1 = line1 + strings.Repeat(" ", width-len([]rune(line1)))
+	}
+
+	// Render first line - path part
+	cells := make([]teapot.Cell, width)
+	runes := []rune(line1)
+	pathEnd := 1 + pathLen // After leading space and path
+	for x := 0; x < width; x++ {
+		r := ' '
+		if x < len(runes) {
+			r = runes[x]
+		}
+		style := headerStyle
+		if x >= pathEnd {
+			style = statsStyle
+		}
+		cells[x] = teapot.Cell{Rune: r, Style: style}
 	}
 	buf.SetCells(0, 0, cells)
 
-	// Blank second line
+	// Second line: thin change line visualization
 	if buf.Height() > 1 {
-		emptyStyle := lipgloss.NewStyle()
-		buf.SetString(0, 1, strings.Repeat(" ", width), emptyStyle)
+		w.renderChangeLine(buf, 1, width, added, deleted, changed)
 	}
 }
 
+// renderChangeLine renders a thin line at the top of the cell (appearing as underline to row above).
+func (w *FileHeaderView) renderChangeLine(buf *teapot.SubBuffer, y, width, added, deleted, changed int) {
+	total := added + deleted + changed
+
+	// Use UPPER ONE EIGHTH BLOCK (▔) - renders at top of cell, looks like underline
+	const lineChar = '▔'
+
+	if total == 0 {
+		// Empty line
+		emptyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#333333"))
+		buf.SetString(0, y, strings.Repeat(string(lineChar), width), emptyStyle)
+		return
+	}
+
+	// Calculate widths for each segment
+	addedWidth := (added * width) / total
+	changedWidth := (changed * width) / total
+	deletedWidth := width - addedWidth - changedWidth
+
+	// Ensure at least 1 char for non-zero values
+	if added > 0 && addedWidth == 0 {
+		addedWidth = 1
+		deletedWidth--
+	}
+	if changed > 0 && changedWidth == 0 {
+		changedWidth = 1
+		deletedWidth--
+	}
+	if deleted > 0 && deletedWidth == 0 {
+		deletedWidth = 1
+		if changedWidth > 1 {
+			changedWidth--
+		} else if addedWidth > 1 {
+			addedWidth--
+		}
+	}
+	if deletedWidth < 0 {
+		deletedWidth = 0
+	}
+
+	// Styles for each segment
+	addedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#4CAF50"))   // Green
+	changedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFC107")) // Yellow/Amber
+	deletedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#F44336")) // Red
+
+	// Build the line
+	cells := make([]teapot.Cell, width)
+	x := 0
+
+	// Added segment (green)
+	for i := 0; i < addedWidth && x < width; i++ {
+		cells[x] = teapot.Cell{Rune: lineChar, Style: addedStyle}
+		x++
+	}
+
+	// Changed segment (yellow)
+	for i := 0; i < changedWidth && x < width; i++ {
+		cells[x] = teapot.Cell{Rune: lineChar, Style: changedStyle}
+		x++
+	}
+
+	// Deleted segment (red)
+	for i := 0; i < deletedWidth && x < width; i++ {
+		cells[x] = teapot.Cell{Rune: lineChar, Style: deletedStyle}
+		x++
+	}
+
+	// Fill any remaining (shouldn't happen, but safety)
+	emptyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#333333"))
+	for x < width {
+		cells[x] = teapot.Cell{Rune: lineChar, Style: emptyStyle}
+		x++
+	}
+
+	buf.SetCells(0, y, cells)
+}
+
 // DiffContentView is the main widget that displays the entire diff view.
-// It stacks HunkViews vertically.
+// It uses a ScrollView to handle scrolling, with a fixed file header.
 type DiffContentView struct {
 	teapot.BaseView
+	scrollView      *teapot.ScrollView
 	file            *ctypes.FileDiff
 	hunks           []*HunkView
 	conversationMap map[int]*critic.Conversation
@@ -560,14 +723,15 @@ type DiffContentView struct {
 	highlightedCtx  map[int]string
 	filterMode      FilterMode
 	selectedRow     int // Global row number of selected item
-	yOffset         int // Scroll offset
 }
 
 // NewDiffContentView creates a new diff view widget.
 func NewDiffContentView() *DiffContentView {
 	w := &DiffContentView{
-		BaseView: teapot.NewBaseView(),
+		BaseView:   teapot.NewBaseView(),
+		scrollView: teapot.NewScrollView(),
 	}
+	w.scrollView.SetParent(w)
 	w.SetFocusable(true)
 	return w
 }
@@ -584,7 +748,7 @@ func (w *DiffContentView) SetFile(
 	w.highlightedNew = highlightedNew
 	w.highlightedCtx = highlightedCtx
 	w.rebuildHunks()
-	w.yOffset = 0
+	w.scrollView.ScrollToTop()
 	w.selectedRow = 3 // First line after header (row 0-1) and first hunk header (row 2)
 }
 
@@ -593,12 +757,18 @@ func (w *DiffContentView) SetFilterMode(mode FilterMode) {
 	w.filterMode = mode
 }
 
-// rebuildHunks creates HunkViews for each hunk.
+// rebuildHunks creates HunkViews for each hunk and populates the ScrollView.
 func (w *DiffContentView) rebuildHunks() {
 	w.hunks = nil
+	w.scrollView.ClearChildren()
+
 	if w.file == nil {
+		w.scrollView.SetHeaderView(nil)
 		return
 	}
+
+	// Set file header as the fixed header
+	w.scrollView.SetHeaderView(NewFileHeaderView(w.file))
 
 	hunksToRender := w.filterHunks(w.file.Hunks)
 	currentRow := 2 // After file header
@@ -607,6 +777,7 @@ func (w *DiffContentView) rebuildHunks() {
 		hw := NewHunkView(hunk, w.conversationMap, w.highlightedOld, w.highlightedNew, w.highlightedCtx)
 		hw.SetStartRow(currentRow)
 		w.hunks = append(w.hunks, hw)
+		w.scrollView.AddChild(hw)
 		currentRow += hw.calculateHeight() + 1 // +1 for spacing
 	}
 }
@@ -657,7 +828,13 @@ func (w *DiffContentView) SetSelectedRow(row int) {
 
 // GetYOffset returns the current scroll offset.
 func (w *DiffContentView) GetYOffset() int {
-	return w.yOffset
+	return w.scrollView.ScrollOffset()
+}
+
+// SetBounds sets the bounds and propagates to the scroll view.
+func (w *DiffContentView) SetBounds(bounds teapot.Rect) {
+	w.BaseView.SetBounds(bounds)
+	w.scrollView.SetBounds(bounds)
 }
 
 // GetFile returns the current file.
@@ -687,86 +864,52 @@ func (w *DiffContentView) Render(buf *teapot.SubBuffer) {
 		return
 	}
 
-	width := buf.Width()
-	height := buf.Height()
-
-	// Calculate total content height
-	contentHeight := w.CalculateTotalHeight()
-
 	// Adjust scroll offset to keep selected item visible
-	w.ensureSelectedVisible(height, contentHeight)
+	w.ensureSelectedVisible()
 
-	// Render file header (fixed at top)
-	fileHeader := NewFileHeaderView(w.file)
-	headerBuf := buf.Sub(teapot.NewRect(0, 0, width, 2))
-	fileHeader.Render(headerBuf)
-
-	// Render hunks with scroll offset
-	renderY := 2 - w.yOffset
-
-	for hunkIdx, hw := range w.hunks {
+	// Update selection state on each hunk before rendering
+	currentRow := 2 // After file header
+	for _, hw := range w.hunks {
 		hunkHeight := hw.calculateHeight()
 
 		// Calculate which row within this hunk is selected (if any)
 		localSelectedRow := -1
-		if w.selectedRow >= renderY+w.yOffset && w.selectedRow < renderY+w.yOffset+hunkHeight {
-			localSelectedRow = w.selectedRow - (renderY + w.yOffset)
+		if w.selectedRow >= currentRow && w.selectedRow < currentRow+hunkHeight {
+			localSelectedRow = w.selectedRow - currentRow
 		}
 		hw.SetSelectedRow(localSelectedRow)
 
-		// Render if any part is visible (must be visible below the header at y=2)
-		if renderY+hunkHeight > 2 && renderY < height {
-			// Calculate how much of the hunk is above the content area (below header)
-			ySkip := 0
-			startY := renderY
-			if renderY < 2 {
-				ySkip = 2 - renderY
-				startY = 2
-			}
-
-			// Calculate visible height
-			visibleHeight := hunkHeight - ySkip
-			if startY+visibleHeight > height {
-				visibleHeight = height - startY
-			}
-
-			if visibleHeight > 0 {
-				hunkBuf := buf.Sub(teapot.NewRect(0, startY, width, visibleHeight))
-				hw.RenderWithYOffset(hunkBuf, ySkip)
-			}
-		}
-		renderY += hunkHeight
-
-		// Spacing between hunks
-		if hunkIdx < len(w.hunks)-1 {
-			if renderY >= 2 && renderY < height {
-				emptyStyle := lipgloss.NewStyle()
-				buf.SetString(0, renderY, strings.Repeat(" ", width), emptyStyle)
-			}
-			renderY++
-		}
+		currentRow += hunkHeight + 1 // +1 for spacing
 	}
+
+	// Delegate rendering to scroll view
+	w.scrollView.Render(buf)
 }
 
-// ensureSelectedVisible adjusts yOffset to keep the selected row visible.
-func (w *DiffContentView) ensureSelectedVisible(viewHeight, contentHeight int) {
-	// Ensure selected row is in view
-	if w.selectedRow < w.yOffset+2 { // +2 for header
-		w.yOffset = w.selectedRow - 2
-	} else if w.selectedRow >= w.yOffset+viewHeight {
-		w.yOffset = w.selectedRow - viewHeight + 1
+// ensureSelectedVisible adjusts scroll offset to keep the selected row visible.
+func (w *DiffContentView) ensureSelectedVisible() {
+	headerHeight := 2 // File header height
+	scrollableHeight := w.Bounds().Height - headerHeight
+	if scrollableHeight <= 0 {
+		return
 	}
 
-	// Clamp offset
-	maxOffset := contentHeight - viewHeight
-	if maxOffset < 0 {
-		maxOffset = 0
+	// Convert selected row to content-relative position (subtract header)
+	contentRow := w.selectedRow - headerHeight
+	if contentRow < 0 {
+		contentRow = 0
 	}
-	if w.yOffset > maxOffset {
-		w.yOffset = maxOffset
+
+	offset := w.scrollView.ScrollOffset()
+
+	// Scroll up if selection is above viewport
+	if contentRow < offset {
+		w.scrollView.SetScrollOffset(contentRow)
 	}
-	if w.yOffset < 0 {
-		w.yOffset = 0
+
+	// Scroll down if selection is below viewport
+	if contentRow >= offset+scrollableHeight {
+		w.scrollView.SetScrollOffset(contentRow - scrollableHeight + 1)
 	}
 }
 
