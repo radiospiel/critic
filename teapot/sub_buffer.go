@@ -188,22 +188,10 @@ func (s *SubBuffer) Sub(rect Rect) *SubBuffer {
 			X: s.offset.X + rect.X,
 			Y: s.offset.Y + rect.Y,
 		},
-		Size{
-			Width:  rect.Width,
-			Height: rect.Height,
-		},
+		rect.Size,
 	}
 	// Clip to our bounds
-	clipped := absRect.Intersect(Rect{
-		Position{
-			X: s.offset.X,
-			Y: s.offset.Y,
-		},
-		Size{
-			Width:  s.offset.Width,
-			Height: s.offset.Height,
-		},
-	})
+	clipped := absRect.Intersect(s.offset)
 	return &SubBuffer{
 		parent: s.parent,
 		offset: clipped,
