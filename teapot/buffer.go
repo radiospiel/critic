@@ -115,6 +115,13 @@ func (b *Buffer) GetCell(x, y int) Cell {
 	return b.cells[y][x]
 }
 
+// setCells is the internal implementation that writes cells without validation.
+// Preconditions: y is valid (0 <= y < height), x is valid (0 <= x < width),
+// cells is non-empty and fits within width.
+func (b *Buffer) setCells(x, y int, cells []Cell) {
+	copy(b.cells[y][x:], cells)
+}
+
 // SetCells writes a slice of cells at position (x, y).
 // Cells that extend beyond the buffer width are clipped.
 // Uses copy for efficiency when possible.
@@ -142,7 +149,41 @@ func (b *Buffer) SetCells(x, y int, cells []Cell) {
 		cells = cells[:available]
 	}
 
-	copy(b.cells[y][x:], cells)
+	b.setCells(x, y, cells)
+}
+
+// setString is the internal implementation that writes a string without validation.
+// Preconditions: y is valid (0 <= y < height), s is non-empty.
+// Handles x clipping internally.
+func (b *Buffer) setString(x, y int, s string, style lipgloss.Style) {
+	runes := []rune(s)
+
+	// Handle negative x by skipping runes
+	if x < 0 {
+		skip := -x
+		if skip >= len(runes) {
+			return
+		}
+		runes = runes[skip:]
+		x = 0
+	}
+
+	// Clip to buffer width
+	available := b.width - x
+	if available <= 0 {
+		return
+	}
+	if len(runes) > available {
+		runes = runes[:available]
+	}
+
+	// Build cells slice
+	cells := make([]Cell, len(runes))
+	for i, r := range runes {
+		cells[i] = Cell{Rune: r, Style: style}
+	}
+
+	b.setCells(x, y, cells)
 }
 
 // SetString writes a string at position (x, y) with the given style.
@@ -152,15 +193,7 @@ func (b *Buffer) SetString(x, y int, s string, style lipgloss.Style) {
 		return
 	}
 
-	runes := []rune(s)
-
-	// Build cells slice
-	cells := make([]Cell, len(runes))
-	for i, r := range runes {
-		cells[i] = Cell{Rune: r, Style: style}
-	}
-
-	b.SetCells(x, y, cells)
+	b.setString(x, y, s, style)
 }
 
 // SetStringTruncated writes a string, truncating with ellipsis if needed.
@@ -178,7 +211,11 @@ func (b *Buffer) SetStringTruncated(x, y int, s string, maxWidth int, style lipg
 		}
 	}
 
-	b.SetString(x, y, string(runes), style)
+	if len(runes) == 0 {
+		return
+	}
+
+	b.setString(x, y, string(runes), style)
 }
 
 // Fill fills a rectangular region with the given cell.
