@@ -121,10 +121,10 @@ func cpuProfile(t *testing.T, filename string, msg string, fn func()) {
 }
 
 // TestRenderProfile profiles rendering of FileListWidget and DiffViewWidget in a compositor.
-// It loads a real git diff between ex1 and ex2 tags and profiles the initial render.
+// It loads a real git diff between ex1 and ex2 commits and profiles the initial render.
 func TestRenderProfile(t *testing.T) {
-	// Get real diff between ex1 and ex2 tags
-	diffOutput, err := getGitDiffBetweenTags("ex1", "ex2")
+	// Get real diff between ex1 and ex2 commits
+	diffOutput, err := getGitDiffBetweenTags("2ce5966eb06280e48496372b1c0ab11f81d1b138", "e85a45510b488e01f4119448281c5318fe1b7644")
 	if err != nil {
 		t.Fatalf("failed to get git diff: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestRenderProfile(t *testing.T) {
 	}
 
 	if len(diff.Files) == 0 {
-		t.Fatal("no files in diff between ex1 and ex2")
+		t.Fatal("no files in diff")
 	}
 
 	// Find internal/app/app.go in the diff
@@ -147,7 +147,7 @@ func TestRenderProfile(t *testing.T) {
 		}
 	}
 	if appFile == nil {
-		t.Fatal("internal/app/app.go not found in diff between ex1 and ex2")
+		t.Fatal("internal/app/app.go not found in diff")
 	}
 
 	// Create widgets
