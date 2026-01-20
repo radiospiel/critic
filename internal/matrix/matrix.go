@@ -254,12 +254,18 @@ func (m *Screensaver) Render(buf *teapot.SubBuffer) {
 			style := m.getCharStyle(distFromHead, streak.length)
 
 			// Write the character at the streak's x position
-			// Always render 2 columns: if char is single-width, add a space
+			// Always occupy 2 cells in the buffer
 			charWidth := runewidth.RuneWidth(char)
 			if charWidth == 1 {
+				// Single-width char + space = 2 cells, 2 terminal columns
 				buf.SetString(streak.xPos, y, string(char)+" ", style)
 			} else {
-				buf.SetString(streak.xPos, y, string(char), style)
+				// Wide char takes 2 terminal columns but only 1 buffer cell
+				// Put null rune (0) in next cell as placeholder - renderRow will skip it
+				buf.SetCells(streak.xPos, y, []teapot.Cell{
+					{Rune: char, Style: style},
+					{Rune: 0, Style: style},
+				})
 			}
 		}
 	}
