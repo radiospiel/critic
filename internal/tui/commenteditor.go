@@ -21,7 +21,6 @@ type CommentEditor struct {
 	active           bool
 	lineNum          int
 	conversation     *critic.Conversation
-	isNewComment     bool // true if creating a new comment (no history to show)
 }
 
 // NewCommentEditor creates a new comment editor
@@ -457,12 +456,13 @@ func (m *CommentEditor) ActivateWithConversation(lineNum int, conv *critic.Conve
 	m.active = true
 	m.lineNum = lineNum
 	m.conversation = conv
-	m.isNewComment = conv == nil || len(conv.Messages) == 0
 	m.textarea.SetValue("")
 	m.textarea.Focus()
 
+	isNewComment := conv == nil || len(conv.Messages) == 0
+
 	// Update dialog title
-	if m.isNewComment {
+	if isNewComment {
 		m.ModalDialog.SetTitle("New Comment")
 		m.textarea.Placeholder = "Enter your comment..."
 	} else {
@@ -473,30 +473,7 @@ func (m *CommentEditor) ActivateWithConversation(lineNum int, conv *critic.Conve
 	// Update content widget
 	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
 		content.historyView.SetConversation(conv)
-		content.showHistory = !m.isNewComment
-		content.focusOnInput = true
-		content.textarea = m.textarea
-	}
-
-	return textarea.Blink
-}
-
-// Activate activates the comment editor for a specific line (legacy, creates new comment)
-func (m *CommentEditor) Activate(lineNum int, existingComment string) tea.Cmd {
-	// Legacy behavior - treat as new comment or editing existing
-	m.active = true
-	m.lineNum = lineNum
-	m.conversation = nil
-	m.isNewComment = true
-	m.textarea.SetValue(existingComment)
-	m.textarea.Focus()
-
-	m.ModalDialog.SetTitle("Edit Comment")
-	m.textarea.Placeholder = "Enter your comment..."
-
-	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
-		content.historyView.SetConversation(nil)
-		content.showHistory = false
+		content.showHistory = !isNewComment
 		content.focusOnInput = true
 		content.textarea = m.textarea
 	}
