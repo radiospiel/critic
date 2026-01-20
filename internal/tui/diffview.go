@@ -37,9 +37,9 @@ const (
 type DiffView struct {
 	teapot.BaseView // Embed BaseWidget to implement the Widget interface
 
-	file     *ctypes.FileDiff
-	viewport viewport.Model
-	ready    bool
+	file                 *ctypes.FileDiff
+	viewport             viewport.Model
+	ready                bool
 	highlighter          *highlight.Highlighter
 	cachedContent        string
 	cachedFile           *ctypes.FileDiff
@@ -258,12 +258,6 @@ func (m *DiffView) Render(buf *teapot.SubBuffer) {
 		screenRow := m.cursorLine - m.diffWidget.GetYOffset()
 		if screenRow >= 0 && screenRow < height {
 			buf.InvertRow(screenRow)
-			// Add chevron indicators at start and end of selected row
-			chevronStyle := lipgloss.NewStyle().Reverse(true)
-			buf.SetString(0, screenRow, ">", chevronStyle)
-			if width > 1 {
-				buf.SetString(width-1, screenRow, "<", chevronStyle)
-			}
 		}
 	}
 	logger.Info("DiffView.Render: complete, cursorLine=%d, screenRow=%d, focused=%v", m.cursorLine, m.cursorLine-m.diffWidget.GetYOffset(), m.Focused())
@@ -845,12 +839,6 @@ func (m *DiffView) renderDiff() (string, int, []int) {
 	// Apply selection overlay - invert the current line if focused and navigable
 	if m.Focused() && m.isNavigableLine(m.cursorLine) {
 		buffer.InvertRow(m.cursorLine)
-		// Add chevron indicators at start and end of selected row
-		chevronStyle := lipgloss.NewStyle().Reverse(true)
-		buffer.SetString(0, m.cursorLine, ">", chevronStyle)
-		if bufferWidth > 1 {
-			buffer.SetString(bufferWidth-1, m.cursorLine, "<", chevronStyle)
-		}
 	}
 
 	// Convert buffer to string

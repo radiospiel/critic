@@ -50,6 +50,7 @@ type Args struct {
 	Paths       []string // Paths to diff
 	Extensions  []string // File extensions to include
 	NoAnimation bool     // Disable animations
+	Debug       bool     // Enable debug mode
 }
 
 // GetDefaultBases returns the default base points based on git state
@@ -136,7 +137,8 @@ type Delegate struct {
 	resolver      *git.BaseResolver // Base resolver with polling
 	messaging     critic.Messaging  // Messaging interface for conversations
 	filterMode    FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
-	noAnimation bool              // Whether animations are disabled
+	noAnimation bool                 // Whether animations are disabled
+	debug       bool                 // Debug mode enabled
 	err         error
 	showHelp    bool                 // Whether to show help screen
 	screensaver *matrix.Screensaver  // Matrix screensaver
@@ -195,6 +197,7 @@ func NewDelegate(args *Args) *Delegate {
 		extensions:    args.Extensions,
 		messaging:   mdb,
 		noAnimation: args.NoAnimation,
+		debug:       args.Debug,
 		screensaver: screensaver,
 		gitRoot:     gitRoot,
 	}
@@ -325,7 +328,7 @@ func (d *Delegate) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 					conv = nil
 				}
 
-				cmd := d.commentEditor.ActivateWithConversation(lineNum, conv)
+				cmd := d.commentEditor.ActivateWithConversation(lineNum, conv, d.debug)
 				// Set the focus manager on the dialog and register as modal
 				fm := d.app.FocusManager()
 				d.commentEditor.SetFocusManager(fm)
@@ -521,15 +524,35 @@ func (d *Delegate) View(baseView string) string {
 		if startLine < 0 {
 			startLine = 0
 		}
+		endLine := startLine + len(editorLines)
 
-		for i, editorLine := range editorLines {
-			lineIdx := startLine + i
-			if lineIdx < len(lines) {
-				paddedLine := strings.Repeat(" ", leftPadding) + editorLine
-				if len([]rune(paddedLine)) < width {
-					paddedLine += strings.Repeat(" ", width-len([]rune(paddedLine)))
-				}
-				lines[lineIdx] = paddedLine
+		// Style for dimming underlying content
+		dimStyle := lipgloss.NewStyle().Faint(true)
+
+		// Dim all lines, overlaying the editor in the middle
+		for lineIdx := 0; lineIdx < len(lines); lineIdx++ {
+			originalLine := lines[lineIdx]
+
+			// Check if this line is within the editor area
+			if lineIdx >= startLine && lineIdx < endLine {
+				editorLineIdx := lineIdx - startLine
+				editorLine := editorLines[editorLineIdx]
+				editorWidth := lipgloss.Width(editorLine)
+
+				// Extract left portion of original line (dimmed)
+				leftPart := extractVisibleChars(originalLine, 0, leftPadding)
+				dimmedLeft := dimStyle.Render(leftPart)
+
+				// Extract right portion of original line (dimmed)
+				rightStart := leftPadding + editorWidth
+				rightPart := extractVisibleChars(originalLine, rightStart, width-rightStart)
+				dimmedRight := dimStyle.Render(rightPart)
+
+				lines[lineIdx] = dimmedLeft + editorLine + dimmedRight
+			} else {
+				// Lines outside the editor area - just dim them
+				dimmedLine := extractVisibleChars(originalLine, 0, width)
+				lines[lineIdx] = dimStyle.Render(dimmedLine)
 			}
 		}
 		return strings.Join(lines, "\n")
@@ -652,6 +675,31 @@ func resolveBase(base string) (string, error) {
 	}
 
 	return mergeBase, nil
+}
+
+// extractVisibleChars extracts visible characters from a string with ANSI codes.
+// It returns characters from position start to start+length (by visible position).
+func extractVisibleChars(s string, start, length int) string {
+	if length <= 0 {
+		return ""
+	}
+
+	// Parse the ANSI line to get cells
+	cells := teapot.ParseANSILine(s)
+
+	// Extract the requested range
+	var result strings.Builder
+	for i := start; i < start+length; i++ {
+		if i < len(cells) {
+			if cells[i].Rune != 0 {
+				result.WriteRune(cells[i].Rune)
+			}
+		} else {
+			result.WriteRune(' ') // Pad with spaces if line is shorter
+		}
+	}
+
+	return result.String()
 }
 
 // renderError renders an error message

@@ -37,3 +37,14 @@ func IfElse[T any](condition bool, ifTrue T, ifFalse T) T {
 	}
 	return ifFalse
 }
+
+// Clamp constrains a value to be within the range [minVal, maxVal].
+func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
+	if value < minVal {
+		return minVal
+	}
+	if value > maxVal {
+		return maxVal
+	}
+	return value
+}
