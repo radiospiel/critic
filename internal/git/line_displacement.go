@@ -139,7 +139,7 @@ func HasPrefix(buf []byte, prefix []byte) bool {
 		return false
 	}
 
-	return bytes.Compare(buf[0:len(prefix)], prefix) == 0
+	return bytes.Equal(buf[0:len(prefix)], prefix)
 }
 
 func HasSuffix(buf []byte, suffix []byte) bool {
@@ -147,7 +147,7 @@ func HasSuffix(buf []byte, suffix []byte) bool {
 		return false
 	}
 
-	return bytes.Compare(buf[len(buf)-len(suffix):], suffix) == 0
+	return bytes.Equal(buf[len(buf)-len(suffix):], suffix)
 }
 
 // matchColor checks if a line matches any known git diff color and returns the color key and text content
