@@ -40,7 +40,8 @@
       "Bash(go list:*)",
       "mcp__critic2__reply_to_critic_conversation",
       "mcp__ide__getDiagnostics",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "mcp__gopls__go_diagnostics"
     ]
   }
 }

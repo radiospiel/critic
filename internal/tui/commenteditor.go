@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"git.15b.it/eno/critic/pkg/critic"
-	"git.15b.it/eno/critic/simple-go/utils"
 	pot "git.15b.it/eno/critic/teapot"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,7 +17,7 @@ import (
 type CommentEditor struct {
 	*pot.ModalDialog // embedded - inherits Close() and other dialog methods
 	historyView      *conversationHistoryView
-	textarea         textarea.Model
+	textareaView     *pot.TextAreaView
 	active           bool
 	lineNum          int
 	conversation     *critic.Conversation
@@ -46,13 +45,18 @@ func NewCommentEditor() CommentEditor {
 	}
 	ta.BlurredStyle = ta.FocusedStyle
 
-	// Create the history view widget
+	// Create the views
 	historyView := newConversationHistoryWidget()
+	textareaView := pot.NewTextAreaView(ta)
+	separator := pot.NewSeparatorView()
+	vbox := pot.NewVBox(0)
 
-	// Create a combined widget with history + textarea
+	// Create a combined widget with history + textarea using VBox layout
 	contentWidget := &commentEditorContent{
-		historyView: historyView,
-		textarea:    ta,
+		vbox:         vbox,
+		historyView:  historyView,
+		separator:    separator,
+		textareaView: textareaView,
 	}
 
 	dialog := pot.NewModalDialog(contentWidget, "Reply to Comment")
@@ -60,10 +64,10 @@ func NewCommentEditor() CommentEditor {
 	dialog.SetBorderFooter("Ctrl+S: Save │ Esc: Cancel")
 
 	return CommentEditor{
-		ModalDialog: dialog,
-		historyView: historyView,
-		textarea:    ta,
-		active:      false,
+		ModalDialog:  dialog,
+		historyView:  historyView,
+		textareaView: textareaView,
+		active:       false,
 	}
 }
 
@@ -221,17 +225,75 @@ func (h *conversationHistoryView) Render(buf *pot.SubBuffer) {
 		h.rebuildLines(width)
 	}
 
+	totalLines := len(h.lines)
+
+	// Calculate max scroll - when scrolled, hint takes 1 line
+	maxScroll := 0
+	if totalLines > height {
+		maxScroll = totalLines - height + 1
+	}
+
+	// Auto-scroll to end on first render (show most recent content)
+	if !h.initialScrolled && totalLines > height {
+		h.scrollOffset = maxScroll
+		h.initialScrolled = true
+	}
+
+	// Clamp scroll offset to valid range
+	if h.scrollOffset < 0 {
+		h.scrollOffset = 0
+	}
+	if h.scrollOffset > maxScroll {
+		h.scrollOffset = maxScroll
+	}
+
 	// Style for history (slightly dimmed)
 	historyStyle := lipgloss.NewStyle().Faint(true)
+	hintStyle := lipgloss.NewStyle().Faint(true).Italic(true)
 
-	for y := range height {
+	// Check if there are hidden lines above
+	hiddenAbove := h.scrollOffset
+	showHint := hiddenAbove > 0
+
+	startY := 0
+	renderHeight := height
+	if showHint {
+		// Reserve first line for hint
+		startY = 1
+		renderHeight = height - 1
+
+		// Render scroll hint
+		hint := fmt.Sprintf("↑ %d more lines above (use ↑/↓ to scroll)", hiddenAbove)
+		if len(hint) > width {
+			hint = hint[:width]
+		}
+		styled := hintStyle.Render(hint)
+		parsedCells := pot.ParseANSILine(styled)
+		rowCells := make([]pot.Cell, width)
+		for x := range width {
+			if x < len(parsedCells) {
+				rowCells[x] = parsedCells[x]
+			} else {
+				rowCells[x] = pot.Cell{Rune: ' '}
+			}
+		}
+		buf.SetCells(0, 0, rowCells)
+	}
+
+	// Render history lines
+	for y := range renderHeight {
+		bufY := startY + y
+		if bufY >= buf.Height() {
+			break
+		}
+
 		lineIdx := h.scrollOffset + y
 		var line string
 		if lineIdx < len(h.lines) {
 			line = h.lines[lineIdx]
 		}
 
-		// Truncate or pad to width
+		// Truncate if needed
 		visibleWidth := lipgloss.Width(line)
 		if visibleWidth > width {
 			line = truncateString(line, width)
@@ -250,7 +312,7 @@ func (h *conversationHistoryView) Render(buf *pot.SubBuffer) {
 				rowCells[x] = pot.Cell{Rune: ' '}
 			}
 		}
-		buf.SetCells(0, y, rowCells)
+		buf.SetCells(0, bufY, rowCells)
 	}
 }
 
@@ -312,12 +374,13 @@ func truncateString(s string, width int) string {
 	return string(runes[:width-3]) + "..."
 }
 
-// commentEditorContent combines history view and textarea
-// TODO(bot) render history view and textarea in a vertically scrollable container.
+// commentEditorContent combines history view and textarea using a VBox layout.
 type commentEditorContent struct {
 	pot.BaseView
+	vbox         *pot.BoxLayout
 	historyView  *conversationHistoryView
-	textarea     textarea.Model
+	separator    *pot.SeparatorView
+	textareaView *pot.TextAreaView
 	focusOnInput bool // true when focus is on textarea
 	showHistory  bool // true when there's history to show
 }
@@ -326,7 +389,7 @@ type commentEditorContent struct {
 // It counts the number of lines in the textarea and returns at least minHeight.
 // When maxHeight > 0, the height is capped at that value.
 func (c *commentEditorContent) calcTextareaHeight(minHeight, maxHeight int) int {
-	content := c.textarea.Value()
+	content := c.textareaView.Value()
 	if content == "" {
 		return minHeight
 	}
@@ -342,11 +405,22 @@ func (c *commentEditorContent) calcTextareaHeight(minHeight, maxHeight int) int 
 
 func (c *commentEditorContent) SetBounds(bounds pot.Rect) {
 	c.BaseView.SetBounds(bounds)
+	c.updateLayout()
+	c.vbox.SetBounds(bounds)
+}
+
+// updateLayout updates the VBox children and constraints based on current state.
+func (c *commentEditorContent) updateLayout() {
+	bounds := c.Bounds()
+	c.vbox.ClearChildren()
 
 	if !c.showHistory {
 		// No history - textarea takes full height
-		c.textarea.SetWidth(bounds.Width)
-		c.textarea.SetHeight(bounds.Height)
+		c.textareaView.SetConstraints(pot.Constraints{
+			MinHeight:       bounds.Height,
+			VerticalStretch: 1,
+		})
+		c.vbox.AddChild(c.textareaView)
 		return
 	}
 
@@ -358,186 +432,32 @@ func (c *commentEditorContent) SetBounds(bounds pot.Rect) {
 	// Calculate textarea height based on content (minimum 3, max half the space)
 	maxTextareaHeight := bounds.Height / 2
 	textareaHeight := c.calcTextareaHeight(3, maxTextareaHeight)
-	// History gets remaining space minus separator
-	historyHeight := max(bounds.Height-textareaHeight-1, 1)
 
-	c.historyView.SetBounds(pot.NewRect(bounds.X, bounds.Y, bounds.Width, historyHeight))
-	c.textarea.SetWidth(bounds.Width)
-	c.textarea.SetHeight(textareaHeight)
+	// History view: takes remaining space (with stretch)
+	c.historyView.SetConstraints(pot.Constraints{
+		MinHeight:       1,
+		VerticalStretch: 1,
+	})
+
+	// Textarea: fixed preferred height based on content
+	c.textareaView.SetConstraints(pot.Constraints{
+		MinHeight:       3,
+		PreferredHeight: textareaHeight,
+	})
+
+	c.vbox.AddChild(c.historyView)
+	c.vbox.AddChild(c.separator)
+	c.vbox.AddChild(c.textareaView)
 }
 
 func (c *commentEditorContent) Render(buf *pot.SubBuffer) {
-	width := buf.Width()
-	height := buf.Height()
-
-	if !c.showHistory {
-		// Just render textarea
-		c.renderTextarea(buf, 0, height)
-		return
-	}
-
-	// Ensure lines are built before calculating layout
-	if width != c.historyView.lastWidth {
-		c.historyView.rebuildLines(width)
-	}
-
-	// Calculate textarea height based on content (minimum 3, max half the space)
-	maxTextareaHeight := height / 2
-	textareaHeight := c.calcTextareaHeight(3, maxTextareaHeight)
-	historyHeight := max(height-textareaHeight-1, 1)
-
-	// Render history directly into buffer
-	c.renderHistory(buf, 0, historyHeight, width)
-
-	// Render separator
-	separatorY := historyHeight
-	separatorStyle := lipgloss.NewStyle().Faint(true)
-	separator := strings.Repeat("─", width)
-	styled := separatorStyle.Render(separator)
-	parsedCells := pot.ParseANSILine(styled)
-
-	// Build row with padding
-	rowCells := make([]pot.Cell, width)
-	for x := range width {
-		if x < len(parsedCells) {
-			rowCells[x] = parsedCells[x]
-		} else {
-			rowCells[x] = pot.Cell{Rune: '─'}
-		}
-	}
-	buf.SetCells(0, separatorY, rowCells)
-
-	// Render textarea
-	textareaY := separatorY + 1
-	c.renderTextarea(buf, textareaY, textareaHeight)
+	// Delegate rendering to VBox
+	c.vbox.Render(buf)
 }
 
-func (c *commentEditorContent) renderHistory(buf *pot.SubBuffer, startY, height, width int) {
-	// Rebuild lines if width changed
-	if width != c.historyView.lastWidth {
-		c.historyView.rebuildLines(width)
-	}
-
-	totalLines := len(c.historyView.lines)
-
-	// Calculate max scroll - when scrolled, hint takes 1 line
-	maxScroll := 0
-	if totalLines > height {
-		maxScroll = totalLines - height + 1
-	}
-
-	// Auto-scroll to end on first render (show most recent content)
-	if !c.historyView.initialScrolled && totalLines > height {
-		c.historyView.scrollOffset = maxScroll
-		c.historyView.initialScrolled = true
-	}
-
-	// Clamp scroll offset to valid range
-	c.historyView.scrollOffset = utils.Clamp(c.historyView.scrollOffset, 0, maxScroll)
-
-	// Style for history (slightly dimmed)
-	historyStyle := lipgloss.NewStyle().Faint(true)
-	hintStyle := lipgloss.NewStyle().Faint(true).Italic(true)
-
-	// Check if there are hidden lines above
-	hiddenAbove := c.historyView.scrollOffset
-	showHint := hiddenAbove > 0
-
-	renderStartY := startY
-	renderHeight := height
-	if showHint {
-		// Reserve first line for hint
-		renderStartY = startY + 1
-		renderHeight = height - 1
-	}
-
-	// Render scroll hint if needed
-	if showHint {
-		hint := fmt.Sprintf("↑ %d more lines above (use ↑/↓ to scroll)", hiddenAbove)
-		if len(hint) > width {
-			hint = hint[:width]
-		}
-		styled := hintStyle.Render(hint)
-		parsedCells := pot.ParseANSILine(styled)
-		rowCells := make([]pot.Cell, width)
-		for x := range width {
-			if x < len(parsedCells) {
-				rowCells[x] = parsedCells[x]
-			} else {
-				rowCells[x] = pot.Cell{Rune: ' '}
-			}
-		}
-		buf.SetCells(0, startY, rowCells)
-	}
-
-	// Render history lines - only render actual content, not empty space beyond
-	linesToRender := totalLines - c.historyView.scrollOffset
-	if linesToRender > renderHeight {
-		linesToRender = renderHeight
-	}
-
-	for y := range linesToRender {
-		bufY := renderStartY + y
-		if bufY >= buf.Height() {
-			break
-		}
-
-		lineIdx := c.historyView.scrollOffset + y
-		line := c.historyView.lines[lineIdx]
-
-		// Truncate if needed
-		visibleWidth := lipgloss.Width(line)
-		if visibleWidth > width {
-			line = truncateString(line, width)
-		}
-
-		// Render with style
-		styled := historyStyle.Render(line)
-		parsedCells := pot.ParseANSILine(styled)
-
-		// Build row with padding
-		rowCells := make([]pot.Cell, width)
-		for x := range width {
-			if x < len(parsedCells) {
-				rowCells[x] = parsedCells[x]
-			} else {
-				rowCells[x] = pot.Cell{Rune: ' '}
-			}
-		}
-		buf.SetCells(0, bufY, rowCells)
-	}
-}
-
-func (c *commentEditorContent) renderTextarea(buf *pot.SubBuffer, startY, height int) {
-	view := c.textarea.View()
-	lines := strings.Split(view, "\n")
-
-	width := buf.Width()
-
-	for y := range height {
-		bufY := startY + y
-		if bufY >= buf.Height() {
-			break
-		}
-
-		var line string
-		if y < len(lines) {
-			line = lines[y]
-		}
-
-		parsedCells := pot.ParseANSILine(line)
-
-		// Build row with padding
-		rowCells := make([]pot.Cell, width)
-		for x := range width {
-			if x < len(parsedCells) {
-				rowCells[x] = parsedCells[x]
-			} else {
-				rowCells[x] = pot.Cell{Rune: ' '}
-			}
-		}
-		buf.SetCells(0, bufY, rowCells)
-	}
+// Children returns the VBox's children for focus traversal.
+func (c *commentEditorContent) Children() []pot.View {
+	return c.vbox.Children()
 }
 
 func (c *commentEditorContent) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
@@ -560,10 +480,8 @@ func (c *commentEditorContent) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		}
 	}
 
-	// Other keys go to textarea
-	var cmd tea.Cmd
-	c.textarea, cmd = c.textarea.Update(msg)
-	return true, cmd
+	// Other keys go to textarea view
+	return c.textareaView.HandleKey(msg)
 }
 
 // Init initializes the comment editor
@@ -591,11 +509,7 @@ func (m *CommentEditor) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	default:
 		// Pass other keys to content widget
 		if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
-			handled, cmd := content.HandleKey(msg)
-			if handled {
-				// Sync textarea state
-				m.textarea = content.textarea
-			}
+			_, cmd := content.HandleKey(msg)
 			return true, cmd // Modal captures all keys when active
 		}
 	}
@@ -624,9 +538,6 @@ func (m *CommentEditor) Render(buf *pot.SubBuffer) {
 		return
 	}
 
-	// Sync textarea state to widget
-	m.syncTextareaState()
-
 	// Render the dialog using RenderWidget for proper border handling
 	pot.RenderWidget(m.ModalDialog, buf)
 }
@@ -638,18 +549,8 @@ func (m *CommentEditor) RenderOverlay(baseView string, screenWidth, screenHeight
 		return baseView
 	}
 
-	// Sync textarea state to widget
-	m.syncTextareaState()
-
 	// Use the ModalDialog's RenderOverlay for dimming and centering
 	return m.ModalDialog.RenderOverlay(baseView, screenWidth, screenHeight)
-}
-
-// syncTextareaState syncs the textarea state to the content widget
-func (m *CommentEditor) syncTextareaState() {
-	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
-		content.textarea = m.textarea
-	}
 }
 
 // ActivateWithConversation activates the comment editor with a full conversation
@@ -657,30 +558,33 @@ func (m *CommentEditor) ActivateWithConversation(lineNum int, conv *critic.Conve
 	m.active = true
 	m.lineNum = lineNum
 	m.conversation = conv
-	m.textarea.SetValue("")
-	m.textarea.Focus()
+	m.textareaView.SetValue("")
+	m.textareaView.Focus()
 
 	isNewComment := conv == nil || len(conv.Messages) == 0
 
-	// Update dialog title
+	// Update dialog title and placeholder via underlying model
+	ta := m.textareaView.Model()
 	if isNewComment {
 		m.ModalDialog.SetTitle("New Comment")
-		m.textarea.Placeholder = "Enter your comment..."
+		ta.Placeholder = "Enter your comment..."
 	} else {
 		title := fmt.Sprintf("Reply to Comment (line %d)", lineNum)
 		if debug && conv.UUID != "" {
 			title = fmt.Sprintf("Reply to Comment (line %d) [%s]", lineNum, conv.UUID)
 		}
 		m.ModalDialog.SetTitle(title)
-		m.textarea.Placeholder = "Enter your reply..."
+		ta.Placeholder = "Enter your reply..."
 	}
+	m.textareaView.SetModel(ta)
 
 	// Update content widget
 	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
 		content.historyView.SetConversation(conv)
 		content.showHistory = !isNewComment
 		content.focusOnInput = true
-		content.textarea = m.textarea
+		// Trigger layout update with current bounds
+		content.SetBounds(content.Bounds())
 	}
 
 	return textarea.Blink
@@ -689,8 +593,8 @@ func (m *CommentEditor) ActivateWithConversation(lineNum int, conv *critic.Conve
 // Deactivate deactivates the comment editor and clears it from the focus manager's modal.
 func (m *CommentEditor) Deactivate() {
 	m.active = false
-	m.textarea.Blur()
-	m.textarea.SetValue("")
+	m.textareaView.Blur()
+	m.textareaView.SetValue("")
 	m.conversation = nil
 	m.Close() // Clear modal from focus manager (inherited from ModalDialog)
 }
@@ -707,7 +611,7 @@ func (m CommentEditor) GetLineNum() int {
 
 // GetComment returns the current comment text
 func (m CommentEditor) GetComment() string {
-	return strings.TrimSpace(m.textarea.Value())
+	return strings.TrimSpace(m.textareaView.Value())
 }
 
 // GetConversationUUID returns the UUID of the conversation being replied to
@@ -725,14 +629,11 @@ func (m CommentEditor) IsReply() bool {
 
 // SetSize sets the size of the comment editor
 func (m *CommentEditor) SetSize(width, height int) {
-	// Reserve space for border
-	innerWidth := width - 4
-	innerHeight := height - 4
-	m.textarea.SetWidth(innerWidth)
-	m.textarea.SetHeight(innerHeight)
 	m.ModalDialog.SetBounds(pot.NewRect(0, 0, width, height))
 
-	// Update content widget bounds
+	// Update content widget bounds (inside the border)
+	innerWidth := width - 4
+	innerHeight := height - 4
 	if content, ok := m.ModalDialog.Content().(*commentEditorContent); ok {
 		content.SetBounds(pot.NewRect(0, 0, innerWidth, innerHeight))
 	}
