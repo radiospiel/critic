@@ -583,6 +583,8 @@ func (m *CommentEditor) ActivateWithConversation(lineNum int, conv *critic.Conve
 		content.historyView.SetConversation(conv)
 		content.showHistory = !isNewComment
 		content.focusOnInput = true
+		// Trigger layout update with current bounds
+		content.SetBounds(content.Bounds())
 	}
 
 	return textarea.Blink
