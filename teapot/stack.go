@@ -236,15 +236,16 @@ func (m *Modal) SetBounds(bounds Rect) {
 // Render renders the modal with optional dimmed background.
 func (m *Modal) Render(buf *SubBuffer) {
 	// Dim background if enabled
-	if m.dimBackground {
+	if m.dimBackground && buf.Width() > 0 {
 		dimStyle := lipgloss.NewStyle().Faint(true)
+		// y values from 0 to Height()-1 are valid, cells is full width (non-empty)
 		for y := 0; y < buf.Height(); y++ {
 			cells := make([]Cell, buf.Width())
 			for x := 0; x < buf.Width(); x++ {
 				cells[x] = buf.GetCell(x, y)
 				cells[x].Style = dimStyle
 			}
-			buf.SetCells(0, y, cells)
+			buf.setCells(0, y, cells)
 		}
 	}
 

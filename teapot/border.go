@@ -217,22 +217,22 @@ func RenderBorder(buf *SubBuffer, border Border) {
 	leftChars := borderCharSets[border.Left]
 	rightChars := borderCharSets[border.Right]
 
-	// Draw corners
+	// Draw corners (y values are valid since height >= 2, strings are single chars)
 	if border.Top != BorderNone || border.Left != BorderNone {
 		corner := getCorner(border.Left, border.Top, "topLeft")
-		buf.SetString(0, 0, string(corner), border.Style)
+		buf.setString(0, 0, string(corner), border.Style)
 	}
 	if border.Top != BorderNone || border.Right != BorderNone {
 		corner := getCorner(border.Right, border.Top, "topRight")
-		buf.SetString(width-1, 0, string(corner), border.Style)
+		buf.setString(width-1, 0, string(corner), border.Style)
 	}
 	if border.Bottom != BorderNone || border.Left != BorderNone {
 		corner := getCorner(border.Left, border.Bottom, "bottomLeft")
-		buf.SetString(0, height-1, string(corner), border.Style)
+		buf.setString(0, height-1, string(corner), border.Style)
 	}
 	if border.Bottom != BorderNone || border.Right != BorderNone {
 		corner := getCorner(border.Right, border.Bottom, "bottomRight")
-		buf.SetString(width-1, height-1, string(corner), border.Style)
+		buf.setString(width-1, height-1, string(corner), border.Style)
 	}
 
 	// Draw top edge
@@ -245,17 +245,17 @@ func RenderBorder(buf *SubBuffer, border Border) {
 		buf.SetString(1, height-1, strings.Repeat(string(bottomChars.horizontal), width-2), border.Style)
 	}
 
-	// Draw left edge
+	// Draw left edge (loop only executes when y values are valid)
 	if border.Left != BorderNone {
 		for y := 1; y < height-1; y++ {
-			buf.SetString(0, y, string(leftChars.vertical), border.Style)
+			buf.setString(0, y, string(leftChars.vertical), border.Style)
 		}
 	}
 
-	// Draw right edge
+	// Draw right edge (loop only executes when y values are valid)
 	if border.Right != BorderNone {
 		for y := 1; y < height-1; y++ {
-			buf.SetString(width-1, y, string(rightChars.vertical), border.Style)
+			buf.setString(width-1, y, string(rightChars.vertical), border.Style)
 		}
 	}
 }
