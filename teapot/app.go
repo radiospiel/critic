@@ -135,8 +135,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.compositor.Resize(msg.Width, msg.Height)
 
+		// Also notify delegate of window size change
+		if a.delegate != nil {
+			if cmd := a.delegate.HandleMessage(msg); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+
 		// Clear screen on resize to avoid artifacts
-		return a, tea.ClearScreen
+		cmds = append(cmds, tea.ClearScreen)
+		return a, tea.Batch(cmds...)
 
 	case ComposerTickMsg:
 		// Notify all tick subscribers

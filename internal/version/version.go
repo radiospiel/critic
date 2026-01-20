@@ -4,13 +4,40 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"git.15b.it/eno/critic/simple-go/logger"
 )
 
-// Version is the current binary version.
-// This should be updated with each release.
-const Version = "0.1.0"
+var (
+	version     string
+	versionOnce sync.Once
+)
+
+// Version returns the binary version based on its modification timestamp.
+func Version() string {
+	versionOnce.Do(func() {
+		version = computeVersion()
+	})
+	return version
+}
+
+func computeVersion() string {
+	exe, err := os.Executable()
+	if err != nil {
+		logger.Info("Could not determine executable path: %v", err)
+		return "unknown"
+	}
+
+	info, err := os.Stat(exe)
+	if err != nil {
+		logger.Info("Could not stat executable: %v", err)
+		return "unknown"
+	}
+
+	return info.ModTime().UTC().Format(time.RFC3339)
+}
 
 // versionFileName is the name of the file that stores the last seen version.
 const versionFileName = ".critic.version"
@@ -30,8 +57,8 @@ func IsFirstRunForVersion(gitRoot string) bool {
 	}
 
 	lastVersion := strings.TrimSpace(string(data))
-	if lastVersion != Version {
-		logger.Info("Version changed from %s to %s", lastVersion, Version)
+	if lastVersion != Version() {
+		logger.Info("Version changed from %s to %s", lastVersion, Version())
 		return true
 	}
 
@@ -43,5 +70,5 @@ func IsFirstRunForVersion(gitRoot string) bool {
 // showing it again for the same version.
 func MarkVersionSeen(gitRoot string) error {
 	versionFile := filepath.Join(gitRoot, versionFileName)
-	return os.WriteFile(versionFile, []byte(Version+"\n"), 0644)
+	return os.WriteFile(versionFile, []byte(Version()+"\n"), 0644)
 }

@@ -25,13 +25,13 @@ type Screensaver struct {
 // rainStreak represents a single streak of falling characters.
 // Each streak occupies 2 terminal columns (for double-width characters).
 type rainStreak struct {
-	xPos      int     // X position (column) where this streak renders
-	chars     []rune  // Characters in the streak (from top to bottom)
-	head      int     // Position of the "head" (leading character)
-	length    int     // Length of the visible trail
-	speed     int     // How many ticks between updates
-	tickCount int     // Counter for speed
-	active    bool    // Whether this streak is currently running
+	xPos       int    // X position (column) where this streak renders
+	chars      []rune // Characters in the streak (from top to bottom)
+	head       int    // Position of the "head" (leading character)
+	length     int    // Length of the visible trail
+	speed      int    // How many ticks between updates
+	tickCount  int    // Counter for speed
+	active     bool   // Whether this streak is currently running
 	startDelay int    // Ticks to wait before starting
 }
 
@@ -269,6 +269,9 @@ func (m *Screensaver) Render(buf *teapot.SubBuffer) {
 			}
 		}
 	}
+
+	// Render centered message box
+	m.renderMessageBox(buf)
 }
 
 // getCharStyle returns the style for a character based on its position in the trail
@@ -301,4 +304,48 @@ func (m *Screensaver) getCharStyle(distFromHead, length int) lipgloss.Style {
 	return lipgloss.NewStyle().
 		Foreground(lipgloss.Color(colorCode)).
 		Background(lipgloss.Color("0"))
+}
+
+// renderMessageBox draws a centered message box with border
+func (m *Screensaver) renderMessageBox(buf *teapot.SubBuffer) {
+	message := "Press <space> to start critic"
+	msgLen := len(message)
+
+	// Box dimensions (message + padding + border)
+	boxWidth := msgLen + 4 // 1 border + 1 padding on each side
+	boxHeight := 3         // 1 border top + 1 message + 1 border bottom
+
+	// Center the box
+	startX := (m.width - boxWidth) / 2
+	startY := (m.height - boxHeight) / 2
+
+	if startX < 0 || startY < 0 {
+		return // Screen too small
+	}
+
+	// Style for the box
+	boxStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("46")). // Green
+		Background(lipgloss.Color("0")) // Black
+
+	// Draw top border: ┌──────┐
+	buf.SetString(startX, startY, "┌", boxStyle)
+	for x := 1; x < boxWidth-1; x++ {
+		buf.SetString(startX+x, startY, "─", boxStyle)
+	}
+	buf.SetString(startX+boxWidth-1, startY, "┐", boxStyle)
+
+	// Draw middle row: │ message │
+	buf.SetString(startX, startY+1, "│", boxStyle)
+	buf.SetString(startX+1, startY+1, " ", boxStyle)
+	buf.SetString(startX+2, startY+1, message, boxStyle)
+	buf.SetString(startX+2+msgLen, startY+1, " ", boxStyle)
+	buf.SetString(startX+boxWidth-1, startY+1, "│", boxStyle)
+
+	// Draw bottom border: └──────┘
+	buf.SetString(startX, startY+2, "└", boxStyle)
+	for x := 1; x < boxWidth-1; x++ {
+		buf.SetString(startX+x, startY+2, "─", boxStyle)
+	}
+	buf.SetString(startX+boxWidth-1, startY+2, "┘", boxStyle)
 }

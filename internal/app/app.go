@@ -136,11 +136,11 @@ type Delegate struct {
 	resolver      *git.BaseResolver // Base resolver with polling
 	messaging     critic.Messaging  // Messaging interface for conversations
 	filterMode    FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
-	noAnimation   bool              // Whether animations are disabled
-	err           error
-	showHelp      bool // Whether to show help screen
-	screensaver   *matrix.Screensaver // Matrix screensaver
-	gitRoot       string                 // Git repository root path
+	noAnimation bool              // Whether animations are disabled
+	err         error
+	showHelp    bool                 // Whether to show help screen
+	screensaver *matrix.Screensaver  // Matrix screensaver
+	gitRoot     string               // Git repository root path
 }
 
 // NewDelegate creates a new critic delegate
@@ -179,7 +179,7 @@ func NewDelegate(args *Args) *Delegate {
 	// Check if this is the first run for this version
 	showScreensaver := version.IsFirstRunForVersion(gitRoot)
 	if showScreensaver {
-		logger.Info("First run for version %s, will show screensaver", version.Version)
+		logger.Info("First run for version %s, will show screensaver", version.Version())
 	}
 
 	d := &Delegate{
@@ -193,10 +193,10 @@ func NewDelegate(args *Args) *Delegate {
 		currentBase:   0, // Start with first base
 		paths:         args.Paths,
 		extensions:    args.Extensions,
-		messaging:     mdb,
-		noAnimation:   args.NoAnimation,
-		screensaver:   screensaver,
-		gitRoot:       gitRoot,
+		messaging:   mdb,
+		noAnimation: args.NoAnimation,
+		screensaver: screensaver,
+		gitRoot:     gitRoot,
 	}
 
 	// Set up screensaver done callback to mark version as seen
@@ -379,6 +379,7 @@ func (d *Delegate) HandleMessage(msg tea.Msg) tea.Cmd {
 
 		// Start screensaver on first window size message if this is first run
 		if version.IsFirstRunForVersion(d.gitRoot) && !d.screensaver.IsActive() {
+			logger.Info("Starting screensaver with size %dx%d", msg.Width, msg.Height)
 			d.screensaver.Start(msg.Width, msg.Height)
 		}
 
