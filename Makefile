@@ -2,7 +2,7 @@ BINARY := critic
 PREFIX := /usr/local
 BINDIR := $(PREFIX)/bin
 
-.PHONY: all build test integration install uninstall clean
+.PHONY: all build test unit-tests integration install uninstall clean
 
 all: test integration
 
@@ -11,6 +11,9 @@ build:
 
 test:
 	go test ./...
+
+unit-tests:
+	go test $$(go list ./... | grep -v '/tests/')
 
 integration:
 	make -C tests/integration/
