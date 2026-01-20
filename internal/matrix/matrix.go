@@ -19,6 +19,7 @@ type Screensaver struct {
 	onDone   func() // Callback when screensaver is dismissed
 	rng      *rand.Rand
 	lastTick int64
+	offset   int // 0 or 1 - grid offset for visual variety
 }
 
 // rainStreak represents a single streak of falling characters.
@@ -76,38 +77,42 @@ func (m *Screensaver) Start(width, height int) {
 	m.active = true
 	m.lastTick = teapot.GlobalTickCount
 
-	// Calculate number of possible streak positions.
-	// Each streak needs 2 columns for the double-width character.
-	// We allow streaks to start at any column (even or odd) to create variety.
-	// Streaks that would go off the right edge are still allowed but will be clipped.
+	// Pick a random grid offset (0 or 1) for visual variety between runs
+	m.offset = m.rng.Intn(2)
 
-	// Create a pool of possible starting positions (every column)
-	// but only activate some of them to avoid too much density
-	numPossiblePositions := width
-	if numPossiblePositions < 1 {
-		numPossiblePositions = 1
+	// Calculate number of slots available.
+	// Each slot is 2 columns wide (for double-width characters).
+	// Slots are positioned at: offset, offset+2, offset+4, ...
+	// This ensures no overlapping between streaks.
+	numSlots := (width - m.offset) / 2
+	if numSlots < 1 {
+		numSlots = 1
 	}
 
-	// We want roughly width/3 streaks active for good density
-	// (since each streak is 2 cols wide, this gives nice spacing)
-	numStreaks := width / 3
+	// Use about 1/3 of available slots for good visual density
+	numStreaks := numSlots / 2
 	if numStreaks < 1 {
 		numStreaks = 1
+	}
+	if numStreaks > numSlots {
+		numStreaks = numSlots
 	}
 
 	m.streaks = make([]*rainStreak, numStreaks)
 
-	// Distribute streaks across the screen width
-	// Allow both even and odd starting positions
-	for i := 0; i < numStreaks; i++ {
-		// Pick a random x position across the full width
-		// This naturally allows both even and odd offsets
-		xPos := m.rng.Intn(width - 1) // -1 to leave room for 2-col char
-		if xPos < 0 {
-			xPos = 0
-		}
+	// Randomly select which slots to use
+	slots := make([]int, numSlots)
+	for i := range slots {
+		slots[i] = m.offset + i*2 // positions: offset, offset+2, offset+4, ...
+	}
+	// Shuffle slots
+	m.rng.Shuffle(len(slots), func(i, j int) {
+		slots[i], slots[j] = slots[j], slots[i]
+	})
 
-		m.streaks[i] = m.newStreak(xPos)
+	// Assign streaks to the first numStreaks slots
+	for i := 0; i < numStreaks; i++ {
+		m.streaks[i] = m.newStreak(slots[i])
 		// Stagger the start times for a more natural effect
 		m.streaks[i].startDelay = m.rng.Intn(height)
 	}
@@ -156,11 +161,13 @@ func (m *Screensaver) resetStreak(streak *rainStreak) {
 	streak.speed = 1 + m.rng.Intn(2)
 	streak.startDelay = m.rng.Intn(m.height / 2)
 
-	// Pick a new random x position (allows both even and odd)
-	streak.xPos = m.rng.Intn(m.width - 1)
-	if streak.xPos < 0 {
-		streak.xPos = 0
+	// Pick a new random slot position (aligned to the grid)
+	numSlots := (m.width - m.offset) / 2
+	if numSlots < 1 {
+		numSlots = 1
 	}
+	slotIndex := m.rng.Intn(numSlots)
+	streak.xPos = m.offset + slotIndex*2
 
 	// Regenerate characters
 	for i := range streak.chars {
@@ -238,8 +245,8 @@ func (m *Screensaver) Render(buf *teapot.SubBuffer) {
 			continue
 		}
 
-		// Skip if streak would be off the right edge
-		if streak.xPos >= m.width-1 {
+		// Skip if streak would be off the right edge (need 2 cols for char)
+		if streak.xPos+2 > m.width {
 			continue
 		}
 
