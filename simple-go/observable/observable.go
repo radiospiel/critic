@@ -4,6 +4,7 @@ package observable
 
 import (
 	"encoding/json"
+	"maps"
 	"path"
 	"reflect"
 	"slices"
@@ -560,10 +561,7 @@ func (o *Observable) setValuesAtKeys(changes []change) {
 	changedKeys = slices.Compact(changedKeys)
 
 	// Copy subscriptions for notification
-	subs := make([]*subscription, 0, len(o.subscriptions))
-	for _, sub := range o.subscriptions {
-		subs = append(subs, sub)
-	}
+	subs := slices.Collect(maps.Values(o.subscriptions))
 	o.mu.Unlock()
 
 	// Notify each subscription once per matching key
