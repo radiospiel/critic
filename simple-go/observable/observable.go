@@ -199,11 +199,11 @@ func (o *Observable) getValueInternal(key string) any {
 //   - The existing value at a path segment has an incompatible type
 //   - An array index is negative or >= 100000
 func (o *Observable) SetValueAtKey(key string, value any) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-
 	// Collect all changes for notification
 	changes := make(map[string]struct{ old, new any })
+
+	// Hold lock for state changes
+	o.mu.Lock()
 
 	// Get old value at the target key
 	oldValue := o.getValueInternal(key)
@@ -220,8 +220,16 @@ func (o *Observable) SetValueAtKey(key string, value any) {
 	// If setting a nested value (map or slice), also record deeper changes
 	o.collectNestedChanges(key, oldValue, newValue, changes)
 
-	// Notify subscribers
-	o.notifySubscribers(changes)
+	// Copy subscriptions for notification outside lock
+	subs := make([]*subscription, 0, len(o.subscriptions))
+	for _, sub := range o.subscriptions {
+		subs = append(subs, sub)
+	}
+
+	o.mu.Unlock()
+
+	// Notify subscribers outside lock to allow callbacks to access observable state
+	o.notifySubscribersOutsideLock(subs, changes)
 }
 
 // setValueInternal sets the value without locking (caller must hold lock).
@@ -373,15 +381,16 @@ func (o *Observable) ClearSubscriptions(subs ...Subscription) {
 	}
 }
 
-// notifySubscribers notifies all matching subscribers of the changes.
+// notifySubscribersOutsideLock notifies all matching subscribers of the changes.
 // Each subscription is triggered at most once per SetValueAtKey call.
-func (o *Observable) notifySubscribers(changes map[string]struct{ old, new any }) {
+// This must be called without holding the lock to allow callbacks to access observable state.
+func (o *Observable) notifySubscribersOutsideLock(subs []*subscription, changes map[string]struct{ old, new any }) {
 	if len(changes) == 0 {
 		return
 	}
 
 	// For each subscription, check if any of its patterns match any changed key
-	for _, sub := range o.subscriptions {
+	for _, sub := range subs {
 		var matchedKey string
 		var matchedChange struct{ old, new any }
 		matched := false

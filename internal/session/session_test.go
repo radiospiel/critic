@@ -91,7 +91,7 @@ func TestNewSession(t *testing.T) {
 	session, err := NewSession(tempDir, nil, DiffArgs{})
 	assert.NoError(t, err, "should create session")
 	assert.NotNil(t, session, "session should not be nil")
-	assert.NotNil(t, session.Observable(), "observable should not be nil")
+	assert.NotNil(t, session.Observable, "embedded observable should not be nil")
 }
 
 func TestDiffArgs(t *testing.T) {
@@ -290,30 +290,45 @@ func TestConversations(t *testing.T) {
 	assert.True(t, summary.HasUnresolvedComments, "should have unresolved comments")
 }
 
-func TestCallbacks(t *testing.T) {
+func TestOnKeyChange(t *testing.T) {
 	session := createTestSession(t, nil)
 
-	// Test OnDiffLoaded callback
-	diffLoadedCalled := false
-	var loadedDiff *types.Diff
-	session.OnDiffLoaded(func(diff *types.Diff) {
-		diffLoadedCalled = true
-		loadedDiff = diff
+	// Test subscription to KeyFiles changes (replaces old OnDiffLoaded callback)
+	filesChangeCalled := false
+	var changedKey string
+	subs := session.OnKeyChange([]string{KeyFiles}, func(key string, oldValue, newValue any) {
+		filesChangeCalled = true
+		changedKey = key
 	})
+	defer session.ClearSubscriptions(subs...)
 
-	diff := &types.Diff{Files: []*types.FileDiff{{NewPath: "test.go"}}}
+	diff := &types.Diff{Files: []*types.FileDiff{
+		{NewPath: "test1.go"},
+		{NewPath: "test2.go"},
+	}}
 	session.SetDiff(diff)
-	assert.True(t, diffLoadedCalled, "OnDiffLoaded should be called")
-	assert.NotNil(t, loadedDiff, "loaded diff should not be nil")
+	assert.True(t, filesChangeCalled, "OnKeyChange callback should be called")
+	assert.Equals(t, changedKey, KeyFiles, "changed key should be KeyFiles")
+
+	// Test subscription to selection changes
+	selectionChangeCalled := false
+	selSubs := session.OnKeyChange([]string{KeySelectedFileIndex}, func(key string, oldValue, newValue any) {
+		selectionChangeCalled = true
+	})
+	defer session.ClearSubscriptions(selSubs...)
+
+	// Select file at index 1 (different from initial 0)
+	session.SetSelectedFile(1)
+	assert.True(t, selectionChangeCalled, "Selection change callback should be called")
 }
 
 func TestSubscriptions(t *testing.T) {
 	session := createTestSession(t, nil)
 
-	// Subscribe to filter mode changes
+	// Subscribe to filter mode changes using OnKeyChange
 	filterChangeCalled := false
 	var changedKey string
-	subs := session.Subscribe([]string{KeyFilterMode}, func(key string, oldValue, newValue any) {
+	subs := session.OnKeyChange([]string{KeyFilterMode}, func(key string, oldValue, newValue any) {
 		filterChangeCalled = true
 		changedKey = key
 	})
@@ -322,9 +337,9 @@ func TestSubscriptions(t *testing.T) {
 	assert.True(t, filterChangeCalled, "filter change callback should be called")
 	assert.Equals(t, changedKey, KeyFilterMode, "changed key should match")
 
-	// Unsubscribe
+	// Unsubscribe using ClearSubscriptions
 	filterChangeCalled = false
-	session.Unsubscribe(subs...)
+	session.ClearSubscriptions(subs...)
 
 	session.SetFilterMode(FilterModeWithUnresolved)
 	assert.False(t, filterChangeCalled, "callback should not be called after unsubscribe")

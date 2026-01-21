@@ -76,9 +76,11 @@ type Selection struct {
 	FocusedPane string `json:"focusedPane"`
 }
 
-// Session manages the observable application state for a review session
+// Session manages the observable application state for a review session.
+// Session embeds *observable.Observable - users can subscribe to state changes
+// using OnKeyChange with the exported Key* constants directly on the Session.
 type Session struct {
-	obs       *observable.Observable
+	*observable.Observable
 	messaging critic.Messaging
 	gitRoot   string
 	mu        sync.RWMutex
@@ -93,35 +95,33 @@ type Session struct {
 	// Processor
 	processor *DiffProcessor
 
-	// Callbacks for state changes
-	onDiffArgsChanged      func()
-	onDiffLoaded           func(*types.Diff)
-	onSelectionChanged     func(filePath string, fileIndex int)
-	onConversationsChanged func(filePath string)
+	// Internal subscriptions (for cleanup)
+	internalSubs []observable.Subscription
 }
 
 // NewSession creates a new Session with the given parameters
 func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Session, error) {
 	s := &Session{
-		obs:       observable.New(),
-		messaging: messaging,
-		gitRoot:   gitRoot,
+		Observable:   observable.New(),
+		messaging:    messaging,
+		gitRoot:      gitRoot,
+		internalSubs: make([]observable.Subscription, 0),
 	}
 
 	// Initialize with default values
-	s.obs.SetValueAtKey(KeyDiffArgs, map[string]any{
+	s.SetValueAtKey(KeyDiffArgs, map[string]any{
 		"bases":       []any{},
 		"currentBase": 0,
 		"paths":       []any{},
 		"extensions":  []any{},
 	})
-	s.obs.SetValueAtKey(KeyResolvedBases, map[string]any{})
-	s.obs.SetValueAtKey(KeyFilterMode, int(FilterModeNone))
-	s.obs.SetValueAtKey(KeySelectedFileIndex, 0)
-	s.obs.SetValueAtKey(KeySelectedFilePath, "")
-	s.obs.SetValueAtKey(KeyFocusedPane, "fileList")
-	s.obs.SetValueAtKey(KeyConversations, map[string]any{})
-	s.obs.SetValueAtKey(KeyConversationSummaries, map[string]any{})
+	s.SetValueAtKey(KeyResolvedBases, map[string]any{})
+	s.SetValueAtKey(KeyFilterMode, int(FilterModeNone))
+	s.SetValueAtKey(KeySelectedFileIndex, 0)
+	s.SetValueAtKey(KeySelectedFilePath, "")
+	s.SetValueAtKey(KeyFocusedPane, "fileList")
+	s.SetValueAtKey(KeyConversations, map[string]any{})
+	s.SetValueAtKey(KeyConversationSummaries, map[string]any{})
 
 	// Create processor
 	s.processor = NewDiffProcessor(s)
@@ -146,16 +146,22 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 	})
 	s.gitWatcher = gitWatcher
 
-	// Wire up state change callbacks to processor
-	s.OnDiffArgsChanged(func() {
-		logger.Info("Session: DiffArgs changed, loading diff")
+	// Wire up internal state change subscriptions
+	// When diff args change, load diff
+	diffArgsSubs := s.OnKeyChange([]string{KeyDiffArgs, KeyCurrentBase}, func(key string, oldValue, newValue any) {
+		logger.Info("Session: DiffArgs changed (%s), loading diff", key)
 		s.processor.LoadDiff()
 	})
+	s.internalSubs = append(s.internalSubs, diffArgsSubs...)
 
-	s.OnSelectionChanged(func(filePath string, fileIndex int) {
+	// When selection changes, load selected file
+	selectionSubs := s.OnKeyChange([]string{KeySelectedFileIndex}, func(key string, oldValue, newValue any) {
+		filePath := s.GetSelectedFilePath()
+		fileIndex := s.GetSelectedFileIndex()
 		logger.Info("Session: Selection changed to %s (index %d)", filePath, fileIndex)
 		s.processor.LoadSelectedFile()
 	})
+	s.internalSubs = append(s.internalSubs, selectionSubs...)
 
 	// Set initial diff args
 	if len(args.Bases) > 0 {
@@ -165,17 +171,11 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 	return s, nil
 }
 
-// Observable returns the underlying observable for subscription purposes
-func (s *Session) Observable() *observable.Observable {
-	return s.obs
-}
 
 // --- Diff Args ---
 
 // SetDiffArgs sets the diff arguments
 func (s *Session) SetDiffArgs(args DiffArgs) {
-	s.mu.Lock()
-
 	// Convert to observable-compatible types
 	bases := make([]any, len(args.Bases))
 	for i, b := range args.Bases {
@@ -190,25 +190,21 @@ func (s *Session) SetDiffArgs(args DiffArgs) {
 		extensions[i] = e
 	}
 
-	s.obs.SetValueAtKey(KeyDiffArgs, map[string]any{
+	// Update git watcher bases (protected by its own mutex)
+	s.mu.Lock()
+	if s.gitWatcher != nil {
+		s.gitWatcher.SetBases(args.Bases)
+	}
+	s.mu.Unlock()
+
+	// Set values without holding the lock - observable has its own internal mutex
+	// and subscriptions may need to access session state
+	s.SetValueAtKey(KeyDiffArgs, map[string]any{
 		"bases":       bases,
 		"currentBase": args.CurrentBase,
 		"paths":       paths,
 		"extensions":  extensions,
 	})
-
-	// Update git watcher bases
-	if s.gitWatcher != nil {
-		s.gitWatcher.SetBases(args.Bases)
-	}
-
-	callback := s.onDiffArgsChanged
-	s.mu.Unlock()
-
-	// Call callback outside lock to avoid deadlock
-	if callback != nil {
-		callback()
-	}
 }
 
 // GetDiffArgs returns the current diff arguments
@@ -216,27 +212,19 @@ func (s *Session) GetDiffArgs() DiffArgs {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return observable.GetValueAs[DiffArgs](s.obs, KeyDiffArgs)
+	return observable.GetValueAs[DiffArgs](s.Observable, KeyDiffArgs)
 }
 
 // SetCurrentBase sets the current base index
 func (s *Session) SetCurrentBase(index int) {
-	s.mu.Lock()
-
-	s.obs.SetValueAtKey(KeyCurrentBase, index)
-
-	callback := s.onDiffArgsChanged
-	s.mu.Unlock()
-
-	// Call callback outside lock to avoid deadlock
-	if callback != nil {
-		callback()
-	}
+	// Set value without holding the lock - observable has its own internal mutex
+	// and subscriptions may need to access session state
+	s.SetValueAtKey(KeyCurrentBase, index)
 }
 
 // GetCurrentBase returns the current base index
 func (s *Session) GetCurrentBase() int {
-	return s.obs.GetInt(KeyCurrentBase)
+	return s.GetInt(KeyCurrentBase)
 }
 
 // GetCurrentBaseName returns the name of the current base ref
@@ -263,15 +251,14 @@ func (s *Session) CycleBase() int {
 
 // SetResolvedBases sets the resolved base refs
 func (s *Session) SetResolvedBases(resolved map[string]string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	// Convert to observable-compatible type
 	bases := make(map[string]any, len(resolved))
 	for k, v := range resolved {
 		bases[k] = v
 	}
-	s.obs.SetValueAtKey(KeyResolvedBases, bases)
+
+	// Set value without holding the lock - observable has its own internal mutex
+	s.SetValueAtKey(KeyResolvedBases, bases)
 }
 
 // GetResolvedBase returns the resolved SHA for a base ref
@@ -279,7 +266,7 @@ func (s *Session) GetResolvedBase(baseRef string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	resolved := s.obs.GetMap(KeyResolvedBases)
+	resolved := s.GetMap(KeyResolvedBases)
 	if resolved == nil {
 		return "", false
 	}
@@ -291,16 +278,17 @@ func (s *Session) GetResolvedBase(baseRef string) (string, bool) {
 
 // SetDiff sets the diff data
 func (s *Session) SetDiff(diff *types.Diff) {
-	s.mu.Lock()
-
 	// Store diff in direct field (not observable since it's a struct pointer)
+	s.mu.Lock()
 	s.diff = diff
+	s.mu.Unlock()
 
+	// Prepare file info for observable
+	var files []any
 	if diff == nil {
-		s.obs.SetValueAtKey(KeyFiles, []any{})
+		files = []any{}
 	} else {
-		// Store file info for observable tracking and subscriptions
-		files := make([]any, len(diff.Files))
+		files = make([]any, len(diff.Files))
 		for i, f := range diff.Files {
 			files[i] = map[string]any{
 				"oldPath":   f.OldPath,
@@ -311,16 +299,11 @@ func (s *Session) SetDiff(diff *types.Diff) {
 				"isBinary":  f.IsBinary,
 			}
 		}
-		s.obs.SetValueAtKey(KeyFiles, files)
 	}
 
-	callback := s.onDiffLoaded
-	s.mu.Unlock()
-
-	// Call callback outside lock to avoid deadlock
-	if callback != nil {
-		callback(diff)
-	}
+	// Set value without holding the lock - observable has its own internal mutex
+	// and subscriptions may need to access session state
+	s.SetValueAtKey(KeyFiles, files)
 }
 
 // GetDiff returns the current diff
@@ -352,11 +335,8 @@ func (s *Session) GetFileCount() int {
 
 // SetSelectedFile sets the selected file by index
 func (s *Session) SetSelectedFile(index int) {
-	s.mu.Lock()
-
-	s.obs.SetValueAtKey(KeySelectedFileIndex, index)
-
-	// Update the file path (access diff directly since we hold the lock)
+	// Get file path while holding the lock
+	s.mu.RLock()
 	var filePath string
 	if s.diff != nil && index >= 0 && index < len(s.diff.Files) {
 		f := s.diff.Files[index]
@@ -365,15 +345,12 @@ func (s *Session) SetSelectedFile(index int) {
 			filePath = f.OldPath
 		}
 	}
-	s.obs.SetValueAtKey(KeySelectedFilePath, filePath)
+	s.mu.RUnlock()
 
-	callback := s.onSelectionChanged
-	s.mu.Unlock()
-
-	// Call callback outside lock to avoid deadlock
-	if callback != nil {
-		callback(filePath, index)
-	}
+	// Set values without holding the lock - observable has its own internal mutex
+	// and subscriptions may need to access session state
+	s.SetValueAtKey(KeySelectedFilePath, filePath)
+	s.SetValueAtKey(KeySelectedFileIndex, index) // Set index last to trigger subscription after path is set
 }
 
 // SetSelectedFilePath sets the selected file by path
@@ -397,12 +374,12 @@ func (s *Session) SetSelectedFilePath(path string) {
 
 // GetSelectedFileIndex returns the index of the selected file
 func (s *Session) GetSelectedFileIndex() int {
-	return s.obs.GetInt(KeySelectedFileIndex)
+	return s.GetInt(KeySelectedFileIndex)
 }
 
 // GetSelectedFilePath returns the path of the selected file
 func (s *Session) GetSelectedFilePath() string {
-	return s.obs.GetString(KeySelectedFilePath)
+	return s.GetString(KeySelectedFilePath)
 }
 
 // GetSelectedFile returns the selected file diff
@@ -443,12 +420,12 @@ func (s *Session) SelectPrevFile() bool {
 
 // SetFocusedPane sets the focused pane ("fileList" or "diffView")
 func (s *Session) SetFocusedPane(pane string) {
-	s.obs.SetValueAtKey(KeyFocusedPane, pane)
+	s.SetValueAtKey(KeyFocusedPane, pane)
 }
 
 // GetFocusedPane returns the focused pane
 func (s *Session) GetFocusedPane() string {
-	return s.obs.GetString(KeyFocusedPane)
+	return s.GetString(KeyFocusedPane)
 }
 
 // ToggleFocus toggles focus between file list and diff view
@@ -464,12 +441,12 @@ func (s *Session) ToggleFocus() {
 
 // SetFilterMode sets the filter mode
 func (s *Session) SetFilterMode(mode FilterMode) {
-	s.obs.SetValueAtKey(KeyFilterMode, int(mode))
+	s.SetValueAtKey(KeyFilterMode, int(mode))
 }
 
 // GetFilterMode returns the current filter mode
 func (s *Session) GetFilterMode() FilterMode {
-	return FilterMode(s.obs.GetInt(KeyFilterMode))
+	return FilterMode(s.GetInt(KeyFilterMode))
 }
 
 // CycleFilterMode cycles through filter modes
@@ -483,8 +460,6 @@ func (s *Session) CycleFilterMode() FilterMode {
 
 // SetConversationsForFile sets the conversations for a specific file
 func (s *Session) SetConversationsForFile(filePath string, conversations []*critic.Conversation) {
-	s.mu.Lock()
-
 	key := KeyConversations + "." + filePath
 
 	// Convert to observable-compatible type
@@ -498,15 +473,9 @@ func (s *Session) SetConversationsForFile(filePath string, conversations []*crit
 			"readByAI":   c.ReadByAI,
 		}
 	}
-	s.obs.SetValueAtKey(key, convs)
 
-	callback := s.onConversationsChanged
-	s.mu.Unlock()
-
-	// Call callback outside lock to avoid deadlock
-	if callback != nil {
-		callback(filePath)
-	}
+	// Set value without holding the lock - observable has its own internal mutex
+	s.SetValueAtKey(key, convs)
 }
 
 // GetConversationsForFile returns conversations for a specific file from the messaging interface
@@ -519,20 +488,23 @@ func (s *Session) GetConversationsForFile(filePath string) ([]*critic.Conversati
 
 // SetConversationSummary sets the conversation summary for a file
 func (s *Session) SetConversationSummary(filePath string, summary *critic.FileConversationSummary) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	key := KeyConversationSummaries + "." + filePath
+
+	// Prepare value
+	var value any
 	if summary == nil {
-		s.obs.SetValueAtKey(key, nil)
+		value = nil
 	} else {
-		s.obs.SetValueAtKey(key, map[string]any{
+		value = map[string]any{
 			"filePath":              summary.FilePath,
 			"hasUnresolvedComments": summary.HasUnresolvedComments,
 			"hasResolvedComments":   summary.HasResolvedComments,
 			"hasUnreadAIMessages":   summary.HasUnreadAIMessages,
-		})
+		}
 	}
+
+	// Set value without holding the lock - observable has its own internal mutex
+	s.SetValueAtKey(key, value)
 }
 
 // GetConversationSummary returns the conversation summary for a file
@@ -572,39 +544,6 @@ func (s *Session) RefreshConversations() error {
 	return nil
 }
 
-// --- Callbacks ---
-
-// OnDiffArgsChanged sets the callback for when diff args change
-func (s *Session) OnDiffArgsChanged(callback func()) {
-	s.onDiffArgsChanged = callback
-}
-
-// OnDiffLoaded sets the callback for when diff is loaded
-func (s *Session) OnDiffLoaded(callback func(*types.Diff)) {
-	s.onDiffLoaded = callback
-}
-
-// OnSelectionChanged sets the callback for when selection changes
-func (s *Session) OnSelectionChanged(callback func(filePath string, fileIndex int)) {
-	s.onSelectionChanged = callback
-}
-
-// OnConversationsChanged sets the callback for when conversations change
-func (s *Session) OnConversationsChanged(callback func(filePath string)) {
-	s.onConversationsChanged = callback
-}
-
-// --- Subscriptions ---
-
-// Subscribe registers a callback for changes at the given key patterns
-func (s *Session) Subscribe(patterns []string, callback observable.ChangeCallback) []observable.Subscription {
-	return s.obs.OnKeyChange(patterns, callback)
-}
-
-// Unsubscribe removes the specified subscriptions
-func (s *Session) Unsubscribe(subs ...observable.Subscription) {
-	s.obs.ClearSubscriptions(subs...)
-}
 
 // --- Watchers ---
 
@@ -658,5 +597,10 @@ func (s *Session) StopWatchers() {
 // Close cleans up resources
 func (s *Session) Close() error {
 	s.StopWatchers()
+	// Clean up internal subscriptions
+	if len(s.internalSubs) > 0 {
+		s.ClearSubscriptions(s.internalSubs...)
+		s.internalSubs = nil
+	}
 	return nil
 }
