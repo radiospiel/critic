@@ -142,3 +142,41 @@ func TestParseANSILine_Reset(t *testing.T) {
 	noStyle := lipgloss.NewStyle()
 	assert.Equals(t, noStyle.Render(""), cells[1].Style.Render(""), "second cell should have no style")
 }
+
+func TestParseANSILine_RoundTrip(t *testing.T) {
+	// Test that colors survive the round-trip: style → render → parse → re-render
+	// This verifies that regardless of terminal color settings, the parsed style
+	// produces the same output as the original style.
+	tests := []struct {
+		name  string
+		style lipgloss.Style
+	}{
+		{"black bg", lipgloss.NewStyle().Background(lipgloss.Color("0"))},
+		{"red bg", lipgloss.NewStyle().Background(lipgloss.Color("1"))},
+		{"green bg", lipgloss.NewStyle().Background(lipgloss.Color("2"))},
+		{"white fg", lipgloss.NewStyle().Foreground(lipgloss.Color("7"))},
+		{"bright red fg", lipgloss.NewStyle().Foreground(lipgloss.Color("9"))},
+		{"256 color 42 bg", lipgloss.NewStyle().Background(lipgloss.Color("42"))},
+		{"combined fg+bg", lipgloss.NewStyle().Foreground(lipgloss.Color("7")).Background(lipgloss.Color("0"))},
+		{"bold + color", lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("1"))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Render with original style
+			original := tt.style.Render("X")
+
+			// Parse the rendered output
+			cells := ParseANSILine(original)
+			if len(cells) == 0 {
+				t.Fatal("expected at least 1 cell")
+			}
+
+			// Re-render using the parsed style
+			reRendered := cells[0].Style.Render("X")
+
+			// The round-trip should produce identical output
+			assert.Equals(t, original, reRendered, "round-trip should preserve style")
+		})
+	}
+}
