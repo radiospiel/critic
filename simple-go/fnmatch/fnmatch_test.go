@@ -114,19 +114,6 @@ func TestFnmatchFunction(t *testing.T) {
 	assert.False(t, Fnmatch("[a-z]*.txt", "123.txt"))
 }
 
-func TestFnmatchCaching(t *testing.T) {
-	// Call multiple times with the same pattern to exercise the cache
-	for i := 0; i < 10; i++ {
-		assert.True(t, Fnmatch("*.go", "test.go"))
-	}
-
-	// Use different patterns to populate cache
-	patterns := []string{"*.go", "*.txt", "*.md", "*.json", "*.yaml"}
-	for _, p := range patterns {
-		Fnmatch(p, "test"+p[1:])
-	}
-}
-
 func TestFnmatchPathToRegex(t *testing.T) {
 	tests := []struct {
 		pattern  string

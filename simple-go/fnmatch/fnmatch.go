@@ -1,12 +1,11 @@
 // Package fnmatch provides shell-style pattern matching (fnmatch) functionality.
-// Patterns are converted to regular expressions and cached using an LRU cache.
+// Patterns are converted to regular expressions.
 package fnmatch
 
 import (
 	"errors"
 	"regexp"
 	"strings"
-	"sync"
 )
 
 // Fnmatcher represents a compiled fnmatch pattern.
@@ -34,135 +33,10 @@ func (f *Fnmatcher) Match(path string) bool {
 	return f.re.MatchString(path)
 }
 
-// lruCache is a simple LRU cache for compiled fnmatch patterns.
-type lruCache struct {
-	mu       sync.Mutex
-	capacity int
-	items    map[string]*lruNode
-	head     *lruNode // most recently used
-	tail     *lruNode // least recently used
-}
-
-type lruNode struct {
-	key     string
-	matcher *Fnmatcher
-	prev    *lruNode
-	next    *lruNode
-}
-
-func newLRUCache(capacity int) *lruCache {
-	return &lruCache{
-		capacity: capacity,
-		items:    make(map[string]*lruNode),
-	}
-}
-
-func (c *lruCache) get(pattern string) (*Fnmatcher, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	node, ok := c.items[pattern]
-	if !ok {
-		return nil, false
-	}
-
-	// Move to front (most recently used)
-	c.moveToFront(node)
-	return node.matcher, true
-}
-
-func (c *lruCache) put(pattern string, matcher *Fnmatcher) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if node, ok := c.items[pattern]; ok {
-		// Already exists, move to front
-		c.moveToFront(node)
-		return
-	}
-
-	// Create new node
-	node := &lruNode{
-		key:     pattern,
-		matcher: matcher,
-	}
-
-	// Add to front
-	c.addToFront(node)
-	c.items[pattern] = node
-
-	// Evict if over capacity
-	if len(c.items) > c.capacity {
-		c.evictLRU()
-	}
-}
-
-func (c *lruCache) moveToFront(node *lruNode) {
-	if node == c.head {
-		return
-	}
-
-	// Remove from current position
-	c.removeNode(node)
-
-	// Add to front
-	c.addToFront(node)
-}
-
-func (c *lruCache) removeNode(node *lruNode) {
-	if node.prev != nil {
-		node.prev.next = node.next
-	} else {
-		c.head = node.next
-	}
-
-	if node.next != nil {
-		node.next.prev = node.prev
-	} else {
-		c.tail = node.prev
-	}
-}
-
-func (c *lruCache) addToFront(node *lruNode) {
-	node.prev = nil
-	node.next = c.head
-
-	if c.head != nil {
-		c.head.prev = node
-	}
-	c.head = node
-
-	if c.tail == nil {
-		c.tail = node
-	}
-}
-
-func (c *lruCache) evictLRU() {
-	if c.tail == nil {
-		return
-	}
-
-	// Remove from map
-	delete(c.items, c.tail.key)
-
-	// Remove tail node
-	c.removeNode(c.tail)
-}
-
-// Global caches with capacity of 256
-var globalCache = newLRUCache(256)
-var globalPathCache = newLRUCache(256)
-
 // Fnmatch checks if the path matches the fnmatch pattern.
 // The wildcard * matches any characters including dots.
-// Compiled patterns are cached using an LRU cache with a capacity of 256.
 func Fnmatch(pattern, path string) bool {
-	matcher, ok := globalCache.get(pattern)
-	if !ok {
-		matcher = MustCompile(pattern)
-		globalCache.put(pattern, matcher)
-	}
-	return matcher.Match(path)
+	return MustCompile(pattern).Match(path)
 }
 
 // MustCompilePath compiles an fnmatch pattern for path matching and returns a Fnmatcher.
@@ -184,14 +58,8 @@ func MustCompilePath(pattern string) *Fnmatcher {
 // FnmatchPath checks if the key matches the fnmatch pattern using path semantics.
 // The wildcard * matches any characters except "." (single segment only).
 // This is suitable for matching dot-separated paths like "foo.bar.baz".
-// Compiled patterns are cached using an LRU cache with a capacity of 256.
 func FnmatchPath(pattern, key string) bool {
-	matcher, ok := globalPathCache.get(pattern)
-	if !ok {
-		matcher = MustCompilePath(pattern)
-		globalPathCache.put(pattern, matcher)
-	}
-	return matcher.Match(key)
+	return MustCompilePath(pattern).Match(key)
 }
 
 // fnmatchPathToRegex converts an fnmatch pattern to a regex where * doesn't match dots.
