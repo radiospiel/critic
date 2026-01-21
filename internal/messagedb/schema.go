@@ -54,31 +54,32 @@ var schema_v3_migration = `
 // schema_v4 migration adds _db_mtime table and triggers for change detection
 // This is applied on top of schema_v3
 var schema_v4_migration = `
-	-- Modification time tracking table for change detection (single row)
+	-- Modification time tracking table for change detection (one row per tracked table)
 	CREATE TABLE IF NOT EXISTS _db_mtime (
-		mtime INTEGER NOT NULL DEFAULT 0
+		tablename TEXT PRIMARY KEY,
+		mtime_msec INTEGER NOT NULL DEFAULT 0
 	);
 
-	-- Initialize mtime with current timestamp in milliseconds
-	INSERT INTO _db_mtime (mtime) SELECT CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE NOT EXISTS (SELECT 1 FROM _db_mtime);
+	-- Initialize mtime for messages table
+	INSERT OR IGNORE INTO _db_mtime (tablename, mtime_msec) VALUES ('messages', CAST(unixepoch('subsec') * 1000 AS INTEGER));
 
 	-- Triggers to update mtime on messages table changes
 	CREATE TRIGGER IF NOT EXISTS _messages_insert_mtime
 	AFTER INSERT ON messages
 	BEGIN
-		UPDATE _db_mtime SET mtime = CAST(unixepoch('subsec') * 1000 AS INTEGER);
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
 	END;
 
 	CREATE TRIGGER IF NOT EXISTS _messages_update_mtime
 	AFTER UPDATE ON messages
 	BEGIN
-		UPDATE _db_mtime SET mtime = CAST(unixepoch('subsec') * 1000 AS INTEGER);
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
 	END;
 
 	CREATE TRIGGER IF NOT EXISTS _messages_delete_mtime
 	AFTER DELETE ON messages
 	BEGIN
-		UPDATE _db_mtime SET mtime = CAST(unixepoch('subsec') * 1000 AS INTEGER);
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
 	END;
 `
 

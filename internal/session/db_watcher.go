@@ -82,10 +82,10 @@ func (w *DBWatcher) Start() error {
 	return nil
 }
 
-// getMtime reads the current mtime from the database
+// getMtime reads the current mtime for the messages table from the database
 func (w *DBWatcher) getMtime(db *sql.DB) (int64, error) {
 	var mtime int64
-	err := db.QueryRow("SELECT mtime FROM _db_mtime LIMIT 1").Scan(&mtime)
+	err := db.QueryRow("SELECT mtime_msec FROM _db_mtime WHERE tablename = 'messages'").Scan(&mtime)
 	if err == sql.ErrNoRows {
 		return 0, nil
 	}
