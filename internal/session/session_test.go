@@ -91,8 +91,6 @@ func TestNewSession(t *testing.T) {
 	assert.NoError(t, err, "should create session")
 	assert.NotNil(t, session, "session should not be nil")
 	assert.NotNil(t, session.Observable(), "observable should not be nil")
-	assert.NotNil(t, session.Processor(), "processor should not be nil")
-	assert.Equals(t, session.GitRoot(), tempDir, "gitRoot should match")
 }
 
 func TestDiffArgs(t *testing.T) {

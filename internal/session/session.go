@@ -170,16 +170,6 @@ func (s *Session) Observable() *observable.Observable {
 	return s.obs
 }
 
-// Processor returns the diff processor
-func (s *Session) Processor() *DiffProcessor {
-	return s.processor
-}
-
-// GitRoot returns the git root directory
-func (s *Session) GitRoot() string {
-	return s.gitRoot
-}
-
 // --- Diff Args ---
 
 // SetDiffArgs sets the diff arguments
