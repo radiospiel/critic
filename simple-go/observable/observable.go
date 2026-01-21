@@ -338,15 +338,21 @@ type change struct {
 // Transactions are created via Observable.Transaction() and are
 // automatically committed when the callback returns, unless Abort() is called.
 type Txn struct {
+	obs     *Observable
 	changes []change
 	aborted bool
 }
 
 // SetValueAtKey records a change to be applied when the transaction commits.
 // If the transaction has been aborted, the call is ignored.
+// Panics if the value violates a schema constraint.
 func (tx *Txn) SetValueAtKey(key string, value any) {
 	if tx.aborted {
 		return
+	}
+	// Validate against schema before recording the change
+	if errMsg := tx.obs.validateAgainstSchema(key, value); errMsg != "" {
+		preconditions.Check(false, "%s", errMsg)
 	}
 	tx.changes = append(tx.changes, change{key: key, value: value})
 }
@@ -420,6 +426,7 @@ func keyOverrides(parent, child string) bool {
 //	})
 func (o *Observable) Transaction(fn func(*Txn)) {
 	tx := &Txn{
+		obs:     o,
 		changes: make([]change, 0),
 		aborted: false,
 	}
@@ -475,26 +482,4 @@ func keyAffectsPattern(key, pattern string) bool {
 	}
 	// Check if key is a parent of pattern (key="foo" affects pattern="foo.bar" or "foo.*.baz")
 	return strings.HasPrefix(pattern, key+".")
-}
-
-// copyMap creates a shallow copy of a map.
-func copyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
-	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
-	return result
-}
-
-// copySlice creates a shallow copy of a slice.
-func copySlice(s []any) []any {
-	if s == nil {
-		return nil
-	}
-	result := make([]any, len(s))
-	copy(result, s)
-	return result
 }

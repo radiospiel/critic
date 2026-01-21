@@ -26,14 +26,14 @@ func TestSchemaValidationPassesForValidString(t *testing.T) {
 
 	// Should not panic
 	obs.SetValueAtKey("name", "Alice")
-	assert.Equals(t, obs.GetString("name"), "Alice", "should set valid string")
+	assert.Equals(t, obs.GetValue("name"), "Alice", "should set valid string")
 }
 
 func TestSchemaValidationPassesForValidNumber(t *testing.T) {
 	obs := New().WithSchema("age", `{"type": "integer", "minimum": 0, "maximum": 150}`)
 
 	obs.SetValueAtKey("age", 30)
-	assert.Equals(t, obs.GetInt("age"), 30, "should set valid integer")
+	assert.Equals(t, obs.GetValue("age"), 30, "should set valid integer")
 }
 
 func TestSchemaValidationPassesForValidObject(t *testing.T) {
@@ -106,7 +106,7 @@ func TestSchemaValidationForArray(t *testing.T) {
 
 	// Valid array of strings
 	obs.SetValueAtKey("tags", []any{"go", "json", "schema"})
-	tags := obs.GetSlice("tags")
+	tags := obs.GetValue("tags").([]any)
 	assert.Equals(t, len(tags), 3, "should have 3 tags")
 }
 
@@ -130,14 +130,14 @@ func TestSchemaDoesNotAffectUnrelatedKeys(t *testing.T) {
 
 	// Setting a different key should not be validated
 	obs.SetValueAtKey("count", 42)
-	assert.Equals(t, obs.GetInt("count"), 42, "unrelated key should be set without validation")
+	assert.Equals(t, obs.GetValue("count"), 42, "unrelated key should be set without validation")
 }
 
 func TestSchemaValidationForNestedKey(t *testing.T) {
 	obs := New().WithSchema("config.port", `{"type": "integer", "minimum": 1, "maximum": 65535}`)
 
 	obs.SetValueAtKey("config.port", 8080)
-	assert.Equals(t, obs.GetInt("config.port"), 8080, "should set valid port")
+	assert.Equals(t, obs.GetValue("config.port"), 8080, "should set valid port")
 }
 
 func TestSchemaValidationFailsForInvalidNestedKey(t *testing.T) {
@@ -184,7 +184,7 @@ func TestSchemaValidationWithMapSchema(t *testing.T) {
 	obs := New().WithSchema("id", schema)
 
 	obs.SetValueAtKey("id", "abc")
-	assert.Equals(t, obs.GetString("id"), "abc", "should set valid lowercase string")
+	assert.Equals(t, obs.GetValue("id"), "abc", "should set valid lowercase string")
 }
 
 func TestSchemaValidationWithMapSchemaFails(t *testing.T) {
@@ -215,7 +215,7 @@ func TestSchemaValidationWithBoolean(t *testing.T) {
 	obs := New().WithSchema("enabled", `{"type": "boolean"}`)
 
 	obs.SetValueAtKey("enabled", true)
-	assert.True(t, obs.GetBool("enabled"), "should set boolean")
+	assert.True(t, obs.GetValue("enabled").(bool), "should set boolean")
 }
 
 func TestSchemaValidationFailsForBooleanWithWrongType(t *testing.T) {
@@ -235,7 +235,7 @@ func TestWithSchemaOnNewWithData(t *testing.T) {
 
 	// Should be able to update with valid value
 	obs.SetValueAtKey("count", 20)
-	assert.Equals(t, obs.GetInt("count"), 20, "should update to valid value")
+	assert.Equals(t, obs.GetValue("count"), 20, "should update to valid value")
 }
 
 func TestMultipleSchemasOnDifferentKeys(t *testing.T) {
@@ -249,7 +249,7 @@ func TestMultipleSchemasOnDifferentKeys(t *testing.T) {
 	// Note: email format validation may be lenient in some implementations
 	obs.SetValueAtKey("email", "alice@example.com")
 
-	assert.Equals(t, obs.GetString("name"), "Alice", "name should be set")
-	assert.Equals(t, obs.GetInt("age"), 30, "age should be set")
-	assert.Equals(t, obs.GetString("email"), "alice@example.com", "email should be set")
+	assert.Equals(t, obs.GetValue("name"), "Alice", "name should be set")
+	assert.Equals(t, obs.GetValue("age"), 30, "age should be set")
+	assert.Equals(t, obs.GetValue("email"), "alice@example.com", "email should be set")
 }

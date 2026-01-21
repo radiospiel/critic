@@ -187,3 +187,25 @@ func formatValidationError(key string, err error) string {
 	}
 	return "schema validation failed for key \"" + key + "\": " + err.Error()
 }
+
+// copyMap creates a shallow copy of a map.
+func copyMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
+}
+
+// copySlice creates a shallow copy of a slice.
+func copySlice(s []any) []any {
+	if s == nil {
+		return nil
+	}
+	result := make([]any, len(s))
+	copy(result, s)
+	return result
+}
