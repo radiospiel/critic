@@ -987,6 +987,7 @@ func TestKeyOverrides(t *testing.T) {
 	assert.False(t, keyOverrides("a.1", "a.2"), "sibling should not override sibling")
 	assert.False(t, keyOverrides("a", "b"), "unrelated keys should not override")
 	assert.False(t, keyOverrides("ab", "a"), "key starting with same chars but not prefix")
+	assert.False(t, keyOverrides("a", "aa"), "key with same prefix but not child")
 }
 
 func TestTransactionalDeduplicationParentOverridesChild(t *testing.T) {
