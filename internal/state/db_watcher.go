@@ -1,83 +1,161 @@
 package state
 
 import (
+	"database/sql"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"git.15b.it/eno/critic/simple-go/logger"
-	"github.com/fsnotify/fsnotify"
+	_ "github.com/mattn/go-sqlite3"
 )
 
-// DBWatcher watches the messaging database for changes
+// DBWatcher watches the messaging database for changes using SQLite triggers
 type DBWatcher struct {
-	dbPath    string
-	watcher   *fsnotify.Watcher
-	onChange  func()
-	stopChan  chan struct{}
-	mu        sync.Mutex
-	running   bool
-	debounceMs int
-
-	// Debouncing
-	lastEvent time.Time
-	timer     *time.Timer
+	dbPath       string
+	db           *sql.DB
+	onChange     func()
+	stopChan     chan struct{}
+	mu           sync.Mutex
+	running      bool
+	pollInterval time.Duration
+	lastVersion  int64
 }
 
 // NewDBWatcher creates a new database watcher
 func NewDBWatcher(gitRoot string, onChange func()) (*DBWatcher, error) {
 	dbPath := filepath.Join(gitRoot, ".critic.db")
 
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, err
-	}
-
 	return &DBWatcher{
-		dbPath:     dbPath,
-		watcher:    watcher,
-		onChange:   onChange,
-		stopChan:   make(chan struct{}),
-		debounceMs: 100, // 100ms debounce
+		dbPath:       dbPath,
+		onChange:     onChange,
+		stopChan:     make(chan struct{}),
+		pollInterval: 500 * time.Millisecond,
 	}, nil
 }
 
-// SetDebounceMs sets the debounce duration in milliseconds
-func (w *DBWatcher) SetDebounceMs(ms int) {
+// SetPollInterval sets the polling interval
+func (w *DBWatcher) SetPollInterval(interval time.Duration) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.debounceMs = ms
+	w.pollInterval = interval
 }
 
-// Start starts watching the database file
+// Start starts watching the database
 func (w *DBWatcher) Start() error {
 	w.mu.Lock()
 	if w.running {
 		w.mu.Unlock()
 		return nil
 	}
+	w.mu.Unlock()
+
+	// Open database connection
+	db, err := sql.Open("sqlite3", w.dbPath)
+	if err != nil {
+		return err
+	}
+
+	// Enable WAL mode for better concurrency
+	_, err = db.Exec("PRAGMA journal_mode = WAL")
+	if err != nil {
+		db.Close()
+		return err
+	}
+
+	// Ensure the version tracking table and triggers exist
+	if err := w.setupTriggers(db); err != nil {
+		db.Close()
+		return err
+	}
+
+	// Get initial version
+	version, err := w.getVersion(db)
+	if err != nil {
+		db.Close()
+		return err
+	}
+
+	w.mu.Lock()
+	w.db = db
+	w.lastVersion = version
 	w.running = true
 	w.mu.Unlock()
 
-	// Watch the database directory (to catch file creation)
-	dir := filepath.Dir(w.dbPath)
-	if err := w.watcher.Add(dir); err != nil {
-		logger.Warn("DBWatcher: Failed to watch directory %s: %v", dir, err)
-		// Try watching the file directly if it exists
-		if err := w.watcher.Add(w.dbPath); err != nil {
+	go w.pollLoop()
+	logger.Info("DBWatcher: Started watching %s (version=%d)", w.dbPath, version)
+	return nil
+}
+
+// setupTriggers creates the version tracking table and triggers
+func (w *DBWatcher) setupTriggers(db *sql.DB) error {
+	// Create version tracking table
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS _db_version (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			version INTEGER NOT NULL DEFAULT 0
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Insert initial version if not exists
+	_, err = db.Exec(`
+		INSERT OR IGNORE INTO _db_version (id, version) VALUES (1, 0)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Check if messages table exists before creating triggers
+	var tableName string
+	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'").Scan(&tableName)
+	if err == sql.ErrNoRows {
+		// Messages table doesn't exist yet, skip trigger creation
+		logger.Info("DBWatcher: Messages table not found, triggers will be created when table exists")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	// Create triggers to increment version on messages table changes
+	triggers := []string{
+		`CREATE TRIGGER IF NOT EXISTS _messages_insert_version
+		 AFTER INSERT ON messages
+		 BEGIN
+			UPDATE _db_version SET version = version + 1 WHERE id = 1;
+		 END`,
+		`CREATE TRIGGER IF NOT EXISTS _messages_update_version
+		 AFTER UPDATE ON messages
+		 BEGIN
+			UPDATE _db_version SET version = version + 1 WHERE id = 1;
+		 END`,
+		`CREATE TRIGGER IF NOT EXISTS _messages_delete_version
+		 AFTER DELETE ON messages
+		 BEGIN
+			UPDATE _db_version SET version = version + 1 WHERE id = 1;
+		 END`,
+	}
+
+	for _, trigger := range triggers {
+		if _, err := db.Exec(trigger); err != nil {
 			return err
 		}
 	}
 
-	// Also watch WAL and SHM files if they exist
-	walPath := w.dbPath + "-wal"
-	shmPath := w.dbPath + "-shm"
-	_ = w.watcher.Add(walPath)
-	_ = w.watcher.Add(shmPath)
-
-	go w.eventLoop()
-	logger.Info("DBWatcher: Started watching %s", w.dbPath)
 	return nil
+}
+
+// getVersion reads the current version from the database
+func (w *DBWatcher) getVersion(db *sql.DB) (int64, error) {
+	var version int64
+	err := db.QueryRow("SELECT version FROM _db_version WHERE id = 1").Scan(&version)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return version, err
 }
 
 // Stop stops the watcher
@@ -92,71 +170,60 @@ func (w *DBWatcher) Stop() {
 
 	close(w.stopChan)
 
-	// Stop any pending timer
-	if w.timer != nil {
-		w.timer.Stop()
+	w.mu.Lock()
+	if w.db != nil {
+		w.db.Close()
+		w.db = nil
 	}
+	w.mu.Unlock()
 
-	_ = w.watcher.Close()
 	logger.Info("DBWatcher: Stopped")
 }
 
-// eventLoop processes file system events
-func (w *DBWatcher) eventLoop() {
+// pollLoop periodically checks for version changes
+func (w *DBWatcher) pollLoop() {
+	ticker := time.NewTicker(w.pollInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
-		case event, ok := <-w.watcher.Events:
-			if !ok {
-				return
-			}
-			w.handleEvent(event)
-
-		case err, ok := <-w.watcher.Errors:
-			if !ok {
-				return
-			}
-			logger.Error("DBWatcher: Error: %v", err)
-
+		case <-ticker.C:
+			w.checkForChanges()
 		case <-w.stopChan:
 			return
 		}
 	}
 }
 
-// handleEvent processes a single file event
-func (w *DBWatcher) handleEvent(event fsnotify.Event) {
-	// Only care about the database file and its WAL
-	base := filepath.Base(event.Name)
-	if base != ".critic.db" && base != ".critic.db-wal" {
-		return
-	}
-
-	// Only care about write events
-	if event.Op&fsnotify.Write != fsnotify.Write &&
-		event.Op&fsnotify.Create != fsnotify.Create {
-		return
-	}
-
-	logger.Debug("DBWatcher: Detected change in %s", event.Name)
-
+// checkForChanges checks if the database version has changed
+func (w *DBWatcher) checkForChanges() {
 	w.mu.Lock()
-	defer w.mu.Unlock()
+	db := w.db
+	lastVersion := w.lastVersion
+	w.mu.Unlock()
 
-	// Reset debounce timer
-	if w.timer != nil {
-		w.timer.Stop()
+	if db == nil {
+		return
 	}
 
-	w.timer = time.AfterFunc(time.Duration(w.debounceMs)*time.Millisecond, func() {
+	version, err := w.getVersion(db)
+	if err != nil {
+		logger.Error("DBWatcher: Failed to get version: %v", err)
+		return
+	}
+
+	if version != lastVersion {
 		w.mu.Lock()
+		w.lastVersion = version
 		callback := w.onChange
 		w.mu.Unlock()
 
+		logger.Info("DBWatcher: Version changed from %d to %d", lastVersion, version)
+
 		if callback != nil {
-			logger.Info("DBWatcher: Triggering onChange callback")
 			callback()
 		}
-	})
+	}
 }
 
 // IsRunning returns whether the watcher is running
@@ -164,4 +231,24 @@ func (w *DBWatcher) IsRunning() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.running
+}
+
+// EnsureTriggers ensures that database triggers are set up
+// Call this after the messages table has been created
+func (w *DBWatcher) EnsureTriggers() error {
+	w.mu.Lock()
+	db := w.db
+	w.mu.Unlock()
+
+	if db == nil {
+		return nil
+	}
+
+	return w.setupTriggers(db)
+}
+
+// SetDebounceMs is a no-op for compatibility (polling interval is used instead)
+// Deprecated: Use SetPollInterval instead
+func (w *DBWatcher) SetDebounceMs(ms int) {
+	w.SetPollInterval(time.Duration(ms) * time.Millisecond)
 }

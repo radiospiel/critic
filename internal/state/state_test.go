@@ -1,12 +1,15 @@
 package state
 
 import (
+	"database/sql"
+	"sync"
 	"testing"
 	"time"
 
 	"git.15b.it/eno/critic/pkg/critic"
 	"git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/assert"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // mockMessaging implements critic.Messaging for testing
@@ -406,6 +409,74 @@ func TestDBWatcher(t *testing.T) {
 	watcher.Stop()
 	time.Sleep(10 * time.Millisecond) // Give it time to stop
 	assert.False(t, watcher.IsRunning(), "watcher should not be running after stop")
+}
+
+func TestDBWatcherWithTriggers(t *testing.T) {
+	// Create a temp dir for testing
+	tempDir := t.TempDir()
+	dbPath := tempDir + "/.critic.db"
+
+	// Track callback invocations
+	var mu sync.Mutex
+	callCount := 0
+	watcher, err := NewDBWatcher(tempDir, func() {
+		mu.Lock()
+		callCount++
+		mu.Unlock()
+	})
+	assert.NoError(t, err, "should create watcher")
+
+	// Set fast poll interval for testing
+	watcher.SetPollInterval(50 * time.Millisecond)
+
+	// Start watcher (creates version table but no triggers yet since no messages table)
+	err = watcher.Start()
+	assert.NoError(t, err, "should start watcher")
+	defer watcher.Stop()
+
+	// Open a separate connection to create messages table and insert data
+	db, err := sql.Open("sqlite3", dbPath)
+	assert.NoError(t, err, "should open db")
+	defer db.Close()
+
+	// Create messages table
+	_, err = db.Exec(`
+		CREATE TABLE messages (
+			id TEXT PRIMARY KEY,
+			message TEXT
+		)
+	`)
+	assert.NoError(t, err, "should create messages table")
+
+	// Ensure triggers get created now that messages table exists
+	err = watcher.EnsureTriggers()
+	assert.NoError(t, err, "should ensure triggers")
+
+	// Insert a message
+	_, err = db.Exec("INSERT INTO messages (id, message) VALUES ('1', 'hello')")
+	assert.NoError(t, err, "should insert message")
+
+	// Wait for poll to detect change
+	time.Sleep(100 * time.Millisecond)
+
+	mu.Lock()
+	count := callCount
+	mu.Unlock()
+
+	assert.True(t, count >= 1, "callback should be called at least once, got %d", count)
+
+	// Insert another message
+	_, err = db.Exec("INSERT INTO messages (id, message) VALUES ('2', 'world')")
+	assert.NoError(t, err, "should insert another message")
+
+	// Wait for poll
+	time.Sleep(100 * time.Millisecond)
+
+	mu.Lock()
+	count = callCount
+	mu.Unlock()
+
+	assert.True(t, count >= 2, "callback should be called at least twice, got %d", count)
 }
 
 func TestStateManager(t *testing.T) {
