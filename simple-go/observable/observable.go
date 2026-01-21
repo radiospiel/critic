@@ -583,17 +583,31 @@ type Txn struct {
 }
 
 // SetValueAtKey records a change to be applied when the transaction commits.
-// Changes are not applied to the observable until the transaction callback returns.
-func (tx *Txn) SetValueAtKey(key string, value any) {
+// Returns true if the new value differs from the current value in the observable,
+// false if the value is unchanged or the transaction has been aborted.
+// Note: Changes are always recorded for deduplication purposes, even when returning false.
+func (tx *Txn) SetValueAtKey(key string, value any) bool {
 	if tx.aborted {
-		return
+		return false
 	}
+
+	// Check if value actually differs from current observable state
+	tx.obs.Observable.mu.RLock()
+	currentValue := tx.obs.Observable.getValueInternal(key)
+	tx.obs.Observable.mu.RUnlock()
+
+	changed := !reflect.DeepEqual(currentValue, value)
+
+	// Always record the change - deduplication will handle overrides
 	tx.changes = append(tx.changes, change{key: key, value: value})
+
+	return changed
 }
 
 // DeleteValueAtKey records a deletion to be applied when the transaction commits.
-func (tx *Txn) DeleteValueAtKey(key string) {
-	tx.SetValueAtKey(key, nil)
+// Returns true if the key currently has a non-nil value, false otherwise.
+func (tx *Txn) DeleteValueAtKey(key string) bool {
+	return tx.SetValueAtKey(key, nil)
 }
 
 // Abort cancels the transaction. All recorded changes will be discarded

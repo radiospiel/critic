@@ -1005,6 +1005,55 @@ func TestTransactionalObservableAbortIgnoresSubsequentChanges(t *testing.T) {
 	assert.Nil(t, obs.GetValue("bar"), "bar should not be set")
 }
 
+func TestTransactionalSetValueAtKeyReturnValue(t *testing.T) {
+	obs := NewTransactional()
+
+	// Set initial value
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "initial")
+	})
+
+	obs.Txn(func(tx *Txn) {
+		// Setting to a different value should return true
+		changed := tx.SetValueAtKey("foo", "changed")
+		assert.True(t, changed, "changing value should return true")
+
+		// Setting to the same value as observable should return false
+		unchanged := tx.SetValueAtKey("bar", nil)
+		assert.False(t, unchanged, "setting nil when already nil should return false")
+
+		// Setting a new key should return true
+		newKey := tx.SetValueAtKey("baz", "new")
+		assert.True(t, newKey, "setting new key should return true")
+	})
+
+	// Test that aborted transaction returns false
+	obs.Txn(func(tx *Txn) {
+		tx.Abort()
+		aborted := tx.SetValueAtKey("foo", "after-abort")
+		assert.False(t, aborted, "SetValueAtKey after abort should return false")
+	})
+}
+
+func TestTransactionalDeleteValueAtKeyReturnValue(t *testing.T) {
+	obs := NewTransactional()
+
+	// Set initial value
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "initial")
+	})
+
+	obs.Txn(func(tx *Txn) {
+		// Deleting existing value should return true
+		deleted := tx.DeleteValueAtKey("foo")
+		assert.True(t, deleted, "deleting existing value should return true")
+
+		// Deleting non-existent value should return false
+		notDeleted := tx.DeleteValueAtKey("nonexistent")
+		assert.False(t, notDeleted, "deleting non-existent value should return false")
+	})
+}
+
 // Tests for change deduplication (parent overrides children)
 
 func TestKeyOverrides(t *testing.T) {
