@@ -135,37 +135,75 @@ func (db *DB) createInitialSchema() error {
 	return nil
 }
 
+// migration defines a single schema migration step
+type migration struct {
+	fromVersion string
+	toVersion   string
+	sql         string
+}
+
+// migrations defines the ordered list of schema migrations
+var migrations = []migration{
+	{"2", "3", schema_v3_migration},
+	{"3", "4", schema_v4_migration},
+}
+
 // migrateSchema applies migrations to bring the database up to current version
 func (db *DB) migrateSchema(fromVersion string) error {
-	switch fromVersion {
-	case "2":
-		// Migrate from v2 to v3
-		logger.Info("Migrating database schema from v2 to v3")
-		_, err := db.db.Exec(schema_v3_migration)
-		if err != nil {
-			return fmt.Errorf("failed to apply schema v3 migration: %w", err)
+	currentVersion := fromVersion
+
+	for currentVersion != currentSchemaVersion {
+		// Find the migration for the current version
+		var mig *migration
+		for i := range migrations {
+			if migrations[i].fromVersion == currentVersion {
+				mig = &migrations[i]
+				break
+			}
 		}
-		if err := db.setSchemaVersion("3"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
+
+		if mig == nil {
+			return fmt.Errorf("schema version mismatch: database is at version %s, expected %s. Please delete .critic.db to start fresh", currentVersion, currentSchemaVersion)
 		}
-		logger.Info("Database schema migrated to version 3")
-		// Continue to apply v4 migration
-		fallthrough
-	case "3":
-		// Migrate from v3 to v4
-		logger.Info("Migrating database schema from v3 to v4")
-		_, err := db.db.Exec(schema_v4_migration)
-		if err != nil {
-			return fmt.Errorf("failed to apply schema v4 migration: %w", err)
+
+		// Run migration in a transaction
+		if err := db.applyMigration(mig); err != nil {
+			return err
 		}
-		if err := db.setSchemaVersion("4"); err != nil {
-			return fmt.Errorf("failed to set schema version: %w", err)
-		}
-		logger.Info("Database schema migrated to version 4")
-		return nil
-	default:
-		return fmt.Errorf("schema version mismatch: database is at version %s, expected %s. Please delete .critic.db to start fresh", fromVersion, currentSchemaVersion)
+
+		currentVersion = mig.toVersion
 	}
+
+	return nil
+}
+
+// applyMigration applies a single migration step within a transaction
+func (db *DB) applyMigration(mig *migration) error {
+	logger.Info("Migrating database schema from v%s to v%s", mig.fromVersion, mig.toVersion)
+
+	tx, err := db.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction for migration v%s→v%s: %w", mig.fromVersion, mig.toVersion, err)
+	}
+
+	_, err = tx.Exec(mig.sql)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to apply schema v%s migration: %w", mig.toVersion, err)
+	}
+
+	_, err = tx.Exec(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, "db_schema", mig.toVersion)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to set schema version to %s: %w", mig.toVersion, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration v%s→v%s: %w", mig.fromVersion, mig.toVersion, err)
+	}
+
+	logger.Info("Database schema migrated to version %s", mig.toVersion)
+	return nil
 }
 
 // getSchemaVersion retrieves the current schema version from settings
