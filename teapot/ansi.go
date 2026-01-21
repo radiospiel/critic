@@ -149,15 +149,17 @@ func applyANSISequence(style lipgloss.Style, seq string) lipgloss.Style {
 					}
 				}
 				if code >= 30 && code <= 37 {
-					style = style.Foreground(lipgloss.Color(p))
+					// Standard foreground: ANSI 30-37 maps to palette 0-7
+					style = style.Foreground(lipgloss.Color(strconv.Itoa(code - 30)))
 				} else if code >= 40 && code <= 47 {
-					style = style.Background(lipgloss.Color(p))
+					// Standard background: ANSI 40-47 maps to palette 0-7
+					style = style.Background(lipgloss.Color(strconv.Itoa(code - 40)))
 				} else if code >= 90 && code <= 97 {
-					// Bright foreground
-					style = style.Foreground(lipgloss.Color(p))
+					// Bright foreground: ANSI 90-97 maps to palette 8-15
+					style = style.Foreground(lipgloss.Color(strconv.Itoa(code - 82)))
 				} else if code >= 100 && code <= 107 {
-					// Bright background
-					style = style.Background(lipgloss.Color(p))
+					// Bright background: ANSI 100-107 maps to palette 8-15
+					style = style.Background(lipgloss.Color(strconv.Itoa(code - 92)))
 				}
 			}
 		}
