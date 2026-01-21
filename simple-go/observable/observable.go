@@ -366,10 +366,10 @@ type Txn struct {
 
 // SetValueAtKey records a change to be applied when the transaction commits.
 // Returns an error if the value violates a schema constraint.
-// If the transaction has an error, the call is ignored and returns the existing error.
+// If the transaction has an error, the call is ignored and returns ErrTransactionAborted.
 func (tx *Txn) SetValueAtKey(key string, value any) error {
 	if tx.err != nil {
-		return tx.err
+		return ErrTransactionAborted
 	}
 	// Validate against schema before recording the change
 	if errMsg := tx.obs.validateAgainstSchema(key, value); errMsg != "" {
