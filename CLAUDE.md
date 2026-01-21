@@ -19,6 +19,13 @@ Maintain a progress log in `docs/agents/logs/` for each significant task. This p
 
 **Log file naming:** `YYYYMMDD-HHMMSS-short-description.md` (e.g., `20250115-143022-fix-scroll-crash.md`)
 
+**To estimate complexity**, use the following guidance:
+- Simple: Task could be completed without any critical human feedback
+- Medium: A planning stage was necessary, with important human feedback. Human feedback after the planning stage was mostly cosmetic.
+- Complex: The initial plan was not sufficient to guide the agent to a successful outcome, repeated human interventions had been necessary.
+
+Note that timestamps **must always** have the time of day!
+
 **Required sections:**
 
 ```markdown
@@ -28,6 +35,8 @@ Maintain a progress log in `docs/agents/logs/` for each significant task. This p
 **Ended:** YYYY-MM-DD HH:MM:SS (or "in progress")
 **Strategy:** [Bug Fix | Feature (TDD) | Refactoring | Performance]
 **Status:** [In Progress | Completed | Blocked]
+**Complexity:** [Simple | Medium | Complex]
+**Used Models:** Haiku, Sonnet, Opus
 
 ## Objective
 [What we're trying to achieve]

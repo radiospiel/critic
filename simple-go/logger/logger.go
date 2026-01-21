@@ -5,14 +5,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 )
 
-// Level represents a log level
+// Level represents a log minLogLevel
 type Level int
 
-const enableStdoutLog = false
 const (
 	DEBUG Level = iota
 	INFO
@@ -22,21 +20,38 @@ const (
 )
 
 var (
-	once   sync.Once
-	level  Level = INFO // default log level
-	prefix string
+	minLogLevel Level = INFO // default log minLogLevel
 )
 
 // stores the path to the current log file
 var logFilePath = buildLogFilePath()
 var fileLogger = newFileLogger(logFilePath)
 
+// logMessage holds the data for a log entry
+type logMessage struct {
+	topic  string
+	format string
+	args   []any
+}
+
+// logChannel is a buffered channel for log messages
+var logChannel = make(chan logMessage, 1000)
+
+func init() {
+	// Start background writer goroutine
+	go func() {
+		for entry := range logChannel {
+			msg := fmt.Sprintf(entry.format, entry.args...)
+			if entry.topic != "" {
+				msg = "[" + entry.topic + "]: " + msg
+			}
+			fileLogger.Println(msg)
+		}
+	}()
+}
+
 // defaultLogger is a TopicLogger with empty topic (no prefix)
 var defaultLogger = &TopicLogger{topic: ""}
-
-func SetPrefix(s string) {
-	prefix = s
-}
 
 func Runtime[T any](msg string, fun func() T) T {
 	start := time.Now()
@@ -93,7 +108,7 @@ func SetNullLog() {
 
 // SetLevel sets the minimum log level
 func SetLevel(l Level) {
-	level = l
+	minLogLevel = l
 }
 
 // TopicLogger is a logger that prepends a topic tag to all log messages
@@ -107,97 +122,80 @@ func OnTopic(topic string) *TopicLogger {
 }
 
 // Printf writes a log message with optional topic prefix
-func (t *TopicLogger) Printf(format string, v ...interface{}) {
-	var finalFormat string
-	var finalArgs []interface{}
-
-	if t.topic != "" {
-		finalFormat = "[%s] " + format
-		finalArgs = append([]interface{}{t.topic}, v...)
-	} else {
-		finalFormat = format
-		finalArgs = v
+func (t *TopicLogger) Printf(format string, v ...any) {
+	logChannel <- logMessage{
+		topic:  t.topic,
+		format: format,
+		args:   v,
 	}
-
-	go func() {
-		fileLogger.Printf(finalFormat, finalArgs...)
-		if enableStdoutLog {
-			if prefix != "" {
-				finalArgs = append([]interface{}{prefix}, finalArgs...)
-				fmt.Printf("%s "+finalFormat+"\n", finalArgs...)
-			} else {
-				fmt.Printf(finalFormat+"\n", finalArgs...)
-			}
-		}
-	}()
 }
 
 // Error writes an error log message with topic prefix
-func (t *TopicLogger) Error(format string, v ...interface{}) {
-	if level > ERROR {
+func (t *TopicLogger) Error(format string, v ...any) {
+	if minLogLevel > ERROR {
 		return
 	}
 	t.Printf("ERROR: "+format, v...)
 }
 
 // Warn writes a warning log message with topic prefix
-func (t *TopicLogger) Warn(format string, v ...interface{}) {
-	if level > WARN {
+func (t *TopicLogger) Warn(format string, v ...any) {
+	if minLogLevel > WARN {
 		return
 	}
 	t.Printf("WARN: "+format, v...)
 }
 
 // Fatal writes a fatal error log message with topic prefix and exits
-func (t *TopicLogger) Fatal(format string, v ...interface{}) {
+func (t *TopicLogger) Fatal(format string, v ...any) {
 	t.Printf("FATAL: "+format, v...)
 	os.Exit(1)
 }
 
 // Info writes an info log message with topic prefix
-func (t *TopicLogger) Info(format string, v ...interface{}) {
-	if level > INFO {
+func (t *TopicLogger) Info(format string, v ...any) {
+	if minLogLevel > INFO {
 		return
 	}
 	t.Printf("INFO: "+format, v...)
 }
 
 // Debug writes a debug log message with topic prefix
-func (t *TopicLogger) Debug(format string, v ...interface{}) {
-	if level > DEBUG {
+func (t *TopicLogger) Debug(format string, v ...any) {
+	if minLogLevel > DEBUG {
 		return
 	}
 	t.Printf("DEBUG: "+format, v...)
 }
 
-// Package-level convenience functions that delegate to defaultLogger
+// Package-minLogLevel convenience functions that delegate to defaultLogger
 
 // Printf writes a log message
-func Printf(format string, v ...interface{}) {
+func Printf(format string, v ...any) {
 	defaultLogger.Printf(format, v...)
 }
 
 // Error writes an error log message
-func Error(format string, v ...interface{}) {
+func Error(format string, v ...any) {
 	defaultLogger.Error(format, v...)
 }
 
 // Warn writes a warning log message
-func Warn(format string, v ...interface{}) {
+func Warn(format string, v ...any) {
 	defaultLogger.Warn(format, v...)
 }
 
 // Fatal writes a fatal error log message and exits
-func Fatal(format string, v ...interface{}) {
+func Fatal(format string, v ...any) {
 	defaultLogger.Fatal(format, v...)
 }
 
 // Info writes an info log message
-func Info(format string, v ...interface{}) {
+func Info(format string, v ...any) {
 	defaultLogger.Info(format, v...)
 }
 
 // Debug writes a debug log message
-func Debug(format string, v ...interface{}) {
+func Debug(format string, v ...any) {
 	defaultLogger.Debug(format, v...)
 }
