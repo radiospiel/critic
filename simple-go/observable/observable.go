@@ -574,14 +574,20 @@ type change struct {
 }
 
 // Txn represents a transaction that batches changes before applying them.
+// Transactions are created via TransactionalObservable.Txn() and are
+// automatically committed when the callback returns, unless Abort() is called.
 type Txn struct {
 	obs     *TransactionalObservable
 	changes []change
+	aborted bool
 }
 
 // SetValueAtKey records a change to be applied when the transaction commits.
-// Changes are not applied to the observable until Commit() is called.
+// Changes are not applied to the observable until the transaction callback returns.
 func (tx *Txn) SetValueAtKey(key string, value any) {
+	if tx.aborted {
+		return
+	}
 	tx.changes = append(tx.changes, change{key: key, value: value})
 }
 
@@ -590,11 +596,18 @@ func (tx *Txn) DeleteValueAtKey(key string) {
 	tx.SetValueAtKey(key, nil)
 }
 
-// Commit applies all recorded changes to the observable, deduplicating
+// Abort cancels the transaction. All recorded changes will be discarded
+// and no notifications will be sent. Subsequent SetValueAtKey calls are ignored.
+func (tx *Txn) Abort() {
+	tx.aborted = true
+	tx.changes = nil
+}
+
+// commit applies all recorded changes to the observable, deduplicating
 // changes where a later change to a parent key overrides earlier child changes.
 // For example: ["a.1.b", "a", "a.2", "c", "a.1", "a"] becomes ["c", "a"]
-func (tx *Txn) Commit() {
-	if len(tx.changes) == 0 {
+func (tx *Txn) commit() {
+	if tx.aborted || len(tx.changes) == 0 {
 		return
 	}
 
@@ -659,7 +672,7 @@ func keyOverrides(parent, child string) bool {
 }
 
 // TransactionalObservable wraps Observable with transactional change batching.
-// Use Begin() to start a transaction, then Commit() to apply changes.
+// Use Txn() to execute changes within a transaction.
 type TransactionalObservable struct {
 	*Observable
 }
@@ -676,13 +689,21 @@ func NewTransactionalWithData(data any) *TransactionalObservable {
 	}
 }
 
-// Begin starts a new transaction. Changes made via the returned Txn are
-// not applied until Commit() is called.
-func (t *TransactionalObservable) Begin() *Txn {
-	return &Txn{
+// Txn executes a transaction. The callback receives a Txn object to record changes.
+// Changes are automatically committed when the callback returns, unless Abort() is called.
+// Example:
+//
+//	obs.Txn(func(tx *Txn) {
+//	    tx.SetValueAtKey("foo", "bar")
+//	    tx.SetValueAtKey("baz", 123)
+//	})
+func (t *TransactionalObservable) Txn(fn func(*Txn)) {
+	tx := &Txn{
 		obs:     t,
 		changes: make([]change, 0),
 	}
+	fn(tx)
+	tx.commit()
 }
 
 // setValuesAtKeys applies multiple changes atomically and notifies subscribers.

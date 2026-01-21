@@ -806,11 +806,11 @@ func TestTransactionalObservableChangesNotNotifiedUntilCommit(t *testing.T) {
 		callCount++
 	})
 
-	tx := obs.Begin()
-	tx.SetValueAtKey("foo", "bar")
-	assert.Equals(t, callCount, 0, "callback should not be called before commit")
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "bar")
+		assert.Equals(t, callCount, 0, "callback should not be called before commit")
+	})
 
-	tx.Commit()
 	assert.Equals(t, callCount, 1, "callback should be called after commit")
 }
 
@@ -826,12 +826,11 @@ func TestTransactionalObservableMultipleChangesToSameKeyUniqued(t *testing.T) {
 		lastNew = newValue
 	})
 
-	tx := obs.Begin()
-	tx.SetValueAtKey("foo", "first")
-	tx.SetValueAtKey("foo", "second")
-	tx.SetValueAtKey("foo", "third")
-
-	tx.Commit()
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "first")
+		tx.SetValueAtKey("foo", "second")
+		tx.SetValueAtKey("foo", "third")
+	})
 
 	assert.Equals(t, callCount, 1, "callback should only be called once for multiple changes to same key")
 	assert.Nil(t, lastOld, "old value should be the original (nil)")
@@ -850,14 +849,13 @@ func TestTransactionalObservableBatchesMultipleKeys(t *testing.T) {
 		barCount++
 	})
 
-	tx := obs.Begin()
-	tx.SetValueAtKey("foo", "value1")
-	tx.SetValueAtKey("bar", "value2")
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "value1")
+		tx.SetValueAtKey("bar", "value2")
 
-	assert.Equals(t, fooCount, 0, "foo callback should not be called before commit")
-	assert.Equals(t, barCount, 0, "bar callback should not be called before commit")
-
-	tx.Commit()
+		assert.Equals(t, fooCount, 0, "foo callback should not be called before commit")
+		assert.Equals(t, barCount, 0, "bar callback should not be called before commit")
+	})
 
 	assert.Equals(t, fooCount, 1, "foo callback should be called once after commit")
 	assert.Equals(t, barCount, 1, "bar callback should be called once after commit")
@@ -871,8 +869,10 @@ func TestTransactionalObservableNoNotificationWithoutChanges(t *testing.T) {
 		callCount++
 	})
 
-	tx := obs.Begin()
-	tx.Commit()
+	obs.Txn(func(tx *Txn) {
+		// Empty transaction
+	})
+
 	assert.Equals(t, callCount, 0, "callback should not be called when no changes")
 }
 
@@ -884,18 +884,17 @@ func TestTransactionalObservableSetThenDeleteNotNotified(t *testing.T) {
 		callCount++
 	})
 
-	tx := obs.Begin()
-	tx.SetValueAtKey("foo", "bar")
-	tx.DeleteValueAtKey("foo")
-
-	tx.Commit()
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "bar")
+		tx.DeleteValueAtKey("foo")
+	})
 
 	// The key was set then deleted - final state is same as initial (nil -> nil)
 	// so no notification should occur
 	assert.Equals(t, callCount, 0, "callback should not be called when net change is nil")
 }
 
-func TestTransactionalObservableMultipleCommits(t *testing.T) {
+func TestTransactionalObservableMultipleTransactions(t *testing.T) {
 	obs := NewTransactional()
 
 	var callCount int
@@ -903,15 +902,15 @@ func TestTransactionalObservableMultipleCommits(t *testing.T) {
 		callCount++
 	})
 
-	tx1 := obs.Begin()
-	tx1.SetValueAtKey("foo", "first")
-	tx1.Commit()
-	assert.Equals(t, callCount, 1, "first commit should trigger callback")
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "first")
+	})
+	assert.Equals(t, callCount, 1, "first transaction should trigger callback")
 
-	tx2 := obs.Begin()
-	tx2.SetValueAtKey("foo", "second")
-	tx2.Commit()
-	assert.Equals(t, callCount, 2, "second commit should trigger callback")
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "second")
+	})
+	assert.Equals(t, callCount, 2, "second transaction should trigger callback")
 }
 
 func TestTransactionalObservableNestedChanges(t *testing.T) {
@@ -922,9 +921,9 @@ func TestTransactionalObservableNestedChanges(t *testing.T) {
 		triggered = true
 	})
 
-	tx := obs.Begin()
-	tx.SetValueAtKey("x.1", map[string]any{"a": "value"})
-	tx.Commit()
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("x.1", map[string]any{"a": "value"})
+	})
 
 	assert.True(t, triggered, "nested subscription should be triggered on commit")
 }
@@ -938,13 +937,12 @@ func TestTransactionalObservableManyChanges(t *testing.T) {
 		callCount++
 	})
 
-	tx := obs.Begin()
-	// Send 5000 changes to different keys (more than any reasonable buffer)
-	for i := 0; i < 5000; i++ {
-		tx.SetValueAtKey(fmt.Sprintf("key%d", i), i)
-	}
-
-	tx.Commit()
+	obs.Txn(func(tx *Txn) {
+		// Send 5000 changes to different keys (more than any reasonable buffer)
+		for i := 0; i < 5000; i++ {
+			tx.SetValueAtKey(fmt.Sprintf("key%d", i), i)
+		}
+	})
 
 	assert.Equals(t, callCount, 5000, "should notify for all 5000 unique keys")
 }
@@ -960,16 +958,51 @@ func TestTransactionalObservableManyChangesToSameKey(t *testing.T) {
 		lastValue = newValue
 	})
 
-	tx := obs.Begin()
-	// Send 10000 changes to the same key
-	for i := 0; i < 10000; i++ {
-		tx.SetValueAtKey("foo", i)
-	}
-
-	tx.Commit()
+	obs.Txn(func(tx *Txn) {
+		// Send 10000 changes to the same key
+		for i := 0; i < 10000; i++ {
+			tx.SetValueAtKey("foo", i)
+		}
+	})
 
 	assert.Equals(t, callCount, 1, "should only notify once for same key")
 	assert.Equals(t, lastValue, 9999, "should have final value")
+}
+
+func TestTransactionalObservableAbort(t *testing.T) {
+	obs := NewTransactional()
+
+	var callCount int
+	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+		callCount++
+	})
+
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "bar")
+		tx.Abort()
+	})
+
+	assert.Equals(t, callCount, 0, "callback should not be called when transaction is aborted")
+	assert.Nil(t, obs.GetValue("foo"), "value should not be set when transaction is aborted")
+}
+
+func TestTransactionalObservableAbortIgnoresSubsequentChanges(t *testing.T) {
+	obs := NewTransactional()
+
+	var callCount int
+	obs.OnKeyChange([]string{"foo", "bar"}, func(key string, oldValue, newValue any) {
+		callCount++
+	})
+
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "value1")
+		tx.Abort()
+		tx.SetValueAtKey("bar", "value2") // Should be ignored
+	})
+
+	assert.Equals(t, callCount, 0, "no callbacks should be called")
+	assert.Nil(t, obs.GetValue("foo"), "foo should not be set")
+	assert.Nil(t, obs.GetValue("bar"), "bar should not be set")
 }
 
 // Tests for change deduplication (parent overrides children)
@@ -1009,11 +1042,10 @@ func TestTransactionalDeduplicationParentOverridesChild(t *testing.T) {
 	})
 
 	// Setting "a.1.b" then "a" - only "a" should be applied (a.1.b is overridden)
-	tx := obs.Begin()
-	tx.SetValueAtKey("a.1.b", "value1")
-	tx.SetValueAtKey("a", map[string]any{"x": "y"})
-
-	tx.Commit()
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("a.1.b", "value1")
+		tx.SetValueAtKey("a", map[string]any{"x": "y"})
+	})
 
 	// "a.1.b" should be overridden by "a", so only "a" and "a.x" get notified
 	assert.True(t, aNotified, "a should be notified")
@@ -1038,15 +1070,14 @@ func TestTransactionalDeduplicationComplexCase(t *testing.T) {
 	})
 
 	// Example from spec: "a.1.b", "a", "a.2", "c", "a.1", "a" → only "c", "a" applied
-	tx := obs.Begin()
-	tx.SetValueAtKey("a.1.b", "v1")
-	tx.SetValueAtKey("a", map[string]any{"first": true})
-	tx.SetValueAtKey("a.2", "v2")
-	tx.SetValueAtKey("c", "v3")
-	tx.SetValueAtKey("a.1", "v4")
-	tx.SetValueAtKey("a", map[string]any{"final": true})
-
-	tx.Commit()
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("a.1.b", "v1")
+		tx.SetValueAtKey("a", map[string]any{"first": true})
+		tx.SetValueAtKey("a.2", "v2")
+		tx.SetValueAtKey("c", "v3")
+		tx.SetValueAtKey("a.1", "v4")
+		tx.SetValueAtKey("a", map[string]any{"final": true})
+	})
 
 	assert.True(t, cNotified, "c should be notified")
 	assert.True(t, aNotified, "a should be notified")
@@ -1070,13 +1101,12 @@ func TestTransactionalDeduplicationRootOverridesAll(t *testing.T) {
 	})
 
 	// Setting various keys, then setting root "" overrides all
-	tx := obs.Begin()
-	tx.SetValueAtKey("a", "v1")
-	tx.SetValueAtKey("b.c", "v2")
-	tx.SetValueAtKey("d.e.f", "v3")
-	tx.SetValueAtKey("", map[string]any{"root": "value"})
-
-	tx.Commit()
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("a", "v1")
+		tx.SetValueAtKey("b.c", "v2")
+		tx.SetValueAtKey("d.e.f", "v3")
+		tx.SetValueAtKey("", map[string]any{"root": "value"})
+	})
 
 	// Only the root change should be applied
 	assert.True(t, rootNotified, "root should be notified")
@@ -1091,12 +1121,11 @@ func TestTransactionalDeduplicationVerifyState(t *testing.T) {
 	obs := NewTransactional()
 
 	// Test that deduplication produces correct final state
-	tx := obs.Begin()
-	tx.SetValueAtKey("a", "1")
-	tx.SetValueAtKey("b", "2")
-	tx.SetValueAtKey("c", "3")
-
-	tx.Commit()
+	obs.Txn(func(tx *Txn) {
+		tx.SetValueAtKey("a", "1")
+		tx.SetValueAtKey("b", "2")
+		tx.SetValueAtKey("c", "3")
+	})
 
 	assert.Equals(t, obs.GetValue("a"), "1", "a should be 1")
 	assert.Equals(t, obs.GetValue("b"), "2", "b should be 2")
