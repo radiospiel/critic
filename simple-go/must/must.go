@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 
@@ -118,4 +119,13 @@ func ParseInt(str string, base int) int64 {
 		logger.Fatal("cannot parseInt %s: %v", str, err)
 	}
 	return val
+}
+
+// Fnmatch matches a key against an fnmatch-style pattern, panicking on invalid pattern.
+func Fnmatch(pattern, key string) bool {
+	matched, err := path.Match(pattern, key)
+	if err != nil {
+		panic(fmt.Sprintf("Invalid Fnmatch pattern %q: %v", pattern, err))
+	}
+	return matched
 }

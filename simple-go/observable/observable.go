@@ -5,12 +5,12 @@ package observable
 import (
 	"encoding/json"
 	"maps"
-	"path"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 
+	"git.15b.it/eno/critic/simple-go/must"
 	"git.15b.it/eno/critic/simple-go/preconditions"
 	"git.15b.it/eno/critic/simple-go/utils"
 )
@@ -282,9 +282,8 @@ func (o *Observable) OnKeyChange(pattern string, callback ChangeCallback) Subscr
 
 	preconditions.Check(callback != nil, "callback must not be nil")
 
-	// Validate pattern
-	_, err := path.Match(pattern, "")
-	preconditions.Check(err == nil, "OnKeyChange: bad pattern %q err: %v", pattern, err)
+	// Validate pattern (must.Fnmatch panics on invalid pattern)
+	must.Fnmatch(pattern, "")
 
 	id := o.nextSubID
 	o.nextSubID++
@@ -305,13 +304,6 @@ func (o *Observable) ClearSubscriptions(subs ...Subscription) {
 	for _, sub := range subs {
 		delete(o.subscriptions, sub)
 	}
-}
-
-// matchPattern checks if a key matches a pattern using fnmatch-style matching.
-func matchPattern(pattern, key string) bool {
-	matched, err := path.Match(pattern, key)
-	preconditions.Check(err == nil, "match pattern %q err: %v", pattern, err)
-	return matched
 }
 
 // parseIndex tries to parse a string as a non-negative integer.
@@ -478,7 +470,7 @@ func keyAffectsPattern(key, pattern string) bool {
 	if key == "" {
 		return true // root change affects all subscriptions
 	}
-	if matchPattern(pattern, key) {
+	if must.Fnmatch(pattern, key) {
 		return true // pattern directly matches the changed key
 	}
 	// Check if key is a parent of pattern (key="foo" affects pattern="foo.bar" or "foo.*.baz")
