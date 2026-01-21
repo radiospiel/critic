@@ -98,61 +98,6 @@ func GetValueAs[T any](o *Observable, key string) T {
 
 	return result
 }
-
-// GetMap returns a copy of the map at the given key path.
-// Returns nil if the key does not exist.
-// Panics if the key exists but the value is not a map.
-func (o *Observable) GetMap(key string) map[string]any {
-	val := o.GetValue(key)
-	if val == nil {
-		return nil
-	}
-	m, ok := val.(map[string]any)
-	preconditions.Check(ok, "value at key %q is not a map, got %T", key, val)
-	return copyMap(m)
-}
-
-// GetSlice returns a copy of the slice at the given key path.
-// Returns nil if the key does not exist.
-// Panics if the key exists but the value is not a slice.
-func (o *Observable) GetSlice(key string) []any {
-	val := o.GetValue(key)
-	if val == nil {
-		return nil
-	}
-	s, ok := val.([]any)
-	preconditions.Check(ok, "value at key %q is not a slice, got %T", key, val)
-	return copySlice(s)
-}
-
-// GetString returns the string at the given key path.
-// Returns empty string if the key does not exist.
-// Panics if the key exists but the value is not a string.
-func (o *Observable) GetString(key string) string {
-	return GetValueAs[string](o, key)
-}
-
-// GetInt returns the int at the given key path.
-// Returns 0 if the key does not exist.
-// Panics if the key exists but the value is not an int.
-func (o *Observable) GetInt(key string) int {
-	return GetValueAs[int](o, key)
-}
-
-// GetFloat64 returns the float64 at the given key path.
-// Returns 0 if the key does not exist.
-// Panics if the key exists but the value is not a float64.
-func (o *Observable) GetFloat64(key string) float64 {
-	return GetValueAs[float64](o, key)
-}
-
-// GetBool returns the bool at the given key path.
-// Returns false if the key does not exist.
-// Panics if the key exists but the value is not a bool.
-func (o *Observable) GetBool(key string) bool {
-	return GetValueAs[bool](o, key)
-}
-
 // getValueInternal returns the value without locking (caller must hold lock).
 func (o *Observable) getValueInternal(key string) any {
 	if key == "" {
