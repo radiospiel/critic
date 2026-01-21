@@ -59,26 +59,26 @@ var schema_v4_migration = `
 		mtime INTEGER NOT NULL DEFAULT 0
 	);
 
-	-- Initialize mtime counter
-	INSERT INTO _db_mtime (mtime) SELECT 0 WHERE NOT EXISTS (SELECT 1 FROM _db_mtime);
+	-- Initialize mtime with current timestamp in milliseconds
+	INSERT INTO _db_mtime (mtime) SELECT CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE NOT EXISTS (SELECT 1 FROM _db_mtime);
 
-	-- Triggers to increment mtime on messages table changes
+	-- Triggers to update mtime on messages table changes
 	CREATE TRIGGER IF NOT EXISTS _messages_insert_mtime
 	AFTER INSERT ON messages
 	BEGIN
-		UPDATE _db_mtime SET mtime = mtime + 1;
+		UPDATE _db_mtime SET mtime = CAST(unixepoch('subsec') * 1000 AS INTEGER);
 	END;
 
 	CREATE TRIGGER IF NOT EXISTS _messages_update_mtime
 	AFTER UPDATE ON messages
 	BEGIN
-		UPDATE _db_mtime SET mtime = mtime + 1;
+		UPDATE _db_mtime SET mtime = CAST(unixepoch('subsec') * 1000 AS INTEGER);
 	END;
 
 	CREATE TRIGGER IF NOT EXISTS _messages_delete_mtime
 	AFTER DELETE ON messages
 	BEGIN
-		UPDATE _db_mtime SET mtime = mtime + 1;
+		UPDATE _db_mtime SET mtime = CAST(unixepoch('subsec') * 1000 AS INTEGER);
 	END;
 `
 
