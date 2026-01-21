@@ -1,49 +1,56 @@
 # Task: Add transactions lite to observable
 
 **Started:** 2026-01-21 03:57:35
-**Ended:** 2026-01-21 04:05:00
+**Ended:** 2026-01-21 04:25:00
 **Strategy:** Feature (TDD)
 **Status:** Completed
-**Complexity:** Simple
+**Complexity:** Medium
 **Used Models:** Opus
 
 ## Objective
-Implement a "transactions lite" feature for the observable package that:
-1. Streams key changes to an internal goroutine that buffers changes
-2. Adds a CommitChanges function that triggers observer notifications
-3. The goroutine uniques all changed keys before calling observers
-4. Removes the need to lock the observable during changes
+Implement a "transactions lite" feature for the observable package with:
+1. `Begin()` → `Txn` function to start a transaction
+2. `Txn.SetValueAtKey()` records changes in a slice (doesn't apply immediately)
+3. `Txn.Commit()` deduplicates changes and applies them atomically
+4. Parent key changes override child key changes (e.g., setting "a" after "a.1.b" discards "a.1.b")
 
 ## Progress
 - [x] Explore existing observable implementation
-- [x] Write tests for transactional behavior (9 tests)
-- [x] Implement buffering goroutine with processLoop
-- [x] Add CommitChanges function
-- [x] Remove lock requirement - channel handles synchronization
-- [x] Run tests and verify (all 72 tests pass)
+- [x] Initial implementation with channel-based buffering
+- [x] Fix unbounded buffer issue (replace channel with mutex-protected map)
+- [x] Redesign with proper `Begin()` / `Commit()` API
+- [x] Implement change deduplication (parent overrides children)
+- [x] Add `setValuesAtKeys` internal method
+- [x] Update tests for new API
+- [x] Run tests and verify (all 73 tests pass)
 
 ## Obstacles
-- **Issue:** Initial implementation didn't drain change channel before processing commits
-  **Resolution:** Added a draining loop before commit processing to ensure all pending changes are included
+- **Issue:** Initial channel-based design had 1000-item buffer limit causing potential deadlock
+  **Resolution:** Replaced with mutex-protected map for unbounded buffering
 
-- **Issue:** Concurrent test expected notifications per unique key, not per batch
-  **Resolution:** Added `notifyPerKey` method that calls callbacks once per changed key (unlike base Observable which notifies once per subscription per batch)
+- **Issue:** User requested proper transaction API with Begin()/Commit() instead of implicit buffering
+  **Resolution:** Complete redesign with Txn type that records changes in a slice
+
+- **Issue:** `path.Match("*", "a.final")` returns true because "." is not a separator in path matching
+  **Resolution:** Updated tests to use specific key patterns instead of relying on "*" wildcard behavior
 
 ## Outcome
 Successfully implemented TransactionalObservable with:
-- `NewTransactional()` and `NewTransactionalWithData()` constructors
-- Buffered change channel (1000 capacity)
-- `CommitChanges()` method that blocks until all notifications complete
-- `Close()` method to stop the processing goroutine
-- Proper handling of nested key changes
+- `Begin()` returns a `Txn` object
+- `Txn.SetValueAtKey(key, value)` records changes in a slice
+- `Txn.Commit()` deduplicates and applies changes atomically
+- `keyOverrides(parent, child)` determines if parent change overrides child
+- Example: `["a.1.b", "a", "a.2", "c", "a.1", "a"]` → only `["c", "a"]` applied
 
 Key design decisions:
-- TransactionalObservable embeds base Observable
-- Changes buffered with original values to detect net changes on commit
-- Each subscription notified once per unique changed key (not once per batch)
-- Still uses lock for actual data access, but notifications are decoupled
+- No goroutines needed - simple synchronous model
+- Changes recorded as slice of {key, value} pairs
+- Deduplication works backwards from end of slice
+- Setting parent key overrides all child key changes
+- Notifications happen once per unique changed key
 
 ## Learnings
-- Channel draining with `select { default: }` pattern is essential for proper batching
-- Need to distinguish between "notify once per batch" vs "notify once per key" semantics
-- Fixed-size channel buffers can cause deadlock when sender blocks waiting for space while receiver waits for different message - use mutex-protected maps for unbounded buffering
+- Channel-based designs need careful consideration of buffer limits
+- `path.Match` uses "/" as separator, so "*" matches "a.b" (dots are not separators)
+- Explicit transaction objects (Begin/Commit) are cleaner than implicit buffering
+- Deduplication logic: iterate backwards, skip changes overridden by later parent changes
