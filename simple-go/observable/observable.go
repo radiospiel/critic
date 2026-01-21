@@ -25,6 +25,26 @@ type Subscription int
 // It receives the full key path that changed.
 type ChangeCallback func(key string)
 
+// SchemaValidationError represents a schema validation failure.
+type SchemaValidationError struct {
+	Key     string
+	Message string
+}
+
+func (e *SchemaValidationError) Error() string {
+	return e.Message
+}
+
+// ErrTransactionAborted is returned when operations are attempted on an aborted transaction.
+var ErrTransactionAborted = &TransactionAbortedError{}
+
+// TransactionAbortedError indicates that a transaction was aborted.
+type TransactionAbortedError struct{}
+
+func (e *TransactionAbortedError) Error() string {
+	return "transaction is aborted"
+}
+
 type subscription struct {
 	pattern  string
 	callback ChangeCallback
@@ -139,7 +159,7 @@ func (o *Observable) getValueInternal(key string) any {
 }
 
 // SetValueAtKey sets the value at the given key path, creating intermediate
-// structures as needed.
+// structures as needed. Returns an error if the value violates a schema constraint.
 //
 // Key is a dot-separated path like "x.1.a".
 // Numeric path segments indicate array indices, string segments indicate map keys.
@@ -147,8 +167,8 @@ func (o *Observable) getValueInternal(key string) any {
 // Panics if:
 //   - The existing value at a path segment has an incompatible type
 //   - An array index is negative or >= 100000
-func (o *Observable) SetValueAtKey(key string, value any) {
-	o.Transaction(func(tx *Txn) {
+func (o *Observable) SetValueAtKey(key string, value any) error {
+	return o.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey(key, value)
 	})
 }
@@ -266,9 +286,10 @@ func (o *Observable) setAtPath(current any, parts []string, value any) any {
 }
 
 // DeleteValueAtKey removes the value at the given key path.
+// Returns an error if validation fails.
 // This is equivalent to SetValueAtKey(key, nil).
-func (o *Observable) DeleteValueAtKey(key string) {
-	o.Transaction(func(tx *Txn) {
+func (o *Observable) DeleteValueAtKey(key string) error {
+	return o.Transaction(func(tx *Txn) {
 		tx.DeleteValueAtKey(key)
 	})
 }
@@ -340,32 +361,42 @@ type change struct {
 type Txn struct {
 	obs     *Observable
 	changes []change
-	aborted bool
+	err     error
 }
 
 // SetValueAtKey records a change to be applied when the transaction commits.
-// If the transaction has been aborted, the call is ignored.
-// Panics if the value violates a schema constraint.
-func (tx *Txn) SetValueAtKey(key string, value any) {
-	if tx.aborted {
-		return
+// Returns an error if the value violates a schema constraint.
+// If the transaction has an error, the call is ignored and returns the existing error.
+func (tx *Txn) SetValueAtKey(key string, value any) error {
+	if tx.err != nil {
+		return tx.err
 	}
 	// Validate against schema before recording the change
 	if errMsg := tx.obs.validateAgainstSchema(key, value); errMsg != "" {
-		preconditions.Check(false, "%s", errMsg)
+		tx.err = &SchemaValidationError{Key: key, Message: errMsg}
+		return tx.err
 	}
 	tx.changes = append(tx.changes, change{key: key, value: value})
+	return nil
 }
 
 // DeleteValueAtKey records a deletion to be applied when the transaction commits.
-func (tx *Txn) DeleteValueAtKey(key string) {
-	tx.SetValueAtKey(key, nil)
+// Returns an error if validation fails.
+func (tx *Txn) DeleteValueAtKey(key string) error {
+	return tx.SetValueAtKey(key, nil)
+}
+
+// Err returns any error that occurred during the transaction.
+func (tx *Txn) Err() error {
+	return tx.err
 }
 
 // Abort cancels the transaction. All recorded changes will be discarded
-// and no notifications will be sent. Subsequent SetValueAtKey calls are ignored.
+// and no notifications will be sent. Subsequent SetValueAtKey calls return ErrTransactionAborted.
 func (tx *Txn) Abort() {
-	tx.aborted = true
+	if tx.err == nil {
+		tx.err = ErrTransactionAborted
+	}
 	tx.changes = nil
 }
 
@@ -416,35 +447,39 @@ func keyOverrides(parent, child string) bool {
 	return strings.HasPrefix(child, parent+".")
 }
 
-// Txn executes a transaction. The callback receives a Txn object to record changes.
-// Changes are automatically committed when the callback returns, unless Abort() is called.
+// Transaction executes a transaction. The callback receives a Txn object to record changes.
+// Changes are automatically committed when the callback returns, unless Abort() is called
+// or an error occurred during the transaction.
+// On commit, all schemas are validated against the final state to catch cross-field
+// constraint violations that individual updates might not detect.
+// Returns an error if any schema validation fails.
 // Example:
 //
-//	obs.Transaction(func(tx *Transaction) {
+//	err := obs.Transaction(func(tx *Txn) {
 //	    tx.SetValueAtKey("foo", "bar")
 //	    tx.SetValueAtKey("baz", 123)
 //	})
-func (o *Observable) Transaction(fn func(*Txn)) {
+func (o *Observable) Transaction(fn func(*Txn)) error {
 	tx := &Txn{
 		obs:     o,
 		changes: make([]change, 0),
-		aborted: false,
 	}
 
 	fn(tx)
 
-	if tx.aborted {
-		return
+	if tx.err != nil {
+		return tx.err
 	}
 
-	o.setValuesAtKeys(tx.changes)
+	return o.setValuesAtKeys(tx.changes)
 }
 
 // setValuesAtKeys applies multiple changes atomically and notifies subscribers.
 // Changes are deduplicated: later changes to parent keys override earlier child changes.
-func (o *Observable) setValuesAtKeys(changes []change) {
+// Returns an error if final state validation against any schema fails.
+func (o *Observable) setValuesAtKeys(changes []change) error {
 	if len(changes) == 0 {
-		return
+		return nil
 	}
 
 	// Remove changes that are overridden by later change on the same or a parent key
@@ -455,6 +490,14 @@ func (o *Observable) setValuesAtKeys(changes []change) {
 	for _, c := range changes {
 		o.setValueInternal(c.key, c.value)
 	}
+
+	// Validate all schemas against the final state
+	// This catches cross-field constraint violations
+	if errMsg := o.validateAllSchemas(); errMsg != "" {
+		o.mu.Unlock()
+		return &SchemaValidationError{Message: errMsg}
+	}
+
 	subs := slices.Collect(maps.Values(o.subscriptions))
 	o.mu.Unlock()
 
@@ -466,6 +509,7 @@ func (o *Observable) setValuesAtKeys(changes []change) {
 			}
 		}
 	}
+	return nil
 }
 
 // keyAffectsPattern returns true if setting 'key' should trigger a subscription on 'pattern'.

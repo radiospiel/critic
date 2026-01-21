@@ -57,23 +57,15 @@ func TestSchemaValidationPassesForValidObject(t *testing.T) {
 func TestSchemaValidationFailsForInvalidType(t *testing.T) {
 	obs := New().WithSchema("name", `{"type": "string"}`)
 
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic when setting invalid type")
-	}()
-
-	obs.SetValueAtKey("name", 123) // number instead of string
+	err := obs.SetValueAtKey("name", 123) // number instead of string
+	assert.NotNil(t, err, "should return error when setting invalid type")
 }
 
 func TestSchemaValidationFailsForInvalidNumber(t *testing.T) {
 	obs := New().WithSchema("age", `{"type": "integer", "minimum": 0}`)
 
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic when setting negative age")
-	}()
-
-	obs.SetValueAtKey("age", -5) // negative number
+	err := obs.SetValueAtKey("age", -5) // negative number
+	assert.NotNil(t, err, "should return error when setting negative age")
 }
 
 func TestSchemaValidationFailsForMissingRequired(t *testing.T) {
@@ -87,14 +79,10 @@ func TestSchemaValidationFailsForMissingRequired(t *testing.T) {
 	}`
 	obs := New().WithSchema("user", schema)
 
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic when required field is missing")
-	}()
-
-	obs.SetValueAtKey("user", map[string]any{
+	err := obs.SetValueAtKey("user", map[string]any{
 		"age": 30, // missing required "name"
 	})
+	assert.NotNil(t, err, "should return error when required field is missing")
 }
 
 func TestSchemaValidationForArray(t *testing.T) {
@@ -117,38 +105,32 @@ func TestSchemaValidationFailsForInvalidArrayItem(t *testing.T) {
 	}`
 	obs := New().WithSchema("tags", schema)
 
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic when array contains non-string")
-	}()
-
-	obs.SetValueAtKey("tags", []any{"go", 123, "schema"}) // 123 is not a string
+	err := obs.SetValueAtKey("tags", []any{"go", 123, "schema"}) // 123 is not a string
+	assert.NotNil(t, err, "should return error when array contains non-string")
 }
 
 func TestSchemaDoesNotAffectUnrelatedKeys(t *testing.T) {
 	obs := New().WithSchema("name", `{"type": "string"}`)
 
 	// Setting a different key should not be validated
-	obs.SetValueAtKey("count", 42)
+	err := obs.SetValueAtKey("count", 42)
+	assert.Nil(t, err, "should not return error for unrelated key")
 	assert.Equals(t, obs.GetValue("count"), 42, "unrelated key should be set without validation")
 }
 
 func TestSchemaValidationForNestedKey(t *testing.T) {
 	obs := New().WithSchema("config.port", `{"type": "integer", "minimum": 1, "maximum": 65535}`)
 
-	obs.SetValueAtKey("config.port", 8080)
+	err := obs.SetValueAtKey("config.port", 8080)
+	assert.Nil(t, err, "should not return error for valid port")
 	assert.Equals(t, obs.GetValue("config.port"), 8080, "should set valid port")
 }
 
 func TestSchemaValidationFailsForInvalidNestedKey(t *testing.T) {
 	obs := New().WithSchema("config.port", `{"type": "integer", "minimum": 1, "maximum": 65535}`)
 
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic when port is out of range")
-	}()
-
-	obs.SetValueAtKey("config.port", 99999) // out of range
+	err := obs.SetValueAtKey("config.port", 99999) // out of range
+	assert.NotNil(t, err, "should return error when port is out of range")
 }
 
 func TestSchemaOnParentValidatesChildKeys(t *testing.T) {
@@ -164,15 +146,12 @@ func TestSchemaOnParentValidatesChildKeys(t *testing.T) {
 	obs := New().WithSchema("config", schema)
 
 	// First set a valid config
-	obs.SetValueAtKey("config", map[string]any{"name": "server", "port": 8080})
+	err := obs.SetValueAtKey("config", map[string]any{"name": "server", "port": 8080})
+	assert.Nil(t, err, "should not return error for valid config")
 
 	// Now try to set an invalid child value
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic when child value violates parent schema")
-	}()
-
-	obs.SetValueAtKey("config.port", "not-a-number") // string instead of integer
+	err = obs.SetValueAtKey("config.port", "not-a-number") // string instead of integer
+	assert.NotNil(t, err, "should return error when child value violates parent schema")
 }
 
 func TestSchemaValidationWithMapSchema(t *testing.T) {
@@ -183,7 +162,8 @@ func TestSchemaValidationWithMapSchema(t *testing.T) {
 	}
 	obs := New().WithSchema("id", schema)
 
-	obs.SetValueAtKey("id", "abc")
+	err := obs.SetValueAtKey("id", "abc")
+	assert.Nil(t, err, "should not return error for valid lowercase string")
 	assert.Equals(t, obs.GetValue("id"), "abc", "should set valid lowercase string")
 }
 
@@ -194,39 +174,34 @@ func TestSchemaValidationWithMapSchemaFails(t *testing.T) {
 	}
 	obs := New().WithSchema("id", schema)
 
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic when pattern doesn't match")
-	}()
-
-	obs.SetValueAtKey("id", "ABC123") // doesn't match pattern
+	err := obs.SetValueAtKey("id", "ABC123") // doesn't match pattern
+	assert.NotNil(t, err, "should return error when pattern doesn't match")
 }
 
 func TestSchemaValidationAllowsNilForOptionalKey(t *testing.T) {
 	obs := New().WithSchema("name", `{"type": "string"}`)
 
 	// Setting to nil (deletion) should be allowed
-	obs.SetValueAtKey("name", "Alice")
-	obs.SetValueAtKey("name", nil)
+	err := obs.SetValueAtKey("name", "Alice")
+	assert.Nil(t, err, "should not return error for valid string")
+	err = obs.SetValueAtKey("name", nil)
+	assert.Nil(t, err, "should not return error for nil deletion")
 	assert.Nil(t, obs.GetValue("name"), "should allow deletion via nil")
 }
 
 func TestSchemaValidationWithBoolean(t *testing.T) {
 	obs := New().WithSchema("enabled", `{"type": "boolean"}`)
 
-	obs.SetValueAtKey("enabled", true)
+	err := obs.SetValueAtKey("enabled", true)
+	assert.Nil(t, err, "should not return error for valid boolean")
 	assert.True(t, obs.GetValue("enabled").(bool), "should set boolean")
 }
 
 func TestSchemaValidationFailsForBooleanWithWrongType(t *testing.T) {
 	obs := New().WithSchema("enabled", `{"type": "boolean"}`)
 
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic when setting non-boolean")
-	}()
-
-	obs.SetValueAtKey("enabled", "yes") // string instead of boolean
+	err := obs.SetValueAtKey("enabled", "yes") // string instead of boolean
+	assert.NotNil(t, err, "should return error when setting non-boolean")
 }
 
 func TestWithSchemaOnNewWithData(t *testing.T) {
@@ -234,7 +209,8 @@ func TestWithSchemaOnNewWithData(t *testing.T) {
 	obs := NewWithData(data).WithSchema("count", `{"type": "integer", "minimum": 0}`)
 
 	// Should be able to update with valid value
-	obs.SetValueAtKey("count", 20)
+	err := obs.SetValueAtKey("count", 20)
+	assert.Nil(t, err, "should not return error for valid integer")
 	assert.Equals(t, obs.GetValue("count"), 20, "should update to valid value")
 }
 
@@ -244,10 +220,13 @@ func TestMultipleSchemasOnDifferentKeys(t *testing.T) {
 		WithSchema("age", `{"type": "integer", "minimum": 0}`).
 		WithSchema("email", `{"type": "string", "format": "email"}`)
 
-	obs.SetValueAtKey("name", "Alice")
-	obs.SetValueAtKey("age", 30)
+	err := obs.SetValueAtKey("name", "Alice")
+	assert.Nil(t, err, "should not return error for valid name")
+	err = obs.SetValueAtKey("age", 30)
+	assert.Nil(t, err, "should not return error for valid age")
 	// Note: email format validation may be lenient in some implementations
-	obs.SetValueAtKey("email", "alice@example.com")
+	err = obs.SetValueAtKey("email", "alice@example.com")
+	assert.Nil(t, err, "should not return error for valid email")
 
 	assert.Equals(t, obs.GetValue("name"), "Alice", "name should be set")
 	assert.Equals(t, obs.GetValue("age"), 30, "age should be set")
