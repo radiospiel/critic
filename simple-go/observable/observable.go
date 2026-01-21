@@ -282,6 +282,10 @@ func (o *Observable) OnKeyChange(pattern string, callback ChangeCallback) Subscr
 
 	preconditions.Check(callback != nil, "callback must not be nil")
 
+	// Validate pattern
+	_, err := path.Match(pattern, "")
+	preconditions.Check(err == nil, "OnKeyChange: bad pattern %q err: %v", pattern, err)
+
 	id := o.nextSubID
 	o.nextSubID++
 
@@ -306,9 +310,7 @@ func (o *Observable) ClearSubscriptions(subs ...Subscription) {
 // matchPattern checks if a key matches a pattern using fnmatch-style matching.
 func matchPattern(pattern, key string) bool {
 	matched, err := path.Match(pattern, key)
-	if err != nil {
-		return false
-	}
+	preconditions.Check(err == nil, "match pattern %q err: %v", pattern, err)
 	return matched
 }
 
