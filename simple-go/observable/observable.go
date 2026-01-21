@@ -567,12 +567,6 @@ func copySlice(s []any) []any {
 	return result
 }
 
-// changeMessage represents a change to be processed by the transaction goroutine.
-type changeMessage struct {
-	key      string
-	oldValue any
-}
-
 // commitMessage signals the goroutine to process buffered changes.
 type commitMessage struct {
 	done chan struct{}
@@ -583,10 +577,11 @@ type commitMessage struct {
 // subscribers are notified with uniqued key changes.
 type TransactionalObservable struct {
 	*Observable
-	changeChan chan changeMessage
-	commitChan chan commitMessage
-	closeChan  chan struct{}
-	closed     bool
+	pendingMu      sync.Mutex
+	pendingChanges map[string]any // key -> original old value (before any changes in this tx)
+	commitChan     chan commitMessage
+	closeChan      chan struct{}
+	closed         bool
 }
 
 // NewTransactional creates a new TransactionalObservable with an empty map as root.
@@ -597,42 +592,25 @@ func NewTransactional() *TransactionalObservable {
 // NewTransactionalWithData creates a new TransactionalObservable with the provided data.
 func NewTransactionalWithData(data any) *TransactionalObservable {
 	t := &TransactionalObservable{
-		Observable: NewWithData(data),
-		changeChan: make(chan changeMessage, 1000),
-		commitChan: make(chan commitMessage),
-		closeChan:  make(chan struct{}),
+		Observable:     NewWithData(data),
+		pendingChanges: make(map[string]any),
+		commitChan:     make(chan commitMessage),
+		closeChan:      make(chan struct{}),
 	}
 	go t.processLoop()
 	return t
 }
 
-// processLoop is the goroutine that buffers changes and processes commits.
+// processLoop is the goroutine that processes commits.
 func (t *TransactionalObservable) processLoop() {
-	// Buffer for tracking original values of changed keys
-	// key -> oldValue (the value before any changes in this transaction)
-	pendingChanges := make(map[string]any)
-
 	for {
 		select {
-		case change := <-t.changeChan:
-			// Only record the first old value for each key
-			if _, exists := pendingChanges[change.key]; !exists {
-				pendingChanges[change.key] = change.oldValue
-			}
-
 		case commit := <-t.commitChan:
-			// Drain any remaining changes from the channel first
-			draining := true
-			for draining {
-				select {
-				case change := <-t.changeChan:
-					if _, exists := pendingChanges[change.key]; !exists {
-						pendingChanges[change.key] = change.oldValue
-					}
-				default:
-					draining = false
-				}
-			}
+			// Swap out pending changes atomically
+			t.pendingMu.Lock()
+			pendingChanges := t.pendingChanges
+			t.pendingChanges = make(map[string]any)
+			t.pendingMu.Unlock()
 
 			// Process all pending changes
 			if len(pendingChanges) > 0 {
@@ -657,9 +635,6 @@ func (t *TransactionalObservable) processLoop() {
 				// Notify subscribers for each changed key (unlike base Observable which
 				// notifies once per SetValueAtKey, transactional notifies once per unique key)
 				t.notifyPerKey(subs, changes)
-
-				// Clear pending changes for next transaction
-				pendingChanges = make(map[string]any)
 			}
 
 			// Signal completion
@@ -669,6 +644,15 @@ func (t *TransactionalObservable) processLoop() {
 			return
 		}
 	}
+}
+
+// bufferChange records a key change, keeping only the original old value.
+func (t *TransactionalObservable) bufferChange(key string, oldValue any) {
+	t.pendingMu.Lock()
+	if _, exists := t.pendingChanges[key]; !exists {
+		t.pendingChanges[key] = oldValue
+	}
+	t.pendingMu.Unlock()
 }
 
 // SetValueAtKey sets the value at the given key path, buffering the change
@@ -688,11 +672,11 @@ func (t *TransactionalObservable) SetValueAtKey(key string, value any) {
 	newNestedKeys := collectKeys(newValue, key)
 	t.Observable.mu.Unlock()
 
-	// Send change to buffer goroutine
+	// Buffer the change (never blocks, uses mutex-protected map)
 	if !t.closed {
-		t.changeChan <- changeMessage{key: key, oldValue: oldValue}
+		t.bufferChange(key, oldValue)
 
-		// Also send nested key changes
+		// Also buffer nested key changes
 		allNestedKeys := make(map[string]bool)
 		for k := range oldNestedKeys {
 			allNestedKeys[k] = true
@@ -704,7 +688,7 @@ func (t *TransactionalObservable) SetValueAtKey(key string, value any) {
 		for nestedKey := range allNestedKeys {
 			if nestedKey != key {
 				oldNested := getNestedValue(oldValue, strings.TrimPrefix(nestedKey, key+"."))
-				t.changeChan <- changeMessage{key: nestedKey, oldValue: oldNested}
+				t.bufferChange(nestedKey, oldNested)
 			}
 		}
 	}

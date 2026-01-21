@@ -1,6 +1,7 @@
 package observable
 
 import (
+	"fmt"
 	"testing"
 
 	"git.15b.it/eno/critic/simple-go/assert"
@@ -968,4 +969,47 @@ func TestTransactionalObservableClose(t *testing.T) {
 	// After close, operations should still work but without notification
 	obs.SetValueAtKey("bar", "baz")
 	assert.Equals(t, obs.GetValue("bar"), "baz", "SetValueAtKey should still work after close")
+}
+
+func TestTransactionalObservableManyChanges(t *testing.T) {
+	// Test that we can handle more changes than would fit in any fixed buffer
+	obs := NewTransactional()
+	defer obs.Close()
+
+	var callCount int
+	obs.OnKeyChange([]string{"*"}, func(key string, oldValue, newValue any) {
+		callCount++
+	})
+
+	// Send 5000 changes to different keys (more than any reasonable buffer)
+	for i := 0; i < 5000; i++ {
+		obs.SetValueAtKey(fmt.Sprintf("key%d", i), i)
+	}
+
+	obs.CommitChanges()
+
+	assert.Equals(t, callCount, 5000, "should notify for all 5000 unique keys")
+}
+
+func TestTransactionalObservableManyChangesToSameKey(t *testing.T) {
+	// Test that many changes to the same key still only notify once
+	obs := NewTransactional()
+	defer obs.Close()
+
+	var callCount int
+	var lastValue any
+	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+		callCount++
+		lastValue = newValue
+	})
+
+	// Send 10000 changes to the same key
+	for i := 0; i < 10000; i++ {
+		obs.SetValueAtKey("foo", i)
+	}
+
+	obs.CommitChanges()
+
+	assert.Equals(t, callCount, 1, "should only notify once for same key")
+	assert.Equals(t, lastValue, 9999, "should have final value")
 }
