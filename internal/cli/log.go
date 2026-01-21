@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"git.15b.it/eno/critic/simple-go/logger"
 	"github.com/fsnotify/fsnotify"
@@ -14,6 +15,7 @@ import (
 // newLogCmd creates the log subcommand
 func newLogCmd() *cobra.Command {
 	var follow bool
+	var topic string
 
 	cmd := &cobra.Command{
 		Use:   "log",
@@ -21,11 +23,12 @@ func newLogCmd() *cobra.Command {
 		Long: `Watch and display the critic log file.
 
 By default, outputs the current log file path. Use -f to follow the log
-file and print new output as it arrives.
+file and print new output as it arrives. Use --topic to filter by topic.
 
 Examples:
-  critic log        # Print the log file path
-  critic log -f     # Follow the log file (like tail -f)
+  critic log                  # Print the log file path
+  critic log -f               # Follow the log file (like tail -f)
+  critic log -f --topic git   # Follow and filter for [git] topic
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -37,17 +40,19 @@ Examples:
 				return nil
 			}
 
-			return watchLogFile(logPath)
+			return watchLogFile(logPath, topic)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow the log file output")
+	cmd.Flags().StringVar(&topic, "topic", "", "Filter log output by topic (e.g., --topic git shows only [git] entries)")
 
 	return cmd
 }
 
 // watchLogFile watches the log file and prints new content to stdout
-func watchLogFile(logPath string) error {
+// If topic is non-empty, only lines containing [topic] are printed
+func watchLogFile(logPath string, topic string) error {
 	// Open the log file
 	file, err := os.Open(logPath)
 	if err != nil {
@@ -76,7 +81,14 @@ func watchLogFile(logPath string) error {
 
 	reader := bufio.NewReader(file)
 
-	fmt.Fprintf(os.Stderr, "Watching %s...\n", logPath)
+	// Build topic filter if specified
+	var topicFilter string
+	if topic != "" {
+		topicFilter = "[" + topic + "]"
+		fmt.Fprintf(os.Stderr, "Watching %s for topic %s...\n", logPath, topicFilter)
+	} else {
+		fmt.Fprintf(os.Stderr, "Watching %s...\n", logPath)
+	}
 
 	for {
 		select {
@@ -92,7 +104,10 @@ func watchLogFile(logPath string) error {
 					if err != nil {
 						break
 					}
-					fmt.Print(line)
+					// Filter by topic if specified
+					if topicFilter == "" || strings.Contains(line, topicFilter) {
+						fmt.Print(line)
+					}
 				}
 			}
 

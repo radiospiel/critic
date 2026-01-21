@@ -147,3 +147,56 @@ func Debug(format string, v ...interface{}) {
 	}
 	Printf("DEBUG: "+format, v...)
 }
+
+// TopicLogger is a logger that prepends a topic tag to all log messages
+type TopicLogger struct {
+	topic string
+}
+
+// OnTopic returns a TopicLogger that prepends [topic] to all log messages
+func OnTopic(topic string) *TopicLogger {
+	return &TopicLogger{topic: topic}
+}
+
+// Printf writes a log message with topic prefix
+func (t *TopicLogger) Printf(format string, v ...interface{}) {
+	Printf("[%s] "+format, append([]interface{}{t.topic}, v...)...)
+}
+
+// Error writes an error log message with topic prefix
+func (t *TopicLogger) Error(format string, v ...interface{}) {
+	if level > ERROR {
+		return
+	}
+	t.Printf("ERROR: "+format, v...)
+}
+
+// Warn writes a warning log message with topic prefix
+func (t *TopicLogger) Warn(format string, v ...interface{}) {
+	if level > WARN {
+		return
+	}
+	t.Printf("WARN: "+format, v...)
+}
+
+// Fatal writes a fatal error log message with topic prefix and exits
+func (t *TopicLogger) Fatal(format string, v ...interface{}) {
+	t.Printf("FATAL: "+format, v...)
+	os.Exit(1)
+}
+
+// Info writes an info log message with topic prefix
+func (t *TopicLogger) Info(format string, v ...interface{}) {
+	if level > INFO {
+		return
+	}
+	t.Printf("INFO: "+format, v...)
+}
+
+// Debug writes a debug log message with topic prefix
+func (t *TopicLogger) Debug(format string, v ...interface{}) {
+	if level > DEBUG {
+		return
+	}
+	t.Printf("DEBUG: "+format, v...)
+}
