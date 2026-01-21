@@ -533,12 +533,12 @@ func (o *Observable) setValuesAtKeys(changes []change) {
 		o.setValueInternal(c.key, c.value)
 	}
 
-	// Collect new values and determine what actually changed
-	changesMap := make(map[string]struct{ old, new any })
+	// Collect keys that actually changed
+	changedKeys := make(map[string]struct{})
 	for key, oldValue := range oldValues {
 		newValue := o.getValueInternal(key)
 		if !reflect.DeepEqual(oldValue, newValue) {
-			changesMap[key] = struct{ old, new any }{oldValue, newValue}
+			changedKeys[key] = struct{}{}
 		}
 	}
 
@@ -546,11 +546,11 @@ func (o *Observable) setValuesAtKeys(changes []change) {
 	for _, c := range changes {
 		newValue := o.getValueInternal(c.key)
 		for nestedKey := range collectKeys(newValue, c.key) {
-			if _, exists := changesMap[nestedKey]; !exists {
+			if _, exists := changedKeys[nestedKey]; !exists {
 				oldValue := oldValues[nestedKey]
 				newNestedValue := o.getValueInternal(nestedKey)
 				if !reflect.DeepEqual(oldValue, newNestedValue) {
-					changesMap[nestedKey] = struct{ old, new any }{oldValue, newNestedValue}
+					changedKeys[nestedKey] = struct{}{}
 				}
 			}
 		}
@@ -564,7 +564,7 @@ func (o *Observable) setValuesAtKeys(changes []change) {
 	o.mu.Unlock()
 
 	// Notify each subscription once per matching key
-	for key := range changesMap {
+	for key := range changedKeys {
 		for _, sub := range subs {
 			if matchPattern(sub.pattern, key) {
 				sub.callback(o, key)
