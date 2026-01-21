@@ -40,7 +40,32 @@ func TestFnmatchToRegex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.pattern, func(t *testing.T) {
-			result, err := fnmatchToRegex(tt.pattern)
+			result, err := fnmatchToRegex(tt.pattern, Options{})
+			assert.NoError(t, err)
+			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
+		})
+	}
+}
+
+func TestFnmatchToRegexWithSeparator(t *testing.T) {
+	tests := []struct {
+		pattern  string
+		expected string
+	}{
+		// Basic wildcards - * matches anything except dots
+		{"foo.*", `^foo\.[^\.]*$`},
+		{"foo.?", `^foo\.[^\.]$`},
+		{"*", `^[^\.]*$`},
+		{"?", `^[^\.]$`},
+
+		// Multi-segment patterns
+		{"foo.*.bar", `^foo\.[^\.]*\.bar$`},
+		{"*.*.baz", `^[^\.]*\.[^\.]*\.baz$`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pattern, func(t *testing.T) {
+			result, err := fnmatchToRegex(tt.pattern, Options{Separator: "."})
 			assert.NoError(t, err)
 			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
 		})
@@ -49,7 +74,7 @@ func TestFnmatchToRegex(t *testing.T) {
 
 func TestFnmatchToRegexError(t *testing.T) {
 	// Unclosed bracket
-	_, err := fnmatchToRegex("[abc")
+	_, err := fnmatchToRegex("[abc", Options{})
 	assert.Error(t, err, "unclosed bracket")
 }
 
@@ -114,32 +139,9 @@ func TestFnmatchFunction(t *testing.T) {
 	assert.False(t, Fnmatch("[a-z]*.txt", "123.txt"))
 }
 
-func TestFnmatchPathToRegex(t *testing.T) {
-	tests := []struct {
-		pattern  string
-		expected string
-	}{
-		// Basic wildcards - * matches anything except dots
-		{"foo.*", `^foo\.[^.]*$`},
-		{"foo.?", `^foo\.[^.]$`},
-		{"*", `^[^.]*$`},
-		{"?", `^[^.]$`},
+func TestFnmatchWithSeparator(t *testing.T) {
+	dotOpts := Options{Separator: "."}
 
-		// Multi-segment patterns
-		{"foo.*.bar", `^foo\.[^.]*\.bar$`},
-		{"*.*.baz", `^[^.]*\.[^.]*\.baz$`},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.pattern, func(t *testing.T) {
-			result, err := fnmatchPathToRegex(tt.pattern)
-			assert.NoError(t, err)
-			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
-		})
-	}
-}
-
-func TestFnmatchPath(t *testing.T) {
 	tests := []struct {
 		pattern string
 		key     string
@@ -179,16 +181,16 @@ func TestFnmatchPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.pattern+"_"+tt.key, func(t *testing.T) {
-			result := FnmatchPath(tt.pattern, tt.key)
+			result := Fnmatch(tt.pattern, tt.key, dotOpts)
 			assert.Equals(t, result, tt.matches, "pattern: %s, key: %s", tt.pattern, tt.key)
 		})
 	}
 }
 
-func TestMustCompilePathPanic(t *testing.T) {
+func TestMustCompileWithSeparatorPanic(t *testing.T) {
 	defer func() {
 		r := recover()
 		assert.NotNil(t, r, "expected panic for invalid pattern")
 	}()
-	MustCompilePath("[abc")
+	MustCompile("[abc", Options{Separator: "."})
 }

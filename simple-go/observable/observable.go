@@ -303,8 +303,8 @@ func (o *Observable) OnKeyChange(pattern string, callback ChangeCallback) Subscr
 
 	preconditions.Check(callback != nil, "callback must not be nil")
 
-	// Validate pattern (fnmatch.MustCompilePath panics on invalid pattern)
-	fnmatch.MustCompilePath(pattern)
+	// Validate pattern (fnmatch.MustCompile panics on invalid pattern)
+	fnmatch.MustCompile(pattern, fnmatch.Options{Separator: "."})
 
 	id := o.nextSubID
 	o.nextSubID++
@@ -521,7 +521,7 @@ func keyAffectsPattern(key, pattern string) bool {
 	if key == "" {
 		return true // root change affects all subscriptions
 	}
-	if fnmatch.FnmatchPath(pattern, key) {
+	if fnmatch.Fnmatch(pattern, key, fnmatch.Options{Separator: "."}) {
 		return true // pattern directly matches the changed key
 	}
 	// Check if key is a parent of pattern (key="foo" affects pattern="foo.bar" or "foo.*.baz")
