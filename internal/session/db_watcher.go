@@ -42,6 +42,7 @@ func (w *DBWatcher) SetPollInterval(interval time.Duration) {
 }
 
 // Start starts watching the database
+// The database must have been initialized with the schema (which creates the _db_version table)
 func (w *DBWatcher) Start() error {
 	w.mu.Lock()
 	if w.running {
@@ -63,13 +64,7 @@ func (w *DBWatcher) Start() error {
 		return err
 	}
 
-	// Ensure the version tracking table and triggers exist
-	if err := w.setupTriggers(db); err != nil {
-		db.Close()
-		return err
-	}
-
-	// Get initial version
+	// Get initial version (requires _db_version table from schema initialization)
 	version, err := w.getVersion(db)
 	if err != nil {
 		db.Close()
@@ -84,67 +79,6 @@ func (w *DBWatcher) Start() error {
 
 	go w.pollLoop()
 	logger.Info("DBWatcher: Started watching %s (version=%d)", w.dbPath, version)
-	return nil
-}
-
-// setupTriggers creates the version tracking table and triggers
-func (w *DBWatcher) setupTriggers(db *sql.DB) error {
-	// Create version tracking table
-	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS _db_version (
-			id INTEGER PRIMARY KEY CHECK (id = 1),
-			version INTEGER NOT NULL DEFAULT 0
-		)
-	`)
-	if err != nil {
-		return err
-	}
-
-	// Insert initial version if not exists
-	_, err = db.Exec(`
-		INSERT OR IGNORE INTO _db_version (id, version) VALUES (1, 0)
-	`)
-	if err != nil {
-		return err
-	}
-
-	// Check if messages table exists before creating triggers
-	var tableName string
-	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='messages'").Scan(&tableName)
-	if err == sql.ErrNoRows {
-		// Messages table doesn't exist yet, skip trigger creation
-		logger.Info("DBWatcher: Messages table not found, triggers will be created when table exists")
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	// Create triggers to increment version on messages table changes
-	triggers := []string{
-		`CREATE TRIGGER IF NOT EXISTS _messages_insert_version
-		 AFTER INSERT ON messages
-		 BEGIN
-			UPDATE _db_version SET version = version + 1 WHERE id = 1;
-		 END`,
-		`CREATE TRIGGER IF NOT EXISTS _messages_update_version
-		 AFTER UPDATE ON messages
-		 BEGIN
-			UPDATE _db_version SET version = version + 1 WHERE id = 1;
-		 END`,
-		`CREATE TRIGGER IF NOT EXISTS _messages_delete_version
-		 AFTER DELETE ON messages
-		 BEGIN
-			UPDATE _db_version SET version = version + 1 WHERE id = 1;
-		 END`,
-	}
-
-	for _, trigger := range triggers {
-		if _, err := db.Exec(trigger); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -231,20 +165,6 @@ func (w *DBWatcher) IsRunning() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.running
-}
-
-// EnsureTriggers ensures that database triggers are set up
-// Call this after the messages table has been created
-func (w *DBWatcher) EnsureTriggers() error {
-	w.mu.Lock()
-	db := w.db
-	w.mu.Unlock()
-
-	if db == nil {
-		return nil
-	}
-
-	return w.setupTriggers(db)
 }
 
 // SetDebounceMs is a no-op for compatibility (polling interval is used instead)

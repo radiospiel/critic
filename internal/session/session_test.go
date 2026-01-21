@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"git.15b.it/eno/critic/internal/messagedb"
 	"git.15b.it/eno/critic/pkg/critic"
 	"git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/assert"
@@ -375,6 +376,11 @@ func TestDBWatcher(t *testing.T) {
 	// Create a temp dir for testing
 	tempDir := t.TempDir()
 
+	// Initialize the database schema (creates _db_version table and triggers)
+	db, err := messagedb.New(tempDir)
+	assert.NoError(t, err, "should create messagedb")
+	defer db.Close()
+
 	watcher, err := NewDBWatcher(tempDir, func() {
 		// Would be called when DB changes
 	})
@@ -402,6 +408,11 @@ func TestDBWatcherWithTriggers(t *testing.T) {
 	tempDir := t.TempDir()
 	dbPath := tempDir + "/.critic.db"
 
+	// Initialize the database schema (creates _db_version table and triggers)
+	msgDB, err := messagedb.New(tempDir)
+	assert.NoError(t, err, "should create messagedb")
+	defer msgDB.Close()
+
 	// Track callback invocations
 	var mu sync.Mutex
 	callCount := 0
@@ -415,31 +426,21 @@ func TestDBWatcherWithTriggers(t *testing.T) {
 	// Set fast poll interval for testing
 	watcher.SetPollInterval(50 * time.Millisecond)
 
-	// Start watcher (creates version table but no triggers yet since no messages table)
+	// Start watcher (schema with _db_version table and triggers already exists from messagedb)
 	err = watcher.Start()
 	assert.NoError(t, err, "should start watcher")
 	defer watcher.Stop()
 
-	// Open a separate connection to create messages table and insert data
+	// Open a separate connection to insert data (triggers will fire on insert)
 	db, err := sql.Open("sqlite3", dbPath)
 	assert.NoError(t, err, "should open db")
 	defer db.Close()
 
-	// Create messages table
+	// Insert a message (triggers are already set up by messagedb schema)
 	_, err = db.Exec(`
-		CREATE TABLE messages (
-			id TEXT PRIMARY KEY,
-			message TEXT
-		)
+		INSERT INTO messages (id, author, status, read_status, message, file_path, lineno, conversation_id, sha1, created_at, updated_at)
+		VALUES ('1', 'human', 'new', 'unread', 'hello', 'test.go', 1, '1', 'abc123', datetime('now'), datetime('now'))
 	`)
-	assert.NoError(t, err, "should create messages table")
-
-	// Ensure triggers get created now that messages table exists
-	err = watcher.EnsureTriggers()
-	assert.NoError(t, err, "should ensure triggers")
-
-	// Insert a message
-	_, err = db.Exec("INSERT INTO messages (id, message) VALUES ('1', 'hello')")
 	assert.NoError(t, err, "should insert message")
 
 	// Wait for poll to detect change
@@ -452,7 +453,10 @@ func TestDBWatcherWithTriggers(t *testing.T) {
 	assert.True(t, count >= 1, "callback should be called at least once, got %d", count)
 
 	// Insert another message
-	_, err = db.Exec("INSERT INTO messages (id, message) VALUES ('2', 'world')")
+	_, err = db.Exec(`
+		INSERT INTO messages (id, author, status, read_status, message, file_path, lineno, conversation_id, sha1, created_at, updated_at)
+		VALUES ('2', 'human', 'new', 'unread', 'world', 'test.go', 2, '2', 'def456', datetime('now'), datetime('now'))
+	`)
 	assert.NoError(t, err, "should insert another message")
 
 	// Wait for poll
@@ -487,6 +491,12 @@ func TestDiffProcessor(t *testing.T) {
 
 func TestStartWatchers(t *testing.T) {
 	tempDir := t.TempDir()
+
+	// Initialize the database schema (creates _db_version table and triggers)
+	msgDB, err := messagedb.New(tempDir)
+	assert.NoError(t, err, "should create messagedb")
+	defer msgDB.Close()
+
 	session, err := NewSession(tempDir, nil, DiffArgs{})
 	assert.NoError(t, err, "should create session")
 
