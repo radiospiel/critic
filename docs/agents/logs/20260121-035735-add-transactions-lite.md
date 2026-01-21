@@ -57,5 +57,6 @@ Key design decisions:
 ## Learnings
 - Callback-based transaction APIs (like `db.Transaction(func(tx) { ... })`) are cleaner than explicit Begin/Commit
 - Simpler notification semantics (key hierarchy only) are easier to reason about
-- `path.Match` uses "/" as separator, so "*" matches "a.b" (dots are not separators)
+- `path.Match` uses "/" as separator, so `must.Fnmatch` converts "." to "/" before matching
+- This ensures "*" only matches a single segment: "a.*.b" matches "a.x.b" but NOT "a.x.y.b"
 - Consolidating related functionality (keyOverrides ≈ keyAffectsPattern) reduces duplication

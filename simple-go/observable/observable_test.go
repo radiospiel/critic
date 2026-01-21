@@ -434,6 +434,24 @@ func TestPatternMatchesSingleLevel(t *testing.T) {
 	assert.True(t, triggered, "foo.*.bar should match foo.dd.bar")
 }
 
+func TestPatternWildcardMatchesSingleSegmentOnly(t *testing.T) {
+	obs := New()
+	var triggered bool
+
+	// * should only match a single segment (between dots), not multiple segments
+	obs.OnKeyChange("a.*.b", func(key string) {
+		triggered = true
+	})
+
+	// Should NOT match because "x.y" is two segments, not one
+	obs.SetValueAtKey("a.x.y.b", "value")
+	assert.False(t, triggered, "a.*.b should NOT match a.x.y.b (* matches single segment only)")
+
+	// Should match because "x" is a single segment
+	obs.SetValueAtKey("a.x.b", "value")
+	assert.True(t, triggered, "a.*.b should match a.x.b")
+}
+
 func TestComplexNestedSetTriggersMultipleChanges(t *testing.T) {
 	obs := New()
 
