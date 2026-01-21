@@ -33,6 +33,7 @@ type Observable struct {
 	data          any
 	subscriptions map[Subscription]*subscription
 	nextSubID     Subscription
+	schemas       map[string]*schemaEntry
 	mu            sync.RWMutex
 }
 
@@ -204,6 +205,12 @@ func (o *Observable) SetValueAtKey(key string, value any) {
 
 	// Hold lock for state changes
 	o.mu.Lock()
+
+	// Validate against schema before making changes
+	if errMsg := o.validateAgainstSchema(key, value); errMsg != "" {
+		o.mu.Unlock()
+		preconditions.Check(false, "%s", errMsg)
+	}
 
 	// Get old value at the target key
 	oldValue := o.getValueInternal(key)
