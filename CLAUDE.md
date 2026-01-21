@@ -1,3 +1,18 @@
+### Task Strategy Selection
+
+Before starting any task, identify which strategy applies from [docs/agents/strategy-guide.md](docs/agents/strategy-guide.md):
+
+- **Bug Fix**: Something is broken, unexpected behavior, errors
+- **Feature (TDD)**: New functionality, "add X" requests
+- **Refactoring**: Code quality improvements, restructuring
+- **Performance**: Optimization, speed/memory issues
+
+**Required workflow:**
+1. State which strategy you're following and why
+2. Follow that strategy's workflow from the guide
+3. If uncertain, ask the human before proceeding
+4. For mixed tasks, decompose and apply strategies separately
+
 ### TUI: test changes with an explicit run
 
 Before completing any significant code changes affecting the TUI, run a manual test by inspecting the rendering. Run this in the fixtures repo, as follows:
