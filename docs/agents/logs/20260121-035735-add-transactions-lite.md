@@ -9,9 +9,9 @@
 
 ## Objective
 Implement a "transactions lite" feature for the observable package with:
-1. `Begin()` → `Txn` function to start a transaction
-2. `Txn.SetValueAtKey()` records changes in a slice (doesn't apply immediately)
-3. `Txn.Commit()` deduplicates changes and applies them atomically
+1. `Begin()` → `Transaction` function to start a transaction
+2. `Transaction.SetValueAtKey()` records changes in a slice (doesn't apply immediately)
+3. `Transaction.Commit()` deduplicates changes and applies them atomically
 4. Parent key changes override child key changes (e.g., setting "a" after "a.1.b" discards "a.1.b")
 
 ## Progress
@@ -29,16 +29,16 @@ Implement a "transactions lite" feature for the observable package with:
   **Resolution:** Replaced with mutex-protected map for unbounded buffering
 
 - **Issue:** User requested proper transaction API with Begin()/Commit() instead of implicit buffering
-  **Resolution:** Complete redesign with Txn type that records changes in a slice
+  **Resolution:** Complete redesign with Transaction type that records changes in a slice
 
 - **Issue:** `path.Match("*", "a.final")` returns true because "." is not a separator in path matching
   **Resolution:** Updated tests to use specific key patterns instead of relying on "*" wildcard behavior
 
 ## Outcome
 Successfully implemented TransactionalObservable with:
-- `Begin()` returns a `Txn` object
-- `Txn.SetValueAtKey(key, value)` records changes in a slice
-- `Txn.Commit()` deduplicates and applies changes atomically
+- `Begin()` returns a `Transaction` object
+- `Transaction.SetValueAtKey(key, value)` records changes in a slice
+- `Transaction.Commit()` deduplicates and applies changes atomically
 - `keyOverrides(parent, child)` determines if parent change overrides child
 - Example: `["a.1.b", "a", "a.2", "c", "a.1", "a"]` → only `["c", "a"]` applied
 

@@ -148,19 +148,19 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 
 	// Wire up internal state change subscriptions
 	// When diff args change, load diff
-	diffArgsSubs := s.OnKeyChange(KeyDiffArgs, func(obs *observable.Observable, key string) {
+	diffArgsSubs := s.OnKeyChange(KeyDiffArgs, func(key string) {
 		logger.Info("Session: DiffArgs changed (%s), loading diff", key)
 		s.processor.LoadDiff()
 	})
 	s.internalSubs = append(s.internalSubs, diffArgsSubs)
-	baseSubs := s.OnKeyChange(KeyCurrentBase, func(obs *observable.Observable, key string) {
+	baseSubs := s.OnKeyChange(KeyCurrentBase, func(key string) {
 		logger.Info("Session: CurrentBase changed (%s), loading diff", key)
 		s.processor.LoadDiff()
 	})
 	s.internalSubs = append(s.internalSubs, baseSubs)
 
 	// When selection changes, load selected file
-	selectionSubs := s.OnKeyChange(KeySelectedFileIndex, func(obs *observable.Observable, key string) {
+	selectionSubs := s.OnKeyChange(KeySelectedFileIndex, func(key string) {
 		filePath := s.GetSelectedFilePath()
 		fileIndex := s.GetSelectedFileIndex()
 		logger.Info("Session: Selection changed to %s (index %d)", filePath, fileIndex)

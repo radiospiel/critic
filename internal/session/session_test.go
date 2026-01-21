@@ -10,7 +10,6 @@ import (
 	"git.15b.it/eno/critic/pkg/critic"
 	"git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/assert"
-	"git.15b.it/eno/critic/simple-go/observable"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -297,7 +296,7 @@ func TestOnKeyChange(t *testing.T) {
 	// Test subscription to KeyFiles changes (replaces old OnDiffLoaded callback)
 	filesChangeCalled := false
 	var changedKey string
-	subs := session.OnKeyChange(KeyFiles, func(obs *observable.Observable, key string) {
+	subs := session.OnKeyChange(KeyFiles, func(key string) {
 		filesChangeCalled = true
 		changedKey = key
 	})
@@ -313,7 +312,7 @@ func TestOnKeyChange(t *testing.T) {
 
 	// Test subscription to selection changes
 	selectionChangeCalled := false
-	selSubs := session.OnKeyChange(KeySelectedFileIndex, func(obs *observable.Observable, key string) {
+	selSubs := session.OnKeyChange(KeySelectedFileIndex, func(key string) {
 		selectionChangeCalled = true
 	})
 	defer session.ClearSubscriptions(selSubs)
@@ -329,7 +328,7 @@ func TestSubscriptions(t *testing.T) {
 	// Subscribe to filter mode changes using OnKeyChange
 	filterChangeCalled := false
 	var changedKey string
-	subs := session.OnKeyChange(KeyFilterMode, func(obs *observable.Observable, key string) {
+	subs := session.OnKeyChange(KeyFilterMode, func(key string) {
 		filterChangeCalled = true
 		changedKey = key
 	})

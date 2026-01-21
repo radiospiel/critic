@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"maps"
 	"path"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,9 +22,8 @@ const maxArrayIndex = 99999
 type Subscription int
 
 // ChangeCallback is the function signature for change notifications.
-// It receives the observable and the full key path that changed.
-// The callback can read from the observable to get the current value.
-type ChangeCallback func(obs *Observable, key string)
+// It receives the full key path that changed.
+type ChangeCallback func(key string)
 
 type subscription struct {
 	pattern  string
@@ -305,68 +303,6 @@ func (o *Observable) ClearSubscriptions(subs ...Subscription) {
 	}
 }
 
-// collectKeys returns all leaf keys from a value with the given prefix.
-func collectKeys(val any, prefix string) map[string]bool {
-	keys := make(map[string]bool)
-
-	if val == nil {
-		return keys
-	}
-
-	switch v := val.(type) {
-	case map[string]any:
-		for k, child := range v {
-			childPrefix := prefix + "." + k
-			keys[childPrefix] = true
-			for nested := range collectKeys(child, childPrefix) {
-				keys[nested] = true
-			}
-		}
-	case []any:
-		for i, child := range v {
-			childPrefix := prefix + "." + strconv.Itoa(i)
-			keys[childPrefix] = true
-			for nested := range collectKeys(child, childPrefix) {
-				keys[nested] = true
-			}
-		}
-	}
-
-	return keys
-}
-
-// getNestedValue gets a value from a nested structure by path.
-func getNestedValue(val any, keyPath string) any {
-	if keyPath == "" {
-		return val
-	}
-
-	parts := strings.Split(keyPath, ".")
-	current := val
-
-	for _, part := range parts {
-		if current == nil {
-			return nil
-		}
-
-		if idx, isNum := parseIndex(part); isNum {
-			slice, ok := current.([]any)
-			if !ok || idx < 0 || idx >= len(slice) {
-				return nil
-			}
-			current = slice[idx]
-		} else {
-			m, ok := current.(map[string]any)
-			if !ok {
-				return nil
-			}
-			current = m[part]
-		}
-	}
-
-	return current
-}
-
 // matchPattern checks if a key matches a pattern using fnmatch-style matching.
 func matchPattern(pattern, key string) bool {
 	matched, err := path.Match(pattern, key)
@@ -500,78 +436,51 @@ func (o *Observable) Transaction(fn func(*Txn)) {
 		return
 	}
 
-	// Remove changes that are overridden by later change on the same or a parent key
-	// For example: ["a.1.b", "a", "a.2", "c", "a.1", "a"] becomes ["c", "a"]
-	deduplicatedChanges := deduplicateChanges(tx.changes)
-
-	tx.obs.setValuesAtKeys(deduplicatedChanges)
+	tx.obs.setValuesAtKeys(tx.changes)
 }
 
 // setValuesAtKeys applies multiple changes atomically and notifies subscribers.
+// Changes are deduplicated: later changes to parent keys override earlier child changes.
 func (o *Observable) setValuesAtKeys(changes []change) {
 	if len(changes) == 0 {
 		return
 	}
 
+	// Remove changes that are overridden by later change on the same or a parent key
+	// For example: ["a.1.b", "a", "a.2", "c", "a.1", "a"] becomes ["c", "a"]
+	changes = deduplicateChanges(changes)
+
 	o.mu.Lock()
-
-	// Collect old values for all keys that will be affected
-	oldValues := make(map[string]any)
-	for _, c := range changes {
-		// Get old value at the key being set
-		oldValues[c.key] = o.getValueInternal(c.key)
-
-		// Also collect old values for nested keys that will be overwritten
-		oldValue := oldValues[c.key]
-		for nestedKey := range collectKeys(oldValue, c.key) {
-			if _, exists := oldValues[nestedKey]; !exists {
-				oldValues[nestedKey] = getNestedValue(oldValue, strings.TrimPrefix(nestedKey, c.key+"."))
-			}
-		}
-	}
-
-	// Apply all changes
 	for _, c := range changes {
 		o.setValueInternal(c.key, c.value)
 	}
-
-	// Collect keys that actually changed
-	var changedKeys []string
-	for key, oldValue := range oldValues {
-		newValue := o.getValueInternal(key)
-		if !reflect.DeepEqual(oldValue, newValue) {
-			changedKeys = append(changedKeys, key)
-		}
-	}
-
-	// Also check for new nested keys created by the changes
-	for _, c := range changes {
-		newValue := o.getValueInternal(c.key)
-		for nestedKey := range collectKeys(newValue, c.key) {
-			oldValue := oldValues[nestedKey]
-			newNestedValue := o.getValueInternal(nestedKey)
-			if !reflect.DeepEqual(oldValue, newNestedValue) {
-				changedKeys = append(changedKeys, nestedKey)
-			}
-		}
-	}
-
-	// Deduplicate changed keys
-	slices.Sort(changedKeys)
-	changedKeys = slices.Compact(changedKeys)
-
-	// Copy subscriptions for notification
 	subs := slices.Collect(maps.Values(o.subscriptions))
 	o.mu.Unlock()
 
-	// Notify each subscription once per matching key
-	for _, key := range changedKeys {
+	// Notify subscriptions for each change
+	for _, c := range changes {
 		for _, sub := range subs {
-			if matchPattern(sub.pattern, key) {
-				sub.callback(o, key)
+			if keyAffectsPattern(c.key, sub.pattern) {
+				sub.callback(c.key)
 			}
 		}
 	}
+}
+
+// keyAffectsPattern returns true if setting 'key' should trigger a subscription on 'pattern'.
+// This is true if:
+//   - key is empty (root change affects everything)
+//   - pattern matches key directly (e.g., pattern="foo" matches key="foo", pattern="*" matches key="bar")
+//   - key is a parent of pattern (e.g., key="foo" affects pattern="foo.bar" or "foo.*")
+func keyAffectsPattern(key, pattern string) bool {
+	if key == "" {
+		return true // root change affects all subscriptions
+	}
+	if matchPattern(pattern, key) {
+		return true // pattern directly matches the changed key
+	}
+	// Check if key is a parent of pattern (key="foo" affects pattern="foo.bar" or "foo.*.baz")
+	return strings.HasPrefix(pattern, key+".")
 }
 
 // copyMap creates a shallow copy of a map.
