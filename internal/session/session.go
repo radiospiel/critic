@@ -176,20 +176,6 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 
 // SetDiffArgs sets the diff arguments
 func (s *Session) SetDiffArgs(args DiffArgs) {
-	// Convert to observable-compatible types
-	bases := make([]any, len(args.Bases))
-	for i, b := range args.Bases {
-		bases[i] = b
-	}
-	paths := make([]any, len(args.Paths))
-	for i, p := range args.Paths {
-		paths[i] = p
-	}
-	extensions := make([]any, len(args.Extensions))
-	for i, e := range args.Extensions {
-		extensions[i] = e
-	}
-
 	// Update git watcher bases (protected by its own mutex)
 	s.mu.Lock()
 	if s.gitWatcher != nil {
@@ -199,12 +185,7 @@ func (s *Session) SetDiffArgs(args DiffArgs) {
 
 	// Set values without holding the lock - observable has its own internal mutex
 	// and subscriptions may need to access session state
-	s.SetValueAtKey(KeyDiffArgs, map[string]any{
-		"bases":       bases,
-		"currentBase": args.CurrentBase,
-		"paths":       paths,
-		"extensions":  extensions,
-	})
+	s.SetValueAtKey(KeyDiffArgs, observable.StructToMap(args))
 }
 
 // GetDiffArgs returns the current diff arguments

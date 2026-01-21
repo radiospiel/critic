@@ -794,3 +794,101 @@ func TestGetValueAsStructPanicsOnIncompatible(t *testing.T) {
 
 	GetValueAs[TestUser](obs, "data")
 }
+
+// Tests for StructToMap
+
+func TestStructToMap(t *testing.T) {
+	user := TestUser{
+		Name:  "Alice",
+		Age:   30,
+		Email: "alice@example.com",
+	}
+
+	m := StructToMap(user)
+	assert.Equals(t, m["name"], "Alice", "name should be Alice")
+	assert.Equals(t, m["age"], float64(30), "age should be 30 (JSON numbers are float64)")
+	assert.Equals(t, m["email"], "alice@example.com", "email should match")
+}
+
+func TestStructToMapWithSlice(t *testing.T) {
+	config := TestConfig{
+		Host:    "localhost",
+		Port:    8080,
+		Tags:    []string{"web", "api", "production"},
+		Enabled: true,
+	}
+
+	m := StructToMap(config)
+	assert.Equals(t, m["host"], "localhost", "host should be localhost")
+	assert.Equals(t, m["port"], float64(8080), "port should be 8080")
+	assert.Equals(t, m["enabled"], true, "enabled should be true")
+
+	tags, ok := m["tags"].([]any)
+	assert.True(t, ok, "tags should be a slice")
+	assert.Equals(t, len(tags), 3, "should have 3 tags")
+	assert.Equals(t, tags[0], "web", "first tag should be 'web'")
+}
+
+func TestStructToMapOmitsEmpty(t *testing.T) {
+	user := TestUser{
+		Name: "Alice",
+		Age:  30,
+		// Email has omitempty tag, should be omitted
+	}
+
+	m := StructToMap(user)
+	assert.Equals(t, m["name"], "Alice", "name should be Alice")
+	_, hasEmail := m["email"]
+	assert.False(t, hasEmail, "email should be omitted when empty")
+}
+
+func TestStructToMapNestedStruct(t *testing.T) {
+	type Address struct {
+		City    string `json:"city"`
+		Country string `json:"country"`
+	}
+	type Person struct {
+		Name    string  `json:"name"`
+		Address Address `json:"address"`
+	}
+
+	person := Person{
+		Name: "Alice",
+		Address: Address{
+			City:    "New York",
+			Country: "USA",
+		},
+	}
+
+	m := StructToMap(person)
+	assert.Equals(t, m["name"], "Alice", "name should be Alice")
+
+	addr, ok := m["address"].(map[string]any)
+	assert.True(t, ok, "address should be a map")
+	assert.Equals(t, addr["city"], "New York", "city should be New York")
+	assert.Equals(t, addr["country"], "USA", "country should be USA")
+}
+
+func TestStructToMapRoundTrip(t *testing.T) {
+	// Test that StructToMap and GetValueAs are inverses
+	original := TestConfig{
+		Host:    "localhost",
+		Port:    8080,
+		Tags:    []string{"web", "api"},
+		Enabled: true,
+	}
+
+	// Convert struct to map
+	m := StructToMap(original)
+
+	// Set in observable and get back
+	obs := New()
+	obs.SetValueAtKey("config", m)
+	retrieved := GetValueAs[TestConfig](obs, "config")
+
+	assert.Equals(t, retrieved.Host, original.Host, "host should match")
+	assert.Equals(t, retrieved.Port, original.Port, "port should match")
+	assert.Equals(t, retrieved.Enabled, original.Enabled, "enabled should match")
+	assert.Equals(t, len(retrieved.Tags), len(original.Tags), "tags length should match")
+	assert.Equals(t, retrieved.Tags[0], original.Tags[0], "first tag should match")
+}

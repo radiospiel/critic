@@ -68,6 +68,21 @@ func (o *Observable) GetValue(key string) any {
 	return o.getValueInternal(key)
 }
 
+// StructToMap converts a struct to a map[string]any using JSON marshaling.
+// This is the inverse of GetValueAs for structs.
+// Panics if the conversion fails.
+// Usage: m := observable.StructToMap(myStruct)
+func StructToMap[T any](val T) map[string]any {
+	bytes, err := json.Marshal(val)
+	preconditions.Check(err == nil, "failed to marshal struct to JSON: %v", err)
+
+	var result map[string]any
+	err = json.Unmarshal(bytes, &result)
+	preconditions.Check(err == nil, "failed to unmarshal JSON to map: %v", err)
+
+	return result
+}
+
 // GetValueAs returns the value at the given key path, converted to type T.
 // Returns the zero value if the key does not exist.
 // For primitive types, performs a direct type assertion.
