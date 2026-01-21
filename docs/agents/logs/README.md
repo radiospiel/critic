@@ -11,19 +11,20 @@ This directory contains progress logs for significant tasks worked on by AI agen
 
 ## File Naming
 
-Use the format: `YYYY-MM-DD-short-description.md`
+Use the format: `YYYYMMDD-HHMMSS-short-description.md`
 
 Examples:
-- `2025-01-15-fix-scroll-crash.md`
-- `2025-01-16-add-export-feature.md`
-- `2025-01-17-refactor-event-loop.md`
+- `20250115-143022-fix-scroll-crash.md`
+- `20250116-091530-add-export-feature.md`
+- `20250117-162845-refactor-event-loop.md`
 
 ## Quick Template
 
 ```markdown
 # Task: [Brief description]
 
-**Date:** YYYY-MM-DD
+**Started:** YYYY-MM-DD HH:MM:SS
+**Ended:** YYYY-MM-DD HH:MM:SS (or "in progress")
 **Strategy:** [Bug Fix | Feature (TDD) | Refactoring | Performance]
 **Status:** [In Progress | Completed | Blocked]
 

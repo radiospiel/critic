@@ -17,14 +17,15 @@ Before starting any task, identify which strategy applies from [docs/agents/stra
 
 Maintain a progress log in `docs/agents/logs/` for each significant task. This provides visibility into agent work and captures learnings.
 
-**Log file naming:** `YYYY-MM-DD-short-description.md` (e.g., `2025-01-15-fix-scroll-crash.md`)
+**Log file naming:** `YYYYMMDD-HHMMSS-short-description.md` (e.g., `20250115-143022-fix-scroll-crash.md`)
 
 **Required sections:**
 
 ```markdown
 # Task: [Brief description]
 
-**Date:** YYYY-MM-DD
+**Started:** YYYY-MM-DD HH:MM:SS
+**Ended:** YYYY-MM-DD HH:MM:SS (or "in progress")
 **Strategy:** [Bug Fix | Feature (TDD) | Refactoring | Performance]
 **Status:** [In Progress | Completed | Blocked]
 
