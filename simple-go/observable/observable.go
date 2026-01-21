@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"path"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -534,11 +535,11 @@ func (o *Observable) setValuesAtKeys(changes []change) {
 	}
 
 	// Collect keys that actually changed
-	changedKeys := make(map[string]struct{})
+	var changedKeys []string
 	for key, oldValue := range oldValues {
 		newValue := o.getValueInternal(key)
 		if !reflect.DeepEqual(oldValue, newValue) {
-			changedKeys[key] = struct{}{}
+			changedKeys = append(changedKeys, key)
 		}
 	}
 
@@ -546,15 +547,17 @@ func (o *Observable) setValuesAtKeys(changes []change) {
 	for _, c := range changes {
 		newValue := o.getValueInternal(c.key)
 		for nestedKey := range collectKeys(newValue, c.key) {
-			if _, exists := changedKeys[nestedKey]; !exists {
-				oldValue := oldValues[nestedKey]
-				newNestedValue := o.getValueInternal(nestedKey)
-				if !reflect.DeepEqual(oldValue, newNestedValue) {
-					changedKeys[nestedKey] = struct{}{}
-				}
+			oldValue := oldValues[nestedKey]
+			newNestedValue := o.getValueInternal(nestedKey)
+			if !reflect.DeepEqual(oldValue, newNestedValue) {
+				changedKeys = append(changedKeys, nestedKey)
 			}
 		}
 	}
+
+	// Deduplicate changed keys
+	slices.Sort(changedKeys)
+	changedKeys = slices.Compact(changedKeys)
 
 	// Copy subscriptions for notification
 	subs := make([]*subscription, 0, len(o.subscriptions))
@@ -564,7 +567,7 @@ func (o *Observable) setValuesAtKeys(changes []change) {
 	o.mu.Unlock()
 
 	// Notify each subscription once per matching key
-	for key := range changedKeys {
+	for _, key := range changedKeys {
 		for _, sub := range subs {
 			if matchPattern(sub.pattern, key) {
 				sub.callback(o, key)
