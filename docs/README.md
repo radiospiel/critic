@@ -8,6 +8,7 @@ Critic is a terminal-based git diff viewer with syntax highlighting, interactive
 - [Usage](usage.md) - Command-line options and keyboard shortcuts
 - [Hacking](hacking.md) - Architecture, testing, and development guide
 - [Plans](plans.md) - Roadmap and planned features
+- [Agent Strategy Guide](agents/strategy-guide.md) - Task strategies for AI agents
 
 ## Quick Start
 
