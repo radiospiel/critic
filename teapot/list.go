@@ -285,13 +285,12 @@ func (l *SelectableList[T]) pageDown() {
 	l.SetSelectedIndex(newSelected)
 }
 
-// ScrollView is a widget that provides scrolling for content larger than its bounds.
-// It uses charmbracelet/bubbles viewport for vertical scroll management.
+// ScrollView is a widget that provides vertical scrolling for content larger than its bounds.
+// It uses charmbracelet/bubbles viewport for scroll management.
 type ScrollView struct {
 	BaseView
 	content     View
 	viewport    viewport.Model
-	scrollX     int  // Horizontal scroll offset (viewport handles vertical)
 	contentSize Size
 	ready       bool // true after viewport is initialized with dimensions
 }
@@ -337,38 +336,14 @@ func (s *ScrollView) SetContentSize(size Size) {
 	}
 }
 
-// SetScroll sets the scroll position.
-// Vertical scrolling is handled by the viewport component; horizontal scrolling
-// is managed separately.
-func (s *ScrollView) SetScroll(x, y int) {
-	// Clamp horizontal scroll manually
-	maxX := s.contentSize.Width - s.bounds.Width
-	if maxX < 0 {
-		maxX = 0
-	}
-	if x < 0 {
-		x = 0
-	}
-	if x > maxX {
-		x = maxX
-	}
-	s.scrollX = x
-
-	// Use viewport for vertical scrolling (it handles clamping internally)
+// SetScroll sets the vertical scroll position.
+func (s *ScrollView) SetScroll(y int) {
 	s.viewport.SetYOffset(y)
 	s.Repaint()
 }
 
-// ScrollTo ensures the given position is visible.
-func (s *ScrollView) ScrollTo(x, y int) {
-	// Scroll horizontally if needed
-	if x < s.scrollX {
-		s.scrollX = x
-	} else if x >= s.scrollX+s.bounds.Width {
-		s.scrollX = x - s.bounds.Width + 1
-	}
-
-	// Scroll vertically if needed using viewport
+// ScrollTo ensures the given vertical position is visible.
+func (s *ScrollView) ScrollTo(y int) {
 	yOffset := s.viewport.YOffset
 	if y < yOffset {
 		s.viewport.SetYOffset(y)
@@ -377,9 +352,9 @@ func (s *ScrollView) ScrollTo(x, y int) {
 	}
 }
 
-// ScrollPosition returns the current scroll position.
-func (s *ScrollView) ScrollPosition() (x, y int) {
-	return s.scrollX, s.viewport.YOffset
+// ScrollPosition returns the current vertical scroll position.
+func (s *ScrollView) ScrollPosition() int {
+	return s.viewport.YOffset
 }
 
 // Children returns the content widget.
@@ -407,7 +382,7 @@ func (s *ScrollView) SetBounds(bounds Rect) {
 		// Content gets virtual bounds at the scroll offset
 		s.content.SetBounds(Rect{
 			Position{
-				X: -s.scrollX,
+				X: 0,
 				Y: -s.viewport.YOffset,
 			},
 			Size{
@@ -441,50 +416,27 @@ func (s *ScrollView) Render(buf *SubBuffer) {
 		}
 
 		// Calculate the range of cells to copy for this row
-		srcStartX := s.scrollX
-		if srcStartX < 0 {
-			srcStartX = 0
-		}
-		srcEndX := s.scrollX + buf.Width()
+		srcEndX := buf.Width()
 		if srcEndX > s.contentSize.Width {
 			srcEndX = s.contentSize.Width
 		}
-		if srcStartX >= srcEndX {
+		if srcEndX <= 0 {
 			continue
 		}
 
 		// Build a row of cells to copy
-		cells := make([]Cell, srcEndX-srcStartX)
+		cells := make([]Cell, srcEndX)
 		for i := 0; i < len(cells); i++ {
-			cells[i] = contentBuf.GetCell(srcStartX+i, srcY)
+			cells[i] = contentBuf.GetCell(i, srcY)
 		}
 
-		destX := srcStartX - s.scrollX
-		buf.SetCells(destX, y, cells)
+		buf.SetCells(0, y, cells)
 	}
 }
 
 // HandleKey handles keyboard input for scrolling.
-// Vertical scrolling is delegated to the viewport component.
+// Scrolling is delegated to the viewport component.
 func (s *ScrollView) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	// Handle horizontal scrolling ourselves
-	switch msg.String() {
-	case "left":
-		if s.scrollX > 0 {
-			s.scrollX--
-			s.Repaint()
-			return true, nil
-		}
-	case "right":
-		maxX := s.contentSize.Width - s.bounds.Width
-		if maxX > 0 && s.scrollX < maxX {
-			s.scrollX++
-			s.Repaint()
-			return true, nil
-		}
-	}
-
-	// Delegate vertical scrolling to viewport
 	switch msg.String() {
 	case "up", "down", "pgup", "pgdown", "home", "end":
 		var cmd tea.Cmd
