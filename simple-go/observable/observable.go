@@ -567,21 +567,101 @@ func copySlice(s []any) []any {
 	return result
 }
 
-// commitMessage signals the goroutine to process buffered changes.
-type commitMessage struct {
-	done chan struct{}
+// change represents a single key-value change in a transaction.
+type change struct {
+	key   string
+	value any
+}
+
+// Txn represents a transaction that batches changes before applying them.
+type Txn struct {
+	obs     *TransactionalObservable
+	changes []change
+}
+
+// SetValueAtKey records a change to be applied when the transaction commits.
+// Changes are not applied to the observable until Commit() is called.
+func (tx *Txn) SetValueAtKey(key string, value any) {
+	tx.changes = append(tx.changes, change{key: key, value: value})
+}
+
+// DeleteValueAtKey records a deletion to be applied when the transaction commits.
+func (tx *Txn) DeleteValueAtKey(key string) {
+	tx.SetValueAtKey(key, nil)
+}
+
+// Commit applies all recorded changes to the observable, deduplicating
+// changes where a later change to a parent key overrides earlier child changes.
+// For example: ["a.1.b", "a", "a.2", "c", "a.1", "a"] becomes ["c", "a"]
+func (tx *Txn) Commit() {
+	if len(tx.changes) == 0 {
+		return
+	}
+
+	// Deduplicate: remove changes that are overridden by later parent changes
+	finalChanges := tx.deduplicateChanges()
+
+	if len(finalChanges) == 0 {
+		return
+	}
+
+	// Apply changes and notify
+	tx.obs.setValuesAtKeys(finalChanges)
+}
+
+// deduplicateChanges removes changes that are overridden by later changes.
+// A change is overridden if a later change sets a parent key (or the same key).
+func (tx *Txn) deduplicateChanges() []change {
+	// Work backwards: for each change, check if any later change overrides it
+	result := make([]change, 0, len(tx.changes))
+
+	for i := len(tx.changes) - 1; i >= 0; i-- {
+		current := tx.changes[i]
+		overridden := false
+
+		// Check if any change already in result (which are later changes) overrides this one
+		for _, later := range result {
+			if keyOverrides(later.key, current.key) {
+				overridden = true
+				break
+			}
+		}
+
+		if !overridden {
+			result = append(result, current)
+		}
+	}
+
+	// Reverse to restore original order (we built it backwards)
+	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
+		result[i], result[j] = result[j], result[i]
+	}
+
+	return result
+}
+
+// keyOverrides returns true if setting 'parent' would override a change to 'child'.
+// This is true if parent is a prefix of child (or equal).
+// Examples:
+//   - keyOverrides("a", "a.1.b") = true  (setting "a" overwrites "a.1.b")
+//   - keyOverrides("a", "a") = true      (same key)
+//   - keyOverrides("a.1", "a") = false   (setting "a.1" doesn't overwrite "a")
+//   - keyOverrides("", "a") = true       (setting root overwrites everything)
+func keyOverrides(parent, child string) bool {
+	if parent == child {
+		return true
+	}
+	if parent == "" {
+		return true // Root overrides everything
+	}
+	// parent must be a prefix followed by "."
+	return strings.HasPrefix(child, parent+".")
 }
 
 // TransactionalObservable wraps Observable with transactional change batching.
-// Changes are buffered until CommitChanges is called, at which point all
-// subscribers are notified with uniqued key changes.
+// Use Begin() to start a transaction, then Commit() to apply changes.
 type TransactionalObservable struct {
 	*Observable
-	pendingMu      sync.Mutex
-	pendingChanges map[string]any // key -> original old value (before any changes in this tx)
-	commitChan     chan commitMessage
-	closeChan      chan struct{}
-	closed         bool
 }
 
 // NewTransactional creates a new TransactionalObservable with an empty map as root.
@@ -591,149 +671,89 @@ func NewTransactional() *TransactionalObservable {
 
 // NewTransactionalWithData creates a new TransactionalObservable with the provided data.
 func NewTransactionalWithData(data any) *TransactionalObservable {
-	t := &TransactionalObservable{
-		Observable:     NewWithData(data),
-		pendingChanges: make(map[string]any),
-		commitChan:     make(chan commitMessage),
-		closeChan:      make(chan struct{}),
+	return &TransactionalObservable{
+		Observable: NewWithData(data),
 	}
-	go t.processLoop()
-	return t
 }
 
-// processLoop is the goroutine that processes commits.
-func (t *TransactionalObservable) processLoop() {
-	for {
-		select {
-		case commit := <-t.commitChan:
-			// Swap out pending changes atomically
-			t.pendingMu.Lock()
-			pendingChanges := t.pendingChanges
-			t.pendingChanges = make(map[string]any)
-			t.pendingMu.Unlock()
+// Begin starts a new transaction. Changes made via the returned Txn are
+// not applied until Commit() is called.
+func (t *TransactionalObservable) Begin() *Txn {
+	return &Txn{
+		obs:     t,
+		changes: make([]change, 0),
+	}
+}
 
-			// Process all pending changes
-			if len(pendingChanges) > 0 {
-				// Build changes map with old and current values
-				changes := make(map[string]struct{ old, new any })
+// setValuesAtKeys applies multiple changes atomically and notifies subscribers.
+func (t *TransactionalObservable) setValuesAtKeys(changes []change) {
+	t.Observable.mu.Lock()
 
-				t.Observable.mu.RLock()
-				for key, oldValue := range pendingChanges {
-					newValue := t.Observable.getValueInternal(key)
-					if !reflect.DeepEqual(oldValue, newValue) {
-						changes[key] = struct{ old, new any }{oldValue, newValue}
-					}
-				}
+	// Collect old values for all keys that will be affected
+	oldValues := make(map[string]any)
+	for _, c := range changes {
+		// Get old value at the key being set
+		oldValues[c.key] = t.Observable.getValueInternal(c.key)
 
-				// Copy subscriptions for notification
-				subs := make([]*subscription, 0, len(t.Observable.subscriptions))
-				for _, sub := range t.Observable.subscriptions {
-					subs = append(subs, sub)
-				}
-				t.Observable.mu.RUnlock()
-
-				// Notify subscribers for each changed key (unlike base Observable which
-				// notifies once per SetValueAtKey, transactional notifies once per unique key)
-				t.notifyPerKey(subs, changes)
+		// Also collect old values for nested keys that will be overwritten
+		oldValue := oldValues[c.key]
+		for nestedKey := range collectKeys(oldValue, c.key) {
+			if _, exists := oldValues[nestedKey]; !exists {
+				oldValues[nestedKey] = getNestedValue(oldValue, strings.TrimPrefix(nestedKey, c.key+"."))
 			}
-
-			// Signal completion
-			close(commit.done)
-
-		case <-t.closeChan:
-			return
 		}
 	}
-}
 
-// bufferChange records a key change, keeping only the original old value.
-func (t *TransactionalObservable) bufferChange(key string, oldValue any) {
-	t.pendingMu.Lock()
-	if _, exists := t.pendingChanges[key]; !exists {
-		t.pendingChanges[key] = oldValue
+	// Apply all changes
+	for _, c := range changes {
+		t.Observable.setValueInternal(c.key, c.value)
 	}
-	t.pendingMu.Unlock()
-}
 
-// SetValueAtKey sets the value at the given key path, buffering the change
-// for later notification when CommitChanges is called.
-func (t *TransactionalObservable) SetValueAtKey(key string, value any) {
-	// Get old value before the change
-	t.Observable.mu.Lock()
-	oldValue := t.Observable.getValueInternal(key)
-	// Also collect nested keys that might change
-	oldNestedKeys := collectKeys(oldValue, key)
+	// Collect new values and determine what actually changed
+	changesMap := make(map[string]struct{ old, new any })
+	for key, oldValue := range oldValues {
+		newValue := t.Observable.getValueInternal(key)
+		if !reflect.DeepEqual(oldValue, newValue) {
+			changesMap[key] = struct{ old, new any }{oldValue, newValue}
+		}
+	}
 
-	// Perform the actual set
-	t.Observable.setValueInternal(key, value)
+	// Also check for new nested keys created by the changes
+	for _, c := range changes {
+		newValue := t.Observable.getValueInternal(c.key)
+		for nestedKey := range collectKeys(newValue, c.key) {
+			if _, exists := changesMap[nestedKey]; !exists {
+				oldValue := oldValues[nestedKey]
+				newNestedValue := t.Observable.getValueInternal(nestedKey)
+				if !reflect.DeepEqual(oldValue, newNestedValue) {
+					changesMap[nestedKey] = struct{ old, new any }{oldValue, newNestedValue}
+				}
+			}
+		}
+	}
 
-	// Get new nested keys
-	newValue := t.Observable.getValueInternal(key)
-	newNestedKeys := collectKeys(newValue, key)
+	// Copy subscriptions for notification
+	subs := make([]*subscription, 0, len(t.Observable.subscriptions))
+	for _, sub := range t.Observable.subscriptions {
+		subs = append(subs, sub)
+	}
 	t.Observable.mu.Unlock()
 
-	// Buffer the change (never blocks, uses mutex-protected map)
-	if !t.closed {
-		t.bufferChange(key, oldValue)
-
-		// Also buffer nested key changes
-		allNestedKeys := make(map[string]bool)
-		for k := range oldNestedKeys {
-			allNestedKeys[k] = true
-		}
-		for k := range newNestedKeys {
-			allNestedKeys[k] = true
-		}
-
-		for nestedKey := range allNestedKeys {
-			if nestedKey != key {
-				oldNested := getNestedValue(oldValue, strings.TrimPrefix(nestedKey, key+"."))
-				t.bufferChange(nestedKey, oldNested)
-			}
-		}
-	}
-}
-
-// DeleteValueAtKey removes the value at the given key path.
-// This is equivalent to SetValueAtKey(key, nil).
-func (t *TransactionalObservable) DeleteValueAtKey(key string) {
-	t.SetValueAtKey(key, nil)
-}
-
-// CommitChanges triggers notification of all buffered changes to subscribers.
-// Changes are uniqued by key, and each subscriber is notified at most once.
-// This method blocks until all notifications are complete.
-func (t *TransactionalObservable) CommitChanges() {
-	if t.closed {
-		return
-	}
-
-	done := make(chan struct{})
-	t.commitChan <- commitMessage{done: done}
-	<-done
-}
-
-// Close stops the transaction processing goroutine.
-// After Close, SetValueAtKey still works but changes won't be buffered or notified.
-func (t *TransactionalObservable) Close() {
-	if !t.closed {
-		t.closed = true
-		close(t.closeChan)
-	}
-}
-
-// notifyPerKey notifies subscribers once per matching changed key.
-// Unlike notifySubscribersOutsideLock which triggers each subscription once per batch,
-// this method triggers for each key that matches a subscription's patterns.
-func (t *TransactionalObservable) notifyPerKey(subs []*subscription, changes map[string]struct{ old, new any }) {
-	for key, change := range changes {
+	// Notify subscribers once per unique changed key
+	// Each subscription can be triggered multiple times (once per matching key)
+	for key, chg := range changesMap {
 		for _, sub := range subs {
 			for _, pattern := range sub.patterns {
 				if matchPattern(pattern, key) {
-					sub.callback(key, change.old, change.new)
-					break // Only trigger once per subscription per key
+					sub.callback(key, chg.old, chg.new)
+					break // Only match first pattern per subscription per key
 				}
 			}
 		}
 	}
+}
+
+// Close is a no-op for compatibility. TransactionalObservable no longer uses goroutines.
+func (t *TransactionalObservable) Close() {
+	// No-op - kept for API compatibility
 }
