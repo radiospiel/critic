@@ -19,7 +19,7 @@ type DBWatcher struct {
 	mu           sync.Mutex
 	running      bool
 	pollInterval time.Duration
-	lastVersion  int64
+	lastMtime    int64
 }
 
 // NewDBWatcher creates a new database watcher
@@ -42,7 +42,7 @@ func (w *DBWatcher) SetPollInterval(interval time.Duration) {
 }
 
 // Start starts watching the database
-// The database must have been initialized with the schema (which creates the _db_version table)
+// The database must have been initialized with the schema (which creates the _db_mtime table)
 func (w *DBWatcher) Start() error {
 	w.mu.Lock()
 	if w.running {
@@ -64,8 +64,8 @@ func (w *DBWatcher) Start() error {
 		return err
 	}
 
-	// Get initial version (requires _db_version table from schema initialization)
-	version, err := w.getVersion(db)
+	// Get initial mtime (requires _db_mtime table from schema initialization)
+	mtime, err := w.getMtime(db)
 	if err != nil {
 		db.Close()
 		return err
@@ -73,23 +73,23 @@ func (w *DBWatcher) Start() error {
 
 	w.mu.Lock()
 	w.db = db
-	w.lastVersion = version
+	w.lastMtime = mtime
 	w.running = true
 	w.mu.Unlock()
 
 	go w.pollLoop()
-	logger.Info("DBWatcher: Started watching %s (version=%d)", w.dbPath, version)
+	logger.Info("DBWatcher: Started watching %s (mtime=%d)", w.dbPath, mtime)
 	return nil
 }
 
-// getVersion reads the current version from the database
-func (w *DBWatcher) getVersion(db *sql.DB) (int64, error) {
-	var version int64
-	err := db.QueryRow("SELECT version FROM _db_version WHERE id = 1").Scan(&version)
+// getMtime reads the current mtime from the database
+func (w *DBWatcher) getMtime(db *sql.DB) (int64, error) {
+	var mtime int64
+	err := db.QueryRow("SELECT mtime FROM _db_mtime LIMIT 1").Scan(&mtime)
 	if err == sql.ErrNoRows {
 		return 0, nil
 	}
-	return version, err
+	return mtime, err
 }
 
 // Stop stops the watcher
@@ -129,30 +129,30 @@ func (w *DBWatcher) pollLoop() {
 	}
 }
 
-// checkForChanges checks if the database version has changed
+// checkForChanges checks if the database mtime has changed
 func (w *DBWatcher) checkForChanges() {
 	w.mu.Lock()
 	db := w.db
-	lastVersion := w.lastVersion
+	lastMtime := w.lastMtime
 	w.mu.Unlock()
 
 	if db == nil {
 		return
 	}
 
-	version, err := w.getVersion(db)
+	mtime, err := w.getMtime(db)
 	if err != nil {
-		logger.Error("DBWatcher: Failed to get version: %v", err)
+		logger.Error("DBWatcher: Failed to get mtime: %v", err)
 		return
 	}
 
-	if version != lastVersion {
+	if mtime != lastMtime {
 		w.mu.Lock()
-		w.lastVersion = version
+		w.lastMtime = mtime
 		callback := w.onChange
 		w.mu.Unlock()
 
-		logger.Info("DBWatcher: Version changed from %d to %d", lastVersion, version)
+		logger.Info("DBWatcher: mtime changed from %d to %d", lastMtime, mtime)
 
 		if callback != nil {
 			callback()

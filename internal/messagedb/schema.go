@@ -51,35 +51,34 @@ var schema_v3_migration = `
 	CREATE INDEX IF NOT EXISTS idx_messages_read_by_ai ON messages(read_by_ai);
 `
 
-// schema_v4 migration adds _db_version table and triggers for change detection
+// schema_v4 migration adds _db_mtime table and triggers for change detection
 // This is applied on top of schema_v3
 var schema_v4_migration = `
-	-- Version tracking table for change detection
-	CREATE TABLE IF NOT EXISTS _db_version (
-		id INTEGER PRIMARY KEY CHECK (id = 1),
-		version INTEGER NOT NULL DEFAULT 0
+	-- Modification time tracking table for change detection (single row)
+	CREATE TABLE IF NOT EXISTS _db_mtime (
+		mtime INTEGER NOT NULL DEFAULT 0
 	);
 
-	-- Initialize version counter
-	INSERT OR IGNORE INTO _db_version (id, version) VALUES (1, 0);
+	-- Initialize mtime counter
+	INSERT INTO _db_mtime (mtime) SELECT 0 WHERE NOT EXISTS (SELECT 1 FROM _db_mtime);
 
-	-- Triggers to increment version on messages table changes
-	CREATE TRIGGER IF NOT EXISTS _messages_insert_version
+	-- Triggers to increment mtime on messages table changes
+	CREATE TRIGGER IF NOT EXISTS _messages_insert_mtime
 	AFTER INSERT ON messages
 	BEGIN
-		UPDATE _db_version SET version = version + 1 WHERE id = 1;
+		UPDATE _db_mtime SET mtime = mtime + 1;
 	END;
 
-	CREATE TRIGGER IF NOT EXISTS _messages_update_version
+	CREATE TRIGGER IF NOT EXISTS _messages_update_mtime
 	AFTER UPDATE ON messages
 	BEGIN
-		UPDATE _db_version SET version = version + 1 WHERE id = 1;
+		UPDATE _db_mtime SET mtime = mtime + 1;
 	END;
 
-	CREATE TRIGGER IF NOT EXISTS _messages_delete_version
+	CREATE TRIGGER IF NOT EXISTS _messages_delete_mtime
 	AFTER DELETE ON messages
 	BEGIN
-		UPDATE _db_version SET version = version + 1 WHERE id = 1;
+		UPDATE _db_mtime SET mtime = mtime + 1;
 	END;
 `
 
@@ -121,7 +120,7 @@ func (db *DB) createInitialSchema() error {
 		return fmt.Errorf("failed to apply schema v3 migration: %w", err)
 	}
 
-	// Apply v4 migration (adds _db_version table and triggers)
+	// Apply v4 migration (adds _db_mtime table and triggers)
 	_, err = db.db.Exec(schema_v4_migration)
 	if err != nil {
 		return fmt.Errorf("failed to apply schema v4 migration: %w", err)
