@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 
@@ -118,4 +119,20 @@ func ParseInt(str string, base int) int64 {
 		logger.Fatal("cannot parseInt %s: %v", str, err)
 	}
 	return val
+}
+
+// Fnmatch matches a key against an fnmatch-style pattern, panicking on invalid pattern.
+// Uses "." as segment separator (converted to "/" for path.Match).
+// This means "*" matches a single segment, not multiple segments.
+// Example: "a.*.b" matches "a.x.b" but NOT "a.x.y.b"
+func Fnmatch(pattern, key string) bool {
+	// Convert dots to slashes so path.Match treats them as segment separators
+	pattern = strings.ReplaceAll(pattern, ".", "/")
+	key = strings.ReplaceAll(key, ".", "/")
+
+	matched, err := path.Match(pattern, key)
+	if err != nil {
+		panic(fmt.Sprintf("Invalid Fnmatch pattern %q: %v", pattern, err))
+	}
+	return matched
 }

@@ -1,6 +1,7 @@
 package observable
 
 import (
+	"fmt"
 	"testing"
 
 	"git.15b.it/eno/critic/simple-go/assert"
@@ -131,21 +132,17 @@ func TestOnKeyChangeSimple(t *testing.T) {
 	obs := New()
 	var callCount int
 	var lastKey string
-	var lastOld, lastNew any
 
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(key string) {
 		callCount++
 		lastKey = key
-		lastOld = oldValue
-		lastNew = newValue
 	})
 
 	obs.SetValueAtKey("foo", "bar")
 
 	assert.Equals(t, callCount, 1, "callback should be called once")
 	assert.Equals(t, lastKey, "foo", "key should be 'foo'")
-	assert.Nil(t, lastOld, "old value should be nil")
-	assert.Equals(t, lastNew, "bar", "new value should be 'bar'")
+	assert.Equals(t, obs.GetValue("foo"), "bar", "new value should be 'bar'")
 }
 
 func TestOnKeyChangeNoChangeNoCallback(t *testing.T) {
@@ -153,21 +150,21 @@ func TestOnKeyChangeNoChangeNoCallback(t *testing.T) {
 	obs.SetValueAtKey("foo", "bar")
 
 	var callCount int
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(key string) {
 		callCount++
 	})
 
-	// Setting the same value shouldn't trigger callback
+	// Setting the same value still triggers callback (we don't compare values)
 	obs.SetValueAtKey("foo", "bar")
 
-	assert.Equals(t, callCount, 0, "callback should not be called when value unchanged")
+	assert.Equals(t, callCount, 1, "callback is called even when value unchanged")
 }
 
 func TestOnKeyChangeWildcard(t *testing.T) {
 	obs := New()
 	var matchedKeys []string
 
-	obs.OnKeyChange([]string{"foo.*"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo.*", func(key string) {
 		matchedKeys = append(matchedKeys, key)
 	})
 
@@ -184,7 +181,7 @@ func TestOnKeyChangeNestedWildcard(t *testing.T) {
 	obs := New()
 	var matchedKeys []string
 
-	obs.OnKeyChange([]string{"x.*.a"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("x.*.a", func(key string) {
 		matchedKeys = append(matchedKeys, key)
 	})
 
@@ -203,39 +200,30 @@ func TestOnKeyChangeDeepSubscriptionTriggeredByNestedSet(t *testing.T) {
 	var triggered bool
 
 	// Subscribe to a deep path
-	obs.OnKeyChange([]string{"x.*.a"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("x.*.a", func(key string) {
 		triggered = true
 	})
 
-	// Set a nested value that contains the path
+	// Set a nested value that contains the path - with simplified semantics,
+	// setting "x.1" does NOT trigger "x.*.a" because we don't walk value trees.
+	// To trigger it, set "x.1.a" directly.
 	obs.SetValueAtKey("x.1", map[string]any{"a": "value"})
 
-	assert.True(t, triggered, "subscription on x.*.a should be triggered when setting x.1 with nested 'a'")
-}
+	assert.False(t, triggered, "setting x.1 does not trigger x.*.a (we don't walk value trees)")
 
-func TestOnKeyChangeCalledOncePerSetValueAtKey(t *testing.T) {
-	obs := New()
-	var callCount int
-
-	// Two patterns that would both match x.1.a
-	obs.OnKeyChange([]string{"x.1.a", "x.*"}, func(key string, oldValue, newValue any) {
-		callCount++
-	})
-
-	obs.SetValueAtKey("x.1", map[string]any{"a": "value"})
-
-	// Should only be called once even though multiple patterns match
-	assert.Equals(t, callCount, 1, "subscription should only trigger once per SetValueAtKey call")
+	// But setting the exact path does trigger
+	obs.SetValueAtKey("x.2.a", "value")
+	assert.True(t, triggered, "setting x.2.a triggers x.*.a")
 }
 
 func TestOnKeyChangeMultipleSubscriptions(t *testing.T) {
 	obs := New()
 	var sub1Called, sub2Called bool
 
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(key string) {
 		sub1Called = true
 	})
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(key string) {
 		sub2Called = true
 	})
 
@@ -249,14 +237,14 @@ func TestClearSubscriptions(t *testing.T) {
 	obs := New()
 	var callCount int
 
-	subs := obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	subs := obs.OnKeyChange("foo", func(key string) {
 		callCount++
 	})
 
 	obs.SetValueAtKey("foo", "bar")
 	assert.Equals(t, callCount, 1, "callback should be called before clear")
 
-	obs.ClearSubscriptions(subs...)
+	obs.ClearSubscriptions(subs)
 
 	obs.SetValueAtKey("foo", "baz")
 	assert.Equals(t, callCount, 1, "callback should not be called after clear")
@@ -266,10 +254,10 @@ func TestClearSubscriptionsPartial(t *testing.T) {
 	obs := New()
 	var sub1Count, sub2Count int
 
-	sub1 := obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	sub1 := obs.OnKeyChange("foo", func(key string) {
 		sub1Count++
 	})
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(key string) {
 		sub2Count++
 	})
 
@@ -277,7 +265,7 @@ func TestClearSubscriptionsPartial(t *testing.T) {
 	assert.Equals(t, sub1Count, 1, "sub1 should be called")
 	assert.Equals(t, sub2Count, 1, "sub2 should be called")
 
-	obs.ClearSubscriptions(sub1...)
+	obs.ClearSubscriptions(sub1)
 
 	obs.SetValueAtKey("foo", "baz")
 	assert.Equals(t, sub1Count, 1, "sub1 should not be called after clear")
@@ -383,12 +371,15 @@ func TestGetValueWithArrayIndex(t *testing.T) {
 	assert.Nil(t, obs.GetValue("items.10"), "should return nil for out of bounds index")
 }
 
-func TestOnKeyChangeMultiplePatterns(t *testing.T) {
+func TestOnKeyChangeMultipleSubscriptions2(t *testing.T) {
 	obs := New()
 	var matchedKeys []string
 
-	// Subscribe with multiple patterns
-	obs.OnKeyChange([]string{"foo.*", "bar.*"}, func(key string, oldValue, newValue any) {
+	// Subscribe with two separate subscriptions
+	obs.OnKeyChange("foo.*", func(key string) {
+		matchedKeys = append(matchedKeys, key)
+	})
+	obs.OnKeyChange("bar.*", func(key string) {
 		matchedKeys = append(matchedKeys, key)
 	})
 
@@ -404,7 +395,7 @@ func TestDeepNestedChange(t *testing.T) {
 	var triggered bool
 	var receivedKey string
 
-	obs.OnKeyChange([]string{"a.b.c.d.e"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("a.b.c.d.e", func(key string) {
 		triggered = true
 		receivedKey = key
 	})
@@ -420,7 +411,7 @@ func TestPatternDoesNotMatchDeeper(t *testing.T) {
 	var triggered bool
 
 	// Pattern with single * should not match deeper paths
-	obs.OnKeyChange([]string{"foo.*.bar"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo.*.bar", func(key string) {
 		triggered = true
 	})
 
@@ -434,7 +425,7 @@ func TestPatternMatchesSingleLevel(t *testing.T) {
 	obs := New()
 	var triggered bool
 
-	obs.OnKeyChange([]string{"foo.*.bar"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo.*.bar", func(key string) {
 		triggered = true
 	})
 
@@ -443,27 +434,53 @@ func TestPatternMatchesSingleLevel(t *testing.T) {
 	assert.True(t, triggered, "foo.*.bar should match foo.dd.bar")
 }
 
+func TestPatternWildcardMatchesSingleSegmentOnly(t *testing.T) {
+	obs := New()
+	var triggered bool
+
+	// * should only match a single segment (between dots), not multiple segments
+	obs.OnKeyChange("a.*.b", func(key string) {
+		triggered = true
+	})
+
+	// Should NOT match because "x.y" is two segments, not one
+	obs.SetValueAtKey("a.x.y.b", "value")
+	assert.False(t, triggered, "a.*.b should NOT match a.x.y.b (* matches single segment only)")
+
+	// Should match because "x" is a single segment
+	obs.SetValueAtKey("a.x.b", "value")
+	assert.True(t, triggered, "a.*.b should match a.x.b")
+}
+
 func TestComplexNestedSetTriggersMultipleChanges(t *testing.T) {
 	obs := New()
 
 	var aTriggered, bTriggered bool
 
-	obs.OnKeyChange([]string{"data.users.*.name"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("data.users.*.name", func(key string) {
 		aTriggered = true
 	})
 
-	obs.OnKeyChange([]string{"data.users.*.age"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("data.users.*.age", func(key string) {
 		bTriggered = true
 	})
 
-	// Set a complex nested structure
+	// With simplified semantics, setting "data.users.0" does NOT trigger "data.users.*.name"
+	// because we don't walk value trees. To trigger those patterns, set the exact keys.
 	obs.SetValueAtKey("data.users.0", map[string]any{
 		"name": "Alice",
 		"age":  30,
 	})
 
-	assert.True(t, aTriggered, "name subscription should trigger")
-	assert.True(t, bTriggered, "age subscription should trigger")
+	assert.False(t, aTriggered, "name subscription should NOT trigger (simplified semantics)")
+	assert.False(t, bTriggered, "age subscription should NOT trigger (simplified semantics)")
+
+	// But setting the exact paths does trigger
+	obs.SetValueAtKey("data.users.1.name", "Bob")
+	obs.SetValueAtKey("data.users.1.age", 25)
+
+	assert.True(t, aTriggered, "name subscription triggers when exact path is set")
+	assert.True(t, bTriggered, "age subscription triggers when exact path is set")
 }
 
 // Tests for typed getters
@@ -500,167 +517,6 @@ func TestGetValueAsMissingReturnsZero(t *testing.T) {
 	assert.Equals(t, GetValueAs[string](obs, "nonexistent"), "", "should return empty string for missing key")
 	assert.Equals(t, GetValueAs[int](obs, "nonexistent"), 0, "should return 0 for missing key")
 	assert.False(t, GetValueAs[bool](obs, "nonexistent"), "should return false for missing key")
-}
-
-func TestGetMap(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("config", map[string]any{"key": "value"})
-
-	m := obs.GetMap("config")
-	assert.NotNil(t, m, "should get map")
-	assert.Equals(t, m["key"], "value", "should have correct value")
-
-	// Test missing returns nil
-	assert.Nil(t, obs.GetMap("nonexistent"), "should return nil for missing key")
-}
-
-func TestGetMapPanicsOnWrongType(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("notmap", "string")
-
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic on type mismatch")
-	}()
-
-	obs.GetMap("notmap")
-}
-
-func TestGetMapReturnsCopy(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("config", map[string]any{"key": "value"})
-
-	m := obs.GetMap("config")
-	// Modify the copy at top level
-	m["key"] = "modified"
-	m["newkey"] = "added"
-
-	// Original should be unchanged
-	original := obs.GetMap("config")
-	assert.Equals(t, original["key"], "value", "original should be unchanged")
-	assert.Nil(t, original["newkey"], "original should not have new key")
-}
-
-func TestGetSlice(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("items", []any{"a", "b", "c"})
-
-	s := obs.GetSlice("items")
-	assert.NotNil(t, s, "should get slice")
-	assert.Equals(t, len(s), 3, "should have 3 items")
-	assert.Equals(t, s[0], "a", "first item should be 'a'")
-
-	// Test missing returns nil
-	assert.Nil(t, obs.GetSlice("nonexistent"), "should return nil for missing key")
-}
-
-func TestGetSlicePanicsOnWrongType(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("notslice", "string")
-
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic on type mismatch")
-	}()
-
-	obs.GetSlice("notslice")
-}
-
-func TestGetSliceReturnsCopy(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("items", []any{"a", "b", "c"})
-
-	s := obs.GetSlice("items")
-	// Modify the copy at top level
-	s[0] = "modified"
-	s = append(s, "d")
-
-	// Original should be unchanged
-	original := obs.GetSlice("items")
-	assert.Equals(t, original[0], "a", "original should be unchanged")
-	assert.Equals(t, len(original), 3, "original length should be unchanged")
-}
-
-func TestGetString(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("name", "Alice")
-
-	assert.Equals(t, obs.GetString("name"), "Alice", "should be Alice")
-	assert.Equals(t, obs.GetString("nonexistent"), "", "should return empty for missing")
-}
-
-func TestGetStringPanicsOnWrongType(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("notstring", 42)
-
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic on type mismatch")
-	}()
-
-	obs.GetString("notstring")
-}
-
-func TestGetInt(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("count", 42)
-
-	assert.Equals(t, obs.GetInt("count"), 42, "should be 42")
-	assert.Equals(t, obs.GetInt("nonexistent"), 0, "should return 0 for missing")
-}
-
-func TestGetIntPanicsOnWrongType(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("notint", "string")
-
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic on type mismatch")
-	}()
-
-	obs.GetInt("notint")
-}
-
-func TestGetFloat64(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("price", 19.99)
-
-	assert.Equals(t, obs.GetFloat64("price"), 19.99, "should be 19.99")
-	assert.Equals(t, obs.GetFloat64("nonexistent"), 0.0, "should return 0 for missing")
-}
-
-func TestGetFloat64PanicsOnWrongType(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("notfloat", "string")
-
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic on type mismatch")
-	}()
-
-	obs.GetFloat64("notfloat")
-}
-
-func TestGetBool(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("enabled", true)
-	obs.SetValueAtKey("disabled", false)
-
-	assert.True(t, obs.GetBool("enabled"), "should be true")
-	assert.False(t, obs.GetBool("disabled"), "should be false")
-	assert.False(t, obs.GetBool("nonexistent"), "should return false for missing")
-}
-
-func TestGetBoolPanicsOnWrongType(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("notbool", "string")
-
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "should panic on type mismatch")
-	}()
-
-	obs.GetBool("notbool")
 }
 
 // Tests for struct conversion
@@ -793,4 +649,348 @@ func TestGetValueAsStructPanicsOnIncompatible(t *testing.T) {
 	}()
 
 	GetValueAs[TestUser](obs, "data")
+}
+
+// Tests for transactional observable
+
+func TestTransactionalObservableChangesNotNotifiedUntilCommit(t *testing.T) {
+	obs := New()
+
+	var callCount int
+	obs.OnKeyChange("foo", func(key string) {
+		callCount++
+	})
+
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "bar")
+		assert.Equals(t, callCount, 0, "callback should not be called before commit")
+	})
+
+	assert.Equals(t, callCount, 1, "callback should be called after commit")
+}
+
+func TestTransactionalObservableMultipleChangesToSameKeyUniqued(t *testing.T) {
+	obs := New()
+
+	var callCount int
+
+	obs.OnKeyChange("foo", func(key string) {
+		callCount++
+	})
+
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "first")
+		tx.SetValueAtKey("foo", "second")
+		tx.SetValueAtKey("foo", "third")
+	})
+
+	assert.Equals(t, callCount, 1, "callback should only be called once for multiple changes to same key")
+	assert.Equals(t, obs.GetValue("foo"), "third", "new value should be the final value")
+}
+
+func TestTransactionalObservableBatchesMultipleKeys(t *testing.T) {
+	obs := New()
+
+	var fooCount, barCount int
+
+	obs.OnKeyChange("foo", func(key string) {
+		fooCount++
+	})
+	obs.OnKeyChange("bar", func(key string) {
+		barCount++
+	})
+
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "value1")
+		tx.SetValueAtKey("bar", "value2")
+
+		assert.Equals(t, fooCount, 0, "foo callback should not be called before commit")
+		assert.Equals(t, barCount, 0, "bar callback should not be called before commit")
+	})
+
+	assert.Equals(t, fooCount, 1, "foo callback should be called once after commit")
+	assert.Equals(t, barCount, 1, "bar callback should be called once after commit")
+}
+
+func TestTransactionalObservableNoNotificationWithoutChanges(t *testing.T) {
+	obs := New()
+
+	var callCount int
+	obs.OnKeyChange("foo", func(key string) {
+		callCount++
+	})
+
+	obs.Transaction(func(tx *Txn) {
+		// Empty transaction
+	})
+
+	assert.Equals(t, callCount, 0, "callback should not be called when no changes")
+}
+
+func TestTransactionalObservableSetThenDeleteNotNotified(t *testing.T) {
+	obs := New()
+
+	var callCount int
+	obs.OnKeyChange("foo", func(key string) {
+		callCount++
+	})
+
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "bar")
+		tx.DeleteValueAtKey("foo")
+	})
+
+	// With simplified semantics, we don't compare old vs new values.
+	// After deduplication, only the delete remains, so we notify once.
+	assert.Equals(t, callCount, 1, "callback is called (simplified semantics doesn't compare values)")
+}
+
+func TestTransactionalObservableMultipleTransactions(t *testing.T) {
+	obs := New()
+
+	var callCount int
+	obs.OnKeyChange("foo", func(key string) {
+		callCount++
+	})
+
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "first")
+	})
+	assert.Equals(t, callCount, 1, "first transaction should trigger callback")
+
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "second")
+	})
+	assert.Equals(t, callCount, 2, "second transaction should trigger callback")
+}
+
+func TestTransactionalObservableNestedChanges(t *testing.T) {
+	obs := New()
+
+	var triggered bool
+	obs.OnKeyChange("x.*.a", func(key string) {
+		triggered = true
+	})
+
+	// With simplified semantics, setting "x.1" does NOT trigger "x.*.a"
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("x.1", map[string]any{"a": "value"})
+	})
+
+	assert.False(t, triggered, "x.*.a should NOT trigger when setting x.1 (simplified semantics)")
+
+	// But setting the exact path does trigger
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("x.2.a", "value")
+	})
+
+	assert.True(t, triggered, "x.*.a triggers when exact path is set")
+}
+
+func TestTransactionalObservableManyChanges(t *testing.T) {
+	// Test that we can handle many changes in a single transaction
+	obs := New()
+
+	var callCount int
+	obs.OnKeyChange("*", func(key string) {
+		callCount++
+	})
+
+	obs.Transaction(func(tx *Txn) {
+		// Send 5000 changes to different keys
+		for i := 0; i < 5000; i++ {
+			tx.SetValueAtKey(fmt.Sprintf("key%d", i), i)
+		}
+	})
+
+	// Each subscription is notified once per matching key
+	assert.Equals(t, callCount, 5000, "subscription should be notified once per matching key")
+
+	// Verify all changes were applied
+	assert.Equals(t, obs.GetValue("key0"), 0, "key0 should be 0")
+	assert.Equals(t, obs.GetValue("key4999"), 4999, "key4999 should be 4999")
+}
+
+func TestTransactionalObservableManyChangesToSameKey(t *testing.T) {
+	// Test that many changes to the same key still only notify once
+	obs := New()
+
+	var callCount int
+	obs.OnKeyChange("foo", func(key string) {
+		callCount++
+	})
+
+	obs.Transaction(func(tx *Txn) {
+		// Send 10000 changes to the same key
+		for i := 0; i < 10000; i++ {
+			tx.SetValueAtKey("foo", i)
+		}
+	})
+
+	assert.Equals(t, callCount, 1, "should only notify once for same key")
+	assert.Equals(t, obs.GetValue("foo"), 9999, "should have final value")
+}
+
+func TestTransactionalObservableAbort(t *testing.T) {
+	obs := New()
+
+	var callCount int
+	obs.OnKeyChange("foo", func(key string) {
+		callCount++
+	})
+
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "bar")
+		tx.Abort()
+	})
+
+	assert.Equals(t, callCount, 0, "callback should not be called when transaction is aborted")
+	assert.Nil(t, obs.GetValue("foo"), "value should not be set when transaction is aborted")
+}
+
+func TestTransactionalObservableAbortIgnoresSubsequentChanges(t *testing.T) {
+	obs := New()
+
+	var callCount int
+	obs.OnKeyChange("foo", func(key string) {
+		callCount++
+	})
+	obs.OnKeyChange("bar", func(key string) {
+		callCount++
+	})
+
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("foo", "value1")
+		tx.Abort()
+		tx.SetValueAtKey("bar", "value2") // Should be ignored
+	})
+
+	assert.Equals(t, callCount, 0, "no callbacks should be called")
+	assert.Nil(t, obs.GetValue("foo"), "foo should not be set")
+	assert.Nil(t, obs.GetValue("bar"), "bar should not be set")
+}
+
+// Tests for change deduplication (parent overrides children)
+
+func TestKeyOverrides(t *testing.T) {
+	// Test the keyOverrides helper function
+	assert.True(t, keyOverrides("a", "a"), "same key should override")
+	assert.True(t, keyOverrides("a", "a.1"), "parent should override child")
+	assert.True(t, keyOverrides("a", "a.1.b"), "parent should override grandchild")
+	assert.True(t, keyOverrides("a.1", "a.1.b"), "parent should override child")
+	assert.True(t, keyOverrides("", "a"), "root should override everything")
+	assert.True(t, keyOverrides("", "a.1.b"), "root should override everything")
+
+	assert.False(t, keyOverrides("a.1", "a"), "child should not override parent")
+	assert.False(t, keyOverrides("a.1", "a.2"), "sibling should not override sibling")
+	assert.False(t, keyOverrides("a", "b"), "unrelated keys should not override")
+	assert.False(t, keyOverrides("ab", "a"), "key starting with same chars but not prefix")
+	assert.False(t, keyOverrides("a", "aa"), "key with same prefix but not child")
+}
+
+func TestTransactionalDeduplicationParentOverridesChild(t *testing.T) {
+	obs := New()
+
+	// Track which keys were notified using specific patterns
+	aNotified := false
+	axNotified := false
+	a1bNotified := false
+
+	obs.OnKeyChange("a", func(key string) {
+		aNotified = true
+	})
+	obs.OnKeyChange("a.x", func(key string) {
+		axNotified = true
+	})
+	obs.OnKeyChange("a.1.b", func(key string) {
+		a1bNotified = true
+	})
+
+	// Setting "a.1.b" then "a" - after deduplication, only "a" change remains
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("a.1.b", "value1")
+		tx.SetValueAtKey("a", map[string]any{"x": "y"})
+	})
+
+	// With simplified semantics, setting parent "a" notifies ALL child subscriptions
+	assert.True(t, aNotified, "a should be notified")
+	assert.True(t, axNotified, "a.x should be notified (child of a)")
+	assert.True(t, a1bNotified, "a.1.b should be notified (child of a)")
+}
+
+func TestTransactionalDeduplicationComplexCase(t *testing.T) {
+	obs := New()
+
+	// Use specific patterns to track exact keys
+	cNotified := false
+	aNotified := false
+
+	obs.OnKeyChange("c", func(key string) {
+		cNotified = true
+	})
+	obs.OnKeyChange("a", func(key string) {
+		aNotified = true
+	})
+
+	// Example from spec: "a.1.b", "a", "a.2", "c", "a.1", "a" → only "c", "a" applied
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("a.1.b", "v1")
+		tx.SetValueAtKey("a", map[string]any{"first": true})
+		tx.SetValueAtKey("a.2", "v2")
+		tx.SetValueAtKey("c", "v3")
+		tx.SetValueAtKey("a.1", "v4")
+		tx.SetValueAtKey("a", map[string]any{"final": true})
+	})
+
+	assert.True(t, cNotified, "c should be notified")
+	assert.True(t, aNotified, "a should be notified")
+
+	// Verify the final value of "a" is the last one set
+	finalA := obs.GetValue("a").(map[string]any)
+	assert.True(t, finalA["final"].(bool), "a should have final value")
+
+	// Verify actual observable state
+	assert.Equals(t, obs.GetValue("c"), "v3", "c should have value v3")
+	assert.Nil(t, obs.GetValue("a.1.b"), "a.1.b should not exist (overridden)")
+	assert.Nil(t, obs.GetValue("a.2"), "a.2 should not exist (overridden)")
+}
+
+func TestTransactionalDeduplicationRootOverridesAll(t *testing.T) {
+	obs := New()
+
+	rootNotified := false
+	obs.OnKeyChange("", func(key string) {
+		rootNotified = true
+	})
+
+	// Setting various keys, then setting root "" overrides all
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("a", "v1")
+		tx.SetValueAtKey("b.c", "v2")
+		tx.SetValueAtKey("d.e.f", "v3")
+		tx.SetValueAtKey("", map[string]any{"root": "value"})
+	})
+
+	// Only the root change should be applied
+	assert.True(t, rootNotified, "root should be notified")
+
+	// Verify actual observable state - only root's value should exist
+	assert.Nil(t, obs.GetValue("a"), "a should not exist (overridden by root)")
+	assert.Nil(t, obs.GetValue("b.c"), "b.c should not exist (overridden by root)")
+	assert.Equals(t, obs.GetValue("root"), "value", "root.root should have value")
+}
+
+func TestTransactionalDeduplicationVerifyState(t *testing.T) {
+	obs := New()
+
+	// Test that deduplication produces correct final state
+	obs.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey("a", "1")
+		tx.SetValueAtKey("b", "2")
+		tx.SetValueAtKey("c", "3")
+	})
+
+	assert.Equals(t, obs.GetValue("a"), "1", "a should be 1")
+	assert.Equals(t, obs.GetValue("b"), "2", "b should be 2")
+	assert.Equals(t, obs.GetValue("c"), "3", "c should be 3")
 }

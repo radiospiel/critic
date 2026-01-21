@@ -4,13 +4,15 @@ package observable
 
 import (
 	"encoding/json"
-	"path"
-	"reflect"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 
+	"git.15b.it/eno/critic/simple-go/must"
 	"git.15b.it/eno/critic/simple-go/preconditions"
+	"git.15b.it/eno/critic/simple-go/utils"
 )
 
 // maxArrayIndex is the maximum allowed array index to prevent accidental huge allocations.
@@ -20,11 +22,31 @@ const maxArrayIndex = 99999
 type Subscription int
 
 // ChangeCallback is the function signature for change notifications.
-// It receives the full key path, the old value, and the new value.
-type ChangeCallback func(key string, oldValue, newValue any)
+// It receives the full key path that changed.
+type ChangeCallback func(key string)
+
+// SchemaValidationError represents a schema validation failure.
+type SchemaValidationError struct {
+	Key     string
+	Message string
+}
+
+func (e *SchemaValidationError) Error() string {
+	return e.Message
+}
+
+// ErrTransactionAborted is returned when operations are attempted on an aborted transaction.
+var ErrTransactionAborted = &TransactionAbortedError{}
+
+// TransactionAbortedError indicates that a transaction was aborted.
+type TransactionAbortedError struct{}
+
+func (e *TransactionAbortedError) Error() string {
+	return "transaction is aborted"
+}
 
 type subscription struct {
-	patterns []string
+	pattern  string
 	callback ChangeCallback
 }
 
@@ -99,60 +121,6 @@ func GetValueAs[T any](o *Observable, key string) T {
 	return result
 }
 
-// GetMap returns a copy of the map at the given key path.
-// Returns nil if the key does not exist.
-// Panics if the key exists but the value is not a map.
-func (o *Observable) GetMap(key string) map[string]any {
-	val := o.GetValue(key)
-	if val == nil {
-		return nil
-	}
-	m, ok := val.(map[string]any)
-	preconditions.Check(ok, "value at key %q is not a map, got %T", key, val)
-	return copyMap(m)
-}
-
-// GetSlice returns a copy of the slice at the given key path.
-// Returns nil if the key does not exist.
-// Panics if the key exists but the value is not a slice.
-func (o *Observable) GetSlice(key string) []any {
-	val := o.GetValue(key)
-	if val == nil {
-		return nil
-	}
-	s, ok := val.([]any)
-	preconditions.Check(ok, "value at key %q is not a slice, got %T", key, val)
-	return copySlice(s)
-}
-
-// GetString returns the string at the given key path.
-// Returns empty string if the key does not exist.
-// Panics if the key exists but the value is not a string.
-func (o *Observable) GetString(key string) string {
-	return GetValueAs[string](o, key)
-}
-
-// GetInt returns the int at the given key path.
-// Returns 0 if the key does not exist.
-// Panics if the key exists but the value is not an int.
-func (o *Observable) GetInt(key string) int {
-	return GetValueAs[int](o, key)
-}
-
-// GetFloat64 returns the float64 at the given key path.
-// Returns 0 if the key does not exist.
-// Panics if the key exists but the value is not a float64.
-func (o *Observable) GetFloat64(key string) float64 {
-	return GetValueAs[float64](o, key)
-}
-
-// GetBool returns the bool at the given key path.
-// Returns false if the key does not exist.
-// Panics if the key exists but the value is not a bool.
-func (o *Observable) GetBool(key string) bool {
-	return GetValueAs[bool](o, key)
-}
-
 // getValueInternal returns the value without locking (caller must hold lock).
 func (o *Observable) getValueInternal(key string) any {
 	if key == "" {
@@ -191,7 +159,7 @@ func (o *Observable) getValueInternal(key string) any {
 }
 
 // SetValueAtKey sets the value at the given key path, creating intermediate
-// structures as needed.
+// structures as needed. Returns an error if the value violates a schema constraint.
 //
 // Key is a dot-separated path like "x.1.a".
 // Numeric path segments indicate array indices, string segments indicate map keys.
@@ -199,44 +167,10 @@ func (o *Observable) getValueInternal(key string) any {
 // Panics if:
 //   - The existing value at a path segment has an incompatible type
 //   - An array index is negative or >= 100000
-func (o *Observable) SetValueAtKey(key string, value any) {
-	// Collect all changes for notification
-	changes := make(map[string]struct{ old, new any })
-
-	// Hold lock for state changes
-	o.mu.Lock()
-
-	// Validate against schema before making changes
-	if errMsg := o.validateAgainstSchema(key, value); errMsg != "" {
-		o.mu.Unlock()
-		preconditions.Check(false, "%s", errMsg)
-	}
-
-	// Get old value at the target key
-	oldValue := o.getValueInternal(key)
-
-	// Perform the set
-	o.setValueInternal(key, value)
-
-	// Record the direct change
-	newValue := o.getValueInternal(key)
-	if !reflect.DeepEqual(oldValue, newValue) {
-		changes[key] = struct{ old, new any }{oldValue, newValue}
-	}
-
-	// If setting a nested value (map or slice), also record deeper changes
-	o.collectNestedChanges(key, oldValue, newValue, changes)
-
-	// Copy subscriptions for notification outside lock
-	subs := make([]*subscription, 0, len(o.subscriptions))
-	for _, sub := range o.subscriptions {
-		subs = append(subs, sub)
-	}
-
-	o.mu.Unlock()
-
-	// Notify subscribers outside lock to allow callbacks to access observable state
-	o.notifySubscribersOutsideLock(subs, changes)
+func (o *Observable) SetValueAtKey(key string, value any) error {
+	return o.Transaction(func(tx *Txn) {
+		tx.SetValueAtKey(key, value)
+	})
 }
 
 // setValueInternal sets the value without locking (caller must hold lock).
@@ -352,30 +286,35 @@ func (o *Observable) setAtPath(current any, parts []string, value any) any {
 }
 
 // DeleteValueAtKey removes the value at the given key path.
+// Returns an error if validation fails.
 // This is equivalent to SetValueAtKey(key, nil).
-func (o *Observable) DeleteValueAtKey(key string) {
-	o.SetValueAtKey(key, nil)
+func (o *Observable) DeleteValueAtKey(key string) error {
+	return o.Transaction(func(tx *Txn) {
+		tx.DeleteValueAtKey(key)
+	})
 }
 
-// OnKeyChange registers a callback to be notified when values at matching paths change.
-// Patterns use fnmatch-style matching (using path.Match).
-// Returns the subscriptions created (one per pattern) for later cleanup.
-func (o *Observable) OnKeyChange(patterns []string, callback ChangeCallback) []Subscription {
+// OnKeyChange registers a callback to be notified when values at the matching path change.
+// Pattern uses fnmatch-style matching (using path.Match).
+// Returns the subscription ID for later cleanup.
+func (o *Observable) OnKeyChange(pattern string, callback ChangeCallback) Subscription {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	preconditions.Check(len(patterns) > 0, "at least one pattern required")
 	preconditions.Check(callback != nil, "callback must not be nil")
+
+	// Validate pattern (must.Fnmatch panics on invalid pattern)
+	must.Fnmatch(pattern, "")
 
 	id := o.nextSubID
 	o.nextSubID++
 
 	o.subscriptions[id] = &subscription{
-		patterns: patterns,
+		pattern:  pattern,
 		callback: callback,
 	}
 
-	return []Subscription{id}
+	return id
 }
 
 // ClearSubscriptions removes the specified subscriptions.
@@ -386,141 +325,6 @@ func (o *Observable) ClearSubscriptions(subs ...Subscription) {
 	for _, sub := range subs {
 		delete(o.subscriptions, sub)
 	}
-}
-
-// notifySubscribersOutsideLock notifies all matching subscribers of the changes.
-// Each subscription is triggered at most once per SetValueAtKey call.
-// This must be called without holding the lock to allow callbacks to access observable state.
-func (o *Observable) notifySubscribersOutsideLock(subs []*subscription, changes map[string]struct{ old, new any }) {
-	if len(changes) == 0 {
-		return
-	}
-
-	// For each subscription, check if any of its patterns match any changed key
-	for _, sub := range subs {
-		var matchedKey string
-		var matchedChange struct{ old, new any }
-		matched := false
-
-		for key, change := range changes {
-			for _, pattern := range sub.patterns {
-				if matchPattern(pattern, key) {
-					if !matched {
-						matchedKey = key
-						matchedChange = change
-						matched = true
-					}
-					break
-				}
-			}
-			if matched {
-				break
-			}
-		}
-
-		if matched {
-			sub.callback(matchedKey, matchedChange.old, matchedChange.new)
-		}
-	}
-}
-
-// collectNestedChanges adds changes for nested keys when setting a map or slice.
-func (o *Observable) collectNestedChanges(prefix string, oldVal, newVal any, changes map[string]struct{ old, new any }) {
-	// Get all keys from both old and new values
-	oldKeys := collectKeys(oldVal, prefix)
-	newKeys := collectKeys(newVal, prefix)
-
-	// Union of all keys
-	allKeys := make(map[string]bool)
-	for k := range oldKeys {
-		allKeys[k] = true
-	}
-	for k := range newKeys {
-		allKeys[k] = true
-	}
-
-	// Check each nested key for changes
-	for key := range allKeys {
-		if key == prefix {
-			continue // Already handled
-		}
-		oldNested := getNestedValue(oldVal, strings.TrimPrefix(key, prefix+"."))
-		newNested := getNestedValue(newVal, strings.TrimPrefix(key, prefix+"."))
-		if !reflect.DeepEqual(oldNested, newNested) {
-			changes[key] = struct{ old, new any }{oldNested, newNested}
-		}
-	}
-}
-
-// collectKeys returns all leaf keys from a value with the given prefix.
-func collectKeys(val any, prefix string) map[string]bool {
-	keys := make(map[string]bool)
-
-	if val == nil {
-		return keys
-	}
-
-	switch v := val.(type) {
-	case map[string]any:
-		for k, child := range v {
-			childPrefix := prefix + "." + k
-			keys[childPrefix] = true
-			for nested := range collectKeys(child, childPrefix) {
-				keys[nested] = true
-			}
-		}
-	case []any:
-		for i, child := range v {
-			childPrefix := prefix + "." + strconv.Itoa(i)
-			keys[childPrefix] = true
-			for nested := range collectKeys(child, childPrefix) {
-				keys[nested] = true
-			}
-		}
-	}
-
-	return keys
-}
-
-// getNestedValue gets a value from a nested structure by path.
-func getNestedValue(val any, keyPath string) any {
-	if keyPath == "" {
-		return val
-	}
-
-	parts := strings.Split(keyPath, ".")
-	current := val
-
-	for _, part := range parts {
-		if current == nil {
-			return nil
-		}
-
-		if idx, isNum := parseIndex(part); isNum {
-			slice, ok := current.([]any)
-			if !ok || idx < 0 || idx >= len(slice) {
-				return nil
-			}
-			current = slice[idx]
-		} else {
-			m, ok := current.(map[string]any)
-			if !ok {
-				return nil
-			}
-			current = m[part]
-		}
-	}
-
-	return current
-}
-
-// matchPattern checks if a key matches a pattern using fnmatch-style matching.
-func matchPattern(pattern, key string) bool {
-	matched, err := path.Match(pattern, key)
-	if err != nil {
-		return false
-	}
-	return matched
 }
 
 // parseIndex tries to parse a string as a non-negative integer.
@@ -545,24 +349,181 @@ func isSlice(v any) bool {
 	return ok
 }
 
-// copyMap creates a shallow copy of a map.
-func copyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
+// change represents a single key-value change in a transaction.
+type change struct {
+	key   string
+	value any
+}
+
+// Txn represents a transaction that batches changes before applying them.
+// Transactions are created via Observable.Transaction() and are
+// automatically committed when the callback returns, unless Abort() is called.
+type Txn struct {
+	obs     *Observable
+	changes []change
+	err     error
+}
+
+// SetValueAtKey records a change to be applied when the transaction commits.
+// Returns an error if the value violates a schema constraint.
+// If the transaction has an error, the call is ignored and returns ErrTransactionAborted.
+func (tx *Txn) SetValueAtKey(key string, value any) error {
+	if tx.err != nil {
+		return ErrTransactionAborted
 	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[k] = v
+	// Validate against schema before recording the change
+	if errMsg := tx.obs.validateAgainstSchema(key, value); errMsg != "" {
+		tx.err = &SchemaValidationError{Key: key, Message: errMsg}
+		return tx.err
 	}
+	tx.changes = append(tx.changes, change{key: key, value: value})
+	return nil
+}
+
+// DeleteValueAtKey records a deletion to be applied when the transaction commits.
+// Returns an error if validation fails.
+func (tx *Txn) DeleteValueAtKey(key string) error {
+	return tx.SetValueAtKey(key, nil)
+}
+
+// Err returns any error that occurred during the transaction.
+func (tx *Txn) Err() error {
+	return tx.err
+}
+
+// Abort cancels the transaction. All recorded changes will be discarded
+// and no notifications will be sent. Subsequent SetValueAtKey calls return ErrTransactionAborted.
+func (tx *Txn) Abort() {
+	if tx.err == nil {
+		tx.err = ErrTransactionAborted
+	}
+	tx.changes = nil
+}
+
+// deduplicateChanges removes changes that are overridden by later changes.
+// A change is overridden if a later change sets a parent key (or the same key).
+func deduplicateChanges(changes []change) []change {
+	// Work backwards: for each change, check if any later change overrides it
+	result := make([]change, 0, len(changes))
+
+	for i := len(changes) - 1; i >= 0; i-- {
+		current := changes[i]
+		overridden := false
+
+		// Check if any change already in result (which are later changes) overrides this one
+		for _, later := range result {
+			if keyOverrides(later.key, current.key) {
+				overridden = true
+				break
+			}
+		}
+
+		if !overridden {
+			result = append(result, current)
+		}
+	}
+
+	// Reverse to restore original order (we built it backwards)
+	utils.Reverse(result)
+
 	return result
 }
 
-// copySlice creates a shallow copy of a slice.
-func copySlice(s []any) []any {
-	if s == nil {
+// keyOverrides returns true if setting 'parent' would override a change to 'child'.
+// This is true if parent is a prefix of child (or equal).
+// Examples:
+//   - keyOverrides("a", "a.1.b") = true  (setting "a" overwrites "a.1.b")
+//   - keyOverrides("a", "a") = true      (same key)
+//   - keyOverrides("a.1", "a") = false   (setting "a.1" doesn't overwrite "a")
+//   - keyOverrides("", "a") = true       (setting root overwrites everything)
+func keyOverrides(parent, child string) bool {
+	if parent == child {
+		return true
+	}
+	if parent == "" {
+		return true // Root overrides everything
+	}
+	// parent must be a prefix followed by "."
+	return strings.HasPrefix(child, parent+".")
+}
+
+// Transaction executes a transaction. The callback receives a Txn object to record changes.
+// Changes are automatically committed when the callback returns, unless Abort() is called
+// or an error occurred during the transaction.
+// On commit, all schemas are validated against the final state to catch cross-field
+// constraint violations that individual updates might not detect.
+// Returns an error if any schema validation fails.
+// Example:
+//
+//	err := obs.Transaction(func(tx *Txn) {
+//	    tx.SetValueAtKey("foo", "bar")
+//	    tx.SetValueAtKey("baz", 123)
+//	})
+func (o *Observable) Transaction(fn func(*Txn)) error {
+	tx := &Txn{
+		obs:     o,
+		changes: make([]change, 0),
+	}
+
+	fn(tx)
+
+	if tx.err != nil {
+		return tx.err
+	}
+
+	return o.setValuesAtKeys(tx.changes)
+}
+
+// setValuesAtKeys applies multiple changes atomically and notifies subscribers.
+// Changes are deduplicated: later changes to parent keys override earlier child changes.
+// Returns an error if final state validation against any schema fails.
+func (o *Observable) setValuesAtKeys(changes []change) error {
+	if len(changes) == 0 {
 		return nil
 	}
-	result := make([]any, len(s))
-	copy(result, s)
-	return result
+
+	// Remove changes that are overridden by later change on the same or a parent key
+	// For example: ["a.1.b", "a", "a.2", "c", "a.1", "a"] becomes ["c", "a"]
+	changes = deduplicateChanges(changes)
+
+	o.mu.Lock()
+	for _, c := range changes {
+		o.setValueInternal(c.key, c.value)
+	}
+
+	// Validate all schemas against the final state
+	// This catches cross-field constraint violations
+	if errMsg := o.validateAllSchemas(); errMsg != "" {
+		o.mu.Unlock()
+		return &SchemaValidationError{Message: errMsg}
+	}
+
+	subs := slices.Collect(maps.Values(o.subscriptions))
+	o.mu.Unlock()
+
+	// Notify subscriptions for each change
+	for _, c := range changes {
+		for _, sub := range subs {
+			if keyAffectsPattern(c.key, sub.pattern) {
+				sub.callback(c.key)
+			}
+		}
+	}
+	return nil
+}
+
+// keyAffectsPattern returns true if setting 'key' should trigger a subscription on 'pattern'.
+// This is true if:
+//   - key is empty (root change affects everything)
+//   - pattern matches key directly (e.g., pattern="foo" matches key="foo", pattern="*" matches key="bar")
+//   - key is a parent of pattern (e.g., key="foo" affects pattern="foo.bar" or "foo.*")
+func keyAffectsPattern(key, pattern string) bool {
+	if key == "" {
+		return true // root change affects all subscriptions
+	}
+	if must.Fnmatch(pattern, key) {
+		return true // pattern directly matches the changed key
+	}
+	// Check if key is a parent of pattern (key="foo" affects pattern="foo.bar" or "foo.*.baz")
+	return strings.HasPrefix(pattern, key+".")
 }

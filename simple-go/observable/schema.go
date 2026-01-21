@@ -105,6 +105,28 @@ func (o *Observable) validateAgainstSchema(key string, value any) string {
 	return ""
 }
 
+// validateAllSchemas validates all schema keys against the current state.
+// Returns an error message if any validation fails, or empty string if all valid.
+// Must be called with lock held.
+func (o *Observable) validateAllSchemas() string {
+	if o.schemas == nil || len(o.schemas) == 0 {
+		return ""
+	}
+
+	for key, entry := range o.schemas {
+		value := o.getValueInternal(key)
+		// nil values are allowed (schema applies when value is set)
+		if value == nil {
+			continue
+		}
+		if err := entry.schema.Validate(value); err != nil {
+			return formatValidationError(key, err)
+		}
+	}
+
+	return ""
+}
+
 // simulateNestedSet creates a copy of the parent with the nested value set.
 func simulateNestedSet(parent any, childKey string, value any) any {
 	if parent == nil {
@@ -186,4 +208,26 @@ func formatValidationError(key string, err error) string {
 		return "schema validation failed for key \"" + key + "\": " + validationErr.Error()
 	}
 	return "schema validation failed for key \"" + key + "\": " + err.Error()
+}
+
+// copyMap creates a shallow copy of a map.
+func copyMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
+}
+
+// copySlice creates a shallow copy of a slice.
+func copySlice(s []any) []any {
+	if s == nil {
+		return nil
+	}
+	result := make([]any, len(s))
+	copy(result, s)
+	return result
 }

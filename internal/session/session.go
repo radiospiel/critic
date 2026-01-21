@@ -148,20 +148,25 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 
 	// Wire up internal state change subscriptions
 	// When diff args change, load diff
-	diffArgsSubs := s.OnKeyChange([]string{KeyDiffArgs, KeyCurrentBase}, func(key string, oldValue, newValue any) {
+	diffArgsSubs := s.OnKeyChange(KeyDiffArgs, func(key string) {
 		logger.Info("Session: DiffArgs changed (%s), loading diff", key)
 		s.processor.LoadDiff()
 	})
-	s.internalSubs = append(s.internalSubs, diffArgsSubs...)
+	s.internalSubs = append(s.internalSubs, diffArgsSubs)
+	baseSubs := s.OnKeyChange(KeyCurrentBase, func(key string) {
+		logger.Info("Session: CurrentBase changed (%s), loading diff", key)
+		s.processor.LoadDiff()
+	})
+	s.internalSubs = append(s.internalSubs, baseSubs)
 
 	// When selection changes, load selected file
-	selectionSubs := s.OnKeyChange([]string{KeySelectedFileIndex}, func(key string, oldValue, newValue any) {
+	selectionSubs := s.OnKeyChange(KeySelectedFileIndex, func(key string) {
 		filePath := s.GetSelectedFilePath()
 		fileIndex := s.GetSelectedFileIndex()
 		logger.Info("Session: Selection changed to %s (index %d)", filePath, fileIndex)
 		s.processor.LoadSelectedFile()
 	})
-	s.internalSubs = append(s.internalSubs, selectionSubs...)
+	s.internalSubs = append(s.internalSubs, selectionSubs)
 
 	// Set initial diff args
 	if len(args.Bases) > 0 {
@@ -224,7 +229,7 @@ func (s *Session) SetCurrentBase(index int) {
 
 // GetCurrentBase returns the current base index
 func (s *Session) GetCurrentBase() int {
-	return s.GetInt(KeyCurrentBase)
+	return observable.GetValueAs[int](s.Observable, KeyCurrentBase)
 }
 
 // GetCurrentBaseName returns the name of the current base ref
@@ -266,7 +271,7 @@ func (s *Session) GetResolvedBase(baseRef string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	resolved := s.GetMap(KeyResolvedBases)
+	resolved := observable.GetValueAs[map[string]any](s.Observable, KeyResolvedBases)
 	if resolved == nil {
 		return "", false
 	}
@@ -374,12 +379,12 @@ func (s *Session) SetSelectedFilePath(path string) {
 
 // GetSelectedFileIndex returns the index of the selected file
 func (s *Session) GetSelectedFileIndex() int {
-	return s.GetInt(KeySelectedFileIndex)
+	return observable.GetValueAs[int](s.Observable, KeySelectedFileIndex)
 }
 
 // GetSelectedFilePath returns the path of the selected file
 func (s *Session) GetSelectedFilePath() string {
-	return s.GetString(KeySelectedFilePath)
+	return observable.GetValueAs[string](s.Observable, KeySelectedFilePath)
 }
 
 // GetSelectedFile returns the selected file diff
@@ -425,7 +430,7 @@ func (s *Session) SetFocusedPane(pane string) {
 
 // GetFocusedPane returns the focused pane
 func (s *Session) GetFocusedPane() string {
-	return s.GetString(KeyFocusedPane)
+	return observable.GetValueAs[string](s.Observable, KeyFocusedPane)
 }
 
 // ToggleFocus toggles focus between file list and diff view
@@ -446,7 +451,7 @@ func (s *Session) SetFilterMode(mode FilterMode) {
 
 // GetFilterMode returns the current filter mode
 func (s *Session) GetFilterMode() FilterMode {
-	return FilterMode(s.GetInt(KeyFilterMode))
+	return FilterMode(observable.GetValueAs[int](s.Observable, KeyFilterMode))
 }
 
 // CycleFilterMode cycles through filter modes
