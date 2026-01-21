@@ -3,7 +3,7 @@ package teapot
 import (
 	"strings"
 
-	"git.15b.it/eno/critic/simple-go/utils"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -286,12 +286,14 @@ func (l *SelectableList[T]) pageDown() {
 }
 
 // ScrollView is a widget that provides scrolling for content larger than its bounds.
+// It uses charmbracelet/bubbles viewport for vertical scroll management.
 type ScrollView struct {
 	BaseView
 	content     View
-	scrollX     int
-	scrollY     int
+	viewport    viewport.Model
+	scrollX     int  // Horizontal scroll offset (viewport handles vertical)
 	contentSize Size
+	ready       bool // true after viewport is initialized with dimensions
 }
 
 // NewScrollView creates a new scroll view with the given content.
@@ -299,6 +301,8 @@ func NewScrollView(content View) *ScrollView {
 	sv := &ScrollView{
 		BaseView: NewBaseView(),
 		content:  content,
+		viewport: viewport.New(0, 0),
+		ready:    false,
 	}
 	if content != nil {
 		content.SetParent(sv)
@@ -320,12 +324,39 @@ func (s *ScrollView) SetContent(w View) {
 // SetContentSize sets the virtual content size.
 func (s *ScrollView) SetContentSize(size Size) {
 	s.contentSize = size
+	// Viewport needs content to calculate scroll bounds, but since we render
+	// widgets to a buffer (not strings), we create placeholder content of the
+	// right height. The viewport uses this to determine max scroll offset.
+	if s.ready && size.Height > 0 {
+		// Create a placeholder string with the right number of lines
+		lines := make([]byte, size.Height-1)
+		for i := range lines {
+			lines[i] = '\n'
+		}
+		s.viewport.SetContent(string(lines))
+	}
 }
 
 // SetScroll sets the scroll position.
+// Vertical scrolling is handled by the viewport component; horizontal scrolling
+// is managed separately.
 func (s *ScrollView) SetScroll(x, y int) {
-	s.scrollX = utils.Clamp(x, 0, s.contentSize.Width-s.bounds.Width)
-	s.scrollY = utils.Clamp(y, 0, s.contentSize.Height-s.bounds.Height)
+	// Clamp horizontal scroll manually
+	maxX := s.contentSize.Width - s.bounds.Width
+	if maxX < 0 {
+		maxX = 0
+	}
+	if x < 0 {
+		x = 0
+	}
+	if x > maxX {
+		x = maxX
+	}
+	s.scrollX = x
+
+	// Use viewport for vertical scrolling (it handles clamping internally)
+	s.viewport.SetYOffset(y)
+	s.Repaint()
 }
 
 // ScrollTo ensures the given position is visible.
@@ -337,17 +368,18 @@ func (s *ScrollView) ScrollTo(x, y int) {
 		s.scrollX = x - s.bounds.Width + 1
 	}
 
-	// Scroll vertically if needed
-	if y < s.scrollY {
-		s.scrollY = y
-	} else if y >= s.scrollY+s.bounds.Height {
-		s.scrollY = y - s.bounds.Height + 1
+	// Scroll vertically if needed using viewport
+	yOffset := s.viewport.YOffset
+	if y < yOffset {
+		s.viewport.SetYOffset(y)
+	} else if y >= yOffset+s.viewport.Height {
+		s.viewport.SetYOffset(y - s.viewport.Height + 1)
 	}
 }
 
 // ScrollPosition returns the current scroll position.
 func (s *ScrollView) ScrollPosition() (x, y int) {
-	return s.scrollX, s.scrollY
+	return s.scrollX, s.viewport.YOffset
 }
 
 // Children returns the content widget.
@@ -361,12 +393,22 @@ func (s *ScrollView) Children() []View {
 // SetBounds sets the scroll view's bounds.
 func (s *ScrollView) SetBounds(bounds Rect) {
 	s.BaseView.SetBounds(bounds)
+
+	// Initialize or update viewport dimensions
+	if !s.ready {
+		s.viewport = viewport.New(bounds.Width, bounds.Height)
+		s.ready = true
+	} else {
+		s.viewport.Width = bounds.Width
+		s.viewport.Height = bounds.Height
+	}
+
 	if s.content != nil {
 		// Content gets virtual bounds at the scroll offset
 		s.content.SetBounds(Rect{
 			Position{
 				X: -s.scrollX,
-				Y: -s.scrollY,
+				Y: -s.viewport.YOffset,
 			},
 			Size{
 				Width:  s.contentSize.Width,
@@ -388,9 +430,12 @@ func (s *ScrollView) Render(buf *SubBuffer) {
 	contentSub := NewSubBuffer(contentBuf, contentBuf.Bounds())
 	RenderWidget(s.content, contentSub)
 
+	// Use viewport's YOffset for vertical scrolling
+	scrollY := s.viewport.YOffset
+
 	// Copy visible portion
 	for y := 0; y < buf.Height(); y++ {
-		srcY := s.scrollY + y
+		srcY := scrollY + y
 		if srcY < 0 || srcY >= s.contentSize.Height {
 			continue
 		}
@@ -420,32 +465,32 @@ func (s *ScrollView) Render(buf *SubBuffer) {
 }
 
 // HandleKey handles keyboard input for scrolling.
+// Vertical scrolling is delegated to the viewport component.
 func (s *ScrollView) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	// Handle horizontal scrolling ourselves
 	switch msg.String() {
-	case "up":
-		s.SetScroll(s.scrollX, s.scrollY-1)
-		return true, nil
-	case "down":
-		s.SetScroll(s.scrollX, s.scrollY+1)
-		return true, nil
 	case "left":
-		s.SetScroll(s.scrollX-1, s.scrollY)
-		return true, nil
+		if s.scrollX > 0 {
+			s.scrollX--
+			s.Repaint()
+			return true, nil
+		}
 	case "right":
-		s.SetScroll(s.scrollX+1, s.scrollY)
-		return true, nil
-	case "pgup":
-		s.SetScroll(s.scrollX, s.scrollY-s.bounds.Height)
-		return true, nil
-	case "pgdown":
-		s.SetScroll(s.scrollX, s.scrollY+s.bounds.Height)
-		return true, nil
-	case "home":
-		s.SetScroll(s.scrollX, 0)
-		return true, nil
-	case "end":
-		s.SetScroll(s.scrollX, s.contentSize.Height-s.bounds.Height)
-		return true, nil
+		maxX := s.contentSize.Width - s.bounds.Width
+		if maxX > 0 && s.scrollX < maxX {
+			s.scrollX++
+			s.Repaint()
+			return true, nil
+		}
+	}
+
+	// Delegate vertical scrolling to viewport
+	switch msg.String() {
+	case "up", "down", "pgup", "pgdown", "home", "end":
+		var cmd tea.Cmd
+		s.viewport, cmd = s.viewport.Update(msg)
+		s.Repaint()
+		return true, cmd
 	}
 
 	// Pass to content if not handled
@@ -453,4 +498,37 @@ func (s *ScrollView) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return s.content.HandleKey(msg)
 	}
 	return false, nil
+}
+
+// GotoTop scrolls to the top of the content.
+func (s *ScrollView) GotoTop() {
+	s.viewport.GotoTop()
+	s.Repaint()
+}
+
+// GotoBottom scrolls to the bottom of the content.
+func (s *ScrollView) GotoBottom() {
+	s.viewport.GotoBottom()
+	s.Repaint()
+}
+
+// AtTop returns true if scrolled to the top.
+func (s *ScrollView) AtTop() bool {
+	return s.viewport.AtTop()
+}
+
+// AtBottom returns true if scrolled to the bottom.
+func (s *ScrollView) AtBottom() bool {
+	return s.viewport.AtBottom()
+}
+
+// YOffset returns the current vertical scroll offset.
+func (s *ScrollView) YOffset() int {
+	return s.viewport.YOffset
+}
+
+// SetYOffset sets the vertical scroll offset.
+func (s *ScrollView) SetYOffset(n int) {
+	s.viewport.SetYOffset(n)
+	s.Repaint()
 }
