@@ -1,7 +1,7 @@
 # Task: Add transactions lite to observable
 
 **Started:** 2026-01-21 03:57:35
-**Ended:** 2026-01-21 04:25:00
+**Ended:** 2026-01-21 06:30:00
 **Strategy:** Feature (TDD)
 **Status:** Completed
 **Complexity:** Medium
@@ -9,48 +9,53 @@
 
 ## Objective
 Implement a "transactions lite" feature for the observable package with:
-1. `Begin()` → `Transaction` function to start a transaction
-2. `Transaction.SetValueAtKey()` records changes in a slice (doesn't apply immediately)
-3. `Transaction.Commit()` deduplicates changes and applies them atomically
+1. Callback-based transaction API: `obs.Transaction(func(tx *Txn) { ... })`
+2. `Txn.SetValueAtKey()` records changes in a slice (doesn't apply immediately)
+3. Auto-commit on callback return, with `Txn.Abort()` to cancel
 4. Parent key changes override child key changes (e.g., setting "a" after "a.1.b" discards "a.1.b")
+5. Simplified notification semantics (no value tree walking)
 
 ## Progress
 - [x] Explore existing observable implementation
 - [x] Initial implementation with channel-based buffering
 - [x] Fix unbounded buffer issue (replace channel with mutex-protected map)
 - [x] Redesign with proper `Begin()` / `Commit()` API
+- [x] Change to callback-based API with auto-commit
+- [x] Merge TransactionalObservable into Observable (all observables are transactional)
 - [x] Implement change deduplication (parent overrides children)
-- [x] Add `setValuesAtKeys` internal method
-- [x] Update tests for new API
-- [x] Run tests and verify (all 73 tests pass)
+- [x] Simplify notification semantics (no value tree walking)
+- [x] Change ChangeCallback from `func(obs *Observable, key string)` to `func(key string)`
+- [x] Move `matchPattern` to `must.Fnmatch`
+- [x] Remove unused `obs` field from `Txn` struct
+- [x] Run tests and verify (all 68 tests pass)
 
 ## Obstacles
 - **Issue:** Initial channel-based design had 1000-item buffer limit causing potential deadlock
   **Resolution:** Replaced with mutex-protected map for unbounded buffering
 
-- **Issue:** User requested proper transaction API with Begin()/Commit() instead of implicit buffering
-  **Resolution:** Complete redesign with Transaction type that records changes in a slice
+- **Issue:** User requested callback-based API instead of Begin()/Commit()
+  **Resolution:** Changed to `obs.Transaction(func(tx *Txn) { ... })` with auto-commit
 
-- **Issue:** `path.Match("*", "a.final")` returns true because "." is not a separator in path matching
-  **Resolution:** Updated tests to use specific key patterns instead of relying on "*" wildcard behavior
+- **Issue:** Complex value tree walking for notifications was over-engineered
+  **Resolution:** Simplified to key-hierarchy based notifications only
 
 ## Outcome
-Successfully implemented TransactionalObservable with:
-- `Begin()` returns a `Transaction` object
-- `Transaction.SetValueAtKey(key, value)` records changes in a slice
-- `Transaction.Commit()` deduplicates and applies changes atomically
-- `keyOverrides(parent, child)` determines if parent change overrides child
-- Example: `["a.1.b", "a", "a.2", "c", "a.1", "a"]` → only `["c", "a"]` applied
+Successfully implemented transactions on Observable with:
+- `obs.Transaction(func(tx *Txn) { ... })` - callback-based with auto-commit
+- `tx.SetValueAtKey(key, value)` / `tx.DeleteValueAtKey(key)` - record changes
+- `tx.Abort()` - cancel transaction, discard all changes
+- `keyOverrides(parent, child)` / `keyAffectsPattern(key, pattern)` for deduplication and notification
+- Simplified notification: setting parent notifies all child subscriptions
 
 Key design decisions:
 - No goroutines needed - simple synchronous model
-- Changes recorded as slice of {key, value} pairs
-- Deduplication works backwards from end of slice
-- Setting parent key overrides all child key changes
-- Notifications happen once per unique changed key
+- Callback-based API ensures transactions are always completed
+- Txn struct doesn't need Observable reference (closure captures it)
+- No value tree walking - notifications based on key hierarchy only
+- Pattern validation moved to `must.Fnmatch` for fail-fast behavior
 
 ## Learnings
-- Channel-based designs need careful consideration of buffer limits
+- Callback-based transaction APIs (like `db.Transaction(func(tx) { ... })`) are cleaner than explicit Begin/Commit
+- Simpler notification semantics (key hierarchy only) are easier to reason about
 - `path.Match` uses "/" as separator, so "*" matches "a.b" (dots are not separators)
-- Explicit transaction objects (Begin/Commit) are cleaner than implicit buffering
-- Deduplication logic: iterate backwards, skip changes overridden by later parent changes
+- Consolidating related functionality (keyOverrides ≈ keyAffectsPattern) reduces duplication

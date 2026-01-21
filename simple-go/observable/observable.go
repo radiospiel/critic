@@ -338,7 +338,6 @@ type change struct {
 // Transactions are created via Observable.Transaction() and are
 // automatically committed when the callback returns, unless Abort() is called.
 type Txn struct {
-	obs     *Observable
 	changes []change
 	aborted bool
 }
@@ -421,16 +420,17 @@ func keyOverrides(parent, child string) bool {
 //	})
 func (o *Observable) Transaction(fn func(*Txn)) {
 	tx := &Txn{
-		obs:     o,
 		changes: make([]change, 0),
+		aborted: false,
 	}
+
 	fn(tx)
 
 	if tx.aborted {
 		return
 	}
 
-	tx.obs.setValuesAtKeys(tx.changes)
+	o.setValuesAtKeys(tx.changes)
 }
 
 // setValuesAtKeys applies multiple changes atomically and notifies subscribers.
