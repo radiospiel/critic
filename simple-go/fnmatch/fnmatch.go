@@ -149,10 +149,12 @@ func (c *lruCache) evictLRU() {
 	c.removeNode(c.tail)
 }
 
-// Global cache with capacity of 256
+// Global caches with capacity of 256
 var globalCache = newLRUCache(256)
+var globalPathCache = newLRUCache(256)
 
 // Fnmatch checks if the path matches the fnmatch pattern.
+// The wildcard * matches any characters including dots.
 // Compiled patterns are cached using an LRU cache with a capacity of 256.
 func Fnmatch(pattern, path string) bool {
 	matcher, ok := globalCache.get(pattern)
@@ -161,6 +163,91 @@ func Fnmatch(pattern, path string) bool {
 		globalCache.put(pattern, matcher)
 	}
 	return matcher.Match(path)
+}
+
+// MustCompilePath compiles an fnmatch pattern for path matching and returns a Fnmatcher.
+// Unlike MustCompile, the wildcard * only matches characters within a single segment
+// (does not match the "." separator).
+// It panics if the pattern is invalid.
+func MustCompilePath(pattern string) *Fnmatcher {
+	regexStr, err := fnmatchPathToRegex(pattern)
+	if err != nil {
+		panic(err)
+	}
+	re := regexp.MustCompile(regexStr)
+	return &Fnmatcher{
+		pattern: pattern,
+		re:      re,
+	}
+}
+
+// FnmatchPath checks if the key matches the fnmatch pattern using path semantics.
+// The wildcard * matches any characters except "." (single segment only).
+// This is suitable for matching dot-separated paths like "foo.bar.baz".
+// Compiled patterns are cached using an LRU cache with a capacity of 256.
+func FnmatchPath(pattern, key string) bool {
+	matcher, ok := globalPathCache.get(pattern)
+	if !ok {
+		matcher = MustCompilePath(pattern)
+		globalPathCache.put(pattern, matcher)
+	}
+	return matcher.Match(key)
+}
+
+// fnmatchPathToRegex converts an fnmatch pattern to a regex where * doesn't match dots.
+func fnmatchPathToRegex(pattern string) (string, error) {
+	var buf strings.Builder
+	buf.WriteString("^")
+
+	i := 0
+	for i < len(pattern) {
+		c := pattern[i]
+		switch c {
+		case '*':
+			buf.WriteString("[^.]*") // Match any char except dot
+		case '?':
+			buf.WriteString("[^.]") // Match single char except dot
+		case '[':
+			// Find closing bracket
+			j := i + 1
+			// Handle [!...] and []...] edge cases
+			if j < len(pattern) && (pattern[j] == '!' || pattern[j] == '^') {
+				j++
+			}
+			if j < len(pattern) && pattern[j] == ']' {
+				j++
+			}
+			for j < len(pattern) && pattern[j] != ']' {
+				j++
+			}
+			if j >= len(pattern) {
+				return "", errors.New("unclosed bracket")
+			}
+			// Copy bracket expression, converting ! to ^
+			buf.WriteByte('[')
+			if i+1 < len(pattern) && pattern[i+1] == '!' {
+				buf.WriteByte('^')
+				buf.WriteString(pattern[i+2 : j])
+			} else {
+				buf.WriteString(pattern[i+1 : j])
+			}
+			buf.WriteByte(']')
+			i = j
+		case '\\':
+			// Escape next character
+			if i+1 < len(pattern) {
+				i++
+				buf.WriteString(regexp.QuoteMeta(string(pattern[i])))
+			}
+		default:
+			// Escape regex metacharacters
+			buf.WriteString(regexp.QuoteMeta(string(c)))
+		}
+		i++
+	}
+
+	buf.WriteByte('$')
+	return buf.String(), nil
 }
 
 // fnmatchToRegex converts an fnmatch pattern to a regular expression string.

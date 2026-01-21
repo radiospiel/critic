@@ -126,3 +126,82 @@ func TestFnmatchCaching(t *testing.T) {
 		Fnmatch(p, "test"+p[1:])
 	}
 }
+
+func TestFnmatchPathToRegex(t *testing.T) {
+	tests := []struct {
+		pattern  string
+		expected string
+	}{
+		// Basic wildcards - * matches anything except dots
+		{"foo.*", `^foo\.[^.]*$`},
+		{"foo.?", `^foo\.[^.]$`},
+		{"*", `^[^.]*$`},
+		{"?", `^[^.]$`},
+
+		// Multi-segment patterns
+		{"foo.*.bar", `^foo\.[^.]*\.bar$`},
+		{"*.*.baz", `^[^.]*\.[^.]*\.baz$`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pattern, func(t *testing.T) {
+			result, err := fnmatchPathToRegex(tt.pattern)
+			assert.NoError(t, err)
+			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
+		})
+	}
+}
+
+func TestFnmatchPath(t *testing.T) {
+	tests := []struct {
+		pattern string
+		key     string
+		matches bool
+	}{
+		// Single segment wildcard
+		{"foo.*", "foo.bar", true},
+		{"foo.*", "foo.baz", true},
+		{"foo.*", "foo.bar.baz", false}, // * does NOT match dots
+		{"foo.*", "bar.baz", false},
+
+		// Multi-segment patterns
+		{"foo.*.bar", "foo.x.bar", true},
+		{"foo.*.bar", "foo.y.bar", true},
+		{"foo.*.bar", "foo.x.y.bar", false}, // * doesn't cross segments
+		{"foo.*.bar", "foo.bar", false},     // * must match something
+
+		// Nested wildcards
+		{"*.*.baz", "a.b.baz", true},
+		{"*.*.baz", "x.y.baz", true},
+		{"*.*.baz", "a.baz", false},
+		{"*.*.baz", "a.b.c.baz", false},
+
+		// Question mark (single char, not dot)
+		{"foo.?", "foo.a", true},
+		{"foo.?", "foo.ab", false},
+		{"foo.?", "foo.", false},
+
+		// Exact matches
+		{"foo.bar.baz", "foo.bar.baz", true},
+		{"foo.bar.baz", "foo.bar.qux", false},
+
+		// Character classes
+		{"foo.[abc]", "foo.a", true},
+		{"foo.[abc]", "foo.d", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pattern+"_"+tt.key, func(t *testing.T) {
+			result := FnmatchPath(tt.pattern, tt.key)
+			assert.Equals(t, result, tt.matches, "pattern: %s, key: %s", tt.pattern, tt.key)
+		})
+	}
+}
+
+func TestMustCompilePathPanic(t *testing.T) {
+	defer func() {
+		r := recover()
+		assert.NotNil(t, r, "expected panic for invalid pattern")
+	}()
+	MustCompilePath("[abc")
+}
