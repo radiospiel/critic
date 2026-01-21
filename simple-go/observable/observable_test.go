@@ -132,21 +132,17 @@ func TestOnKeyChangeSimple(t *testing.T) {
 	obs := New()
 	var callCount int
 	var lastKey string
-	var lastOld, lastNew any
 
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(o *Observable, key string) {
 		callCount++
 		lastKey = key
-		lastOld = oldValue
-		lastNew = newValue
 	})
 
 	obs.SetValueAtKey("foo", "bar")
 
 	assert.Equals(t, callCount, 1, "callback should be called once")
 	assert.Equals(t, lastKey, "foo", "key should be 'foo'")
-	assert.Nil(t, lastOld, "old value should be nil")
-	assert.Equals(t, lastNew, "bar", "new value should be 'bar'")
+	assert.Equals(t, obs.GetValue("foo"), "bar", "new value should be 'bar'")
 }
 
 func TestOnKeyChangeNoChangeNoCallback(t *testing.T) {
@@ -154,7 +150,7 @@ func TestOnKeyChangeNoChangeNoCallback(t *testing.T) {
 	obs.SetValueAtKey("foo", "bar")
 
 	var callCount int
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		callCount++
 	})
 
@@ -168,7 +164,7 @@ func TestOnKeyChangeWildcard(t *testing.T) {
 	obs := New()
 	var matchedKeys []string
 
-	obs.OnKeyChange([]string{"foo.*"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo.*", func(obs *Observable, key string) {
 		matchedKeys = append(matchedKeys, key)
 	})
 
@@ -185,7 +181,7 @@ func TestOnKeyChangeNestedWildcard(t *testing.T) {
 	obs := New()
 	var matchedKeys []string
 
-	obs.OnKeyChange([]string{"x.*.a"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("x.*.a", func(obs *Observable, key string) {
 		matchedKeys = append(matchedKeys, key)
 	})
 
@@ -204,7 +200,7 @@ func TestOnKeyChangeDeepSubscriptionTriggeredByNestedSet(t *testing.T) {
 	var triggered bool
 
 	// Subscribe to a deep path
-	obs.OnKeyChange([]string{"x.*.a"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("x.*.a", func(obs *Observable, key string) {
 		triggered = true
 	})
 
@@ -214,29 +210,14 @@ func TestOnKeyChangeDeepSubscriptionTriggeredByNestedSet(t *testing.T) {
 	assert.True(t, triggered, "subscription on x.*.a should be triggered when setting x.1 with nested 'a'")
 }
 
-func TestOnKeyChangeCalledOncePerSetValueAtKey(t *testing.T) {
-	obs := New()
-	var callCount int
-
-	// Two patterns that would both match x.1.a
-	obs.OnKeyChange([]string{"x.1.a", "x.*"}, func(key string, oldValue, newValue any) {
-		callCount++
-	})
-
-	obs.SetValueAtKey("x.1", map[string]any{"a": "value"})
-
-	// Should only be called once even though multiple patterns match
-	assert.Equals(t, callCount, 1, "subscription should only trigger once per SetValueAtKey call")
-}
-
 func TestOnKeyChangeMultipleSubscriptions(t *testing.T) {
 	obs := New()
 	var sub1Called, sub2Called bool
 
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		sub1Called = true
 	})
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		sub2Called = true
 	})
 
@@ -250,14 +231,14 @@ func TestClearSubscriptions(t *testing.T) {
 	obs := New()
 	var callCount int
 
-	subs := obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	subs := obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		callCount++
 	})
 
 	obs.SetValueAtKey("foo", "bar")
 	assert.Equals(t, callCount, 1, "callback should be called before clear")
 
-	obs.ClearSubscriptions(subs...)
+	obs.ClearSubscriptions(subs)
 
 	obs.SetValueAtKey("foo", "baz")
 	assert.Equals(t, callCount, 1, "callback should not be called after clear")
@@ -267,10 +248,10 @@ func TestClearSubscriptionsPartial(t *testing.T) {
 	obs := New()
 	var sub1Count, sub2Count int
 
-	sub1 := obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	sub1 := obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		sub1Count++
 	})
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		sub2Count++
 	})
 
@@ -278,7 +259,7 @@ func TestClearSubscriptionsPartial(t *testing.T) {
 	assert.Equals(t, sub1Count, 1, "sub1 should be called")
 	assert.Equals(t, sub2Count, 1, "sub2 should be called")
 
-	obs.ClearSubscriptions(sub1...)
+	obs.ClearSubscriptions(sub1)
 
 	obs.SetValueAtKey("foo", "baz")
 	assert.Equals(t, sub1Count, 1, "sub1 should not be called after clear")
@@ -384,12 +365,15 @@ func TestGetValueWithArrayIndex(t *testing.T) {
 	assert.Nil(t, obs.GetValue("items.10"), "should return nil for out of bounds index")
 }
 
-func TestOnKeyChangeMultiplePatterns(t *testing.T) {
+func TestOnKeyChangeMultipleSubscriptions2(t *testing.T) {
 	obs := New()
 	var matchedKeys []string
 
-	// Subscribe with multiple patterns
-	obs.OnKeyChange([]string{"foo.*", "bar.*"}, func(key string, oldValue, newValue any) {
+	// Subscribe with two separate subscriptions
+	obs.OnKeyChange("foo.*", func(obs *Observable, key string) {
+		matchedKeys = append(matchedKeys, key)
+	})
+	obs.OnKeyChange("bar.*", func(obs *Observable, key string) {
 		matchedKeys = append(matchedKeys, key)
 	})
 
@@ -405,7 +389,7 @@ func TestDeepNestedChange(t *testing.T) {
 	var triggered bool
 	var receivedKey string
 
-	obs.OnKeyChange([]string{"a.b.c.d.e"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("a.b.c.d.e", func(obs *Observable, key string) {
 		triggered = true
 		receivedKey = key
 	})
@@ -421,7 +405,7 @@ func TestPatternDoesNotMatchDeeper(t *testing.T) {
 	var triggered bool
 
 	// Pattern with single * should not match deeper paths
-	obs.OnKeyChange([]string{"foo.*.bar"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo.*.bar", func(obs *Observable, key string) {
 		triggered = true
 	})
 
@@ -435,7 +419,7 @@ func TestPatternMatchesSingleLevel(t *testing.T) {
 	obs := New()
 	var triggered bool
 
-	obs.OnKeyChange([]string{"foo.*.bar"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo.*.bar", func(obs *Observable, key string) {
 		triggered = true
 	})
 
@@ -449,11 +433,11 @@ func TestComplexNestedSetTriggersMultipleChanges(t *testing.T) {
 
 	var aTriggered, bTriggered bool
 
-	obs.OnKeyChange([]string{"data.users.*.name"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("data.users.*.name", func(obs *Observable, key string) {
 		aTriggered = true
 	})
 
-	obs.OnKeyChange([]string{"data.users.*.age"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("data.users.*.age", func(obs *Observable, key string) {
 		bTriggered = true
 	})
 
@@ -638,10 +622,10 @@ func TestGetValueAsStructPanicsOnIncompatible(t *testing.T) {
 // Tests for transactional observable
 
 func TestTransactionalObservableChangesNotNotifiedUntilCommit(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	var callCount int
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		callCount++
 	})
 
@@ -654,15 +638,12 @@ func TestTransactionalObservableChangesNotNotifiedUntilCommit(t *testing.T) {
 }
 
 func TestTransactionalObservableMultipleChangesToSameKeyUniqued(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	var callCount int
-	var lastOld, lastNew any
 
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(o *Observable, key string) {
 		callCount++
-		lastOld = oldValue
-		lastNew = newValue
 	})
 
 	obs.Txn(func(tx *Txn) {
@@ -672,19 +653,18 @@ func TestTransactionalObservableMultipleChangesToSameKeyUniqued(t *testing.T) {
 	})
 
 	assert.Equals(t, callCount, 1, "callback should only be called once for multiple changes to same key")
-	assert.Nil(t, lastOld, "old value should be the original (nil)")
-	assert.Equals(t, lastNew, "third", "new value should be the final value")
+	assert.Equals(t, obs.GetValue("foo"), "third", "new value should be the final value")
 }
 
 func TestTransactionalObservableBatchesMultipleKeys(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	var fooCount, barCount int
 
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		fooCount++
 	})
-	obs.OnKeyChange([]string{"bar"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("bar", func(obs *Observable, key string) {
 		barCount++
 	})
 
@@ -701,10 +681,10 @@ func TestTransactionalObservableBatchesMultipleKeys(t *testing.T) {
 }
 
 func TestTransactionalObservableNoNotificationWithoutChanges(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	var callCount int
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		callCount++
 	})
 
@@ -716,10 +696,10 @@ func TestTransactionalObservableNoNotificationWithoutChanges(t *testing.T) {
 }
 
 func TestTransactionalObservableSetThenDeleteNotNotified(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	var callCount int
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		callCount++
 	})
 
@@ -734,10 +714,10 @@ func TestTransactionalObservableSetThenDeleteNotNotified(t *testing.T) {
 }
 
 func TestTransactionalObservableMultipleTransactions(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	var callCount int
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		callCount++
 	})
 
@@ -753,10 +733,10 @@ func TestTransactionalObservableMultipleTransactions(t *testing.T) {
 }
 
 func TestTransactionalObservableNestedChanges(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	var triggered bool
-	obs.OnKeyChange([]string{"x.*.a"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("x.*.a", func(obs *Observable, key string) {
 		triggered = true
 	})
 
@@ -768,33 +748,36 @@ func TestTransactionalObservableNestedChanges(t *testing.T) {
 }
 
 func TestTransactionalObservableManyChanges(t *testing.T) {
-	// Test that we can handle more changes than would fit in any fixed buffer
-	obs := NewTransactional()
+	// Test that we can handle many changes in a single transaction
+	obs := New()
 
 	var callCount int
-	obs.OnKeyChange([]string{"*"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("*", func(obs *Observable, key string) {
 		callCount++
 	})
 
 	obs.Txn(func(tx *Txn) {
-		// Send 5000 changes to different keys (more than any reasonable buffer)
+		// Send 5000 changes to different keys
 		for i := 0; i < 5000; i++ {
 			tx.SetValueAtKey(fmt.Sprintf("key%d", i), i)
 		}
 	})
 
-	assert.Equals(t, callCount, 5000, "should notify for all 5000 unique keys")
+	// Each subscription is notified once per matching key
+	assert.Equals(t, callCount, 5000, "subscription should be notified once per matching key")
+
+	// Verify all changes were applied
+	assert.Equals(t, obs.GetValue("key0"), 0, "key0 should be 0")
+	assert.Equals(t, obs.GetValue("key4999"), 4999, "key4999 should be 4999")
 }
 
 func TestTransactionalObservableManyChangesToSameKey(t *testing.T) {
 	// Test that many changes to the same key still only notify once
-	obs := NewTransactional()
+	obs := New()
 
 	var callCount int
-	var lastValue any
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(o *Observable, key string) {
 		callCount++
-		lastValue = newValue
 	})
 
 	obs.Txn(func(tx *Txn) {
@@ -805,14 +788,14 @@ func TestTransactionalObservableManyChangesToSameKey(t *testing.T) {
 	})
 
 	assert.Equals(t, callCount, 1, "should only notify once for same key")
-	assert.Equals(t, lastValue, 9999, "should have final value")
+	assert.Equals(t, obs.GetValue("foo"), 9999, "should have final value")
 }
 
 func TestTransactionalObservableAbort(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	var callCount int
-	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
 		callCount++
 	})
 
@@ -826,10 +809,13 @@ func TestTransactionalObservableAbort(t *testing.T) {
 }
 
 func TestTransactionalObservableAbortIgnoresSubsequentChanges(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	var callCount int
-	obs.OnKeyChange([]string{"foo", "bar"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("foo", func(obs *Observable, key string) {
+		callCount++
+	})
+	obs.OnKeyChange("bar", func(obs *Observable, key string) {
 		callCount++
 	})
 
@@ -842,55 +828,6 @@ func TestTransactionalObservableAbortIgnoresSubsequentChanges(t *testing.T) {
 	assert.Equals(t, callCount, 0, "no callbacks should be called")
 	assert.Nil(t, obs.GetValue("foo"), "foo should not be set")
 	assert.Nil(t, obs.GetValue("bar"), "bar should not be set")
-}
-
-func TestTransactionalSetValueAtKeyReturnValue(t *testing.T) {
-	obs := NewTransactional()
-
-	// Set initial value
-	obs.Txn(func(tx *Txn) {
-		tx.SetValueAtKey("foo", "initial")
-	})
-
-	obs.Txn(func(tx *Txn) {
-		// Setting to a different value should return true
-		changed := tx.SetValueAtKey("foo", "changed")
-		assert.True(t, changed, "changing value should return true")
-
-		// Setting to the same value as observable should return false
-		unchanged := tx.SetValueAtKey("bar", nil)
-		assert.False(t, unchanged, "setting nil when already nil should return false")
-
-		// Setting a new key should return true
-		newKey := tx.SetValueAtKey("baz", "new")
-		assert.True(t, newKey, "setting new key should return true")
-	})
-
-	// Test that aborted transaction returns false
-	obs.Txn(func(tx *Txn) {
-		tx.Abort()
-		aborted := tx.SetValueAtKey("foo", "after-abort")
-		assert.False(t, aborted, "SetValueAtKey after abort should return false")
-	})
-}
-
-func TestTransactionalDeleteValueAtKeyReturnValue(t *testing.T) {
-	obs := NewTransactional()
-
-	// Set initial value
-	obs.Txn(func(tx *Txn) {
-		tx.SetValueAtKey("foo", "initial")
-	})
-
-	obs.Txn(func(tx *Txn) {
-		// Deleting existing value should return true
-		deleted := tx.DeleteValueAtKey("foo")
-		assert.True(t, deleted, "deleting existing value should return true")
-
-		// Deleting non-existent value should return false
-		notDeleted := tx.DeleteValueAtKey("nonexistent")
-		assert.False(t, notDeleted, "deleting non-existent value should return false")
-	})
 }
 
 // Tests for change deduplication (parent overrides children)
@@ -912,20 +849,20 @@ func TestKeyOverrides(t *testing.T) {
 }
 
 func TestTransactionalDeduplicationParentOverridesChild(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	// Track which keys were notified using specific patterns
 	aNotified := false
 	axNotified := false
 	a1bNotified := false
 
-	obs.OnKeyChange([]string{"a"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("a", func(obs *Observable, key string) {
 		aNotified = true
 	})
-	obs.OnKeyChange([]string{"a.x"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("a.x", func(obs *Observable, key string) {
 		axNotified = true
 	})
-	obs.OnKeyChange([]string{"a.1.b"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("a.1.b", func(obs *Observable, key string) {
 		a1bNotified = true
 	})
 
@@ -942,19 +879,17 @@ func TestTransactionalDeduplicationParentOverridesChild(t *testing.T) {
 }
 
 func TestTransactionalDeduplicationComplexCase(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	// Use specific patterns to track exact keys
 	cNotified := false
 	aNotified := false
-	var aValue any
 
-	obs.OnKeyChange([]string{"c"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("c", func(o *Observable, key string) {
 		cNotified = true
 	})
-	obs.OnKeyChange([]string{"a"}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("a", func(o *Observable, key string) {
 		aNotified = true
-		aValue = newValue
 	})
 
 	// Example from spec: "a.1.b", "a", "a.2", "c", "a.1", "a" → only "c", "a" applied
@@ -971,7 +906,7 @@ func TestTransactionalDeduplicationComplexCase(t *testing.T) {
 	assert.True(t, aNotified, "a should be notified")
 
 	// Verify the final value of "a" is the last one set
-	finalA := aValue.(map[string]any)
+	finalA := obs.GetValue("a").(map[string]any)
 	assert.True(t, finalA["final"].(bool), "a should have final value")
 
 	// Verify actual observable state
@@ -981,10 +916,10 @@ func TestTransactionalDeduplicationComplexCase(t *testing.T) {
 }
 
 func TestTransactionalDeduplicationRootOverridesAll(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	rootNotified := false
-	obs.OnKeyChange([]string{""}, func(key string, oldValue, newValue any) {
+	obs.OnKeyChange("", func(obs *Observable, key string) {
 		rootNotified = true
 	})
 
@@ -1006,7 +941,7 @@ func TestTransactionalDeduplicationRootOverridesAll(t *testing.T) {
 }
 
 func TestTransactionalDeduplicationVerifyState(t *testing.T) {
-	obs := NewTransactional()
+	obs := New()
 
 	// Test that deduplication produces correct final state
 	obs.Txn(func(tx *Txn) {

@@ -148,20 +148,25 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 
 	// Wire up internal state change subscriptions
 	// When diff args change, load diff
-	diffArgsSubs := s.OnKeyChange([]string{KeyDiffArgs, KeyCurrentBase}, func(key string, oldValue, newValue any) {
+	diffArgsSubs := s.OnKeyChange(KeyDiffArgs, func(obs *observable.Observable, key string) {
 		logger.Info("Session: DiffArgs changed (%s), loading diff", key)
 		s.processor.LoadDiff()
 	})
-	s.internalSubs = append(s.internalSubs, diffArgsSubs...)
+	s.internalSubs = append(s.internalSubs, diffArgsSubs)
+	baseSubs := s.OnKeyChange(KeyCurrentBase, func(obs *observable.Observable, key string) {
+		logger.Info("Session: CurrentBase changed (%s), loading diff", key)
+		s.processor.LoadDiff()
+	})
+	s.internalSubs = append(s.internalSubs, baseSubs)
 
 	// When selection changes, load selected file
-	selectionSubs := s.OnKeyChange([]string{KeySelectedFileIndex}, func(key string, oldValue, newValue any) {
+	selectionSubs := s.OnKeyChange(KeySelectedFileIndex, func(obs *observable.Observable, key string) {
 		filePath := s.GetSelectedFilePath()
 		fileIndex := s.GetSelectedFileIndex()
 		logger.Info("Session: Selection changed to %s (index %d)", filePath, fileIndex)
 		s.processor.LoadSelectedFile()
 	})
-	s.internalSubs = append(s.internalSubs, selectionSubs...)
+	s.internalSubs = append(s.internalSubs, selectionSubs)
 
 	// Set initial diff args
 	if len(args.Bases) > 0 {

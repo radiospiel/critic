@@ -10,6 +10,7 @@ import (
 	"git.15b.it/eno/critic/pkg/critic"
 	"git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/assert"
+	"git.15b.it/eno/critic/simple-go/observable"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -296,11 +297,11 @@ func TestOnKeyChange(t *testing.T) {
 	// Test subscription to KeyFiles changes (replaces old OnDiffLoaded callback)
 	filesChangeCalled := false
 	var changedKey string
-	subs := session.OnKeyChange([]string{KeyFiles}, func(key string, oldValue, newValue any) {
+	subs := session.OnKeyChange(KeyFiles, func(obs *observable.Observable, key string) {
 		filesChangeCalled = true
 		changedKey = key
 	})
-	defer session.ClearSubscriptions(subs...)
+	defer session.ClearSubscriptions(subs)
 
 	diff := &types.Diff{Files: []*types.FileDiff{
 		{NewPath: "test1.go"},
@@ -312,10 +313,10 @@ func TestOnKeyChange(t *testing.T) {
 
 	// Test subscription to selection changes
 	selectionChangeCalled := false
-	selSubs := session.OnKeyChange([]string{KeySelectedFileIndex}, func(key string, oldValue, newValue any) {
+	selSubs := session.OnKeyChange(KeySelectedFileIndex, func(obs *observable.Observable, key string) {
 		selectionChangeCalled = true
 	})
-	defer session.ClearSubscriptions(selSubs...)
+	defer session.ClearSubscriptions(selSubs)
 
 	// Select file at index 1 (different from initial 0)
 	session.SetSelectedFile(1)
@@ -328,7 +329,7 @@ func TestSubscriptions(t *testing.T) {
 	// Subscribe to filter mode changes using OnKeyChange
 	filterChangeCalled := false
 	var changedKey string
-	subs := session.OnKeyChange([]string{KeyFilterMode}, func(key string, oldValue, newValue any) {
+	subs := session.OnKeyChange(KeyFilterMode, func(obs *observable.Observable, key string) {
 		filterChangeCalled = true
 		changedKey = key
 	})
@@ -339,7 +340,7 @@ func TestSubscriptions(t *testing.T) {
 
 	// Unsubscribe using ClearSubscriptions
 	filterChangeCalled = false
-	session.ClearSubscriptions(subs...)
+	session.ClearSubscriptions(subs)
 
 	session.SetFilterMode(FilterModeWithUnresolved)
 	assert.False(t, filterChangeCalled, "callback should not be called after unsubscribe")

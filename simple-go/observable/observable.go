@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"git.15b.it/eno/critic/simple-go/preconditions"
+	"git.15b.it/eno/critic/simple-go/utils"
 )
 
 // maxArrayIndex is the maximum allowed array index to prevent accidental huge allocations.
@@ -20,11 +21,12 @@ const maxArrayIndex = 99999
 type Subscription int
 
 // ChangeCallback is the function signature for change notifications.
-// It receives the full key path, the old value, and the new value.
-type ChangeCallback func(key string, oldValue, newValue any)
+// It receives the observable and the full key path that changed.
+// The callback can read from the observable to get the current value.
+type ChangeCallback func(obs *Observable, key string)
 
 type subscription struct {
-	patterns []string
+	pattern  string
 	callback ChangeCallback
 }
 
@@ -98,6 +100,7 @@ func GetValueAs[T any](o *Observable, key string) T {
 
 	return result
 }
+
 // getValueInternal returns the value without locking (caller must hold lock).
 func (o *Observable) getValueInternal(key string) any {
 	if key == "" {
@@ -145,43 +148,9 @@ func (o *Observable) getValueInternal(key string) any {
 //   - The existing value at a path segment has an incompatible type
 //   - An array index is negative or >= 100000
 func (o *Observable) SetValueAtKey(key string, value any) {
-	// Collect all changes for notification
-	changes := make(map[string]struct{ old, new any })
-
-	// Hold lock for state changes
-	o.mu.Lock()
-
-	// Validate against schema before making changes
-	if errMsg := o.validateAgainstSchema(key, value); errMsg != "" {
-		o.mu.Unlock()
-		preconditions.Check(false, "%s", errMsg)
-	}
-
-	// Get old value at the target key
-	oldValue := o.getValueInternal(key)
-
-	// Perform the set
-	o.setValueInternal(key, value)
-
-	// Record the direct change
-	newValue := o.getValueInternal(key)
-	if !reflect.DeepEqual(oldValue, newValue) {
-		changes[key] = struct{ old, new any }{oldValue, newValue}
-	}
-
-	// If setting a nested value (map or slice), also record deeper changes
-	o.collectNestedChanges(key, oldValue, newValue, changes)
-
-	// Copy subscriptions for notification outside lock
-	subs := make([]*subscription, 0, len(o.subscriptions))
-	for _, sub := range o.subscriptions {
-		subs = append(subs, sub)
-	}
-
-	o.mu.Unlock()
-
-	// Notify subscribers outside lock to allow callbacks to access observable state
-	o.notifySubscribersOutsideLock(subs, changes)
+	o.Txn(func(tx *Txn) {
+		tx.SetValueAtKey(key, value)
+	})
 }
 
 // setValueInternal sets the value without locking (caller must hold lock).
@@ -302,25 +271,24 @@ func (o *Observable) DeleteValueAtKey(key string) {
 	o.SetValueAtKey(key, nil)
 }
 
-// OnKeyChange registers a callback to be notified when values at matching paths change.
-// Patterns use fnmatch-style matching (using path.Match).
-// Returns the subscriptions created (one per pattern) for later cleanup.
-func (o *Observable) OnKeyChange(patterns []string, callback ChangeCallback) []Subscription {
+// OnKeyChange registers a callback to be notified when values at the matching path change.
+// Pattern uses fnmatch-style matching (using path.Match).
+// Returns the subscription ID for later cleanup.
+func (o *Observable) OnKeyChange(pattern string, callback ChangeCallback) Subscription {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	preconditions.Check(len(patterns) > 0, "at least one pattern required")
 	preconditions.Check(callback != nil, "callback must not be nil")
 
 	id := o.nextSubID
 	o.nextSubID++
 
 	o.subscriptions[id] = &subscription{
-		patterns: patterns,
+		pattern:  pattern,
 		callback: callback,
 	}
 
-	return []Subscription{id}
+	return id
 }
 
 // ClearSubscriptions removes the specified subscriptions.
@@ -330,70 +298,6 @@ func (o *Observable) ClearSubscriptions(subs ...Subscription) {
 
 	for _, sub := range subs {
 		delete(o.subscriptions, sub)
-	}
-}
-
-// notifySubscribersOutsideLock notifies all matching subscribers of the changes.
-// Each subscription is triggered at most once per SetValueAtKey call.
-// This must be called without holding the lock to allow callbacks to access observable state.
-func (o *Observable) notifySubscribersOutsideLock(subs []*subscription, changes map[string]struct{ old, new any }) {
-	if len(changes) == 0 {
-		return
-	}
-
-	// For each subscription, check if any of its patterns match any changed key
-	for _, sub := range subs {
-		var matchedKey string
-		var matchedChange struct{ old, new any }
-		matched := false
-
-		for key, change := range changes {
-			for _, pattern := range sub.patterns {
-				if matchPattern(pattern, key) {
-					if !matched {
-						matchedKey = key
-						matchedChange = change
-						matched = true
-					}
-					break
-				}
-			}
-			if matched {
-				break
-			}
-		}
-
-		if matched {
-			sub.callback(matchedKey, matchedChange.old, matchedChange.new)
-		}
-	}
-}
-
-// collectNestedChanges adds changes for nested keys when setting a map or slice.
-func (o *Observable) collectNestedChanges(prefix string, oldVal, newVal any, changes map[string]struct{ old, new any }) {
-	// Get all keys from both old and new values
-	oldKeys := collectKeys(oldVal, prefix)
-	newKeys := collectKeys(newVal, prefix)
-
-	// Union of all keys
-	allKeys := make(map[string]bool)
-	for k := range oldKeys {
-		allKeys[k] = true
-	}
-	for k := range newKeys {
-		allKeys[k] = true
-	}
-
-	// Check each nested key for changes
-	for key := range allKeys {
-		if key == prefix {
-			continue // Already handled
-		}
-		oldNested := getNestedValue(oldVal, strings.TrimPrefix(key, prefix+"."))
-		newNested := getNestedValue(newVal, strings.TrimPrefix(key, prefix+"."))
-		if !reflect.DeepEqual(oldNested, newNested) {
-			changes[key] = struct{ old, new any }{oldNested, newNested}
-		}
 	}
 }
 
@@ -490,28 +394,6 @@ func isSlice(v any) bool {
 	return ok
 }
 
-// copyMap creates a shallow copy of a map.
-func copyMap(m map[string]any) map[string]any {
-	if m == nil {
-		return nil
-	}
-	result := make(map[string]any, len(m))
-	for k, v := range m {
-		result[k] = v
-	}
-	return result
-}
-
-// copySlice creates a shallow copy of a slice.
-func copySlice(s []any) []any {
-	if s == nil {
-		return nil
-	}
-	result := make([]any, len(s))
-	copy(result, s)
-	return result
-}
-
 // change represents a single key-value change in a transaction.
 type change struct {
 	key   string
@@ -519,40 +401,26 @@ type change struct {
 }
 
 // Txn represents a transaction that batches changes before applying them.
-// Transactions are created via TransactionalObservable.Txn() and are
+// Transactions are created via Observable.Txn() and are
 // automatically committed when the callback returns, unless Abort() is called.
 type Txn struct {
-	obs     *TransactionalObservable
+	obs     *Observable
 	changes []change
 	aborted bool
 }
 
 // SetValueAtKey records a change to be applied when the transaction commits.
-// Returns true if the new value differs from the current value in the observable,
-// false if the value is unchanged or the transaction has been aborted.
-// Note: Changes are always recorded for deduplication purposes, even when returning false.
-func (tx *Txn) SetValueAtKey(key string, value any) bool {
+// If the transaction has been aborted, the call is ignored.
+func (tx *Txn) SetValueAtKey(key string, value any) {
 	if tx.aborted {
-		return false
+		return
 	}
-
-	// Check if value actually differs from current observable state
-	tx.obs.Observable.mu.RLock()
-	currentValue := tx.obs.Observable.getValueInternal(key)
-	tx.obs.Observable.mu.RUnlock()
-
-	changed := !reflect.DeepEqual(currentValue, value)
-
-	// Always record the change - deduplication will handle overrides
 	tx.changes = append(tx.changes, change{key: key, value: value})
-
-	return changed
 }
 
 // DeleteValueAtKey records a deletion to be applied when the transaction commits.
-// Returns true if the key currently has a non-nil value, false otherwise.
-func (tx *Txn) DeleteValueAtKey(key string) bool {
-	return tx.SetValueAtKey(key, nil)
+func (tx *Txn) DeleteValueAtKey(key string) {
+	tx.SetValueAtKey(key, nil)
 }
 
 // Abort cancels the transaction. All recorded changes will be discarded
@@ -605,9 +473,7 @@ func (tx *Txn) deduplicateChanges() []change {
 	}
 
 	// Reverse to restore original order (we built it backwards)
-	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
-		result[i], result[j] = result[j], result[i]
-	}
+	utils.Reverse(result)
 
 	return result
 }
@@ -630,24 +496,6 @@ func keyOverrides(parent, child string) bool {
 	return strings.HasPrefix(child, parent+".")
 }
 
-// TransactionalObservable wraps Observable with transactional change batching.
-// Use Txn() to execute changes within a transaction.
-type TransactionalObservable struct {
-	*Observable
-}
-
-// NewTransactional creates a new TransactionalObservable with an empty map as root.
-func NewTransactional() *TransactionalObservable {
-	return NewTransactionalWithData(make(map[string]any))
-}
-
-// NewTransactionalWithData creates a new TransactionalObservable with the provided data.
-func NewTransactionalWithData(data any) *TransactionalObservable {
-	return &TransactionalObservable{
-		Observable: NewWithData(data),
-	}
-}
-
 // Txn executes a transaction. The callback receives a Txn object to record changes.
 // Changes are automatically committed when the callback returns, unless Abort() is called.
 // Example:
@@ -656,9 +504,9 @@ func NewTransactionalWithData(data any) *TransactionalObservable {
 //	    tx.SetValueAtKey("foo", "bar")
 //	    tx.SetValueAtKey("baz", 123)
 //	})
-func (t *TransactionalObservable) Txn(fn func(*Txn)) {
+func (o *Observable) Txn(fn func(*Txn)) {
 	tx := &Txn{
-		obs:     t,
+		obs:     o,
 		changes: make([]change, 0),
 	}
 	fn(tx)
@@ -666,14 +514,14 @@ func (t *TransactionalObservable) Txn(fn func(*Txn)) {
 }
 
 // setValuesAtKeys applies multiple changes atomically and notifies subscribers.
-func (t *TransactionalObservable) setValuesAtKeys(changes []change) {
-	t.Observable.mu.Lock()
+func (o *Observable) setValuesAtKeys(changes []change) {
+	o.mu.Lock()
 
 	// Collect old values for all keys that will be affected
 	oldValues := make(map[string]any)
 	for _, c := range changes {
 		// Get old value at the key being set
-		oldValues[c.key] = t.Observable.getValueInternal(c.key)
+		oldValues[c.key] = o.getValueInternal(c.key)
 
 		// Also collect old values for nested keys that will be overwritten
 		oldValue := oldValues[c.key]
@@ -686,13 +534,13 @@ func (t *TransactionalObservable) setValuesAtKeys(changes []change) {
 
 	// Apply all changes
 	for _, c := range changes {
-		t.Observable.setValueInternal(c.key, c.value)
+		o.setValueInternal(c.key, c.value)
 	}
 
 	// Collect new values and determine what actually changed
 	changesMap := make(map[string]struct{ old, new any })
 	for key, oldValue := range oldValues {
-		newValue := t.Observable.getValueInternal(key)
+		newValue := o.getValueInternal(key)
 		if !reflect.DeepEqual(oldValue, newValue) {
 			changesMap[key] = struct{ old, new any }{oldValue, newValue}
 		}
@@ -700,11 +548,11 @@ func (t *TransactionalObservable) setValuesAtKeys(changes []change) {
 
 	// Also check for new nested keys created by the changes
 	for _, c := range changes {
-		newValue := t.Observable.getValueInternal(c.key)
+		newValue := o.getValueInternal(c.key)
 		for nestedKey := range collectKeys(newValue, c.key) {
 			if _, exists := changesMap[nestedKey]; !exists {
 				oldValue := oldValues[nestedKey]
-				newNestedValue := t.Observable.getValueInternal(nestedKey)
+				newNestedValue := o.getValueInternal(nestedKey)
 				if !reflect.DeepEqual(oldValue, newNestedValue) {
 					changesMap[nestedKey] = struct{ old, new any }{oldValue, newNestedValue}
 				}
@@ -713,27 +561,40 @@ func (t *TransactionalObservable) setValuesAtKeys(changes []change) {
 	}
 
 	// Copy subscriptions for notification
-	subs := make([]*subscription, 0, len(t.Observable.subscriptions))
-	for _, sub := range t.Observable.subscriptions {
+	subs := make([]*subscription, 0, len(o.subscriptions))
+	for _, sub := range o.subscriptions {
 		subs = append(subs, sub)
 	}
-	t.Observable.mu.Unlock()
+	o.mu.Unlock()
 
-	// Notify subscribers once per unique changed key
-	// Each subscription can be triggered multiple times (once per matching key)
-	for key, chg := range changesMap {
+	// Notify each subscription once per matching key
+	for key := range changesMap {
 		for _, sub := range subs {
-			for _, pattern := range sub.patterns {
-				if matchPattern(pattern, key) {
-					sub.callback(key, chg.old, chg.new)
-					break // Only match first pattern per subscription per key
-				}
+			if matchPattern(sub.pattern, key) {
+				sub.callback(o, key)
 			}
 		}
 	}
 }
 
-// Close is a no-op for compatibility. TransactionalObservable no longer uses goroutines.
-func (t *TransactionalObservable) Close() {
-	// No-op - kept for API compatibility
+// copyMap creates a shallow copy of a map.
+func copyMap(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
+}
+
+// copySlice creates a shallow copy of a slice.
+func copySlice(s []any) []any {
+	if s == nil {
+		return nil
+	}
+	result := make([]any, len(s))
+	copy(result, s)
+	return result
 }

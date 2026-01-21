@@ -7,6 +7,13 @@ import (
 	"git.15b.it/eno/critic/simple-go/preconditions"
 )
 
+// Reverse reverses a slice in place
+func Reverse[S ~[]E, E any](s S) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
+
 // SortBy returns a sorted copy of the slice, sorted by the key returned by the iteratee.
 func SortBy[T any, K cmp.Ordered](collection []T, iteratee func(T) K) []T {
 	result := make([]T, len(collection))
