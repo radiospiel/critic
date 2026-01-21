@@ -46,3 +46,4 @@ Key design decisions:
 ## Learnings
 - Channel draining with `select { default: }` pattern is essential for proper batching
 - Need to distinguish between "notify once per batch" vs "notify once per key" semantics
+- Fixed-size channel buffers can cause deadlock when sender blocks waiting for space while receiver waits for different message - use mutex-protected maps for unbounded buffering
