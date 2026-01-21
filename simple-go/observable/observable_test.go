@@ -794,3 +794,178 @@ func TestGetValueAsStructPanicsOnIncompatible(t *testing.T) {
 
 	GetValueAs[TestUser](obs, "data")
 }
+
+// Tests for transactional observable
+
+func TestTransactionalObservableChangesNotNotifiedUntilCommit(t *testing.T) {
+	obs := NewTransactional()
+	defer obs.Close()
+
+	var callCount int
+	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+		callCount++
+	})
+
+	obs.SetValueAtKey("foo", "bar")
+	assert.Equals(t, callCount, 0, "callback should not be called before commit")
+
+	obs.CommitChanges()
+	assert.Equals(t, callCount, 1, "callback should be called after commit")
+}
+
+func TestTransactionalObservableMultipleChangesToSameKeyUniqued(t *testing.T) {
+	obs := NewTransactional()
+	defer obs.Close()
+
+	var callCount int
+	var lastOld, lastNew any
+
+	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+		callCount++
+		lastOld = oldValue
+		lastNew = newValue
+	})
+
+	obs.SetValueAtKey("foo", "first")
+	obs.SetValueAtKey("foo", "second")
+	obs.SetValueAtKey("foo", "third")
+
+	obs.CommitChanges()
+
+	assert.Equals(t, callCount, 1, "callback should only be called once for multiple changes to same key")
+	assert.Nil(t, lastOld, "old value should be the original (nil)")
+	assert.Equals(t, lastNew, "third", "new value should be the final value")
+}
+
+func TestTransactionalObservableBatchesMultipleKeys(t *testing.T) {
+	obs := NewTransactional()
+	defer obs.Close()
+
+	var fooCount, barCount int
+
+	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+		fooCount++
+	})
+	obs.OnKeyChange([]string{"bar"}, func(key string, oldValue, newValue any) {
+		barCount++
+	})
+
+	obs.SetValueAtKey("foo", "value1")
+	obs.SetValueAtKey("bar", "value2")
+
+	assert.Equals(t, fooCount, 0, "foo callback should not be called before commit")
+	assert.Equals(t, barCount, 0, "bar callback should not be called before commit")
+
+	obs.CommitChanges()
+
+	assert.Equals(t, fooCount, 1, "foo callback should be called once after commit")
+	assert.Equals(t, barCount, 1, "bar callback should be called once after commit")
+}
+
+func TestTransactionalObservableNoNotificationWithoutChanges(t *testing.T) {
+	obs := NewTransactional()
+	defer obs.Close()
+
+	var callCount int
+	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+		callCount++
+	})
+
+	obs.CommitChanges()
+	assert.Equals(t, callCount, 0, "callback should not be called when no changes")
+}
+
+func TestTransactionalObservableSetThenDeleteNotNotified(t *testing.T) {
+	obs := NewTransactional()
+	defer obs.Close()
+
+	var callCount int
+	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+		callCount++
+	})
+
+	obs.SetValueAtKey("foo", "bar")
+	obs.DeleteValueAtKey("foo")
+
+	obs.CommitChanges()
+
+	// The key was set then deleted - final state is same as initial (nil -> nil)
+	// so no notification should occur
+	assert.Equals(t, callCount, 0, "callback should not be called when net change is nil")
+}
+
+func TestTransactionalObservableMultipleCommits(t *testing.T) {
+	obs := NewTransactional()
+	defer obs.Close()
+
+	var callCount int
+	obs.OnKeyChange([]string{"foo"}, func(key string, oldValue, newValue any) {
+		callCount++
+	})
+
+	obs.SetValueAtKey("foo", "first")
+	obs.CommitChanges()
+	assert.Equals(t, callCount, 1, "first commit should trigger callback")
+
+	obs.SetValueAtKey("foo", "second")
+	obs.CommitChanges()
+	assert.Equals(t, callCount, 2, "second commit should trigger callback")
+}
+
+func TestTransactionalObservableNestedChanges(t *testing.T) {
+	obs := NewTransactional()
+	defer obs.Close()
+
+	var triggered bool
+	obs.OnKeyChange([]string{"x.*.a"}, func(key string, oldValue, newValue any) {
+		triggered = true
+	})
+
+	obs.SetValueAtKey("x.1", map[string]any{"a": "value"})
+	obs.CommitChanges()
+
+	assert.True(t, triggered, "nested subscription should be triggered on commit")
+}
+
+func TestTransactionalObservableConcurrentSafety(t *testing.T) {
+	obs := NewTransactional()
+	defer obs.Close()
+
+	var callCount int
+	obs.OnKeyChange([]string{"*"}, func(key string, oldValue, newValue any) {
+		callCount++
+	})
+
+	// Concurrent writes from multiple goroutines
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func(idx int) {
+			for j := 0; j < 100; j++ {
+				obs.SetValueAtKey("key"+string(rune('a'+idx)), j)
+			}
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	// Commit and verify no panics occurred
+	obs.CommitChanges()
+
+	// Should have exactly 10 unique keys notified
+	assert.Equals(t, callCount, 10, "should notify once per unique key")
+}
+
+func TestTransactionalObservableClose(t *testing.T) {
+	obs := NewTransactional()
+
+	obs.SetValueAtKey("foo", "bar")
+	obs.Close()
+
+	// After close, operations should still work but without notification
+	obs.SetValueAtKey("bar", "baz")
+	assert.Equals(t, obs.GetValue("bar"), "baz", "SetValueAtKey should still work after close")
+}
