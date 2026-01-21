@@ -148,7 +148,7 @@ func (o *Observable) getValueInternal(key string) any {
 //   - The existing value at a path segment has an incompatible type
 //   - An array index is negative or >= 100000
 func (o *Observable) SetValueAtKey(key string, value any) {
-	o.Txn(func(tx *Txn) {
+	o.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey(key, value)
 	})
 }
@@ -268,7 +268,9 @@ func (o *Observable) setAtPath(current any, parts []string, value any) any {
 // DeleteValueAtKey removes the value at the given key path.
 // This is equivalent to SetValueAtKey(key, nil).
 func (o *Observable) DeleteValueAtKey(key string) {
-	o.SetValueAtKey(key, nil)
+	o.Transaction(func(tx *Txn) {
+		tx.DeleteValueAtKey(key)
+	})
 }
 
 // OnKeyChange registers a callback to be notified when values at the matching path change.
@@ -401,7 +403,7 @@ type change struct {
 }
 
 // Txn represents a transaction that batches changes before applying them.
-// Transactions are created via Observable.Txn() and are
+// Transactions are created via Observable.Transaction() and are
 // automatically committed when the callback returns, unless Abort() is called.
 type Txn struct {
 	obs     *Observable
@@ -430,33 +432,14 @@ func (tx *Txn) Abort() {
 	tx.changes = nil
 }
 
-// commit applies all recorded changes to the observable, deduplicating
-// changes where a later change to a parent key overrides earlier child changes.
-// For example: ["a.1.b", "a", "a.2", "c", "a.1", "a"] becomes ["c", "a"]
-func (tx *Txn) commit() {
-	if tx.aborted || len(tx.changes) == 0 {
-		return
-	}
-
-	// Deduplicate: remove changes that are overridden by later parent changes
-	finalChanges := tx.deduplicateChanges()
-
-	if len(finalChanges) == 0 {
-		return
-	}
-
-	// Apply changes and notify
-	tx.obs.setValuesAtKeys(finalChanges)
-}
-
 // deduplicateChanges removes changes that are overridden by later changes.
 // A change is overridden if a later change sets a parent key (or the same key).
-func (tx *Txn) deduplicateChanges() []change {
+func deduplicateChanges(changes []change) []change {
 	// Work backwards: for each change, check if any later change overrides it
-	result := make([]change, 0, len(tx.changes))
+	result := make([]change, 0, len(changes))
 
-	for i := len(tx.changes) - 1; i >= 0; i-- {
-		current := tx.changes[i]
+	for i := len(changes) - 1; i >= 0; i-- {
+		current := changes[i]
 		overridden := false
 
 		// Check if any change already in result (which are later changes) overrides this one
@@ -500,21 +483,34 @@ func keyOverrides(parent, child string) bool {
 // Changes are automatically committed when the callback returns, unless Abort() is called.
 // Example:
 //
-//	obs.Txn(func(tx *Txn) {
+//	obs.Transaction(func(tx *Transaction) {
 //	    tx.SetValueAtKey("foo", "bar")
 //	    tx.SetValueAtKey("baz", 123)
 //	})
-func (o *Observable) Txn(fn func(*Txn)) {
+func (o *Observable) Transaction(fn func(*Txn)) {
 	tx := &Txn{
 		obs:     o,
 		changes: make([]change, 0),
 	}
 	fn(tx)
-	tx.commit()
+
+	if tx.aborted {
+		return
+	}
+
+	// Remove changes that are overridden by later change on the same or a parent key
+	// For example: ["a.1.b", "a", "a.2", "c", "a.1", "a"] becomes ["c", "a"]
+	deduplicatedChanges := deduplicateChanges(tx.changes)
+
+	tx.obs.setValuesAtKeys(deduplicatedChanges)
 }
 
 // setValuesAtKeys applies multiple changes atomically and notifies subscribers.
 func (o *Observable) setValuesAtKeys(changes []change) {
+	if len(changes) == 0 {
+		return
+	}
+
 	o.mu.Lock()
 
 	// Collect old values for all keys that will be affected

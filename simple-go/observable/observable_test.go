@@ -629,7 +629,7 @@ func TestTransactionalObservableChangesNotNotifiedUntilCommit(t *testing.T) {
 		callCount++
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("foo", "bar")
 		assert.Equals(t, callCount, 0, "callback should not be called before commit")
 	})
@@ -646,7 +646,7 @@ func TestTransactionalObservableMultipleChangesToSameKeyUniqued(t *testing.T) {
 		callCount++
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("foo", "first")
 		tx.SetValueAtKey("foo", "second")
 		tx.SetValueAtKey("foo", "third")
@@ -668,7 +668,7 @@ func TestTransactionalObservableBatchesMultipleKeys(t *testing.T) {
 		barCount++
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("foo", "value1")
 		tx.SetValueAtKey("bar", "value2")
 
@@ -688,7 +688,7 @@ func TestTransactionalObservableNoNotificationWithoutChanges(t *testing.T) {
 		callCount++
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		// Empty transaction
 	})
 
@@ -703,7 +703,7 @@ func TestTransactionalObservableSetThenDeleteNotNotified(t *testing.T) {
 		callCount++
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("foo", "bar")
 		tx.DeleteValueAtKey("foo")
 	})
@@ -721,12 +721,12 @@ func TestTransactionalObservableMultipleTransactions(t *testing.T) {
 		callCount++
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("foo", "first")
 	})
 	assert.Equals(t, callCount, 1, "first transaction should trigger callback")
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("foo", "second")
 	})
 	assert.Equals(t, callCount, 2, "second transaction should trigger callback")
@@ -740,7 +740,7 @@ func TestTransactionalObservableNestedChanges(t *testing.T) {
 		triggered = true
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("x.1", map[string]any{"a": "value"})
 	})
 
@@ -756,7 +756,7 @@ func TestTransactionalObservableManyChanges(t *testing.T) {
 		callCount++
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		// Send 5000 changes to different keys
 		for i := 0; i < 5000; i++ {
 			tx.SetValueAtKey(fmt.Sprintf("key%d", i), i)
@@ -780,7 +780,7 @@ func TestTransactionalObservableManyChangesToSameKey(t *testing.T) {
 		callCount++
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		// Send 10000 changes to the same key
 		for i := 0; i < 10000; i++ {
 			tx.SetValueAtKey("foo", i)
@@ -799,7 +799,7 @@ func TestTransactionalObservableAbort(t *testing.T) {
 		callCount++
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("foo", "bar")
 		tx.Abort()
 	})
@@ -819,7 +819,7 @@ func TestTransactionalObservableAbortIgnoresSubsequentChanges(t *testing.T) {
 		callCount++
 	})
 
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("foo", "value1")
 		tx.Abort()
 		tx.SetValueAtKey("bar", "value2") // Should be ignored
@@ -867,7 +867,7 @@ func TestTransactionalDeduplicationParentOverridesChild(t *testing.T) {
 	})
 
 	// Setting "a.1.b" then "a" - only "a" should be applied (a.1.b is overridden)
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("a.1.b", "value1")
 		tx.SetValueAtKey("a", map[string]any{"x": "y"})
 	})
@@ -893,7 +893,7 @@ func TestTransactionalDeduplicationComplexCase(t *testing.T) {
 	})
 
 	// Example from spec: "a.1.b", "a", "a.2", "c", "a.1", "a" → only "c", "a" applied
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("a.1.b", "v1")
 		tx.SetValueAtKey("a", map[string]any{"first": true})
 		tx.SetValueAtKey("a.2", "v2")
@@ -924,7 +924,7 @@ func TestTransactionalDeduplicationRootOverridesAll(t *testing.T) {
 	})
 
 	// Setting various keys, then setting root "" overrides all
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("a", "v1")
 		tx.SetValueAtKey("b.c", "v2")
 		tx.SetValueAtKey("d.e.f", "v3")
@@ -944,7 +944,7 @@ func TestTransactionalDeduplicationVerifyState(t *testing.T) {
 	obs := New()
 
 	// Test that deduplication produces correct final state
-	obs.Txn(func(tx *Txn) {
+	obs.Transaction(func(tx *Txn) {
 		tx.SetValueAtKey("a", "1")
 		tx.SetValueAtKey("b", "2")
 		tx.SetValueAtKey("c", "3")
