@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"git.15b.it/eno/critic/simple-go/logger"
@@ -16,19 +17,27 @@ import (
 func newLogCmd() *cobra.Command {
 	var follow bool
 	var topic string
+	var ignoreCase bool
 
 	cmd := &cobra.Command{
-		Use:   "log",
+		Use:   "log [filter...]",
 		Short: "Watch and display the critic log file",
 		Long: `Watch and display the critic log file.
 
 By default, outputs the current log file path. Use -f to follow the log
-file and print new output as it arrives. Use --topic to filter by topic.
+file and print new output as it arrives.
+
+Filter expressions can be plain strings or regex patterns (enclosed in //).
+Multiple filters are ANDed together (all must match).
 
 Examples:
-  critic log                  # Print the log file path
-  critic log -f               # Follow the log file (like tail -f)
-  critic log -f --topic git   # Follow and filter for [git] topic
+  critic log                     # Print the log file path
+  critic log -f                  # Follow the log file (like tail -f)
+  critic log -f -t git           # Follow and filter for [git] topic
+  critic log -f ERROR            # Follow and filter for lines containing "ERROR"
+  critic log -f -i error         # Case-insensitive filter for "error"
+  critic log -f "/error|warn/"   # Filter using regex
+  critic log -f ERROR -t git     # Multiple filters (AND)
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -40,19 +49,81 @@ Examples:
 				return nil
 			}
 
-			return watchLogFile(logPath, topic)
+			// Build filters from args and topic flag
+			var filters []string
+			filters = append(filters, args...)
+			if topic != "" {
+				filters = append(filters, "["+topic+"]")
+			}
+
+			return watchLogFile(logPath, filters, ignoreCase)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow the log file output")
-	cmd.Flags().StringVar(&topic, "topic", "", "Filter log output by topic (e.g., --topic git shows only [git] entries)")
+	cmd.Flags().StringVarP(&topic, "topic", "t", "", "Filter log output by topic (e.g., -t git shows only [git] entries)")
+	cmd.Flags().BoolVarP(&ignoreCase, "ignore-case", "i", false, "Case-insensitive filtering")
 
 	return cmd
 }
 
+// filter represents a compiled filter (either string or regex)
+type filter struct {
+	pattern    string
+	regex      *regexp.Regexp
+	ignoreCase bool
+}
+
+// newFilter creates a filter from a pattern string
+// Patterns enclosed in // are treated as regex
+func newFilter(pattern string, ignoreCase bool) (*filter, error) {
+	f := &filter{
+		pattern:    pattern,
+		ignoreCase: ignoreCase,
+	}
+
+	// Check if it's a regex pattern (enclosed in //)
+	if strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") && len(pattern) > 2 {
+		regexPattern := pattern[1 : len(pattern)-1]
+		if ignoreCase {
+			regexPattern = "(?i)" + regexPattern
+		}
+		re, err := regexp.Compile(regexPattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid regex %s: %w", pattern, err)
+		}
+		f.regex = re
+	}
+
+	return f, nil
+}
+
+// matches returns true if the line matches this filter
+func (f *filter) matches(line string) bool {
+	if f.regex != nil {
+		return f.regex.MatchString(line)
+	}
+
+	// Plain string matching
+	if f.ignoreCase {
+		return strings.Contains(strings.ToLower(line), strings.ToLower(f.pattern))
+	}
+	return strings.Contains(line, f.pattern)
+}
+
 // watchLogFile watches the log file and prints new content to stdout
-// If topic is non-empty, only lines containing [topic] are printed
-func watchLogFile(logPath string, topic string) error {
+// All filters must match for a line to be printed (AND logic)
+func watchLogFile(logPath string, filterPatterns []string, ignoreCase bool) error {
+	// Compile filters
+	var filters []*filter
+	for _, pattern := range filterPatterns {
+		f, err := newFilter(pattern, ignoreCase)
+		if err != nil {
+			return err
+		}
+		filters = append(filters, f)
+	}
+
 	// Open the log file
 	file, err := os.Open(logPath)
 	if err != nil {
@@ -81,11 +152,13 @@ func watchLogFile(logPath string, topic string) error {
 
 	reader := bufio.NewReader(file)
 
-	// Build topic filter if specified
-	var topicFilter string
-	if topic != "" {
-		topicFilter = "[" + topic + "]"
-		fmt.Fprintf(os.Stderr, "Watching %s for topic %s...\n", logPath, topicFilter)
+	// Display watching message
+	if len(filters) > 0 {
+		var filterDescs []string
+		for _, f := range filters {
+			filterDescs = append(filterDescs, f.pattern)
+		}
+		fmt.Fprintf(os.Stderr, "Watching %s for: %s...\n", logPath, strings.Join(filterDescs, " AND "))
 	} else {
 		fmt.Fprintf(os.Stderr, "Watching %s...\n", logPath)
 	}
@@ -104,8 +177,8 @@ func watchLogFile(logPath string, topic string) error {
 					if err != nil {
 						break
 					}
-					// Filter by topic if specified
-					if topicFilter == "" || strings.Contains(line, topicFilter) {
+					// Check if line matches all filters (AND logic)
+					if matchesAllFilters(line, filters) {
 						fmt.Print(line)
 					}
 				}
@@ -118,4 +191,14 @@ func watchLogFile(logPath string, topic string) error {
 			return fmt.Errorf("watcher error: %w", err)
 		}
 	}
+}
+
+// matchesAllFilters returns true if the line matches all filters
+func matchesAllFilters(line string, filters []*filter) bool {
+	for _, f := range filters {
+		if !f.matches(line) {
+			return false
+		}
+	}
+	return true
 }
