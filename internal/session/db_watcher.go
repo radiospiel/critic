@@ -1,4 +1,4 @@
-package state
+package session
 
 import (
 	"database/sql"

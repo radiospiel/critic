@@ -1,4 +1,4 @@
-package state
+package session
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 
 // DiffProcessor handles loading and processing diffs
 type DiffProcessor struct {
-	state *AppState
+	state *Session
 	mu    sync.Mutex
 
 	// Processing state
@@ -23,7 +23,7 @@ type DiffProcessor struct {
 }
 
 // NewDiffProcessor creates a new diff processor
-func NewDiffProcessor(state *AppState) *DiffProcessor {
+func NewDiffProcessor(state *Session) *DiffProcessor {
 	return &DiffProcessor{
 		state: state,
 	}
@@ -242,72 +242,3 @@ func filterFilesByExtension(files []*types.FileDiff, extensions []string) []*typ
 	return filtered
 }
 
-// StateManager combines state and processing for convenient use
-type StateManager struct {
-	State     *AppState
-	Processor *DiffProcessor
-}
-
-// NewStateManager creates a new state manager with integrated processing
-func NewStateManager(state *AppState) *StateManager {
-	processor := NewDiffProcessor(state)
-
-	sm := &StateManager{
-		State:     state,
-		Processor: processor,
-	}
-
-	// Wire up state change callbacks to processor
-	state.OnDiffArgsChanged(func() {
-		logger.Info("StateManager: DiffArgs changed, loading diff")
-		processor.LoadDiff()
-	})
-
-	state.OnSelectionChanged(func(filePath string, fileIndex int) {
-		logger.Info("StateManager: Selection changed to %s (index %d)", filePath, fileIndex)
-		processor.LoadSelectedFile()
-	})
-
-	return sm
-}
-
-// SetupWatchers creates and configures watchers for the state manager
-func (sm *StateManager) SetupWatchers(gitRoot string) error {
-	// Create DB watcher
-	dbWatcher, err := NewDBWatcher(gitRoot, func() {
-		logger.Info("StateManager: DB changed, refreshing conversations")
-		if err := sm.State.RefreshConversations(); err != nil {
-			logger.Warn("StateManager: Failed to refresh conversations: %v", err)
-		}
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create DB watcher: %w", err)
-	}
-	sm.State.SetDBWatcher(dbWatcher)
-
-	// Create git watcher
-	gitWatcher := NewGitWatcher(sm.State)
-	gitWatcher.OnBasesChanged(func() {
-		logger.Info("StateManager: Git bases changed, loading diff")
-		sm.Processor.LoadDiff()
-	})
-	sm.State.SetGitWatcher(gitWatcher)
-
-	return nil
-}
-
-// Start starts all watchers
-func (sm *StateManager) Start() error {
-	return sm.State.StartWatchers()
-}
-
-// Stop stops all watchers and cleans up
-func (sm *StateManager) Stop() {
-	sm.State.StopWatchers()
-}
-
-// Close cleans up all resources
-func (sm *StateManager) Close() error {
-	sm.Stop()
-	return sm.State.Close()
-}

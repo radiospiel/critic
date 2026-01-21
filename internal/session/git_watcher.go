@@ -1,4 +1,4 @@
-package state
+package session
 
 import (
 	"sync"
@@ -10,7 +10,7 @@ import (
 
 // GitWatcher watches for changes to git references and kicks off diff reloading
 type GitWatcher struct {
-	state         *AppState
+	state         *Session
 	bases         []string          // Base refs to watch (e.g., ["main", "origin/main", "HEAD"])
 	resolvedBases map[string]string // Current resolved SHAs
 	mu            sync.RWMutex
@@ -25,7 +25,7 @@ type GitWatcher struct {
 }
 
 // NewGitWatcher creates a new git watcher
-func NewGitWatcher(state *AppState) *GitWatcher {
+func NewGitWatcher(state *Session) *GitWatcher {
 	return &GitWatcher{
 		state:         state,
 		resolvedBases: make(map[string]string),
