@@ -41,9 +41,10 @@ var compileMemoized = utils.Memoize2(func(pattern, separators string) Matcher {
 
 // MustCompile compiles an fnmatch pattern and returns a Matcher.
 // Options can be provided to customize matching behavior.
-// Deprecated: Use Compile instead, which now never returns an error.
+// panics on error
 func MustCompile(pattern string, opts ...Options) Matcher {
-	m, _ := Compile(pattern, opts...)
+	m, err := Compile(pattern, opts...)
+	preconditions.Check(err == nil, "failed to compile regexp: %v", err)
 	return m
 }
 
