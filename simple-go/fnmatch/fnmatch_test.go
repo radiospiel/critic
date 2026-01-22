@@ -17,11 +17,6 @@ func TestFnmatchToRegex(t *testing.T) {
 		{"*", `^.*$`},
 		{"?", `^.$`},
 
-		// Character classes
-		{"[abc]*.log", `^[abc].*\.log$`},
-		{"[!0-9]*", `^[^0-9].*$`},
-		{"[a-z]", `^[a-z]$`},
-
 		// Escaped regex metacharacters
 		{"data.*.json", `^data\..*\.json$`},
 		{"file(1).txt", `^file\(1\)\.txt$`},
@@ -35,13 +30,11 @@ func TestFnmatchToRegex(t *testing.T) {
 
 		// Combined patterns
 		{"src/**/*.go", `^src/.*.*/.*\.go$`},
-		{"test_[0-9].txt", `^test_[0-9]\.txt$`},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.pattern, func(t *testing.T) {
-			result, err := fnmatchToRegex(tt.pattern, "") // no separators
-			assert.NoError(t, err)
+			result := fnmatchToRegex(tt.pattern, "") // no separators
 			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
 		})
 	}
@@ -65,17 +58,10 @@ func TestFnmatchToRegexWithSeparator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.pattern, func(t *testing.T) {
-			result, err := fnmatchToRegex(tt.pattern, ".") // dot separator
-			assert.NoError(t, err)
+			result := fnmatchToRegex(tt.pattern, ".") // dot separator
 			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
 		})
 	}
-}
-
-func TestFnmatchToRegexError(t *testing.T) {
-	// Unclosed bracket
-	_, err := fnmatchToRegex("[abc", "")
-	assert.Error(t, err, "unclosed bracket")
 }
 
 func TestFnmatcherMatch(t *testing.T) {
@@ -91,13 +77,6 @@ func TestFnmatcherMatch(t *testing.T) {
 		{"foo?.txt", "foo1.txt", true},
 		{"foo?.txt", "foo12.txt", false},
 		{"foo?.txt", "bar1.txt", false},
-
-		// Character classes
-		{"[abc]*.log", "a.log", true},
-		{"[abc]*.log", "abc.log", true},
-		{"[abc]*.log", "d.log", false},
-		{"[!0-9]*", "abc", true},
-		{"[!0-9]*", "1abc", false},
 
 		// Dot files
 		{"*.go", ".go", true},
@@ -123,20 +102,10 @@ func TestFnmatcherMatch(t *testing.T) {
 	}
 }
 
-func TestMustCompilePanic(t *testing.T) {
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "expected panic for invalid pattern")
-	}()
-	MustCompile("[abc")
-}
-
 func TestFnmatchFunction(t *testing.T) {
 	// Test the convenience function
 	assert.True(t, Fnmatch("*.go", "main.go"))
 	assert.False(t, Fnmatch("*.go", "main.txt"))
-	assert.True(t, Fnmatch("[a-z]*.txt", "hello.txt"))
-	assert.False(t, Fnmatch("[a-z]*.txt", "123.txt"))
 }
 
 func TestFnmatchWithSeparator(t *testing.T) {
@@ -173,10 +142,6 @@ func TestFnmatchWithSeparator(t *testing.T) {
 		// Exact matches
 		{"foo.bar.baz", "foo.bar.baz", true},
 		{"foo.bar.baz", "foo.bar.qux", false},
-
-		// Character classes
-		{"foo.[abc]", "foo.a", true},
-		{"foo.[abc]", "foo.d", false},
 	}
 
 	for _, tt := range tests {
@@ -185,14 +150,6 @@ func TestFnmatchWithSeparator(t *testing.T) {
 			assert.Equals(t, result, tt.matches, "pattern: %s, key: %s", tt.pattern, tt.key)
 		})
 	}
-}
-
-func TestMustCompileWithSeparatorPanic(t *testing.T) {
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "expected panic for invalid pattern")
-	}()
-	MustCompile("[abc", Options{Separators: "."})
 }
 
 func TestFnmatchWithMultipleSeparators(t *testing.T) {

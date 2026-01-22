@@ -3,7 +3,6 @@
 package fnmatch
 
 import (
-	"errors"
 	"regexp"
 	"strings"
 
@@ -54,17 +53,7 @@ func Compile(pattern string, opts ...Options) (Matcher, error) {
 		separators = opts[0].Separators
 	}
 
-	regexStr, err := fnmatchToRegex(pattern, separators)
-	if err != nil {
-		return nil, err
-	}
-
-	return regexp.Compile(regexStr)
-}
-
-func Validate(pattern string, opts ...Options) error {
-	_, err := Compile(pattern, opts...)
-	return err
+	return regexp.Compile(fnmatchToRegex(pattern, separators))
 }
 
 // Fnmatch checks if the path matches the fnmatch pattern.
@@ -75,7 +64,7 @@ func Fnmatch(pattern, path string, opts ...Options) bool {
 }
 
 // fnmatchToRegex converts an fnmatch pattern to a regular expression string.
-func fnmatchToRegex(pattern string, separators string) (string, error) {
+func fnmatchToRegex(pattern string, separators string) string {
 	var buf strings.Builder
 	buf.WriteString("^")
 
@@ -85,12 +74,8 @@ func fnmatchToRegex(pattern string, separators string) (string, error) {
 		// * and ? don't match any separator character
 		// Build character class excluding all separator chars
 		var escapedSeps strings.Builder
-		seen := make(map[rune]bool)
 		for _, r := range separators {
-			if !seen[r] {
-				seen[r] = true
-				escapedSeps.WriteString(regexp.QuoteMeta(string(r)))
-			}
+			escapedSeps.WriteString(regexp.QuoteMeta(string(r)))
 		}
 		starPattern = "[^" + escapedSeps.String() + "]*"
 		questionPattern = "[^" + escapedSeps.String() + "]"
@@ -108,32 +93,6 @@ func fnmatchToRegex(pattern string, separators string) (string, error) {
 			buf.WriteString(starPattern)
 		case '?':
 			buf.WriteString(questionPattern)
-		case '[':
-			// Find closing bracket
-			j := i + 1
-			// Handle [!...] and []...] edge cases
-			if j < len(pattern) && (pattern[j] == '!' || pattern[j] == '^') {
-				j++
-			}
-			if j < len(pattern) && pattern[j] == ']' {
-				j++
-			}
-			for j < len(pattern) && pattern[j] != ']' {
-				j++
-			}
-			if j >= len(pattern) {
-				return "", errors.New("unclosed bracket")
-			}
-			// Copy bracket expression, converting ! to ^
-			buf.WriteByte('[')
-			if i+1 < len(pattern) && pattern[i+1] == '!' {
-				buf.WriteByte('^')
-				buf.WriteString(pattern[i+2 : j])
-			} else {
-				buf.WriteString(pattern[i+1 : j])
-			}
-			buf.WriteByte(']')
-			i = j
 		case '\\':
 			// Escape next character
 			if i+1 < len(pattern) {
@@ -148,5 +107,5 @@ func fnmatchToRegex(pattern string, separators string) (string, error) {
 	}
 
 	buf.WriteByte('$')
-	return buf.String(), nil
+	return buf.String()
 }
