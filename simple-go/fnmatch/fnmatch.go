@@ -16,12 +16,19 @@ type Matcher interface {
 	MatchString(s string) bool
 }
 
+// DefaultSeparators is used when no Options are provided.
+// By default, * and ? do not match "/" or "\" (i.e. Unix and Windows
+// path separators.
+const DefaultSeparators = `/\`
+
 // Options configures fnmatch behavior.
 type Options struct {
 	// Separators is a string where each character acts as a separator.
 	// When empty, * matches any character. When set (e.g., "/."),
 	// * only matches characters that are not separators.
 	// For example, with Separators: "/.", "*" matches neither "/" nor ".".
+	// Default (when no Options provided): "/\" - see DefaultSeparators.
+	// To match any character, explicitly pass Options{Separators: ""}.
 	Separators string
 }
 
@@ -36,14 +43,18 @@ func MustCompile(pattern string, opts ...Options) Matcher {
 
 // Compile compiles an fnmatch pattern and returns a Matcher.
 // Options can be provided to customize matching behavior.
+// When no Options are provided, DefaultSeparators ("/\") is used.
+// To match any character with *, pass Options{Separators: ""}.
 func Compile(pattern string, opts ...Options) (Matcher, error) {
-	var opt Options
 	preconditions.Check(len(opts) <= 1, "Only zero or one Options are allowed")
+
+	// Use default separators when no options provided
+	separators := DefaultSeparators
 	if len(opts) > 0 {
-		opt = opts[0]
+		separators = opts[0].Separators
 	}
 
-	regexStr, err := fnmatchToRegex(pattern, opt)
+	regexStr, err := fnmatchToRegex(pattern, separators)
 	if err != nil {
 		return nil, err
 	}
@@ -64,18 +75,18 @@ func Fnmatch(pattern, path string, opts ...Options) bool {
 }
 
 // fnmatchToRegex converts an fnmatch pattern to a regular expression string.
-func fnmatchToRegex(pattern string, opt Options) (string, error) {
+func fnmatchToRegex(pattern string, separators string) (string, error) {
 	var buf strings.Builder
 	buf.WriteString("^")
 
 	// Build the regex patterns for * and ? based on separators
 	var starPattern, questionPattern string
-	if opt.Separators != "" {
+	if separators != "" {
 		// * and ? don't match any separator character
 		// Build character class excluding all separator chars
 		var escapedSeps strings.Builder
 		seen := make(map[rune]bool)
-		for _, r := range opt.Separators {
+		for _, r := range separators {
 			if !seen[r] {
 				seen[r] = true
 				escapedSeps.WriteString(regexp.QuoteMeta(string(r)))

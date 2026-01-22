@@ -40,7 +40,7 @@ func TestFnmatchToRegex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.pattern, func(t *testing.T) {
-			result, err := fnmatchToRegex(tt.pattern, Options{})
+			result, err := fnmatchToRegex(tt.pattern, "") // no separators
 			assert.NoError(t, err)
 			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
 		})
@@ -65,7 +65,7 @@ func TestFnmatchToRegexWithSeparator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.pattern, func(t *testing.T) {
-			result, err := fnmatchToRegex(tt.pattern, Options{Separators: "."})
+			result, err := fnmatchToRegex(tt.pattern, ".") // dot separator
 			assert.NoError(t, err)
 			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
 		})
@@ -74,7 +74,7 @@ func TestFnmatchToRegexWithSeparator(t *testing.T) {
 
 func TestFnmatchToRegexError(t *testing.T) {
 	// Unclosed bracket
-	_, err := fnmatchToRegex("[abc", Options{})
+	_, err := fnmatchToRegex("[abc", "")
 	assert.Error(t, err, "unclosed bracket")
 }
 
@@ -106,8 +106,8 @@ func TestFnmatcherMatch(t *testing.T) {
 		// Complex patterns
 		{"data.*.json", "data.test.json", true},
 		{"data.*.json", "data.json", false},
-		{"src/*.go", "src/main.go", true},
-		{"src/*.go", "src/sub/main.go", true}, // * matches any char including /
+		{"src/*.go", "src/main.go", true},      // * matches "main" (. is not a separator by default)
+		{"src/*.go", "src/sub/main.go", false}, // * does NOT match "/" with default separators
 
 		// Exact matches
 		{"exact.txt", "exact.txt", true},
