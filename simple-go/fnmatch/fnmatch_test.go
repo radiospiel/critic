@@ -6,7 +6,7 @@ import (
 	"git.15b.it/eno/critic/simple-go/assert"
 )
 
-func TestFnmatchToRegex(t *testing.T) {
+func TestFnmatchToRegexp(t *testing.T) {
 	tests := []struct {
 		pattern  string
 		expected string
@@ -34,13 +34,13 @@ func TestFnmatchToRegex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.pattern, func(t *testing.T) {
-			result := fnmatchToRegex(tt.pattern, "") // no separators
-			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
+			result := fnmatchToRegexp(tt.pattern, "") // no separators
+			assert.Equals(t, result.String(), tt.expected, "pattern: %s", tt.pattern)
 		})
 	}
 }
 
-func TestFnmatchToRegexWithSeparator(t *testing.T) {
+func TestFnmatchToRegexpWithSeparator(t *testing.T) {
 	tests := []struct {
 		pattern  string
 		expected string
@@ -58,8 +58,8 @@ func TestFnmatchToRegexWithSeparator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.pattern, func(t *testing.T) {
-			result := fnmatchToRegex(tt.pattern, ".") // dot separator
-			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
+			result := fnmatchToRegexp(tt.pattern, ".") // dot separator
+			assert.Equals(t, result.String(), tt.expected, "pattern: %s", tt.pattern)
 		})
 	}
 }
