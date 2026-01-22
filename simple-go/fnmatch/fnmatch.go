@@ -18,10 +18,11 @@ type Matcher interface {
 
 // Options configures fnmatch behavior.
 type Options struct {
-	// Separator is a character that * and ? will not match.
-	// When empty, * matches any character. When set (e.g., "."),
-	// * only matches characters within a single segment.
-	Separator string
+	// Separators is a string where each character acts as a separator.
+	// When empty, * matches any character. When set (e.g., "/."),
+	// * only matches characters that are not separators.
+	// For example, with Separators: "/.", "*" matches neither "/" nor ".".
+	Separators string
 }
 
 // MustCompile compiles an fnmatch pattern and returns a Fnmatcher.
@@ -67,13 +68,21 @@ func fnmatchToRegex(pattern string, opt Options) (string, error) {
 	var buf strings.Builder
 	buf.WriteString("^")
 
-	// Build the regex patterns for * and ? based on separator
+	// Build the regex patterns for * and ? based on separators
 	var starPattern, questionPattern string
-	if opt.Separator != "" {
-		// * and ? don't match the separator
-		escapedSep := regexp.QuoteMeta(opt.Separator)
-		starPattern = "[^" + escapedSep + "]*"
-		questionPattern = "[^" + escapedSep + "]"
+	if opt.Separators != "" {
+		// * and ? don't match any separator character
+		// Build character class excluding all separator chars
+		var escapedSeps strings.Builder
+		seen := make(map[rune]bool)
+		for _, r := range opt.Separators {
+			if !seen[r] {
+				seen[r] = true
+				escapedSeps.WriteString(regexp.QuoteMeta(string(r)))
+			}
+		}
+		starPattern = "[^" + escapedSeps.String() + "]*"
+		questionPattern = "[^" + escapedSeps.String() + "]"
 	} else {
 		// * and ? match any character
 		starPattern = ".*"

@@ -65,7 +65,7 @@ func TestFnmatchToRegexWithSeparator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.pattern, func(t *testing.T) {
-			result, err := fnmatchToRegex(tt.pattern, Options{Separator: "."})
+			result, err := fnmatchToRegex(tt.pattern, Options{Separators: "."})
 			assert.NoError(t, err)
 			assert.Equals(t, result, tt.expected, "pattern: %s", tt.pattern)
 		})
@@ -117,7 +117,7 @@ func TestFnmatcherMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.pattern+"_"+tt.path, func(t *testing.T) {
 			matcher := MustCompile(tt.pattern)
-			result := matcher.match(tt.path)
+			result := matcher.MatchString(tt.path)
 			assert.Equals(t, result, tt.matches, "pattern: %s, path: %s", tt.pattern, tt.path)
 		})
 	}
@@ -140,7 +140,7 @@ func TestFnmatchFunction(t *testing.T) {
 }
 
 func TestFnmatchWithSeparator(t *testing.T) {
-	dotOpts := Options{Separator: "."}
+	dotOpts := Options{Separators: "."}
 
 	tests := []struct {
 		pattern string
@@ -192,5 +192,50 @@ func TestMustCompileWithSeparatorPanic(t *testing.T) {
 		r := recover()
 		assert.NotNil(t, r, "expected panic for invalid pattern")
 	}()
-	MustCompile("[abc", Options{Separator: "."})
+	MustCompile("[abc", Options{Separators: "."})
+}
+
+func TestFnmatchWithMultipleSeparators(t *testing.T) {
+	// With separators "/.", * matches neither "/" nor "."
+	opts := Options{Separators: "/."}
+
+	tests := []struct {
+		pattern string
+		path    string
+		matches bool
+	}{
+		// * doesn't match dots
+		{"foo.*", "foo.bar", true},
+		{"foo.*", "foo.bar.baz", false},
+
+		// * doesn't match slashes
+		{"src/*", "src/main", true},
+		{"src/*", "src/sub/main", false},
+
+		// * doesn't match either
+		{"*", "foo", true},
+		{"*", "foo.bar", false},
+		{"*", "foo/bar", false},
+
+		// Multi-segment with mixed separators
+		{"src/*.go", "src/main.go", true},  // * matches "main" (no / or . in it)
+		{"src/*.*", "src/main.go", true},   // each * matches a single segment
+		{"src/*", "src/main.go", false},    // * can't match the dot in "main.go"
+
+		// Duplicate separators in options should work the same
+		{"foo.*", "foo.bar", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pattern+"_"+tt.path, func(t *testing.T) {
+			result := Fnmatch(tt.pattern, tt.path, opts)
+			assert.Equals(t, result, tt.matches, "pattern: %s, path: %s", tt.pattern, tt.path)
+		})
+	}
+
+	// Test with duplicate separators (should behave same as unique)
+	dupeOpts := Options{Separators: "/../.."}
+	assert.True(t, Fnmatch("*", "foo", dupeOpts))
+	assert.False(t, Fnmatch("*", "foo.bar", dupeOpts))
+	assert.False(t, Fnmatch("*", "foo/bar", dupeOpts))
 }
