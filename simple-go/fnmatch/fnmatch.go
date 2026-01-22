@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"git.15b.it/eno/critic/simple-go/preconditions"
+	"git.15b.it/eno/critic/simple-go/utils"
 )
 
 type Matcher interface {
@@ -31,19 +32,28 @@ type Options struct {
 	Separators string
 }
 
-// MustCompile compiles an fnmatch pattern and returns a Fnmatcher.
+// compileMemoized is a memoized version of the internal pattern compilation.
+// It caches compiled patterns based on (pattern, separators) to avoid
+// repeated regex compilation for the same patterns.
+var compileMemoized = utils.Memoize2(func(pattern, separators string) Matcher {
+	return fnmatchToRegexp(pattern, separators)
+})
+
+// MustCompile compiles an fnmatch pattern and returns a Matcher.
 // Options can be provided to customize matching behavior.
-// It panics if the pattern is invalid.
+// panics on error
 func MustCompile(pattern string, opts ...Options) Matcher {
-	re, err := Compile(pattern, opts...)
+	m, err := Compile(pattern, opts...)
 	preconditions.Check(err == nil, "failed to compile regexp: %v", err)
-	return re
+	return m
 }
 
 // Compile compiles an fnmatch pattern and returns a Matcher.
 // Options can be provided to customize matching behavior.
 // When no Options are provided, DefaultSeparators ("/\") is used.
 // To match any character with *, pass Options{Separators: ""}.
+// Results are cached based on (pattern, separators) to avoid repeated compilation.
+// The error return is always nil (kept for API compatibility).
 func Compile(pattern string, opts ...Options) (Matcher, error) {
 	preconditions.Check(len(opts) <= 1, "Only zero or one Options are allowed")
 
@@ -53,7 +63,7 @@ func Compile(pattern string, opts ...Options) (Matcher, error) {
 		separators = opts[0].Separators
 	}
 
-	return regexp.Compile(fnmatchToRegex(pattern, separators))
+	return compileMemoized(pattern, separators), nil
 }
 
 // Fnmatch checks if the path matches the fnmatch pattern.
@@ -63,8 +73,9 @@ func Fnmatch(pattern, path string, opts ...Options) bool {
 	return MustCompile(pattern, opts...).MatchString(path)
 }
 
-// fnmatchToRegex converts an fnmatch pattern to a regular expression string.
-func fnmatchToRegex(pattern string, separators string) string {
+// fnmatchToRegexp converts an fnmatch pattern to a compiled regular expression.
+// Panics if the generated regex is invalid (which should never happen for valid fnmatch patterns).
+func fnmatchToRegexp(pattern string, separators string) *regexp.Regexp {
 	var buf strings.Builder
 	buf.WriteString("^")
 
@@ -107,5 +118,5 @@ func fnmatchToRegex(pattern string, separators string) string {
 	}
 
 	buf.WriteByte('$')
-	return buf.String()
+	return regexp.MustCompile(buf.String())
 }
