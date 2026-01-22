@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"git.15b.it/eno/critic/simple-go/must"
+	"git.15b.it/eno/critic/simple-go/fnmatch"
 	"git.15b.it/eno/critic/simple-go/preconditions"
 	"git.15b.it/eno/critic/simple-go/utils"
 )
@@ -46,8 +46,9 @@ func (e *TransactionAbortedError) Error() string {
 }
 
 type subscription struct {
-	pattern  string
-	callback ChangeCallback
+	pattern   string
+	callback  ChangeCallback
+	fnmatcher fnmatch.Matcher
 }
 
 // Observable wraps maps and lists with path-based access and change subscriptions.
@@ -295,7 +296,7 @@ func (o *Observable) DeleteValueAtKey(key string) error {
 }
 
 // OnKeyChange registers a callback to be notified when values at the matching path change.
-// Pattern uses fnmatch-style matching (using path.Match).
+// Pattern uses fnmatch-style matching where * matches a single segment (not dots).
 // Returns the subscription ID for later cleanup.
 func (o *Observable) OnKeyChange(pattern string, callback ChangeCallback) Subscription {
 	o.mu.Lock()
@@ -303,15 +304,16 @@ func (o *Observable) OnKeyChange(pattern string, callback ChangeCallback) Subscr
 
 	preconditions.Check(callback != nil, "callback must not be nil")
 
-	// Validate pattern (must.Fnmatch panics on invalid pattern)
-	must.Fnmatch(pattern, "")
+	// Validate pattern (fnmatch.MustCompile panics on invalid pattern)
+	fnmatcher := fnmatch.MustCompile(pattern, fnmatch.Options{Separators: "."})
 
 	id := o.nextSubID
 	o.nextSubID++
 
 	o.subscriptions[id] = &subscription{
-		pattern:  pattern,
-		callback: callback,
+		pattern:   pattern,
+		callback:  callback,
+		fnmatcher: fnmatcher,
 	}
 
 	return id
@@ -504,7 +506,7 @@ func (o *Observable) setValuesAtKeys(changes []change) error {
 	// Notify subscriptions for each change
 	for _, c := range changes {
 		for _, sub := range subs {
-			if keyAffectsPattern(c.key, sub.pattern) {
+			if keyAffectsPattern(c.key, sub) {
 				sub.callback(c.key)
 			}
 		}
@@ -517,13 +519,13 @@ func (o *Observable) setValuesAtKeys(changes []change) error {
 //   - key is empty (root change affects everything)
 //   - pattern matches key directly (e.g., pattern="foo" matches key="foo", pattern="*" matches key="bar")
 //   - key is a parent of pattern (e.g., key="foo" affects pattern="foo.bar" or "foo.*")
-func keyAffectsPattern(key, pattern string) bool {
+func keyAffectsPattern(key string, sub *subscription) bool {
 	if key == "" {
 		return true // root change affects all subscriptions
 	}
-	if must.Fnmatch(pattern, key) {
+	if sub.fnmatcher.MatchString(key) {
 		return true // pattern directly matches the changed key
 	}
 	// Check if key is a parent of pattern (key="foo" affects pattern="foo.bar" or "foo.*.baz")
-	return strings.HasPrefix(pattern, key+".")
+	return strings.HasPrefix(sub.pattern, key+".")
 }
