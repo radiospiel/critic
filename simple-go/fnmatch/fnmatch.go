@@ -6,7 +6,15 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+
+	"git.15b.it/eno/critic/simple-go/preconditions"
 )
+
+type Matcher interface {
+	// MatchString reports whether the string s
+	// contains any match of the regular expression re.
+	MatchString(s string) bool
+}
 
 // Options configures fnmatch behavior.
 type Options struct {
@@ -16,42 +24,42 @@ type Options struct {
 	Separator string
 }
 
-// Fnmatcher represents a compiled fnmatch pattern.
-type Fnmatcher struct {
-	pattern string
-	re      *regexp.Regexp
-}
-
 // MustCompile compiles an fnmatch pattern and returns a Fnmatcher.
 // Options can be provided to customize matching behavior.
 // It panics if the pattern is invalid.
-func MustCompile(pattern string, opts ...Options) *Fnmatcher {
+func MustCompile(pattern string, opts ...Options) Matcher {
+	re, err := Compile(pattern, opts...)
+	preconditions.Check(err == nil, "failed to compile regexp: %v", err)
+	return re
+}
+
+// Compile compiles an fnmatch pattern and returns a Matcher.
+// Options can be provided to customize matching behavior.
+func Compile(pattern string, opts ...Options) (Matcher, error) {
 	var opt Options
+	preconditions.Check(len(opts) <= 1, "Only zero or one Options are allowed")
 	if len(opts) > 0 {
 		opt = opts[0]
 	}
 
 	regexStr, err := fnmatchToRegex(pattern, opt)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	re := regexp.MustCompile(regexStr)
-	return &Fnmatcher{
-		pattern: pattern,
-		re:      re,
-	}
+
+	return regexp.Compile(regexStr)
 }
 
-// Match checks if the path matches the fnmatch pattern.
-func (f *Fnmatcher) Match(path string) bool {
-	return f.re.MatchString(path)
+func Validate(pattern string, opts ...Options) error {
+	_, err := Compile(pattern, opts...)
+	return err
 }
 
 // Fnmatch checks if the path matches the fnmatch pattern.
 // Options can be provided to customize matching behavior.
 // When Separator is set, * only matches characters except the separator.
 func Fnmatch(pattern, path string, opts ...Options) bool {
-	return MustCompile(pattern, opts...).Match(path)
+	return MustCompile(pattern, opts...).MatchString(path)
 }
 
 // fnmatchToRegex converts an fnmatch pattern to a regular expression string.

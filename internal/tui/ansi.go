@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Match all background color codes:
+// match all background color codes:
 // - \x1b[4[0-9]m - basic 16-color backgrounds (40-49)
 // - \x1b[48;5;NNNm - 256-color backgrounds
 // - \x1b[48;2;R;G;Bm - true color backgrounds
@@ -34,7 +34,7 @@ func stripAllStyleCodes(s string) string {
 	s = stripResetCodes(s)
 
 	// Also strip any compound SGR sequences that might have backgrounds mixed in
-	// Match sequences like \x1b[1;32;42m and remove background parts
+	// match sequences like \x1b[1;32;42m and remove background parts
 	compoundRegex := regexp.MustCompile(`\x1b\[([0-9;]+)m`)
 	s = compoundRegex.ReplaceAllStringFunc(s, func(match string) string {
 		// Extract the parameters

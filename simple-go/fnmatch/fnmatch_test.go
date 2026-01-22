@@ -117,7 +117,7 @@ func TestFnmatcherMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.pattern+"_"+tt.path, func(t *testing.T) {
 			matcher := MustCompile(tt.pattern)
-			result := matcher.Match(tt.path)
+			result := matcher.match(tt.path)
 			assert.Equals(t, result, tt.matches, "pattern: %s, path: %s", tt.pattern, tt.path)
 		})
 	}
