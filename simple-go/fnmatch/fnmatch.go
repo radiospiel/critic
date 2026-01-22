@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"git.15b.it/eno/critic/simple-go/preconditions"
+	"git.15b.it/eno/critic/simple-go/utils"
 )
 
 type Matcher interface {
@@ -31,6 +32,20 @@ type Options struct {
 	Separators string
 }
 
+// compileResult holds the result of pattern compilation for memoization.
+type compileResult struct {
+	matcher Matcher
+	err     error
+}
+
+// compileMemoized is a memoized version of the internal pattern compilation.
+// It caches compiled patterns based on (pattern, separators) to avoid
+// repeated regex compilation for the same patterns.
+var compileMemoized = utils.Memoize2(func(pattern, separators string) compileResult {
+	re, err := regexp.Compile(fnmatchToRegex(pattern, separators))
+	return compileResult{matcher: re, err: err}
+})
+
 // MustCompile compiles an fnmatch pattern and returns a Fnmatcher.
 // Options can be provided to customize matching behavior.
 // It panics if the pattern is invalid.
@@ -44,6 +59,7 @@ func MustCompile(pattern string, opts ...Options) Matcher {
 // Options can be provided to customize matching behavior.
 // When no Options are provided, DefaultSeparators ("/\") is used.
 // To match any character with *, pass Options{Separators: ""}.
+// Results are cached based on (pattern, separators) to avoid repeated compilation.
 func Compile(pattern string, opts ...Options) (Matcher, error) {
 	preconditions.Check(len(opts) <= 1, "Only zero or one Options are allowed")
 
@@ -53,7 +69,8 @@ func Compile(pattern string, opts ...Options) (Matcher, error) {
 		separators = opts[0].Separators
 	}
 
-	return regexp.Compile(fnmatchToRegex(pattern, separators))
+	result := compileMemoized(pattern, separators)
+	return result.matcher, result.err
 }
 
 // Fnmatch checks if the path matches the fnmatch pattern.
