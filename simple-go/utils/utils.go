@@ -58,3 +58,78 @@ func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
 	}
 	return value
 }
+
+const memoizeCacheLimit = 256
+
+// Memoize1 returns a memoized version of a single-argument function.
+// The returned function caches results based on the argument value.
+// Uses LRU eviction with a cache limit of 256 entries.
+func Memoize1[A comparable, R any](fn func(A) R) func(A) R {
+	cache := make(map[A]R)
+	order := make([]A, 0, memoizeCacheLimit)
+
+	return func(arg A) R {
+		if result, ok := cache[arg]; ok {
+			// Move to end (most recently used)
+			for i, k := range order {
+				if k == arg {
+					order = append(order[:i], order[i+1:]...)
+					order = append(order, arg)
+					break
+				}
+			}
+			return result
+		}
+
+		// Evict oldest if at capacity
+		if len(order) >= memoizeCacheLimit {
+			oldest := order[0]
+			order = order[1:]
+			delete(cache, oldest)
+		}
+
+		result := fn(arg)
+		cache[arg] = result
+		order = append(order, arg)
+		return result
+	}
+}
+
+// Memoize2 returns a memoized version of a two-argument function.
+// The returned function caches results based on both argument values.
+// Uses LRU eviction with a cache limit of 256 entries.
+func Memoize2[A, B comparable, R any](fn func(A, B) R) func(A, B) R {
+	type key struct {
+		a A
+		b B
+	}
+	cache := make(map[key]R)
+	order := make([]key, 0, memoizeCacheLimit)
+
+	return func(a A, b B) R {
+		k := key{a, b}
+		if result, ok := cache[k]; ok {
+			// Move to end (most recently used)
+			for i, stored := range order {
+				if stored == k {
+					order = append(order[:i], order[i+1:]...)
+					order = append(order, k)
+					break
+				}
+			}
+			return result
+		}
+
+		// Evict oldest if at capacity
+		if len(order) >= memoizeCacheLimit {
+			oldest := order[0]
+			order = order[1:]
+			delete(cache, oldest)
+		}
+
+		result := fn(a, b)
+		cache[k] = result
+		order = append(order, k)
+		return result
+	}
+}
