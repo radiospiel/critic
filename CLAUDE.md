@@ -37,6 +37,7 @@ Note that timestamps **must always** have the time of day!
 **Status:** [In Progress | Completed | Blocked]
 **Complexity:** [Simple | Medium | Complex]
 **Used Models:** Haiku, Sonnet, Opus
+**Token usage (Estimated):** 100k input, 100k output
 
 ## Objective
 [What we're trying to achieve]
