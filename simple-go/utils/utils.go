@@ -59,38 +59,70 @@ func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
 	return value
 }
 
-const memoizeCacheLimit = 256
+const lruCacheDefaultLimit = 256
+
+// lruCache is a simple LRU cache using a map and slice.
+type lruCache[K comparable, V any] struct {
+	data  map[K]V
+	order []K
+	limit int
+}
+
+// newLRUCache creates a new LRU cache with the specified limit.
+func newLRUCache[K comparable, V any](limit int) *lruCache[K, V] {
+	return &lruCache[K, V]{
+		data:  make(map[K]V),
+		order: make([]K, 0, limit),
+		limit: limit,
+	}
+}
+
+// Get retrieves a value from the cache, moving it to most recently used.
+func (c *lruCache[K, V]) Get(key K) (V, bool) {
+	value, ok := c.data[key]
+	if ok {
+		// Move to end (most recently used)
+		for i, k := range c.order {
+			if k == key {
+				c.order = append(c.order[:i], c.order[i+1:]...)
+				c.order = append(c.order, key)
+				break
+			}
+		}
+	}
+	return value, ok
+}
+
+// Set adds or updates a value in the cache, evicting the oldest if at capacity.
+func (c *lruCache[K, V]) Set(key K, value V) {
+	if _, exists := c.data[key]; exists {
+		c.data[key] = value
+		return
+	}
+
+	// Evict oldest if at capacity
+	if len(c.order) >= c.limit {
+		oldest := c.order[0]
+		c.order = c.order[1:]
+		delete(c.data, oldest)
+	}
+
+	c.data[key] = value
+	c.order = append(c.order, key)
+}
 
 // Memoize1 returns a memoized version of a single-argument function.
 // The returned function caches results based on the argument value.
 // Uses LRU eviction with a cache limit of 256 entries.
 func Memoize1[A comparable, R any](fn func(A) R) func(A) R {
-	cache := make(map[A]R)
-	order := make([]A, 0, memoizeCacheLimit)
+	cache := newLRUCache[A, R](lruCacheDefaultLimit)
 
 	return func(arg A) R {
-		if result, ok := cache[arg]; ok {
-			// Move to end (most recently used)
-			for i, k := range order {
-				if k == arg {
-					order = append(order[:i], order[i+1:]...)
-					order = append(order, arg)
-					break
-				}
-			}
+		if result, ok := cache.Get(arg); ok {
 			return result
 		}
-
-		// Evict oldest if at capacity
-		if len(order) >= memoizeCacheLimit {
-			oldest := order[0]
-			order = order[1:]
-			delete(cache, oldest)
-		}
-
 		result := fn(arg)
-		cache[arg] = result
-		order = append(order, arg)
+		cache.Set(arg, result)
 		return result
 	}
 }
@@ -103,33 +135,15 @@ func Memoize2[A, B comparable, R any](fn func(A, B) R) func(A, B) R {
 		a A
 		b B
 	}
-	cache := make(map[key]R)
-	order := make([]key, 0, memoizeCacheLimit)
+	cache := newLRUCache[key, R](lruCacheDefaultLimit)
 
 	return func(a A, b B) R {
 		k := key{a, b}
-		if result, ok := cache[k]; ok {
-			// Move to end (most recently used)
-			for i, stored := range order {
-				if stored == k {
-					order = append(order[:i], order[i+1:]...)
-					order = append(order, k)
-					break
-				}
-			}
+		if result, ok := cache.Get(k); ok {
 			return result
 		}
-
-		// Evict oldest if at capacity
-		if len(order) >= memoizeCacheLimit {
-			oldest := order[0]
-			order = order[1:]
-			delete(cache, oldest)
-		}
-
 		result := fn(a, b)
-		cache[k] = result
-		order = append(order, k)
+		cache.Set(k, result)
 		return result
 	}
 }
