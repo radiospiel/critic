@@ -16,6 +16,7 @@ import (
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
+	"git.15b.it/eno/critic/simple-go/observable"
 	"git.15b.it/eno/critic/teapot"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -148,7 +149,14 @@ type Delegate struct {
 func NewDelegate(args *Args) *Delegate {
 	logger.Info("NewDelegate: Creating delegate with %d paths, %d bases", len(args.Paths), len(args.Bases))
 
-	ses := &session.Session{}
+	ses := &session.Session{
+		Observable: observable.New(),
+	}
+	ses.OnKeyChange("", func(key string) {
+		logger.Warn("session change: %s", key)
+	})
+	logger.Warn("created session")
+
 	diffView := tui.NewDiffView(ses)
 	fileList := tui.NewFileListView(ses)
 	fileList.SetFocused(true) // Start with file list focused
