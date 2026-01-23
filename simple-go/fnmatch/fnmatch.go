@@ -39,8 +39,8 @@ type patternCacheKey struct {
 }
 
 // patternCache caches compiled patterns to avoid repeated regex compilation.
-var patternCache = utils.NewLRUCache(256, func(key patternCacheKey) Matcher {
-	return fnmatchToRegexp(key.pattern, key.separators)
+var patternCache = utils.NewLRUCache(256, func(key patternCacheKey) (Matcher, error) {
+	return fnmatchToRegexp(key.pattern, key.separators), nil
 })
 
 // MustCompile compiles an fnmatch pattern and returns a Matcher.
@@ -57,7 +57,6 @@ func MustCompile(pattern string, opts ...Options) Matcher {
 // When no Options are provided, DefaultSeparators ("/\") is used.
 // To match any character with *, pass Options{Separators: ""}.
 // Results are cached based on (pattern, separators) to avoid repeated compilation.
-// The error return is always nil (kept for API compatibility).
 func Compile(pattern string, opts ...Options) (Matcher, error) {
 	preconditions.Check(len(opts) <= 1, "Only zero or one Options are allowed")
 
@@ -67,7 +66,7 @@ func Compile(pattern string, opts ...Options) (Matcher, error) {
 		separators = opts[0].Separators
 	}
 
-	return patternCache.Get(patternCacheKey{pattern, separators}), nil
+	return patternCache.Get(patternCacheKey{pattern, separators})
 }
 
 // Fnmatch checks if the path matches the fnmatch pattern.

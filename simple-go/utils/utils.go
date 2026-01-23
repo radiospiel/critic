@@ -62,29 +62,30 @@ func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
 // LRUCache is a simple LRU cache using a map and slice.
 // It includes a creator function that is called when a key is not found.
 type LRUCache[K comparable, V any] struct {
-	data    map[K]V
+	data       map[K]V
 	usageOrder []K
-	limit   int
-	creator func(K) V
+	limit      int
+	creator    func(K) (V, error)
 }
 
 // NewLRUCache creates a new LRU cache with the specified limit and creator function.
 // The creator function is called when Get is called with a key that doesn't exist.
 // Panics if limit < 1.
-func NewLRUCache[K comparable, V any](limit int, creator func(K) V) *LRUCache[K, V] {
+func NewLRUCache[K comparable, V any](limit int, creator func(K) (V, error)) *LRUCache[K, V] {
 	preconditions.Check(limit >= 1, "LRUCache limit must be >= 1, got %d", limit)
 	return &LRUCache[K, V]{
-		data:    make(map[K]V),
+		data:       make(map[K]V),
 		usageOrder: make([]K, 0, limit),
-		limit:   limit,
-		creator: creator,
+		limit:      limit,
+		creator:    creator,
 	}
 }
 
 // Get retrieves a value from the cache, creating it if it doesn't exist.
 // If the key exists, it is moved to most recently used position.
 // If the key doesn't exist, the creator function is called and the result is cached.
-func (c *LRUCache[K, V]) Get(key K) V {
+// If the creator returns an error, the result is not cached and the error is returned.
+func (c *LRUCache[K, V]) Get(key K) (V, error) {
 	if value, ok := c.data[key]; ok {
 		// Move to end (most recently used)
 		for i, k := range c.usageOrder {
@@ -94,11 +95,15 @@ func (c *LRUCache[K, V]) Get(key K) V {
 				break
 			}
 		}
-		return value
+		return value, nil
 	}
 
 	// Create new value
-	value := c.creator(key)
+	value, err := c.creator(key)
+	if err != nil {
+		var zero V
+		return zero, err
+	}
 
 	// Evict oldest if at capacity
 	if len(c.usageOrder) >= c.limit {
@@ -109,5 +114,5 @@ func (c *LRUCache[K, V]) Get(key K) V {
 
 	c.data[key] = value
 	c.usageOrder = append(c.usageOrder, key)
-	return value
+	return value, nil
 }
