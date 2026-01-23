@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"testing"
 
 	"git.15b.it/eno/critic/simple-go/assert"
@@ -60,39 +61,47 @@ func TestReverseInPlace(t *testing.T) {
 }
 
 func TestLRUCacheCreatesValue(t *testing.T) {
-	cache := NewLRUCache(10, func(key string) int {
-		return len(key)
+	cache := NewLRUCache(10, func(key string) (int, error) {
+		return len(key), nil
 	})
 
-	assert.Equals(t, cache.Get("a"), 1, "should create value for 'a'")
-	assert.Equals(t, cache.Get("hello"), 5, "should create value for 'hello'")
+	val, err := cache.Get("a")
+	assert.Equals(t, err, nil, "should not error")
+	assert.Equals(t, val, 1, "should create value for 'a'")
+
+	val, err = cache.Get("hello")
+	assert.Equals(t, err, nil, "should not error")
+	assert.Equals(t, val, 5, "should create value for 'hello'")
 }
 
 func TestLRUCacheCachesResults(t *testing.T) {
 	callCount := 0
-	cache := NewLRUCache(10, func(key int) int {
+	cache := NewLRUCache(10, func(key int) (int, error) {
 		callCount++
-		return key * 2
+		return key * 2, nil
 	})
 
 	// First call creates value
-	assert.Equals(t, cache.Get(5), 10, "should return 10")
+	val, _ := cache.Get(5)
+	assert.Equals(t, val, 10, "should return 10")
 	assert.Equals(t, callCount, 1, "creator should be called once")
 
 	// Second call uses cache
-	assert.Equals(t, cache.Get(5), 10, "should return cached 10")
+	val, _ = cache.Get(5)
+	assert.Equals(t, val, 10, "should return cached 10")
 	assert.Equals(t, callCount, 1, "creator should still be called only once")
 
 	// Different key creates new value
-	assert.Equals(t, cache.Get(3), 6, "should return 6")
+	val, _ = cache.Get(3)
+	assert.Equals(t, val, 6, "should return 6")
 	assert.Equals(t, callCount, 2, "creator should be called twice")
 }
 
 func TestLRUCacheEviction(t *testing.T) {
 	callCount := 0
-	cache := NewLRUCache(3, func(key int) int {
+	cache := NewLRUCache(3, func(key int) (int, error) {
 		callCount++
-		return key * 10
+		return key * 10, nil
 	})
 
 	// Fill cache
@@ -116,9 +125,9 @@ func TestLRUCacheEviction(t *testing.T) {
 
 func TestLRUCacheLRUOrder(t *testing.T) {
 	callCount := 0
-	cache := NewLRUCache(3, func(key int) int {
+	cache := NewLRUCache(3, func(key int) (int, error) {
 		callCount++
-		return key
+		return key, nil
 	})
 
 	cache.Get(1)
@@ -147,15 +156,50 @@ func TestLRUCacheWithStructKey(t *testing.T) {
 		a string
 		b int
 	}
-	cache := NewLRUCache(10, func(k key) string {
-		return k.a + "!"
+	cache := NewLRUCache(10, func(k key) (string, error) {
+		return k.a + "!", nil
 	})
 
 	k1 := key{"hello", 1}
 	k2 := key{"world", 2}
 
-	assert.Equals(t, cache.Get(k1), "hello!", "should create value for k1")
-	assert.Equals(t, cache.Get(k2), "world!", "should create value for k2")
+	val, _ := cache.Get(k1)
+	assert.Equals(t, val, "hello!", "should create value for k1")
+
+	val, _ = cache.Get(k2)
+	assert.Equals(t, val, "world!", "should create value for k2")
+}
+
+func TestLRUCacheErrorNotCached(t *testing.T) {
+	callCount := 0
+	cache := NewLRUCache(10, func(key int) (int, error) {
+		callCount++
+		if key < 0 {
+			return 0, fmt.Errorf("negative key: %d", key)
+		}
+		return key * 2, nil
+	})
+
+	// Successful call is cached
+	val, err := cache.Get(5)
+	assert.Equals(t, err, nil, "should not error")
+	assert.Equals(t, val, 10, "should return 10")
+	assert.Equals(t, callCount, 1, "creator called once")
+
+	// Error result is not cached
+	_, err = cache.Get(-1)
+	assert.NotEquals(t, err, nil, "should error for negative key")
+	assert.Equals(t, callCount, 2, "creator called again")
+
+	// Retry still calls creator (error was not cached)
+	_, err = cache.Get(-1)
+	assert.NotEquals(t, err, nil, "should error again")
+	assert.Equals(t, callCount, 3, "creator called again on retry")
+
+	// Successful call still cached
+	val, _ = cache.Get(5)
+	assert.Equals(t, val, 10, "should return cached 10")
+	assert.Equals(t, callCount, 3, "creator not called for cached value")
 }
 
 func TestLRUCachePanicsOnInvalidLimit(t *testing.T) {
@@ -164,5 +208,5 @@ func TestLRUCachePanicsOnInvalidLimit(t *testing.T) {
 			t.Error("expected panic for limit < 1")
 		}
 	}()
-	NewLRUCache(0, func(key int) int { return key })
+	NewLRUCache(0, func(key int) (int, error) { return key, nil })
 }
