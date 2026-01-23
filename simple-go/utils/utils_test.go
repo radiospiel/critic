@@ -158,6 +158,11 @@ func TestLRUCacheWithStructKey(t *testing.T) {
 	assert.Equals(t, cache.Get(k2), "world!", "should create value for k2")
 }
 
-func TestLRUCacheDefaultLimit(t *testing.T) {
-	assert.Equals(t, LRUCacheDefaultLimit, 256, "default limit should be 256")
+func TestLRUCachePanicsOnInvalidLimit(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic for limit < 1")
+		}
+	}()
+	NewLRUCache(0, func(key int) int { return key })
 }

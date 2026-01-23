@@ -59,9 +59,6 @@ func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
 	return value
 }
 
-// LRUCacheDefaultLimit is the default cache limit for LRU caches.
-const LRUCacheDefaultLimit = 256
-
 // LRUCache is a simple LRU cache using a map and slice.
 // It includes a creator function that is called when a key is not found.
 type LRUCache[K comparable, V any] struct {
@@ -73,7 +70,9 @@ type LRUCache[K comparable, V any] struct {
 
 // NewLRUCache creates a new LRU cache with the specified limit and creator function.
 // The creator function is called when Get is called with a key that doesn't exist.
+// Panics if limit < 1.
 func NewLRUCache[K comparable, V any](limit int, creator func(K) V) *LRUCache[K, V] {
+	preconditions.Check(limit >= 1, "LRUCache limit must be >= 1, got %d", limit)
 	return &LRUCache[K, V]{
 		data:    make(map[K]V),
 		order:   make([]K, 0, limit),

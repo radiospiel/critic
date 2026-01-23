@@ -39,7 +39,7 @@ type patternCacheKey struct {
 }
 
 // patternCache caches compiled patterns to avoid repeated regex compilation.
-var patternCache = utils.NewLRUCache(utils.LRUCacheDefaultLimit, func(key patternCacheKey) Matcher {
+var patternCache = utils.NewLRUCache(256, func(key patternCacheKey) Matcher {
 	return fnmatchToRegexp(key.pattern, key.separators)
 })
 
