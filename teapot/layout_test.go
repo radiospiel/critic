@@ -35,6 +35,21 @@ func (m *mockView) Render(buf *SubBuffer) {
 	}
 }
 
+// AcceptsFocus returns true for mock views (they can receive focus in tests)
+func (m *mockView) AcceptsFocus() bool {
+	return true
+}
+
+// FocusNext is a no-op for mock views
+func (m *mockView) FocusNext() bool {
+	return false
+}
+
+// FocusPrev is a no-op for mock views
+func (m *mockView) FocusPrev() bool {
+	return false
+}
+
 func TestVBoxLayout(t *testing.T) {
 	vbox := NewVBox(0)
 	vbox.SetBounds(NewRect(0, 0, 100, 100))

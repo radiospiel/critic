@@ -671,6 +671,21 @@ func (m *DiffView) Children() []teapot.View {
 	return nil
 }
 
+// AcceptsFocus returns true as the diff view can receive focus.
+func (m *DiffView) AcceptsFocus() bool {
+	return true
+}
+
+// FocusNext returns false as diff view has no focusable children.
+func (m *DiffView) FocusNext() bool {
+	return false
+}
+
+// FocusPrev returns false as diff view has no focusable children.
+func (m *DiffView) FocusPrev() bool {
+	return false
+}
+
 // SetMessaging sets the messaging interface for conversations
 func (m *DiffView) SetMessaging(messaging critic.Messaging) {
 	m.messaging = messaging

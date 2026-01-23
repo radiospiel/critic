@@ -111,7 +111,17 @@ func (t *TextAreaView) SetValue(s string) {
 	t.model.SetValue(s)
 }
 
-// Focusable returns true as the textarea can receive focus.
-func (t *TextAreaView) Focusable() bool {
+// AcceptsFocus returns true as the textarea can receive focus.
+func (t *TextAreaView) AcceptsFocus() bool {
 	return true
+}
+
+// FocusNext is a no-op for textarea as it has no focusable children.
+func (t *TextAreaView) FocusNext() bool {
+	return false
+}
+
+// FocusPrev is a no-op for textarea as it has no focusable children.
+func (t *TextAreaView) FocusPrev() bool {
+	return false
 }

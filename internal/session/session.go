@@ -27,10 +27,10 @@ const (
 	KeyDiff  = "diff"       // *types.Diff - the parsed diff
 	KeyFiles = "diff.files" // []*types.FileDiff - list of files in the diff
 
-	// Selection
-	KeySelectedFileIndex = "selection.fileIndex"  // int - index of currently selected file
-	KeySelectedFilePath  = "selection.filePath"   // string - path of currently selected file
-	KeyFocusedPane       = "selection.focusedPane" // string - "fileList" or "diffView"
+	// TUI state
+	KeySelectedFileIndex = "tui.fileIndex"   // int - index of currently selected file
+	KeySelectedFilePath  = "tui.filePath"    // string - path of currently selected file
+	KeyFocusedPane       = "tui.focusedPane" // string - "fileList" or "diffView"
 
 	// Conversations
 	KeyConversations         = "conversations"         // map[string][]*critic.Conversation - file path -> conversations
