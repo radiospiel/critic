@@ -59,91 +59,77 @@ func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
 	return value
 }
 
-const lruCacheDefaultLimit = 256
-
-// lruCache is a simple LRU cache using a map and slice.
-type lruCache[K comparable, V any] struct {
-	data  map[K]V
-	order []K
-	limit int
+// LRUCache is a simple LRU cache using a map and slice.
+// It includes a creator function that is called when a key is not found.
+type LRUCache[K comparable, V any] struct {
+	data       map[K]V
+	usageOrder []K
+	limit      int
+	creator    func(K) (V, error)
 }
 
-// newLRUCache creates a new LRU cache with the specified limit.
-func newLRUCache[K comparable, V any](limit int) *lruCache[K, V] {
-	return &lruCache[K, V]{
-		data:  make(map[K]V),
-		order: make([]K, 0, limit),
-		limit: limit,
+// NewLRUCache creates a new LRU cache with the specified limit and creator function.
+// The creator function is called when Get is called with a key that doesn't exist.
+// Panics if limit < 1.
+func NewLRUCache[K comparable, V any](limit int, creator func(K) (V, error)) *LRUCache[K, V] {
+	preconditions.Check(limit >= 1, "LRUCache limit must be >= 1, got %d", limit)
+	return &LRUCache[K, V]{
+		data:       make(map[K]V),
+		usageOrder: make([]K, 0, limit),
+		limit:      limit,
+		creator:    creator,
 	}
 }
 
-// Get retrieves a value from the cache, moving it to most recently used.
-func (c *lruCache[K, V]) Get(key K) (V, bool) {
-	value, ok := c.data[key]
-	if ok {
-		// Move to end (most recently used)
-		for i, k := range c.order {
-			if k == key {
-				c.order = append(c.order[:i], c.order[i+1:]...)
-				c.order = append(c.order, key)
-				break
-			}
-		}
-	}
-	return value, ok
-}
-
-// Set adds or updates a value in the cache, evicting the oldest if at capacity.
-func (c *lruCache[K, V]) Set(key K, value V) {
-	if _, exists := c.data[key]; exists {
-		c.data[key] = value
-		return
+// Get retrieves a value from the cache, creating it if it doesn't exist.
+// If the key exists, it is moved to most recently used position.
+// If the key doesn't exist, the creator function is called and the result is cached.
+// If the creator returns an error, the result is not cached and the error is returned.
+func (c *LRUCache[K, V]) Get(key K) (V, error) {
+	// TODO: get mutex
+	if value, ok := c.data[key]; ok {
+		// Move to end (most recently used) only if not already there
+		// Search from end since recently used entries are more likely to be accessed
+		c.moveUsedKeyToEnd(key, value)
+		return value, nil
 	}
 
-	// Evict oldest if at capacity
-	if len(c.order) >= c.limit {
-		oldest := c.order[0]
-		c.order = c.order[1:]
+	// Create new value
+	value, err := c.creator(key)
+	if err != nil {
+		var zero V
+		return zero, err
+	}
+
+	// TODO: get mutex
+	// Add to data, evict oldest entry if at capacity
+	if len(c.usageOrder) >= c.limit {
+		oldest := c.usageOrder[0]
+		c.usageOrder = c.usageOrder[1:]
 		delete(c.data, oldest)
 	}
 
 	c.data[key] = value
-	c.order = append(c.order, key)
+	c.usageOrder = append(c.usageOrder, key)
+	return value, nil
 }
 
-// Memoize1 returns a memoized version of a single-argument function.
-// The returned function caches results based on the argument value.
-// Uses LRU eviction with a cache limit of 256 entries.
-func Memoize1[A comparable, R any](fn func(A) R) func(A) R {
-	cache := newLRUCache[A, R](lruCacheDefaultLimit)
+func (c *LRUCache[K, V]) moveUsedKeyToEnd(key K, value V) {
+	preconditions.Check(len(c.usageOrder) > 0, "usageOrder cannot be empty here")
 
-	return func(arg A) R {
-		if result, ok := cache.Get(arg); ok {
-			return result
+	i := len(c.usageOrder) - 1
+	if c.usageOrder[i] == key {
+		return
+	}
+
+	for i > 0 {
+		i--
+		if c.usageOrder[i] == key {
+			c.usageOrder = append(c.usageOrder[:i], c.usageOrder[i+1:]...)
+			c.usageOrder = append(c.usageOrder, key)
+			return
 		}
-		result := fn(arg)
-		cache.Set(arg, result)
-		return result
 	}
-}
 
-// Memoize2 returns a memoized version of a two-argument function.
-// The returned function caches results based on both argument values.
-// Uses LRU eviction with a cache limit of 256 entries.
-func Memoize2[A, B comparable, R any](fn func(A, B) R) func(A, B) R {
-	type key struct {
-		a A
-		b B
-	}
-	cache := newLRUCache[key, R](lruCacheDefaultLimit)
-
-	return func(a A, b B) R {
-		k := key{a, b}
-		if result, ok := cache.Get(k); ok {
-			return result
-		}
-		result := fn(a, b)
-		cache.Set(k, result)
-		return result
-	}
+	preconditions.Fail("This should never happen")
 }

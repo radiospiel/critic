@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"testing"
 
 	"git.15b.it/eno/critic/simple-go/assert"
@@ -59,132 +60,153 @@ func TestReverseInPlace(t *testing.T) {
 	assert.Equals(t, original[0], 3, "original slice should be modified in place")
 }
 
-func TestMemoize1ReturnsCorrectValue(t *testing.T) {
-	double := func(x int) int { return x * 2 }
-	memoized := Memoize1(double)
+func TestLRUCacheCreatesValue(t *testing.T) {
+	cache := NewLRUCache(10, func(key string) (int, error) {
+		return len(key), nil
+	})
 
-	assert.Equals(t, memoized(5), 10, "memoized(5) should return 10")
-	assert.Equals(t, memoized(3), 6, "memoized(3) should return 6")
+	val, err := cache.Get("a")
+	assert.Equals(t, err, nil, "should not error")
+	assert.Equals(t, val, 1, "should create value for 'a'")
+
+	val, err = cache.Get("hello")
+	assert.Equals(t, err, nil, "should not error")
+	assert.Equals(t, val, 5, "should create value for 'hello'")
 }
 
-func TestMemoize1CachesResults(t *testing.T) {
+func TestLRUCacheCachesResults(t *testing.T) {
 	callCount := 0
-	expensive := func(x int) int {
+	cache := NewLRUCache(10, func(key int) (int, error) {
 		callCount++
-		return x * x
-	}
-	memoized := Memoize1(expensive)
+		return key * 2, nil
+	})
 
-	// First call should invoke the function
-	result1 := memoized(4)
-	assert.Equals(t, result1, 16, "first call should return 16")
-	assert.Equals(t, callCount, 1, "function should be called once")
+	// First call creates value
+	val, _ := cache.Get(5)
+	assert.Equals(t, val, 10, "should return 10")
+	assert.Equals(t, callCount, 1, "creator should be called once")
 
-	// Second call with same argument should use cache
-	result2 := memoized(4)
-	assert.Equals(t, result2, 16, "cached call should return 16")
-	assert.Equals(t, callCount, 1, "function should still be called only once")
+	// Second call uses cache
+	val, _ = cache.Get(5)
+	assert.Equals(t, val, 10, "should return cached 10")
+	assert.Equals(t, callCount, 1, "creator should still be called only once")
 
-	// Call with different argument should invoke function again
-	result3 := memoized(5)
-	assert.Equals(t, result3, 25, "new argument should return 25")
-	assert.Equals(t, callCount, 2, "function should be called twice total")
+	// Different key creates new value
+	val, _ = cache.Get(3)
+	assert.Equals(t, val, 6, "should return 6")
+	assert.Equals(t, callCount, 2, "creator should be called twice")
 }
 
-func TestMemoize1WithStrings(t *testing.T) {
-	toUpper := func(s string) string { return s + "!" }
-	memoized := Memoize1(toUpper)
-
-	assert.Equals(t, memoized("hello"), "hello!", "should append exclamation")
-	assert.Equals(t, memoized("world"), "world!", "should append exclamation")
-}
-
-func TestMemoize1LRUEviction(t *testing.T) {
+func TestLRUCacheEviction(t *testing.T) {
 	callCount := 0
-	fn := func(x int) int {
+	cache := NewLRUCache(3, func(key int) (int, error) {
 		callCount++
-		return x
-	}
-	memoized := Memoize1(fn)
+		return key * 10, nil
+	})
 
-	// Fill cache beyond limit (256)
-	for i := 0; i < 260; i++ {
-		memoized(i)
-	}
-	assert.Equals(t, callCount, 260, "should have called function 260 times")
+	// Fill cache
+	cache.Get(1)
+	cache.Get(2)
+	cache.Get(3)
+	assert.Equals(t, callCount, 3, "should have called creator 3 times")
 
-	// Access early entries - they should have been evicted
-	memoized(0)
-	assert.Equals(t, callCount, 261, "entry 0 should have been evicted and recomputed")
+	// Add one more, should evict oldest (1)
+	cache.Get(4)
+	assert.Equals(t, callCount, 4, "should have called creator 4 times")
 
-	// Access recent entry - should still be cached
-	memoized(259)
-	assert.Equals(t, callCount, 261, "entry 259 should still be cached")
+	// Access evicted key - should recreate
+	cache.Get(1)
+	assert.Equals(t, callCount, 5, "key 1 should have been evicted and recreated")
+
+	// Access cached key - should not call creator
+	cache.Get(4)
+	assert.Equals(t, callCount, 5, "key 4 should still be cached")
 }
 
-func TestMemoize2ReturnsCorrectValue(t *testing.T) {
-	add := func(a, b int) int { return a + b }
-	memoized := Memoize2(add)
-
-	assert.Equals(t, memoized(2, 3), 5, "memoized(2, 3) should return 5")
-	assert.Equals(t, memoized(10, 20), 30, "memoized(10, 20) should return 30")
-}
-
-func TestMemoize2CachesResults(t *testing.T) {
+func TestLRUCacheLRUOrder(t *testing.T) {
 	callCount := 0
-	multiply := func(a, b int) int {
+	cache := NewLRUCache(3, func(key int) (int, error) {
 		callCount++
-		return a * b
+		return key, nil
+	})
+
+	cache.Get(1)
+	cache.Get(2)
+	cache.Get(3)
+
+	// Access key 1, making it most recently used
+	cache.Get(1)
+	assert.Equals(t, callCount, 3, "no new creation for cached key")
+
+	// Add new key, should evict key 2 (now oldest)
+	cache.Get(4)
+	assert.Equals(t, callCount, 4, "should create key 4")
+
+	// Key 2 should have been evicted
+	cache.Get(2)
+	assert.Equals(t, callCount, 5, "key 2 should have been evicted and recreated")
+
+	// Key 1 should still be cached
+	cache.Get(1)
+	assert.Equals(t, callCount, 5, "key 1 should still be cached")
+}
+
+func TestLRUCacheWithStructKey(t *testing.T) {
+	type key struct {
+		a string
+		b int
 	}
-	memoized := Memoize2(multiply)
+	cache := NewLRUCache(10, func(k key) (string, error) {
+		return k.a + "!", nil
+	})
 
-	// First call
-	result1 := memoized(3, 4)
-	assert.Equals(t, result1, 12, "first call should return 12")
-	assert.Equals(t, callCount, 1, "function should be called once")
+	k1 := key{"hello", 1}
+	k2 := key{"world", 2}
 
-	// Same arguments - should use cache
-	result2 := memoized(3, 4)
-	assert.Equals(t, result2, 12, "cached call should return 12")
-	assert.Equals(t, callCount, 1, "function should still be called only once")
+	val, _ := cache.Get(k1)
+	assert.Equals(t, val, "hello!", "should create value for k1")
 
-	// Different arguments
-	result3 := memoized(4, 3)
-	assert.Equals(t, result3, 12, "different args should return 12")
-	assert.Equals(t, callCount, 2, "function should be called twice total")
-
-	// Original args still cached
-	memoized(3, 4)
-	assert.Equals(t, callCount, 2, "original args should still be cached")
+	val, _ = cache.Get(k2)
+	assert.Equals(t, val, "world!", "should create value for k2")
 }
 
-func TestMemoize2WithStrings(t *testing.T) {
-	concat := func(a, b string) string { return a + b }
-	memoized := Memoize2(concat)
-
-	assert.Equals(t, memoized("hello", "world"), "helloworld", "should concatenate")
-	assert.Equals(t, memoized("foo", "bar"), "foobar", "should concatenate")
-}
-
-func TestMemoize2LRUEviction(t *testing.T) {
+func TestLRUCacheErrorNotCached(t *testing.T) {
 	callCount := 0
-	fn := func(a, b int) int {
+	cache := NewLRUCache(10, func(key int) (int, error) {
 		callCount++
-		return a + b
-	}
-	memoized := Memoize2(fn)
+		if key < 0 {
+			return 0, fmt.Errorf("negative key: %d", key)
+		}
+		return key * 2, nil
+	})
 
-	// Fill cache beyond limit (256)
-	for i := 0; i < 260; i++ {
-		memoized(i, 0)
-	}
-	assert.Equals(t, callCount, 260, "should have called function 260 times")
+	// Successful call is cached
+	val, err := cache.Get(5)
+	assert.Equals(t, err, nil, "should not error")
+	assert.Equals(t, val, 10, "should return 10")
+	assert.Equals(t, callCount, 1, "creator called once")
 
-	// Access early entry - should have been evicted
-	memoized(0, 0)
-	assert.Equals(t, callCount, 261, "entry (0,0) should have been evicted and recomputed")
+	// Error result is not cached
+	_, err = cache.Get(-1)
+	assert.NotEquals(t, err, nil, "should error for negative key")
+	assert.Equals(t, callCount, 2, "creator called again")
 
-	// Access recent entry - should still be cached
-	memoized(259, 0)
-	assert.Equals(t, callCount, 261, "entry (259,0) should still be cached")
+	// Retry still calls creator (error was not cached)
+	_, err = cache.Get(-1)
+	assert.NotEquals(t, err, nil, "should error again")
+	assert.Equals(t, callCount, 3, "creator called again on retry")
+
+	// Successful call still cached
+	val, _ = cache.Get(5)
+	assert.Equals(t, val, 10, "should return cached 10")
+	assert.Equals(t, callCount, 3, "creator not called for cached value")
+}
+
+func TestLRUCachePanicsOnInvalidLimit(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic for limit < 1")
+		}
+	}()
+	NewLRUCache(0, func(key int) (int, error) { return key, nil })
 }
