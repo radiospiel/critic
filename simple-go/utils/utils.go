@@ -88,8 +88,9 @@ func NewLRUCache[K comparable, V any](limit int, creator func(K) (V, error)) *LR
 func (c *LRUCache[K, V]) Get(key K) (V, error) {
 	if value, ok := c.data[key]; ok {
 		// Move to end (most recently used) only if not already there
-		for i, k := range c.usageOrder {
-			if k == key {
+		// Search from end since recently used entries are more likely to be accessed
+		for i := len(c.usageOrder) - 1; i >= 0; i-- {
+			if c.usageOrder[i] == key {
 				if i < len(c.usageOrder)-1 {
 					c.usageOrder = append(c.usageOrder[:i], c.usageOrder[i+1:]...)
 					c.usageOrder = append(c.usageOrder, key)
