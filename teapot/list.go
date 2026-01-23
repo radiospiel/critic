@@ -3,6 +3,7 @@ package teapot
 import (
 	"strings"
 
+	"git.15b.it/eno/critic/simple-go/utils"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -87,13 +88,7 @@ func (l *SelectableList[T]) SelectedIndex() int {
 
 // SetSelectedIndex sets the selected index.
 func (l *SelectableList[T]) SetSelectedIndex(index int) {
-	if index < 0 {
-		index = 0
-	}
-	if index >= len(l.items) {
-		index = len(l.items) - 1
-	}
-	l.selected = index
+	l.selected = utils.Clamp(index, 0, len(l.items)-1)
 	l.ensureVisible()
 	l.Repaint() // Mark as dirty for compositor re-render
 }

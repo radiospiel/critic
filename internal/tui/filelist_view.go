@@ -223,31 +223,28 @@ func (w *FileListView) SelectByPath(path string) bool {
 		return filePath == path
 	})
 
-	if index >= 0 {
-		w.list.SetSelectedIndex(index)
-		return true
+	return w.SetSelectedIndex(index)
+}
+
+func (w *FileListView) SetSelectedIndex(idx int) bool {
+	if idx < 0 || idx >= len(w.list.Items())-1 {
+		return false
 	}
-	return false
+
+	w.list.SetSelectedIndex(idx)
+	return true
 }
 
 // SelectNext moves to the next file
 func (w *FileListView) SelectNext() bool {
 	idx := w.list.SelectedIndex()
-	if idx < len(w.list.Items())-1 {
-		w.list.SetSelectedIndex(idx + 1)
-		return true
-	}
-	return false
+	return w.SetSelectedIndex(idx + 1)
 }
 
 // SelectPrev moves to the previous file
 func (w *FileListView) SelectPrev() bool {
 	idx := w.list.SelectedIndex()
-	if idx > 0 {
-		w.list.SetSelectedIndex(idx - 1)
-		return true
-	}
-	return false
+	return w.SetSelectedIndex(idx - 1)
 }
 
 // SetSession sets the session and subscribes to relevant keys.
