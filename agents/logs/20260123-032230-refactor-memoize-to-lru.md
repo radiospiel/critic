@@ -1,12 +1,12 @@
 # Refactor Memoize to LRUCache
 
 **Started**: 2026-01-23 03:22:30
-**Ended**: 2026-01-23 03:35:00
+**Ended**: 2026-01-23 03:45:00
 **Strategy:** Refactoring
 **Status:** Completed
 **Complexity**: Medium
 **Used Models:** Opus
-**Token usage (Estimated):** 80k input, 20k output
+**Token usage (Estimated):** 120k input, 25k output
 
 ## Summary
 Refactor the memoize implementation to export LRUCache directly with a creator function that supports error handling.
@@ -34,6 +34,8 @@ Refactor the memoize implementation to export LRUCache directly with a creator f
 - [x] Remove Memoize1/Memoize2 functions
 - [x] Update tests
 - [x] Verify all tests pass
+- [x] Optimize: skip move-to-end if already at end
+- [x] Optimize: search usageOrder from end (recent entries found faster)
 
 ## Obstacles
 (none)
@@ -52,3 +54,5 @@ Successfully refactored the memoize implementation:
 - Removed `Memoize1` and `Memoize2` wrapper functions
 - Updated `fnmatch.go` to use `LRUCache` directly with struct key and creator
 - Updated tests to test `LRUCache` API directly including error handling
+- Optimized: skip move-to-end if key already at end of usageOrder
+- Optimized: search usageOrder from end since recent entries are accessed more often
