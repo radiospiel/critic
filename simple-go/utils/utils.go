@@ -59,18 +59,19 @@ func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
 	return value
 }
 
-const lruCacheDefaultLimit = 256
+// LRUCacheDefaultLimit is the default cache limit for LRU caches.
+const LRUCacheDefaultLimit = 256
 
-// lruCache is a simple LRU cache using a map and slice.
-type lruCache[K comparable, V any] struct {
+// LRUCache is a simple LRU cache using a map and slice.
+type LRUCache[K comparable, V any] struct {
 	data  map[K]V
 	order []K
 	limit int
 }
 
-// newLRUCache creates a new LRU cache with the specified limit.
-func newLRUCache[K comparable, V any](limit int) *lruCache[K, V] {
-	return &lruCache[K, V]{
+// NewLRUCache creates a new LRU cache with the specified limit.
+func NewLRUCache[K comparable, V any](limit int) *LRUCache[K, V] {
+	return &LRUCache[K, V]{
 		data:  make(map[K]V),
 		order: make([]K, 0, limit),
 		limit: limit,
@@ -78,7 +79,7 @@ func newLRUCache[K comparable, V any](limit int) *lruCache[K, V] {
 }
 
 // Get retrieves a value from the cache, moving it to most recently used.
-func (c *lruCache[K, V]) Get(key K) (V, bool) {
+func (c *LRUCache[K, V]) Get(key K) (V, bool) {
 	value, ok := c.data[key]
 	if ok {
 		// Move to end (most recently used)
@@ -94,7 +95,7 @@ func (c *lruCache[K, V]) Get(key K) (V, bool) {
 }
 
 // Set adds or updates a value in the cache, evicting the oldest if at capacity.
-func (c *lruCache[K, V]) Set(key K, value V) {
+func (c *LRUCache[K, V]) Set(key K, value V) {
 	if _, exists := c.data[key]; exists {
 		c.data[key] = value
 		return
@@ -109,41 +110,4 @@ func (c *lruCache[K, V]) Set(key K, value V) {
 
 	c.data[key] = value
 	c.order = append(c.order, key)
-}
-
-// Memoize1 returns a memoized version of a single-argument function.
-// The returned function caches results based on the argument value.
-// Uses LRU eviction with a cache limit of 256 entries.
-func Memoize1[A comparable, R any](fn func(A) R) func(A) R {
-	cache := newLRUCache[A, R](lruCacheDefaultLimit)
-
-	return func(arg A) R {
-		if result, ok := cache.Get(arg); ok {
-			return result
-		}
-		result := fn(arg)
-		cache.Set(arg, result)
-		return result
-	}
-}
-
-// Memoize2 returns a memoized version of a two-argument function.
-// The returned function caches results based on both argument values.
-// Uses LRU eviction with a cache limit of 256 entries.
-func Memoize2[A, B comparable, R any](fn func(A, B) R) func(A, B) R {
-	type key struct {
-		a A
-		b B
-	}
-	cache := newLRUCache[key, R](lruCacheDefaultLimit)
-
-	return func(a A, b B) R {
-		k := key{a, b}
-		if result, ok := cache.Get(k); ok {
-			return result
-		}
-		result := fn(a, b)
-		cache.Set(k, result)
-		return result
-	}
 }

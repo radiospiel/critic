@@ -32,12 +32,14 @@ type Options struct {
 	Separators string
 }
 
-// compileMemoized is a memoized version of the internal pattern compilation.
-// It caches compiled patterns based on (pattern, separators) to avoid
-// repeated regex compilation for the same patterns.
-var compileMemoized = utils.Memoize2(func(pattern, separators string) Matcher {
-	return fnmatchToRegexp(pattern, separators)
-})
+// patternCacheKey is the cache key for compiled patterns.
+type patternCacheKey struct {
+	pattern    string
+	separators string
+}
+
+// patternCache caches compiled patterns to avoid repeated regex compilation.
+var patternCache = utils.NewLRUCache[patternCacheKey, Matcher](utils.LRUCacheDefaultLimit)
 
 // MustCompile compiles an fnmatch pattern and returns a Matcher.
 // Options can be provided to customize matching behavior.
@@ -63,7 +65,14 @@ func Compile(pattern string, opts ...Options) (Matcher, error) {
 		separators = opts[0].Separators
 	}
 
-	return compileMemoized(pattern, separators), nil
+	key := patternCacheKey{pattern, separators}
+	if cached, ok := patternCache.Get(key); ok {
+		return cached, nil
+	}
+
+	matcher := fnmatchToRegexp(pattern, separators)
+	patternCache.Set(key, matcher)
+	return matcher, nil
 }
 
 // Fnmatch checks if the path matches the fnmatch pattern.

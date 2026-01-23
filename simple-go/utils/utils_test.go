@@ -59,132 +59,92 @@ func TestReverseInPlace(t *testing.T) {
 	assert.Equals(t, original[0], 3, "original slice should be modified in place")
 }
 
-func TestMemoize1ReturnsCorrectValue(t *testing.T) {
-	double := func(x int) int { return x * 2 }
-	memoized := Memoize1(double)
+func TestLRUCacheGetSet(t *testing.T) {
+	cache := NewLRUCache[string, int](10)
 
-	assert.Equals(t, memoized(5), 10, "memoized(5) should return 10")
-	assert.Equals(t, memoized(3), 6, "memoized(3) should return 6")
+	// Set and get a value
+	cache.Set("a", 1)
+	val, ok := cache.Get("a")
+	assert.Equals(t, ok, true, "key 'a' should exist")
+	assert.Equals(t, val, 1, "value should be 1")
+
+	// Get non-existent key
+	_, ok = cache.Get("b")
+	assert.Equals(t, ok, false, "key 'b' should not exist")
 }
 
-func TestMemoize1CachesResults(t *testing.T) {
-	callCount := 0
-	expensive := func(x int) int {
-		callCount++
-		return x * x
+func TestLRUCacheUpdate(t *testing.T) {
+	cache := NewLRUCache[string, int](10)
+
+	cache.Set("a", 1)
+	cache.Set("a", 2) // Update existing key
+
+	val, ok := cache.Get("a")
+	assert.Equals(t, ok, true, "key 'a' should exist")
+	assert.Equals(t, val, 2, "value should be updated to 2")
+}
+
+func TestLRUCacheEviction(t *testing.T) {
+	cache := NewLRUCache[int, int](3)
+
+	// Fill cache
+	cache.Set(1, 10)
+	cache.Set(2, 20)
+	cache.Set(3, 30)
+
+	// Add one more, should evict oldest (1)
+	cache.Set(4, 40)
+
+	_, ok := cache.Get(1)
+	assert.Equals(t, ok, false, "key 1 should have been evicted")
+
+	val, ok := cache.Get(2)
+	assert.Equals(t, ok, true, "key 2 should still exist")
+	assert.Equals(t, val, 20, "value should be 20")
+}
+
+func TestLRUCacheLRUOrder(t *testing.T) {
+	cache := NewLRUCache[int, int](3)
+
+	cache.Set(1, 10)
+	cache.Set(2, 20)
+	cache.Set(3, 30)
+
+	// Access key 1, making it most recently used
+	cache.Get(1)
+
+	// Add new key, should evict key 2 (now oldest)
+	cache.Set(4, 40)
+
+	_, ok := cache.Get(2)
+	assert.Equals(t, ok, false, "key 2 should have been evicted")
+
+	_, ok = cache.Get(1)
+	assert.Equals(t, ok, true, "key 1 should still exist (was accessed)")
+}
+
+func TestLRUCacheWithStructKey(t *testing.T) {
+	type key struct {
+		a string
+		b int
 	}
-	memoized := Memoize1(expensive)
+	cache := NewLRUCache[key, string](10)
 
-	// First call should invoke the function
-	result1 := memoized(4)
-	assert.Equals(t, result1, 16, "first call should return 16")
-	assert.Equals(t, callCount, 1, "function should be called once")
+	k1 := key{"hello", 1}
+	k2 := key{"world", 2}
 
-	// Second call with same argument should use cache
-	result2 := memoized(4)
-	assert.Equals(t, result2, 16, "cached call should return 16")
-	assert.Equals(t, callCount, 1, "function should still be called only once")
+	cache.Set(k1, "value1")
+	cache.Set(k2, "value2")
 
-	// Call with different argument should invoke function again
-	result3 := memoized(5)
-	assert.Equals(t, result3, 25, "new argument should return 25")
-	assert.Equals(t, callCount, 2, "function should be called twice total")
+	val, ok := cache.Get(k1)
+	assert.Equals(t, ok, true, "key k1 should exist")
+	assert.Equals(t, val, "value1", "value should be 'value1'")
+
+	val, ok = cache.Get(k2)
+	assert.Equals(t, ok, true, "key k2 should exist")
+	assert.Equals(t, val, "value2", "value should be 'value2'")
 }
 
-func TestMemoize1WithStrings(t *testing.T) {
-	toUpper := func(s string) string { return s + "!" }
-	memoized := Memoize1(toUpper)
-
-	assert.Equals(t, memoized("hello"), "hello!", "should append exclamation")
-	assert.Equals(t, memoized("world"), "world!", "should append exclamation")
-}
-
-func TestMemoize1LRUEviction(t *testing.T) {
-	callCount := 0
-	fn := func(x int) int {
-		callCount++
-		return x
-	}
-	memoized := Memoize1(fn)
-
-	// Fill cache beyond limit (256)
-	for i := 0; i < 260; i++ {
-		memoized(i)
-	}
-	assert.Equals(t, callCount, 260, "should have called function 260 times")
-
-	// Access early entries - they should have been evicted
-	memoized(0)
-	assert.Equals(t, callCount, 261, "entry 0 should have been evicted and recomputed")
-
-	// Access recent entry - should still be cached
-	memoized(259)
-	assert.Equals(t, callCount, 261, "entry 259 should still be cached")
-}
-
-func TestMemoize2ReturnsCorrectValue(t *testing.T) {
-	add := func(a, b int) int { return a + b }
-	memoized := Memoize2(add)
-
-	assert.Equals(t, memoized(2, 3), 5, "memoized(2, 3) should return 5")
-	assert.Equals(t, memoized(10, 20), 30, "memoized(10, 20) should return 30")
-}
-
-func TestMemoize2CachesResults(t *testing.T) {
-	callCount := 0
-	multiply := func(a, b int) int {
-		callCount++
-		return a * b
-	}
-	memoized := Memoize2(multiply)
-
-	// First call
-	result1 := memoized(3, 4)
-	assert.Equals(t, result1, 12, "first call should return 12")
-	assert.Equals(t, callCount, 1, "function should be called once")
-
-	// Same arguments - should use cache
-	result2 := memoized(3, 4)
-	assert.Equals(t, result2, 12, "cached call should return 12")
-	assert.Equals(t, callCount, 1, "function should still be called only once")
-
-	// Different arguments
-	result3 := memoized(4, 3)
-	assert.Equals(t, result3, 12, "different args should return 12")
-	assert.Equals(t, callCount, 2, "function should be called twice total")
-
-	// Original args still cached
-	memoized(3, 4)
-	assert.Equals(t, callCount, 2, "original args should still be cached")
-}
-
-func TestMemoize2WithStrings(t *testing.T) {
-	concat := func(a, b string) string { return a + b }
-	memoized := Memoize2(concat)
-
-	assert.Equals(t, memoized("hello", "world"), "helloworld", "should concatenate")
-	assert.Equals(t, memoized("foo", "bar"), "foobar", "should concatenate")
-}
-
-func TestMemoize2LRUEviction(t *testing.T) {
-	callCount := 0
-	fn := func(a, b int) int {
-		callCount++
-		return a + b
-	}
-	memoized := Memoize2(fn)
-
-	// Fill cache beyond limit (256)
-	for i := 0; i < 260; i++ {
-		memoized(i, 0)
-	}
-	assert.Equals(t, callCount, 260, "should have called function 260 times")
-
-	// Access early entry - should have been evicted
-	memoized(0, 0)
-	assert.Equals(t, callCount, 261, "entry (0,0) should have been evicted and recomputed")
-
-	// Access recent entry - should still be cached
-	memoized(259, 0)
-	assert.Equals(t, callCount, 261, "entry (259,0) should still be cached")
+func TestLRUCacheDefaultLimit(t *testing.T) {
+	assert.Equals(t, LRUCacheDefaultLimit, 256, "default limit should be 256")
 }
