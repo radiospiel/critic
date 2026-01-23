@@ -130,36 +130,6 @@ func TestSelectableListSelectByPredicate(t *testing.T) {
 	assert.False(t, notFound, "should not find item with id=100")
 }
 
-func TestSelectableListCallbacks(t *testing.T) {
-	list := NewSelectableList[testItem](nil)
-	list.SetBounds(NewRect(0, 0, 20, 10))
-
-	items := []testItem{
-		{name: "Apple", id: 1},
-		{name: "Banana", id: 2},
-	}
-	list.SetItems(items)
-
-	var selectedItem testItem
-	var confirmedItem testItem
-
-	list.OnSelect(func(item testItem) {
-		selectedItem = item
-	})
-
-	list.OnConfirm(func(item testItem) {
-		confirmedItem = item
-	})
-
-	// Move to second item - should trigger OnSelect
-	list.HandleKey(tea.KeyMsg{Type: tea.KeyDown})
-	assert.Equals(t, selectedItem.name, "Banana")
-
-	// Press enter - should trigger OnConfirm
-	list.HandleKey(tea.KeyMsg{Type: tea.KeyEnter})
-	assert.Equals(t, confirmedItem.name, "Banana")
-}
-
 func TestSelectableListRender(t *testing.T) {
 	// Custom renderer
 	renderer := func(buf *SubBuffer, item testItem, selected bool, focused bool, width int) {

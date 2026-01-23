@@ -33,9 +33,7 @@ type SelectableList[T ListItem] struct {
 	normalStyle            lipgloss.Style
 
 	// Callbacks
-	onSelect  func(item T)    // Called when selection changes
-	onConfirm func(item T)    // Called when Enter is pressed
-	onChange  func(items []T) // Called when items change
+	onChange func(items []T) // Called when items change
 }
 
 // NewSelectableList creates a new selectable list with the given renderer.
@@ -98,9 +96,6 @@ func (l *SelectableList[T]) SetSelectedIndex(index int) {
 	l.selected = index
 	l.ensureVisible()
 	l.Repaint() // Mark as dirty for compositor re-render
-	if l.onSelect != nil && len(l.items) > 0 {
-		l.onSelect(l.items[l.selected])
-	}
 }
 
 // SelectByPredicate selects the first item matching the predicate.
@@ -119,16 +114,6 @@ func (l *SelectableList[T]) SetStyles(selected, selectedUnfocused, normal lipglo
 	l.selectedStyle = selected
 	l.selectedUnfocusedStyle = selectedUnfocused
 	l.normalStyle = normal
-}
-
-// OnSelect sets a callback for when selection changes.
-func (l *SelectableList[T]) OnSelect(fn func(item T)) {
-	l.onSelect = fn
-}
-
-// OnConfirm sets a callback for when Enter is pressed.
-func (l *SelectableList[T]) OnConfirm(fn func(item T)) {
-	l.onConfirm = fn
 }
 
 // OnChange sets a callback for when items change.
@@ -240,11 +225,6 @@ func (l *SelectableList[T]) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 		l.pageDown()
 		return true, nil
 	case "enter":
-		if l.onConfirm != nil {
-			if item, ok := l.Selected(); ok {
-				l.onConfirm(item)
-			}
-		}
 		return true, nil
 	}
 	return false, nil
@@ -255,9 +235,6 @@ func (l *SelectableList[T]) moveUp() {
 		l.selected--
 		l.ensureVisible()
 		l.Repaint()
-		if l.onSelect != nil {
-			l.onSelect(l.items[l.selected])
-		}
 	}
 }
 
@@ -266,9 +243,6 @@ func (l *SelectableList[T]) moveDown() {
 		l.selected++
 		l.ensureVisible()
 		l.Repaint()
-		if l.onSelect != nil {
-			l.onSelect(l.items[l.selected])
-		}
 	}
 }
 
@@ -283,4 +257,3 @@ func (l *SelectableList[T]) pageDown() {
 	newSelected := min(len(l.items)-1, l.selected+visible)
 	l.SetSelectedIndex(newSelected)
 }
-

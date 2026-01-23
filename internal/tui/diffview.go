@@ -65,12 +65,13 @@ type DiffView struct {
 }
 
 // NewDiffView creates a new diff viewer model
-func NewDiffView(ses *session.Session) *DiffView {
+func NewDiffView(ses *session.Session, messaging critic.Messaging) *DiffView {
 	m := &DiffView{
 		BaseView:    teapot.NewBaseView(),
 		highlighter: highlight.NewHighlighter(),
 		diffWidget:  NewDiffContentView(),
 		session:     ses,
+		messaging:   messaging,
 	}
 	m.SetFocusable(true)
 	m.SetName("DiffView")
@@ -686,11 +687,6 @@ func (m *DiffView) FocusNext() bool {
 // FocusPrev returns false as diff view has no focusable children.
 func (m *DiffView) FocusPrev() bool {
 	return false
-}
-
-// SetMessaging sets the messaging interface for conversations
-func (m *DiffView) SetMessaging(messaging critic.Messaging) {
-	m.messaging = messaging
 }
 
 // SetFilterMode sets the filter mode for hunk filtering

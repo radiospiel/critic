@@ -41,8 +41,8 @@ type FileListView struct {
 }
 
 // NewFileListView creates a new file list widget
-func NewFileListView(session *session.Session) *FileListView {
-	w := &FileListView{session: session}
+func NewFileListView(session *session.Session, messaging critic.Messaging) *FileListView {
+	w := &FileListView{session: session, messaging: messaging}
 
 	// Create the SelectableList with a custom renderer
 	w.list = pot.NewSelectableList[FileItem](w.renderItem)
@@ -241,18 +241,6 @@ func (w *FileListView) SelectPrev() bool {
 		return true
 	}
 	return false
-}
-
-// OnSelect sets a callback for when selection changes
-func (w *FileListView) OnSelect(fn func(*ctypes.FileDiff)) {
-	w.list.OnSelect(func(item FileItem) {
-		fn(item.File)
-	})
-}
-
-// SetMessaging sets the messaging interface
-func (w *FileListView) SetMessaging(messaging critic.Messaging) {
-	w.messaging = messaging
 }
 
 // SetSession sets the session and subscribes to relevant keys.

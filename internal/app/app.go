@@ -157,10 +157,6 @@ func NewDelegate(args *Args) *Delegate {
 	})
 	logger.Warn("created session")
 
-	diffView := tui.NewDiffView(ses)
-	fileList := tui.NewFileListView(ses)
-	fileList.SetFocused(true) // Start with file list focused
-
 	// Initialize message database
 	gitRoot, err := git.GetGitRoot()
 	if err != nil {
@@ -171,8 +167,9 @@ func NewDelegate(args *Args) *Delegate {
 		logger.Fatal("Failed to initialize message database: %v", err)
 	}
 
-	diffView.SetMessaging(mdb)
-	fileList.SetMessaging(mdb)
+	diffView := tui.NewDiffView(ses, mdb)
+	fileList := tui.NewFileListView(ses, mdb)
+	fileList.SetFocused(true) // Start with file list focused
 
 	statusBar := tui.NewStatusBarView()
 	statusBar.SetFilter("All") // Default filter mode

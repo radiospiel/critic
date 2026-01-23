@@ -151,10 +151,10 @@ func TestRenderProfile(t *testing.T) {
 	}
 
 	// Create widgets
-	fileListWidget := tui.NewFileListView()
+	fileListWidget := tui.NewFileListView(nil, nil)
 	fileListWidget.SetFiles(diff.Files)
 
-	diffViewWidget := tui.NewDiffView()
+	diffViewWidget := tui.NewDiffView(nil, nil)
 	// Load internal/app/app.go into the diff view
 	diffViewWidget.SetFile(appFile)
 
@@ -177,7 +177,7 @@ func TestRenderProfile(t *testing.T) {
 // BenchmarkFileListWidgetRender benchmarks FileListWidget rendering.
 func BenchmarkFileListWidgetRender(b *testing.B) {
 	files := createSampleFiles(50)
-	widget := tui.NewFileListView()
+	widget := tui.NewFileListView(nil, nil)
 	widget.SetFiles(files)
 	widget.SetBounds(teapot.NewRect(0, 0, 40, 50))
 
@@ -196,7 +196,7 @@ func BenchmarkFileListWidgetRender(b *testing.B) {
 // BenchmarkDiffViewWidgetRender benchmarks DiffViewWidget rendering.
 func BenchmarkDiffViewWidgetRender(b *testing.B) {
 	fileDiff := createSampleFileDiff(10, 30)
-	widget := tui.NewDiffView()
+	widget := tui.NewDiffView(nil, nil)
 	widget.SetFile(fileDiff)
 	widget.SetBounds(teapot.NewRect(0, 0, 120, 50))
 
@@ -217,11 +217,11 @@ func BenchmarkCombinedRender(b *testing.B) {
 	files := createSampleFiles(50)
 	fileDiff := createSampleFileDiff(10, 30)
 
-	fileListWidget := tui.NewFileListView()
+	fileListWidget := tui.NewFileListView(nil, nil)
 	fileListWidget.SetFiles(files)
 	fileListWidget.SetBounds(teapot.NewRect(0, 0, 40, 50))
 
-	diffViewWidget := tui.NewDiffView()
+	diffViewWidget := tui.NewDiffView(nil, nil)
 	diffViewWidget.SetFile(fileDiff)
 	diffViewWidget.SetBounds(teapot.NewRect(0, 0, 120, 50))
 
@@ -245,7 +245,7 @@ func BenchmarkCombinedRender(b *testing.B) {
 func BenchmarkLargeDiffViewRender(b *testing.B) {
 	// Large file: 50 hunks, 100 lines each = 5000 lines
 	fileDiff := createSampleFileDiff(50, 100)
-	widget := tui.NewDiffView()
+	widget := tui.NewDiffView(nil, nil)
 	widget.SetFile(fileDiff)
 	widget.SetBounds(teapot.NewRect(0, 0, 200, 100))
 
@@ -268,10 +268,10 @@ func BenchmarkCompositorView(b *testing.B) {
 	fileDiff := createSampleFileDiff(10, 30)
 
 	// Create widgets
-	fileListWidget := tui.NewFileListView()
+	fileListWidget := tui.NewFileListView(nil, nil)
 	fileListWidget.SetFiles(files)
 
-	diffViewWidget := tui.NewDiffView()
+	diffViewWidget := tui.NewDiffView(nil, nil)
 	diffViewWidget.SetFile(fileDiff)
 
 	// Create an HSplit layout with file list on left, diff view on right
@@ -304,10 +304,10 @@ func BenchmarkCompositorViewCached(b *testing.B) {
 	files := createSampleFiles(50)
 	fileDiff := createSampleFileDiff(10, 30)
 
-	fileListWidget := tui.NewFileListView()
+	fileListWidget := tui.NewFileListView(nil, nil)
 	fileListWidget.SetFiles(files)
 
-	diffViewWidget := tui.NewDiffView()
+	diffViewWidget := tui.NewDiffView(nil, nil)
 	diffViewWidget.SetFile(fileDiff)
 
 	split := teapot.NewHSplit(fileListWidget, diffViewWidget, 0.25)
@@ -332,10 +332,10 @@ func TestCompositorRenderProfile(t *testing.T) {
 	files := createSampleFiles(50)
 	fileDiff := createSampleFileDiff(10, 30)
 
-	fileListWidget := tui.NewFileListView()
+	fileListWidget := tui.NewFileListView(nil, nil)
 	fileListWidget.SetFiles(files)
 
-	diffViewWidget := tui.NewDiffView()
+	diffViewWidget := tui.NewDiffView(nil, nil)
 	diffViewWidget.SetFile(fileDiff)
 
 	split := teapot.NewHSplit(fileListWidget, diffViewWidget, 0.25)
