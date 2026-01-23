@@ -525,3 +525,46 @@ func TestStartWatchers(t *testing.T) {
 	// Stop and close
 	session.Close()
 }
+
+func TestDiffArgsSchemaValidation(t *testing.T) {
+	session := createTestSession(t, nil)
+
+	// Valid diff args should work
+	args := DiffArgs{
+		Bases:       []string{"main", "HEAD"},
+		CurrentBase: 0,
+		Paths:       []string{"internal/"},
+		Extensions:  []string{"go"},
+	}
+	session.SetDiffArgs(args)
+
+	retrieved := session.GetDiffArgs()
+	assert.Equals(t, len(retrieved.Bases), 2, "should have 2 bases")
+	assert.Equals(t, retrieved.CurrentBase, 0, "current base should be 0")
+}
+
+func TestDiffArgsSchemaRejectsInvalidCurrentBase(t *testing.T) {
+	session := createTestSession(t, nil)
+
+	// Attempting to set invalid currentBase type should return error
+	err := session.SetValueAtKey(KeyDiffArgs, map[string]any{
+		"bases":       []any{"main"},
+		"currentBase": "not-a-number", // invalid: should be integer
+		"paths":       []any{},
+		"extensions":  []any{},
+	})
+	assert.NotNil(t, err, "should return error when setting invalid currentBase type")
+}
+
+func TestDiffArgsSchemaRejectsInvalidBasesType(t *testing.T) {
+	session := createTestSession(t, nil)
+
+	// Attempting to set invalid bases type should return error
+	err := session.SetValueAtKey(KeyDiffArgs, map[string]any{
+		"bases":       []any{123}, // invalid: items should be strings
+		"currentBase": 0,
+		"paths":       []any{},
+		"extensions":  []any{},
+	})
+	assert.NotNil(t, err, "should return error when setting invalid bases type")
+}

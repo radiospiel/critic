@@ -69,6 +69,18 @@ type DiffArgs struct {
 	Extensions  []string `json:"extensions"`  // File extensions to include
 }
 
+// DiffArgsSchema is the JSON schema for validating DiffArgs values
+var DiffArgsSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"bases":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		"currentBase": map[string]any{"type": "integer", "minimum": 0},
+		"paths":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		"extensions":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+	},
+	"required": []any{"bases", "currentBase", "paths", "extensions"},
+}
+
 // Selection holds the current selection state
 type Selection struct {
 	FileIndex   int    `json:"fileIndex"`
@@ -102,7 +114,7 @@ type Session struct {
 // NewSession creates a new Session with the given parameters
 func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Session, error) {
 	s := &Session{
-		Observable:   observable.New(),
+		Observable:   observable.New().WithSchema(KeyDiffArgs, DiffArgsSchema),
 		messaging:    messaging,
 		gitRoot:      gitRoot,
 		internalSubs: make([]observable.Subscription, 0),
