@@ -87,11 +87,13 @@ func NewLRUCache[K comparable, V any](limit int, creator func(K) (V, error)) *LR
 // If the creator returns an error, the result is not cached and the error is returned.
 func (c *LRUCache[K, V]) Get(key K) (V, error) {
 	if value, ok := c.data[key]; ok {
-		// Move to end (most recently used)
+		// Move to end (most recently used) only if not already there
 		for i, k := range c.usageOrder {
 			if k == key {
-				c.usageOrder = append(c.usageOrder[:i], c.usageOrder[i+1:]...)
-				c.usageOrder = append(c.usageOrder, key)
+				if i < len(c.usageOrder)-1 {
+					c.usageOrder = append(c.usageOrder[:i], c.usageOrder[i+1:]...)
+					c.usageOrder = append(c.usageOrder, key)
+				}
 				break
 			}
 		}
