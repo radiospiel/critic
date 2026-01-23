@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_TOOL_INPUT\" | jq -r '.command' | grep -qE '^git commit'"
+          },
+          {
+            "type": "prompt",
+            "prompt": "file:agents/hooks/pre-commit-review.md"
+          }
+        ]
+      }
+    ]
+  }
+}
