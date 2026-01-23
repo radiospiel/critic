@@ -63,7 +63,7 @@ func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
 // It includes a creator function that is called when a key is not found.
 type LRUCache[K comparable, V any] struct {
 	data    map[K]V
-	order   []K
+	usageOrder []K
 	limit   int
 	creator func(K) V
 }
@@ -75,7 +75,7 @@ func NewLRUCache[K comparable, V any](limit int, creator func(K) V) *LRUCache[K,
 	preconditions.Check(limit >= 1, "LRUCache limit must be >= 1, got %d", limit)
 	return &LRUCache[K, V]{
 		data:    make(map[K]V),
-		order:   make([]K, 0, limit),
+		usageOrder: make([]K, 0, limit),
 		limit:   limit,
 		creator: creator,
 	}
@@ -87,10 +87,10 @@ func NewLRUCache[K comparable, V any](limit int, creator func(K) V) *LRUCache[K,
 func (c *LRUCache[K, V]) Get(key K) V {
 	if value, ok := c.data[key]; ok {
 		// Move to end (most recently used)
-		for i, k := range c.order {
+		for i, k := range c.usageOrder {
 			if k == key {
-				c.order = append(c.order[:i], c.order[i+1:]...)
-				c.order = append(c.order, key)
+				c.usageOrder = append(c.usageOrder[:i], c.usageOrder[i+1:]...)
+				c.usageOrder = append(c.usageOrder, key)
 				break
 			}
 		}
@@ -101,13 +101,13 @@ func (c *LRUCache[K, V]) Get(key K) V {
 	value := c.creator(key)
 
 	// Evict oldest if at capacity
-	if len(c.order) >= c.limit {
-		oldest := c.order[0]
-		c.order = c.order[1:]
+	if len(c.usageOrder) >= c.limit {
+		oldest := c.usageOrder[0]
+		c.usageOrder = c.usageOrder[1:]
 		delete(c.data, oldest)
 	}
 
 	c.data[key] = value
-	c.order = append(c.order, key)
+	c.usageOrder = append(c.usageOrder, key)
 	return value
 }
