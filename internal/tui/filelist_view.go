@@ -5,8 +5,10 @@ import (
 	"strings"
 
 	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/internal/session"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
+	"git.15b.it/eno/critic/simple-go/observable"
 	pot "git.15b.it/eno/critic/teapot"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -28,12 +30,14 @@ func (f FileItem) FilterValue() string {
 // FileListView is a teapot-based file list widget.
 type FileListView struct {
 	pot.BaseView
-	list       *pot.SelectableList[FileItem]
-	messaging  critic.Messaging
-	width      int
-	height     int
-	filterMode int // 0 = all, 1 = with comments, 2 = unresolved only
-	totalFiles int // Total files before filtering (for "No files match filter" message)
+	list          *pot.SelectableList[FileItem]
+	messaging     critic.Messaging
+	session       *session.Session
+	subscriptions []observable.Subscription
+	width         int
+	height        int
+	filterMode    int // 0 = all, 1 = with comments, 2 = unresolved only
+	totalFiles    int // Total files before filtering (for "No files match filter" message)
 }
 
 // NewFileListView creates a new file list widget
@@ -251,6 +255,77 @@ func (w *FileListView) SetMessaging(messaging critic.Messaging) {
 	w.messaging = messaging
 }
 
+// SetSession sets the session and subscribes to relevant keys.
+// The view will automatically update when these session keys change:
+// - diff.files: Updates the file list
+// - tui.fileIndex: Updates selection
+// - tui.filePath: Updates selection by path
+// - tui.focusedPane: Updates focus state
+func (w *FileListView) SetSession(s *session.Session) {
+	// Clear previous subscriptions
+	if w.session != nil && len(w.subscriptions) > 0 {
+		w.session.ClearSubscriptions(w.subscriptions...)
+		w.subscriptions = nil
+	}
+
+	w.session = s
+	if s == nil {
+		return
+	}
+
+	// Subscribe to diff.files changes
+	filesSub := s.OnKeyChange(session.KeyFiles, func(key string) {
+		files := s.GetFiles()
+		w.updateFilesFromSession(files)
+	})
+	w.subscriptions = append(w.subscriptions, filesSub)
+
+	// Subscribe to tui.fileIndex changes
+	indexSub := s.OnKeyChange(session.KeySelectedFileIndex, func(key string) {
+		index := s.GetSelectedFileIndex()
+		w.updateSelectionFromSession(index)
+	})
+	w.subscriptions = append(w.subscriptions, indexSub)
+
+	// Subscribe to tui.focusedPane changes
+	focusSub := s.OnKeyChange(session.KeyFocusedPane, func(key string) {
+		pane := s.GetFocusedPane()
+		focused := pane == "fileList"
+		if w.HasFocus() != focused {
+			w.SetFocused(focused)
+			w.Repaint()
+		}
+	})
+	w.subscriptions = append(w.subscriptions, focusSub)
+}
+
+// updateFilesFromSession updates the file list from session data
+func (w *FileListView) updateFilesFromSession(files []*ctypes.FileDiff) {
+	items := make([]FileItem, len(files))
+	for i, f := range files {
+		items[i] = FileItem{File: f}
+	}
+	w.list.SetItems(items)
+	w.totalFiles = len(files)
+	w.Repaint()
+}
+
+// updateSelectionFromSession updates the selection from session data
+func (w *FileListView) updateSelectionFromSession(index int) {
+	if w.list.SelectedIndex() != index {
+		w.list.SetSelectedIndex(index)
+		w.Repaint()
+	}
+}
+
+// ClearSubscriptions clears all session subscriptions
+func (w *FileListView) ClearSubscriptions() {
+	if w.session != nil && len(w.subscriptions) > 0 {
+		w.session.ClearSubscriptions(w.subscriptions...)
+		w.subscriptions = nil
+	}
+}
+
 // SetFilterMode sets the current filter mode and total files count
 // filterMode: 0 = all, 1 = with comments, 2 = unresolved only
 func (w *FileListView) SetFilterMode(filterMode int, totalFiles int) {
@@ -305,6 +380,21 @@ func (w *FileListView) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 // Children returns the child widgets
 func (w *FileListView) Children() []pot.View {
 	return nil
+}
+
+// AcceptsFocus returns true as the file list can receive focus.
+func (w *FileListView) AcceptsFocus() bool {
+	return true
+}
+
+// FocusNext is a no-op for file list as it has no focusable children.
+func (w *FileListView) FocusNext() bool {
+	return false
+}
+
+// FocusPrev is a no-op for file list as it has no focusable children.
+func (w *FileListView) FocusPrev() bool {
+	return false
 }
 
 // SetSize sets the size (for compatibility)

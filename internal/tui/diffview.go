@@ -254,13 +254,13 @@ func (m *DiffView) Render(buf *teapot.SubBuffer) {
 
 	// Apply selection overlay - invert the current line if focused and navigable
 	// Convert from content coordinates to screen coordinates (account for scroll offset)
-	if m.Focused() && m.isNavigableLine(m.cursorLine) {
+	if m.HasFocus() && m.isNavigableLine(m.cursorLine) {
 		screenRow := m.cursorLine - m.diffWidget.GetYOffset()
 		if screenRow >= 0 && screenRow < height {
 			buf.InvertRow(screenRow)
 		}
 	}
-	logger.Info("DiffView.Render: complete, cursorLine=%d, screenRow=%d, focused=%v", m.cursorLine, m.cursorLine-m.diffWidget.GetYOffset(), m.Focused())
+	logger.Info("DiffView.Render: complete, cursorLine=%d, screenRow=%d, focused=%v", m.cursorLine, m.cursorLine-m.diffWidget.GetYOffset(), m.HasFocus())
 }
 
 // renderMessage renders a centered message in the buffer
@@ -626,7 +626,7 @@ func (m *DiffView) ScrollPageUp() tea.Cmd {
 
 // SetFocused sets whether this pane is focused
 func (m *DiffView) SetFocused(focused bool) {
-	if m.Focused() != focused {
+	if m.HasFocus() != focused {
 		m.BaseView.SetFocused(focused)
 		// Re-render to update cursor visibility
 		m.refreshContent()
@@ -669,6 +669,21 @@ func (m *DiffView) SetBounds(bounds teapot.Rect) {
 // The internal diffWidget is an implementation detail and not exposed as a child.
 func (m *DiffView) Children() []teapot.View {
 	return nil
+}
+
+// AcceptsFocus returns true as the diff view can receive focus.
+func (m *DiffView) AcceptsFocus() bool {
+	return true
+}
+
+// FocusNext returns false as diff view has no focusable children.
+func (m *DiffView) FocusNext() bool {
+	return false
+}
+
+// FocusPrev returns false as diff view has no focusable children.
+func (m *DiffView) FocusPrev() bool {
+	return false
 }
 
 // SetMessaging sets the messaging interface for conversations
@@ -837,7 +852,7 @@ func (m *DiffView) renderDiff() (string, int, []int) {
 	m.diffWidget.Render(subBuf)
 
 	// Apply selection overlay - invert the current line if focused and navigable
-	if m.Focused() && m.isNavigableLine(m.cursorLine) {
+	if m.HasFocus() && m.isNavigableLine(m.cursorLine) {
 		buffer.InvertRow(m.cursorLine)
 	}
 
@@ -1204,7 +1219,7 @@ func (m *DiffView) renderConversationPreview(conv *critic.Conversation, startLin
 		blockSize = 1 + maxLines + 1 + 1 // top separator + truncated content + "more" indicator + bottom separator
 	}
 
-	cursorInBlock := m.Focused() && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize
+	cursorInBlock := m.HasFocus() && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize
 
 	// If cursor is in the block, show full content
 	if cursorInBlock {
@@ -1424,7 +1439,7 @@ func (m *DiffView) renderLine(line *ctypes.Line, highlightedContent string, curr
 // renderLineWithCursor applies cursor highlighting if this is the active line
 func (m *DiffView) renderLineWithCursor(content string, currentLineNum int) string {
 	// Only show cursor when pane is focused and line is navigable
-	if m.Focused() && currentLineNum == m.cursorLine && m.isNavigableLine(currentLineNum) {
+	if m.HasFocus() && currentLineNum == m.cursorLine && m.isNavigableLine(currentLineNum) {
 		// Apply full reverse highlighting
 		return lipgloss.NewStyle().Reverse(true).Render(content)
 	}

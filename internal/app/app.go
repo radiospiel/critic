@@ -184,13 +184,17 @@ func NewDelegate(args *Args) *Delegate {
 		logger.Info("First run for version %s, will show screensaver", version.Version())
 	}
 
+	// Create layout view and set children for focus management
+	layout := tui.NewLayoutView()
+	layout.SetChildren(fileList, diffView)
+
 	d := &Delegate{
 		fileList:      fileList,
 		diffView:      diffView,
 		commentEditor: tui.NewCommentEditor(),
 		statusBar:     statusBar,
 		mainLayout:    mainLayout,
-		layout:        tui.NewLayoutView(),
+		layout:        layout,
 		bases:         args.Bases,
 		currentBase:   0, // Start with first base
 		paths:         args.Paths,
@@ -248,11 +252,18 @@ func (d *Delegate) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case "tab", "shift+tab":
-		// Override teapot.App's focus handling to use legacy pane-based focus
-		d.layout.ToggleFocus()
-		d.fileList.SetFocused(d.layout.GetFocusedPane() == tui.FileListPane)
-		d.diffView.SetFocused(d.layout.GetFocusedPane() == tui.DiffViewPane)
+	case "tab":
+		// Move focus to next child
+		if d.layout.FocusNext() {
+			d.mainLayout.Repaint()
+		}
+		return true, nil
+
+	case "shift+tab":
+		// Move focus to previous child
+		if d.layout.FocusPrev() {
+			d.mainLayout.Repaint()
+		}
 		return true, nil
 
 	case "b":

@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	pot "git.15b.it/eno/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -14,12 +15,14 @@ const (
 	DiffViewPane
 )
 
-// LayoutView manages the split pane layout
+// LayoutView manages the split pane layout and focus traversal
 type LayoutView struct {
-	width      int
-	height     int
-	focusedPane Pane
-	splitRatio float64 // Ratio of width for left pane (0.0 to 1.0)
+	width        int
+	height       int
+	focusedPane  Pane
+	splitRatio   float64   // Ratio of width for left pane (0.0 to 1.0)
+	children     []pot.View // Child views in stable order
+	focusedIndex int       // Index of currently focused child
 }
 
 // NewLayoutView creates a new layout model
@@ -55,15 +58,6 @@ func (m *LayoutView) GetDiffViewSize() (int, int) {
 	return rightWidth, height
 }
 
-// ToggleFocus switches focus between panes
-func (m *LayoutView) ToggleFocus() {
-	if m.focusedPane == FileListPane {
-		m.focusedPane = DiffViewPane
-	} else {
-		m.focusedPane = FileListPane
-	}
-}
-
 // GetFocusedPane returns the currently focused pane
 func (m *LayoutView) GetFocusedPane() Pane {
 	return m.focusedPane
@@ -72,6 +66,122 @@ func (m *LayoutView) GetFocusedPane() Pane {
 // SetFocusedPane sets which pane is focused
 func (m *LayoutView) SetFocusedPane(pane Pane) {
 	m.focusedPane = pane
+}
+
+// SetChildren sets the child views in stable order for focus traversal
+func (m *LayoutView) SetChildren(children ...pot.View) {
+	m.children = children
+	m.focusedIndex = -1 // Reset focused index
+	// Find first focusable child
+	for i, child := range children {
+		if child.AcceptsFocus() {
+			m.focusedIndex = i
+			break
+		}
+	}
+}
+
+// Children returns the child views in stable order
+func (m *LayoutView) Children() []pot.View {
+	return m.children
+}
+
+// FocusNext moves focus to the next focusable child view.
+// Returns true if focus was successfully transferred to a different child,
+// false if there are no focusable children or only one focusable child.
+func (m *LayoutView) FocusNext() bool {
+	return m.moveFocus(1)
+}
+
+// FocusPrev moves focus to the previous focusable child view.
+// Returns true if focus was successfully transferred to a different child,
+// false if there are no focusable children or only one focusable child.
+func (m *LayoutView) FocusPrev() bool {
+	return m.moveFocus(-1)
+}
+
+// moveFocus moves focus by the given delta (positive for next, negative for prev).
+// Returns false if there is no next/previous focusable child in the requested direction.
+func (m *LayoutView) moveFocus(delta int) bool {
+	if len(m.children) == 0 {
+		return false
+	}
+
+	// Build list of focusable children
+	var focusableIndices []int
+	for i, child := range m.children {
+		if child.AcceptsFocus() {
+			focusableIndices = append(focusableIndices, i)
+		}
+	}
+
+	// Need at least 2 focusable children to move
+	if len(focusableIndices) < 2 {
+		return false
+	}
+
+	// Find current position in focusable list
+	currentPos := -1
+	for i, idx := range focusableIndices {
+		if idx == m.focusedIndex {
+			currentPos = i
+			break
+		}
+	}
+
+	// Calculate new position, return false if out of bounds
+	newPos := currentPos + delta
+	if newPos < 0 || newPos >= len(focusableIndices) {
+		return false
+	}
+	newIndex := focusableIndices[newPos]
+
+	// Update focus state
+	if m.focusedIndex >= 0 && m.focusedIndex < len(m.children) {
+		m.children[m.focusedIndex].SetFocused(false)
+	}
+	m.focusedIndex = newIndex
+	m.children[m.focusedIndex].SetFocused(true)
+
+	// Update legacy focusedPane for compatibility
+	if m.focusedIndex == 0 {
+		m.focusedPane = FileListPane
+	} else if m.focusedIndex == 1 {
+		m.focusedPane = DiffViewPane
+	}
+
+	return true
+}
+
+// GetFocusedChild returns the currently focused child view, or nil if none
+func (m *LayoutView) GetFocusedChild() pot.View {
+	if m.focusedIndex >= 0 && m.focusedIndex < len(m.children) {
+		return m.children[m.focusedIndex]
+	}
+	return nil
+}
+
+// SetFocusedChild sets focus to the specified child view
+// Returns true if the child was found and can accept focus
+func (m *LayoutView) SetFocusedChild(child pot.View) bool {
+	for i, c := range m.children {
+		if c == child && c.AcceptsFocus() {
+			if m.focusedIndex >= 0 && m.focusedIndex < len(m.children) {
+				m.children[m.focusedIndex].SetFocused(false)
+			}
+			m.focusedIndex = i
+			m.children[i].SetFocused(true)
+
+			// Update legacy focusedPane for compatibility
+			if i == 0 {
+				m.focusedPane = FileListPane
+			} else if i == 1 {
+				m.focusedPane = DiffViewPane
+			}
+			return true
+		}
+	}
+	return false
 }
 
 // RenderSplitView renders two panes side-by-side

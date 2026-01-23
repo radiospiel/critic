@@ -34,8 +34,10 @@ type View interface {
 	MightBeDirty() bool // Returns true if widget might need repainting (animated widgets override to return true)
 
 	// Focus and input handling
-	Focusable() bool
-	Focused() bool
+	AcceptsFocus() bool // Returns true if the view is able to accept focus
+	FocusNext() bool    // Moves focus to next focusable child; returns true if focus changed
+	FocusPrev() bool    // Moves focus to previous focusable child; returns true if focus changed
+	HasFocus() bool     // Returns true if this view currently has focus
 	SetFocused(focused bool)
 	HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd)
 	HandleMouse(msg tea.MouseMsg) (handled bool, cmd tea.Cmd)
@@ -105,9 +107,30 @@ func (b *BaseView) Render(buf *SubBuffer) {
 	// No-op: override in concrete implementations
 }
 
-// Focusable returns whether this widget can receive focus.
-func (b *BaseView) Focusable() bool {
-	return b.focusable
+// AcceptsFocus returns whether this widget is able to accept focus.
+// BaseView returns false by default; leaf views that can accept focus should override this.
+func (b *BaseView) AcceptsFocus() bool {
+	return false
+}
+
+// FocusNext moves focus to the next focusable child.
+// For views that AcceptsFocus(), returns false (no children to focus).
+// For views that don't AcceptsFocus(), panics (should not be called).
+func (b *BaseView) FocusNext() bool {
+	if !b.AcceptsFocus() {
+		panic("FocusNext called on view that does not accept focus")
+	}
+	return false
+}
+
+// FocusPrev moves focus to the previous focusable child.
+// For views that AcceptsFocus(), returns false (no children to focus).
+// For views that don't AcceptsFocus(), panics (should not be called).
+func (b *BaseView) FocusPrev() bool {
+	if !b.AcceptsFocus() {
+		panic("FocusPrev called on view that does not accept focus")
+	}
+	return false
 }
 
 // SetFocusable sets whether this widget can receive focus.
@@ -115,8 +138,8 @@ func (b *BaseView) SetFocusable(focusable bool) {
 	b.focusable = focusable
 }
 
-// Focused returns whether this widget currently has focus.
-func (b *BaseView) Focused() bool {
+// HasFocus returns whether this widget currently has focus.
+func (b *BaseView) HasFocus() bool {
 	return b.focused
 }
 
@@ -372,7 +395,7 @@ func (fm *FocusManager) collectFocusable(w View) {
 		return
 	}
 
-	if w.Focusable() {
+	if w.AcceptsFocus() {
 		logger.Info("*** collectFocusable")
 		fm.focusChain = append(fm.focusChain, w)
 	}

@@ -398,7 +398,17 @@ func (s *ScrollView) HandleMouse(msg tea.MouseMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-// Focusable returns true as the scroll view can receive focus for keyboard scrolling.
-func (s *ScrollView) Focusable() bool {
+// AcceptsFocus returns true as the scroll view can receive focus for keyboard scrolling.
+func (s *ScrollView) AcceptsFocus() bool {
 	return true
+}
+
+// FocusNext is a no-op for scroll view as it has no focusable children.
+func (s *ScrollView) FocusNext() bool {
+	return false
+}
+
+// FocusPrev is a no-op for scroll view as it has no focusable children.
+func (s *ScrollView) FocusPrev() bool {
+	return false
 }
