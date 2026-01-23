@@ -86,18 +86,11 @@ func NewLRUCache[K comparable, V any](limit int, creator func(K) (V, error)) *LR
 // If the key doesn't exist, the creator function is called and the result is cached.
 // If the creator returns an error, the result is not cached and the error is returned.
 func (c *LRUCache[K, V]) Get(key K) (V, error) {
+	// TODO: get mutex
 	if value, ok := c.data[key]; ok {
 		// Move to end (most recently used) only if not already there
 		// Search from end since recently used entries are more likely to be accessed
-		for i := len(c.usageOrder) - 1; i >= 0; i-- {
-			if c.usageOrder[i] == key {
-				if i < len(c.usageOrder)-1 {
-					c.usageOrder = append(c.usageOrder[:i], c.usageOrder[i+1:]...)
-					c.usageOrder = append(c.usageOrder, key)
-				}
-				break
-			}
-		}
+		c.moveUsedKeyToEnd(key, value)
 		return value, nil
 	}
 
@@ -108,7 +101,8 @@ func (c *LRUCache[K, V]) Get(key K) (V, error) {
 		return zero, err
 	}
 
-	// Evict oldest if at capacity
+	// TODO: get mutex
+	// Add to data, evict oldest entry if at capacity
 	if len(c.usageOrder) >= c.limit {
 		oldest := c.usageOrder[0]
 		c.usageOrder = c.usageOrder[1:]
@@ -118,4 +112,24 @@ func (c *LRUCache[K, V]) Get(key K) (V, error) {
 	c.data[key] = value
 	c.usageOrder = append(c.usageOrder, key)
 	return value, nil
+}
+
+func (c *LRUCache[K, V]) moveUsedKeyToEnd(key K, value V) {
+	preconditions.Check(len(c.usageOrder) > 0, "usageOrder cannot be empty here")
+
+	i := len(c.usageOrder) - 1
+	if c.usageOrder[i] == key {
+		return
+	}
+
+	for i > 0 {
+		i--
+		if c.usageOrder[i] == key {
+			c.usageOrder = append(c.usageOrder[:i], c.usageOrder[i+1:]...)
+			c.usageOrder = append(c.usageOrder, key)
+			return
+		}
+	}
+
+	preconditions.Fail("This should never happen")
 }
