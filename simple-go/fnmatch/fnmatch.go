@@ -39,7 +39,9 @@ type patternCacheKey struct {
 }
 
 // patternCache caches compiled patterns to avoid repeated regex compilation.
-var patternCache = utils.NewLRUCache[patternCacheKey, Matcher](utils.LRUCacheDefaultLimit)
+var patternCache = utils.NewLRUCache(utils.LRUCacheDefaultLimit, func(key patternCacheKey) Matcher {
+	return fnmatchToRegexp(key.pattern, key.separators)
+})
 
 // MustCompile compiles an fnmatch pattern and returns a Matcher.
 // Options can be provided to customize matching behavior.
@@ -65,14 +67,7 @@ func Compile(pattern string, opts ...Options) (Matcher, error) {
 		separators = opts[0].Separators
 	}
 
-	key := patternCacheKey{pattern, separators}
-	if cached, ok := patternCache.Get(key); ok {
-		return cached, nil
-	}
-
-	matcher := fnmatchToRegexp(pattern, separators)
-	patternCache.Set(key, matcher)
-	return matcher, nil
+	return patternCache.Get(patternCacheKey{pattern, separators}), nil
 }
 
 // Fnmatch checks if the path matches the fnmatch pattern.

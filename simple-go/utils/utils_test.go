@@ -59,68 +59,87 @@ func TestReverseInPlace(t *testing.T) {
 	assert.Equals(t, original[0], 3, "original slice should be modified in place")
 }
 
-func TestLRUCacheGetSet(t *testing.T) {
-	cache := NewLRUCache[string, int](10)
+func TestLRUCacheCreatesValue(t *testing.T) {
+	cache := NewLRUCache(10, func(key string) int {
+		return len(key)
+	})
 
-	// Set and get a value
-	cache.Set("a", 1)
-	val, ok := cache.Get("a")
-	assert.Equals(t, ok, true, "key 'a' should exist")
-	assert.Equals(t, val, 1, "value should be 1")
-
-	// Get non-existent key
-	_, ok = cache.Get("b")
-	assert.Equals(t, ok, false, "key 'b' should not exist")
+	assert.Equals(t, cache.Get("a"), 1, "should create value for 'a'")
+	assert.Equals(t, cache.Get("hello"), 5, "should create value for 'hello'")
 }
 
-func TestLRUCacheUpdate(t *testing.T) {
-	cache := NewLRUCache[string, int](10)
+func TestLRUCacheCachesResults(t *testing.T) {
+	callCount := 0
+	cache := NewLRUCache(10, func(key int) int {
+		callCount++
+		return key * 2
+	})
 
-	cache.Set("a", 1)
-	cache.Set("a", 2) // Update existing key
+	// First call creates value
+	assert.Equals(t, cache.Get(5), 10, "should return 10")
+	assert.Equals(t, callCount, 1, "creator should be called once")
 
-	val, ok := cache.Get("a")
-	assert.Equals(t, ok, true, "key 'a' should exist")
-	assert.Equals(t, val, 2, "value should be updated to 2")
+	// Second call uses cache
+	assert.Equals(t, cache.Get(5), 10, "should return cached 10")
+	assert.Equals(t, callCount, 1, "creator should still be called only once")
+
+	// Different key creates new value
+	assert.Equals(t, cache.Get(3), 6, "should return 6")
+	assert.Equals(t, callCount, 2, "creator should be called twice")
 }
 
 func TestLRUCacheEviction(t *testing.T) {
-	cache := NewLRUCache[int, int](3)
+	callCount := 0
+	cache := NewLRUCache(3, func(key int) int {
+		callCount++
+		return key * 10
+	})
 
 	// Fill cache
-	cache.Set(1, 10)
-	cache.Set(2, 20)
-	cache.Set(3, 30)
+	cache.Get(1)
+	cache.Get(2)
+	cache.Get(3)
+	assert.Equals(t, callCount, 3, "should have called creator 3 times")
 
 	// Add one more, should evict oldest (1)
-	cache.Set(4, 40)
+	cache.Get(4)
+	assert.Equals(t, callCount, 4, "should have called creator 4 times")
 
-	_, ok := cache.Get(1)
-	assert.Equals(t, ok, false, "key 1 should have been evicted")
+	// Access evicted key - should recreate
+	cache.Get(1)
+	assert.Equals(t, callCount, 5, "key 1 should have been evicted and recreated")
 
-	val, ok := cache.Get(2)
-	assert.Equals(t, ok, true, "key 2 should still exist")
-	assert.Equals(t, val, 20, "value should be 20")
+	// Access cached key - should not call creator
+	cache.Get(4)
+	assert.Equals(t, callCount, 5, "key 4 should still be cached")
 }
 
 func TestLRUCacheLRUOrder(t *testing.T) {
-	cache := NewLRUCache[int, int](3)
+	callCount := 0
+	cache := NewLRUCache(3, func(key int) int {
+		callCount++
+		return key
+	})
 
-	cache.Set(1, 10)
-	cache.Set(2, 20)
-	cache.Set(3, 30)
+	cache.Get(1)
+	cache.Get(2)
+	cache.Get(3)
 
 	// Access key 1, making it most recently used
 	cache.Get(1)
+	assert.Equals(t, callCount, 3, "no new creation for cached key")
 
 	// Add new key, should evict key 2 (now oldest)
-	cache.Set(4, 40)
+	cache.Get(4)
+	assert.Equals(t, callCount, 4, "should create key 4")
 
-	_, ok := cache.Get(2)
-	assert.Equals(t, ok, false, "key 2 should have been evicted")
+	// Key 2 should have been evicted
+	cache.Get(2)
+	assert.Equals(t, callCount, 5, "key 2 should have been evicted and recreated")
 
-	_, ok = cache.Get(1)
-	assert.Equals(t, ok, true, "key 1 should still exist (was accessed)")
+	// Key 1 should still be cached
+	cache.Get(1)
+	assert.Equals(t, callCount, 5, "key 1 should still be cached")
 }
 
 func TestLRUCacheWithStructKey(t *testing.T) {
@@ -128,21 +147,15 @@ func TestLRUCacheWithStructKey(t *testing.T) {
 		a string
 		b int
 	}
-	cache := NewLRUCache[key, string](10)
+	cache := NewLRUCache(10, func(k key) string {
+		return k.a + "!"
+	})
 
 	k1 := key{"hello", 1}
 	k2 := key{"world", 2}
 
-	cache.Set(k1, "value1")
-	cache.Set(k2, "value2")
-
-	val, ok := cache.Get(k1)
-	assert.Equals(t, ok, true, "key k1 should exist")
-	assert.Equals(t, val, "value1", "value should be 'value1'")
-
-	val, ok = cache.Get(k2)
-	assert.Equals(t, ok, true, "key k2 should exist")
-	assert.Equals(t, val, "value2", "value should be 'value2'")
+	assert.Equals(t, cache.Get(k1), "hello!", "should create value for k1")
+	assert.Equals(t, cache.Get(k2), "world!", "should create value for k2")
 }
 
 func TestLRUCacheDefaultLimit(t *testing.T) {

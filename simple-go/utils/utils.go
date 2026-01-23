@@ -63,25 +63,30 @@ func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
 const LRUCacheDefaultLimit = 256
 
 // LRUCache is a simple LRU cache using a map and slice.
+// It includes a creator function that is called when a key is not found.
 type LRUCache[K comparable, V any] struct {
-	data  map[K]V
-	order []K
-	limit int
+	data    map[K]V
+	order   []K
+	limit   int
+	creator func(K) V
 }
 
-// NewLRUCache creates a new LRU cache with the specified limit.
-func NewLRUCache[K comparable, V any](limit int) *LRUCache[K, V] {
+// NewLRUCache creates a new LRU cache with the specified limit and creator function.
+// The creator function is called when Get is called with a key that doesn't exist.
+func NewLRUCache[K comparable, V any](limit int, creator func(K) V) *LRUCache[K, V] {
 	return &LRUCache[K, V]{
-		data:  make(map[K]V),
-		order: make([]K, 0, limit),
-		limit: limit,
+		data:    make(map[K]V),
+		order:   make([]K, 0, limit),
+		limit:   limit,
+		creator: creator,
 	}
 }
 
-// Get retrieves a value from the cache, moving it to most recently used.
-func (c *LRUCache[K, V]) Get(key K) (V, bool) {
-	value, ok := c.data[key]
-	if ok {
+// Get retrieves a value from the cache, creating it if it doesn't exist.
+// If the key exists, it is moved to most recently used position.
+// If the key doesn't exist, the creator function is called and the result is cached.
+func (c *LRUCache[K, V]) Get(key K) V {
+	if value, ok := c.data[key]; ok {
 		// Move to end (most recently used)
 		for i, k := range c.order {
 			if k == key {
@@ -90,16 +95,11 @@ func (c *LRUCache[K, V]) Get(key K) (V, bool) {
 				break
 			}
 		}
+		return value
 	}
-	return value, ok
-}
 
-// Set adds or updates a value in the cache, evicting the oldest if at capacity.
-func (c *LRUCache[K, V]) Set(key K, value V) {
-	if _, exists := c.data[key]; exists {
-		c.data[key] = value
-		return
-	}
+	// Create new value
+	value := c.creator(key)
 
 	// Evict oldest if at capacity
 	if len(c.order) >= c.limit {
@@ -110,4 +110,5 @@ func (c *LRUCache[K, V]) Set(key K, value V) {
 
 	c.data[key] = value
 	c.order = append(c.order, key)
+	return value
 }
