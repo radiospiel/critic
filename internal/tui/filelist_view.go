@@ -291,7 +291,7 @@ func (w *FileListView) SetSession(s *session.Session) {
 	focusSub := s.OnKeyChange(session.KeyFocusedPane, func(key string) {
 		pane := s.GetFocusedPane()
 		focused := pane == "fileList"
-		if w.HasFocus() != focused {
+		if w.Focused() != focused {
 			w.SetFocused(focused)
 			w.Repaint()
 		}

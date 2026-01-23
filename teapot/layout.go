@@ -192,7 +192,7 @@ func (b *BoxLayout) Render(buf *SubBuffer) {
 // HandleKey routes key events to focused child.
 func (b *BoxLayout) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	for _, child := range b.children {
-		if child.HasFocus() {
+		if child.Focused() {
 			return child.HandleKey(msg)
 		}
 		// Check for focused descendants
@@ -205,7 +205,7 @@ func (b *BoxLayout) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 
 func (b *BoxLayout) routeToFocusedDescendant(w View, msg tea.KeyMsg) (bool, tea.Cmd) {
 	for _, child := range w.Children() {
-		if child.HasFocus() {
+		if child.Focused() {
 			return child.HandleKey(msg)
 		}
 		if handled, cmd := b.routeToFocusedDescendant(child, msg); handled {
@@ -442,7 +442,7 @@ func (s *Split) Render(buf *SubBuffer) {
 func (s *Split) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	// Check first pane
 	if s.first != nil {
-		if s.first.HasFocus() {
+		if s.first.Focused() {
 			return s.first.HandleKey(msg)
 		}
 		if handled, cmd := s.routeToFocused(s.first, msg); handled {
@@ -452,7 +452,7 @@ func (s *Split) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 
 	// Check second pane
 	if s.second != nil {
-		if s.second.HasFocus() {
+		if s.second.Focused() {
 			return s.second.HandleKey(msg)
 		}
 		if handled, cmd := s.routeToFocused(s.second, msg); handled {
@@ -465,7 +465,7 @@ func (s *Split) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 
 func (s *Split) routeToFocused(w View, msg tea.KeyMsg) (bool, tea.Cmd) {
 	for _, child := range w.Children() {
-		if child.HasFocus() {
+		if child.Focused() {
 			return child.HandleKey(msg)
 		}
 		if handled, cmd := s.routeToFocused(child, msg); handled {

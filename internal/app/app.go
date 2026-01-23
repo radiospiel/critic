@@ -128,7 +128,6 @@ type Delegate struct {
 	commentEditor tui.CommentEditor
 	statusBar     *tui.StatusBarView
 	mainLayout    *tui.MainView
-	layout        tui.LayoutView // Legacy layout for pane focus tracking
 	diff          *ctypes.Diff
 	bases         []string          // List of base refs
 	currentBase   int               // Index of current base
@@ -184,17 +183,12 @@ func NewDelegate(args *Args) *Delegate {
 		logger.Info("First run for version %s, will show screensaver", version.Version())
 	}
 
-	// Create layout view and set children for focus management
-	layout := tui.NewLayoutView()
-	layout.SetChildren(fileList, diffView)
-
 	d := &Delegate{
 		fileList:      fileList,
 		diffView:      diffView,
 		commentEditor: tui.NewCommentEditor(),
 		statusBar:     statusBar,
 		mainLayout:    mainLayout,
-		layout:        layout,
 		bases:         args.Bases,
 		currentBase:   0, // Start with first base
 		paths:         args.Paths,
@@ -254,14 +248,14 @@ func (d *Delegate) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 	switch msg.String() {
 	case "tab":
 		// Move focus to next child
-		if d.layout.FocusNext() {
+		if d.mainLayout.FocusNext() {
 			d.mainLayout.Repaint()
 		}
 		return true, nil
 
 	case "shift+tab":
 		// Move focus to previous child
-		if d.layout.FocusPrev() {
+		if d.mainLayout.FocusPrev() {
 			d.mainLayout.Repaint()
 		}
 		return true, nil
@@ -314,7 +308,7 @@ func (d *Delegate) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 
 	case "enter":
 		// Activate comment editor when focused on diff view
-		if d.layout.GetFocusedPane() == tui.DiffViewPane {
+		if d.mainLayout.GetFocusedPane() == tui.DiffViewPane {
 			activeFile := d.fileList.GetActiveFile()
 			if activeFile != nil {
 				cursorLine := d.diffView.GetCursorLine()
@@ -352,7 +346,7 @@ func (d *Delegate) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 
 	default:
 		// Route key messages to focused pane
-		if d.layout.GetFocusedPane() == tui.FileListPane {
+		if d.mainLayout.GetFocusedPane() == tui.FileListPane {
 			prevFile := d.fileList.GetActiveFile()
 			_, cmd := d.fileList.HandleKey(msg)
 			if d.fileList.GetActiveFile() != prevFile {
@@ -383,9 +377,6 @@ func (d *Delegate) HandleMessage(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		// Handle window resize for legacy layout and comment editor
-		d.layout.SetSize(msg.Width, msg.Height)
-
 		// Update comment editor size (80% width, centered)
 		editorWidth := msg.Width * 80 / 100
 		editorHeight := msg.Height - 6

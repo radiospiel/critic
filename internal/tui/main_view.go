@@ -18,6 +18,9 @@ type MainView struct {
 
 	// Layout containers
 	hsplit *pot.Split
+
+	// Focus management
+	focus *FocusManager
 }
 
 // NewMainView creates a new main layout with the given widgets.
@@ -34,6 +37,10 @@ func NewMainView(fileList *FileListView, diffView *DiffView, statusBar *StatusBa
 	fileList.SetParent(m)
 	diffView.SetParent(m)
 	statusBar.SetParent(m)
+
+	// Initialize focus manager with focusable children (fileList, diffView)
+	// Note: statusBar is not focusable
+	m.focus = NewFocusManager(fileList, diffView)
 
 	// Create placeholder widgets for the split
 	// (actual rendering is done directly to avoid double-buffering)
@@ -138,4 +145,26 @@ func (m *MainView) DiffView() *DiffView {
 // StatusBar returns the status bar widget.
 func (m *MainView) StatusBar() *StatusBarView {
 	return m.statusBar
+}
+
+// GetFocusedPane returns which pane is currently focused.
+func (m *MainView) GetFocusedPane() Pane {
+	return m.focus.GetFocusedPane()
+}
+
+// SetFocusedPane sets which pane is focused.
+func (m *MainView) SetFocusedPane(pane Pane) {
+	m.focus.SetFocusedPane(pane)
+}
+
+// FocusNext moves focus to the next focusable child.
+// Returns true if focus was moved, false if already at the last child.
+func (m *MainView) FocusNext() bool {
+	return m.focus.FocusNext()
+}
+
+// FocusPrev moves focus to the previous focusable child.
+// Returns true if focus was moved, false if already at the first child.
+func (m *MainView) FocusPrev() bool {
+	return m.focus.FocusPrev()
 }
