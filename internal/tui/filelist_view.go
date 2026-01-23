@@ -41,8 +41,8 @@ type FileListView struct {
 }
 
 // NewFileListView creates a new file list widget
-func NewFileListView() *FileListView {
-	w := &FileListView{}
+func NewFileListView(session *session.Session) *FileListView {
+	w := &FileListView{session: session}
 
 	// Create the SelectableList with a custom renderer
 	w.list = pot.NewSelectableList[FileItem](w.renderItem)
