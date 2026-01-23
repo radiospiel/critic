@@ -14,7 +14,6 @@ import (
 // newTUICmd creates the tui subcommand
 func newTUICmd(handler func(*app.Args) error) *cobra.Command {
 	var extensionsFlag []string
-	var noAnimationFlag bool
 	var debugFlag bool
 	var cpuprofileFlag string
 
@@ -65,10 +64,9 @@ Examples:
 				defer pprof.StopCPUProfile()
 			}
 			parsedArgs := &app.Args{
-				Extensions:  ensureSlice(extensionsFlag),
-				Paths:       []string{"."},
-				NoAnimation: noAnimationFlag,
-				Debug:       debugFlag,
+				Extensions: ensureSlice(extensionsFlag),
+				Paths:      []string{"."},
+				Debug:      debugFlag,
 			}
 
 			argsLenAtDash := cmd.ArgsLenAtDash()
@@ -96,7 +94,6 @@ Examples:
 	}
 
 	cmd.Flags().StringSliceVar(&extensionsFlag, "extensions", nil, "Comma-separated list of file extensions to include")
-	cmd.Flags().BoolVar(&noAnimationFlag, "no-animation", false, "Disable animations")
 	cmd.Flags().BoolVar(&debugFlag, "debug", false, "Enable debug mode (shows UUIDs, etc.)")
 	cmd.Flags().StringVar(&cpuprofileFlag, "cpuprofile", "", "Write CPU profile to file")
 

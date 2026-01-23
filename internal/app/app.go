@@ -10,6 +10,7 @@ import (
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/matrix"
 	"git.15b.it/eno/critic/internal/messagedb"
+	"git.15b.it/eno/critic/internal/session"
 	"git.15b.it/eno/critic/internal/tui"
 	"git.15b.it/eno/critic/internal/version"
 	"git.15b.it/eno/critic/pkg/critic"
@@ -46,11 +47,10 @@ func (m FilterMode) String() string {
 
 // Args represents parsed command-line arguments
 type Args struct {
-	Bases       []string // List of base points (e.g., ["main", "origin/main", "HEAD"])
-	Paths       []string // Paths to diff
-	Extensions  []string // File extensions to include
-	NoAnimation bool     // Disable animations
-	Debug       bool     // Enable debug mode
+	Bases      []string // List of base points (e.g., ["main", "origin/main", "HEAD"])
+	Paths      []string // Paths to diff
+	Extensions []string // File extensions to include
+	Debug      bool     // Enable debug mode
 }
 
 // GetDefaultBases returns the default base points based on git state
@@ -123,6 +123,7 @@ func Run(args *Args) error {
 // Delegate implements teapot.AppDelegate for critic-specific behavior
 type Delegate struct {
 	app           *teapot.App // Set after app creation
+	session       *session.Session
 	fileList      *tui.FileListView
 	diffView      *tui.DiffView
 	commentEditor tui.CommentEditor
@@ -136,20 +137,20 @@ type Delegate struct {
 	resolver      *git.BaseResolver // Base resolver with polling
 	messaging     critic.Messaging  // Messaging interface for conversations
 	filterMode    FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
-	noAnimation bool                 // Whether animations are disabled
-	debug       bool                 // Debug mode enabled
-	err         error
-	showHelp    bool                 // Whether to show help screen
-	screensaver *matrix.Screensaver  // Matrix screensaver
-	gitRoot     string               // Git repository root path
+	debug         bool              // Debug mode enabled
+	err           error
+	showHelp      bool                // Whether to show help screen
+	screensaver   *matrix.Screensaver // Matrix screensaver
+	gitRoot       string              // Git repository root path
 }
 
 // NewDelegate creates a new critic delegate
 func NewDelegate(args *Args) *Delegate {
 	logger.Info("NewDelegate: Creating delegate with %d paths, %d bases", len(args.Paths), len(args.Bases))
-	diffView := tui.NewDiffView()
 
-	fileList := tui.NewFileListView()
+	ses := &session.Session{}
+	diffView := tui.NewDiffView(ses)
+	fileList := tui.NewFileListView(ses)
 	fileList.SetFocused(true) // Start with file list focused
 
 	// Initialize message database
@@ -184,6 +185,7 @@ func NewDelegate(args *Args) *Delegate {
 	}
 
 	d := &Delegate{
+		session:       ses,
 		fileList:      fileList,
 		diffView:      diffView,
 		commentEditor: tui.NewCommentEditor(),
@@ -193,11 +195,10 @@ func NewDelegate(args *Args) *Delegate {
 		currentBase:   0, // Start with first base
 		paths:         args.Paths,
 		extensions:    args.Extensions,
-		messaging:   mdb,
-		noAnimation: args.NoAnimation,
-		debug:       args.Debug,
-		screensaver: screensaver,
-		gitRoot:     gitRoot,
+		messaging:     mdb,
+		debug:         args.Debug,
+		screensaver:   screensaver,
+		gitRoot:       gitRoot,
 	}
 
 	// Set up screensaver done callback to mark version as seen

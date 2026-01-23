@@ -9,6 +9,7 @@ import (
 	"git.15b.it/eno/critic/internal/config"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/highlight"
+	"git.15b.it/eno/critic/internal/session"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
@@ -35,8 +36,8 @@ const (
 // It is a proper teapot Widget that wraps DiffContentView with additional
 // functionality like syntax highlighting, cursor management, and scrolling.
 type DiffView struct {
-	teapot.BaseView // Embed BaseWidget to implement the Widget interface
-
+	teapot.BaseView      // Embed BaseWidget to implement the Widget interface
+	session              *session.Session
 	file                 *ctypes.FileDiff
 	viewport             viewport.Model
 	ready                bool
@@ -64,11 +65,12 @@ type DiffView struct {
 }
 
 // NewDiffView creates a new diff viewer model
-func NewDiffView() *DiffView {
+func NewDiffView(ses *session.Session) *DiffView {
 	m := &DiffView{
 		BaseView:    teapot.NewBaseView(),
 		highlighter: highlight.NewHighlighter(),
 		diffWidget:  NewDiffContentView(),
+		session:     ses,
 	}
 	m.SetFocusable(true)
 	m.SetName("DiffView")
