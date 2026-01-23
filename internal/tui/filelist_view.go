@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"git.15b.it/eno/critic/internal/git"
@@ -214,13 +215,19 @@ func (w *FileListView) GetActiveFile() *ctypes.FileDiff {
 
 // SelectByPath selects a file by its path
 func (w *FileListView) SelectByPath(path string) bool {
-	return w.list.SelectByPredicate(func(item FileItem) bool {
+	index := slices.IndexFunc(w.list.Items(), func(item FileItem) bool {
 		filePath := item.File.NewPath
 		if filePath == "" {
 			filePath = item.File.OldPath
 		}
 		return filePath == path
 	})
+
+	if index >= 0 {
+		w.list.SetSelectedIndex(index)
+		return true
+	}
+	return false
 }
 
 // SelectNext moves to the next file

@@ -744,10 +744,7 @@ func (d *Delegate) applyFilterMode() {
 
 	d.fileList.SetFiles(filteredFiles)
 	d.fileList.SetFilterMode(int(d.filterMode), len(d.diff.Files))
-
-	if currentPath != "" {
-		d.fileList.SelectByPath(currentPath)
-	}
+	d.fileList.SelectByPath(currentPath)
 
 	d.diffView.SetFilterMode(tui.FilterMode(d.filterMode))
 

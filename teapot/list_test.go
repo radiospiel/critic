@@ -108,28 +108,6 @@ func TestSelectableListSetSelectedIndex(t *testing.T) {
 	assert.Equals(t, list.SelectedIndex(), 0)
 }
 
-func TestSelectableListSelectByPredicate(t *testing.T) {
-	list := NewSelectableList[testItem](nil)
-
-	items := []testItem{
-		{name: "Apple", id: 1},
-		{name: "Banana", id: 2},
-		{name: "Cherry", id: 3},
-	}
-	list.SetItems(items)
-
-	found := list.SelectByPredicate(func(item testItem) bool {
-		return item.id == 2
-	})
-	assert.True(t, found, "should find item with id=2")
-	assert.Equals(t, list.SelectedIndex(), 1)
-
-	notFound := list.SelectByPredicate(func(item testItem) bool {
-		return item.id == 100
-	})
-	assert.False(t, notFound, "should not find item with id=100")
-}
-
 func TestSelectableListRender(t *testing.T) {
 	// Custom renderer
 	renderer := func(buf *SubBuffer, item testItem, selected bool, focused bool, width int) {

@@ -98,17 +98,6 @@ func (l *SelectableList[T]) SetSelectedIndex(index int) {
 	l.Repaint() // Mark as dirty for compositor re-render
 }
 
-// SelectByPredicate selects the first item matching the predicate.
-func (l *SelectableList[T]) SelectByPredicate(pred func(T) bool) bool {
-	for i, item := range l.items {
-		if pred(item) {
-			l.SetSelectedIndex(i)
-			return true
-		}
-	}
-	return false
-}
-
 // SetStyles sets the selection styles.
 func (l *SelectableList[T]) SetStyles(selected, selectedUnfocused, normal lipgloss.Style) {
 	l.selectedStyle = selected
