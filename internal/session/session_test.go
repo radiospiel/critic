@@ -36,15 +36,6 @@ func (m *mockMessaging) GetConversations(status string) ([]critic.Conversation, 
 	return all, nil
 }
 
-func (m *mockMessaging) GetConversationsByFile(filePath string) ([]critic.Conversation, error) {
-	convs := m.conversations[filePath]
-	result := make([]critic.Conversation, len(convs))
-	for i, c := range convs {
-		result[i] = *c
-	}
-	return result, nil
-}
-
 func (m *mockMessaging) GetFullConversation(uuid string) (*critic.Conversation, error) {
 	for _, convs := range m.conversations {
 		for _, c := range convs {

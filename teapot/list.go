@@ -3,12 +3,13 @@ package teapot
 import (
 	"strings"
 
+	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/simple-go/utils"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-// ListItem represents a single item in a SelectableList.
+// ListItem represents a single item in a List.
 type ListItem interface {
 	// FilterValue returns the string used for filtering/searching.
 	FilterValue() string
@@ -19,9 +20,9 @@ type ListItem interface {
 // and the available width. It should render to the buffer at y=0.
 type ItemRenderer[T ListItem] func(buf *SubBuffer, item T, selected bool, focused bool, width int)
 
-// SelectableList is a generic scrollable list with selection.
+// List is a generic scrollable list with selection.
 // It can be used for file lists, branch selectors, commit selectors, etc.
-type SelectableList[T ListItem] struct {
+type List[T ListItem] struct {
 	BaseView
 	items        []T
 	selected     int // Index of selected item
@@ -38,8 +39,8 @@ type SelectableList[T ListItem] struct {
 }
 
 // NewSelectableList creates a new selectable list with the given renderer.
-func NewSelectableList[T ListItem](renderer ItemRenderer[T]) *SelectableList[T] {
-	list := &SelectableList[T]{
+func NewSelectableList[T ListItem](renderer ItemRenderer[T]) *List[T] {
+	list := &List[T]{
 		BaseView: NewBaseView(),
 		renderer: renderer,
 		selectedStyle: lipgloss.NewStyle().
@@ -54,7 +55,7 @@ func NewSelectableList[T ListItem](renderer ItemRenderer[T]) *SelectableList[T] 
 }
 
 // SetItems sets the list items.
-func (l *SelectableList[T]) SetItems(items []T) {
+func (l *List[T]) SetItems(items []T) {
 	l.items = items
 	// Adjust selection if needed
 	if l.selected >= len(items) {
@@ -68,12 +69,12 @@ func (l *SelectableList[T]) SetItems(items []T) {
 }
 
 // Items returns all items.
-func (l *SelectableList[T]) Items() []T {
+func (l *List[T]) Items() []T {
 	return l.items
 }
 
 // Selected returns the currently selected item.
-func (l *SelectableList[T]) Selected() (T, bool) {
+func (l *List[T]) Selected() (T, bool) {
 	var zero T
 	if l.selected < 0 || l.selected >= len(l.items) {
 		return zero, false
@@ -82,36 +83,36 @@ func (l *SelectableList[T]) Selected() (T, bool) {
 }
 
 // SelectedIndex returns the index of the selected item.
-func (l *SelectableList[T]) SelectedIndex() int {
+func (l *List[T]) SelectedIndex() int {
 	return l.selected
 }
 
 // SetSelectedIndex sets the selected index.
-func (l *SelectableList[T]) SetSelectedIndex(index int) {
+func (l *List[T]) SetSelectedIndex(index int) {
 	l.selected = utils.Clamp(index, 0, len(l.items)-1)
 	l.ensureVisible()
 	l.Repaint() // Mark as dirty for compositor re-render
 }
 
 // SetStyles sets the selection styles.
-func (l *SelectableList[T]) SetStyles(selected, selectedUnfocused, normal lipgloss.Style) {
+func (l *List[T]) SetStyles(selected, selectedUnfocused, normal lipgloss.Style) {
 	l.selectedStyle = selected
 	l.selectedUnfocusedStyle = selectedUnfocused
 	l.normalStyle = normal
 }
 
 // OnChange sets a callback for when items change.
-func (l *SelectableList[T]) OnChange(fn func(items []T)) {
+func (l *List[T]) OnChange(fn func(items []T)) {
 	l.onChange = fn
 }
 
 // visibleCount returns the number of visible items.
-func (l *SelectableList[T]) visibleCount() int {
+func (l *List[T]) visibleCount() int {
 	return l.bounds.Height
 }
 
 // ensureVisible ensures the selected item is visible.
-func (l *SelectableList[T]) ensureVisible() {
+func (l *List[T]) ensureVisible() {
 	visible := l.visibleCount()
 	if visible <= 0 {
 		return
@@ -129,7 +130,7 @@ func (l *SelectableList[T]) ensureVisible() {
 }
 
 // Render renders the list to the buffer.
-func (l *SelectableList[T]) Render(buf *SubBuffer) {
+func (l *List[T]) Render(buf *SubBuffer) {
 	visible := l.visibleCount()
 	if visible <= 0 || len(l.items) == 0 {
 		return
@@ -184,7 +185,9 @@ func (l *SelectableList[T]) Render(buf *SubBuffer) {
 }
 
 // HandleKey handles keyboard input.
-func (l *SelectableList[T]) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+func (l *List[T]) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+	logger.Info("*** List.HandleKey")
+
 	switch msg.String() {
 	case "up", "k":
 		l.moveUp()
@@ -214,7 +217,7 @@ func (l *SelectableList[T]) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-func (l *SelectableList[T]) moveUp() {
+func (l *List[T]) moveUp() {
 	if l.selected > 0 {
 		l.selected--
 		l.ensureVisible()
@@ -222,7 +225,7 @@ func (l *SelectableList[T]) moveUp() {
 	}
 }
 
-func (l *SelectableList[T]) moveDown() {
+func (l *List[T]) moveDown() {
 	if l.selected < len(l.items)-1 {
 		l.selected++
 		l.ensureVisible()
@@ -230,13 +233,13 @@ func (l *SelectableList[T]) moveDown() {
 	}
 }
 
-func (l *SelectableList[T]) pageUp() {
+func (l *List[T]) pageUp() {
 	visible := l.visibleCount()
 	newSelected := max(0, l.selected-visible)
 	l.SetSelectedIndex(newSelected)
 }
 
-func (l *SelectableList[T]) pageDown() {
+func (l *List[T]) pageDown() {
 	visible := l.visibleCount()
 	newSelected := min(len(l.items)-1, l.selected+visible)
 	l.SetSelectedIndex(newSelected)

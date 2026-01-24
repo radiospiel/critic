@@ -72,41 +72,6 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	return conversations, nil
 }
 
-// GetConversationsByFile returns all conversations for a specific file
-// Returns root-level conversations ordered by line number
-func (db *DB) GetConversationsByFile(filePath string) ([]critic.Conversation, error) {
-	query := `
-		SELECT id, status, file_path, lineno, sha1, context, created_at, updated_at
-		FROM messages
-		WHERE id = conversation_id AND file_path = ?
-		ORDER BY lineno, created_at ASC
-	`
-
-	rows, err := db.db.Query(query, filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get conversations by file: %w", err)
-	}
-	defer rows.Close()
-
-	var conversations []critic.Conversation
-	for rows.Next() {
-		var conv critic.Conversation
-		var status string
-		var context *string
-		if err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &context, &conv.CreatedAt, &conv.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan conversation: %w", err)
-		}
-		conv.Status = convertToCriticStatus(Status(status))
-		if context != nil {
-			conv.Context = *context
-		}
-		conversations = append(conversations, conv)
-	}
-
-	logger.Debug("Found %d conversations for file %s", len(conversations), filePath)
-	return conversations, nil
-}
-
 // GetFullConversation returns the complete conversation including all replies
 // Messages are ordered by created_at (root message first, then replies in chronological order)
 func (db *DB) GetFullConversation(conversationID string) (*critic.Conversation, error) {

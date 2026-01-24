@@ -9,6 +9,7 @@ import (
 	"git.15b.it/eno/critic/internal/session"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
+	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/simple-go/observable"
 	pot "git.15b.it/eno/critic/teapot"
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,7 +32,7 @@ func (f FileItem) FilterValue() string {
 // FileListView is a teapot-based file list widget.
 type FileListView struct {
 	pot.BaseView
-	list          *pot.SelectableList[FileItem]
+	list          *pot.List[FileItem]
 	messaging     critic.Messaging
 	session       *session.Session
 	subscriptions []observable.Subscription
@@ -43,9 +44,10 @@ type FileListView struct {
 
 // NewFileListView creates a new file list widget
 func NewFileListView(session *session.Session, messaging critic.Messaging) *FileListView {
+	messaging = &critic.NullMessaging{}
 	w := &FileListView{session: session, messaging: messaging}
 
-	// Create the SelectableList with a custom renderer
+	// Create the List with a custom renderer
 	w.list = pot.NewSelectableList[FileItem](w.renderItem)
 
 	// Configure styles
@@ -231,7 +233,19 @@ func (w *FileListView) SetSelectedIndex(idx int) bool {
 		return false
 	}
 
+	logger.Info("*** SetSelectedIndex")
 	w.list.SetSelectedIndex(idx)
+	w.session.SetValueAtKey(session.KeySelectedFileIndex, idx)
+	filePath := w.list.Items()[idx].File.NewPath
+	if filePath == "" {
+		filePath = w.list.Items()[idx].File.OldPath
+	}
+
+	w.session.Transaction(func(txn *observable.Txn) {
+		txn.SetValueAtKey(session.KeySelectedFileIndex, idx)
+		txn.SetValueAtKey(session.KeySelectedFilePath, filePath)
+	})
+
 	return true
 }
 

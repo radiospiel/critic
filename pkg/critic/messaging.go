@@ -1,9 +1,8 @@
 package critic
 
 import (
+	"errors"
 	"time"
-
-	"github.com/samber/lo"
 )
 
 // Author represents who authored a message
@@ -62,10 +61,6 @@ type Messaging interface {
 	// Only returns the root message info, not the full thread
 	GetConversations(status string) ([]Conversation, error)
 
-	// GetConversationsByFile returns all conversations for a specific file
-	// Returns root-level conversations ordered by line number
-	GetConversationsByFile(filePath string) ([]Conversation, error)
-
 	// GetFullConversation returns the complete conversation including all replies
 	// Messages are ordered by created_at (root message first, then replies in chronological order)
 	GetFullConversation(uuid string) (*Conversation, error)
@@ -99,42 +94,50 @@ type Messaging interface {
 	Close() error
 }
 
-// GetFilesWithComments returns a list of unique file paths that have conversations
-func GetFilesWithComments(m Messaging) ([]string, error) {
-	conversations, err := m.GetConversations("")
-	if err != nil {
-		return nil, err
-	}
-
-	filePaths := lo.Map(conversations, func(conv Conversation, _ int) string {
-		return conv.FilePath
-	})
-	return lo.Uniq(filePaths), nil
+// Messaging defines the interface for managing critic conversations
+type NullMessaging struct {
 }
 
-// GetFilesWithUnreadAIMessages returns a list of unique file paths that have unread AI messages
-func GetFilesWithUnreadAIMessages(m Messaging) ([]string, error) {
-	conversations, err := m.GetConversations("")
-	if err != nil {
-		return nil, err
-	}
+func (n NullMessaging) GetConversations(status string) ([]Conversation, error) {
+	return []Conversation{}, nil
+}
 
-	// TODO: future improvement: this can be optimized with SQL
-	// Get full conversations (skipping any that fail to load)
-	fullConvs := lo.FilterMap(conversations, func(conv Conversation, _ int) (*Conversation, bool) {
-		fullConv, err := m.GetFullConversation(conv.UUID)
-		return fullConv, err == nil
-	})
+func (n NullMessaging) GetFullConversation(uuid string) (*Conversation, error) {
+	return nil, errors.New("No such conversation")
+}
 
-	// Filter to those with unread AI messages
-	convsWithUnread := lo.Filter(fullConvs, func(conv *Conversation, _ int) bool {
-		return lo.ContainsBy(conv.Messages, func(msg Message) bool {
-			return msg.Author == AuthorAI && msg.IsUnread
-		})
-	})
+func (n NullMessaging) GetConversationsForFile(filePath string) ([]*Conversation, error) {
+	return nil, errors.New("No conversation for filePath " + filePath)
+}
 
-	filePaths := lo.Map(convsWithUnread, func(conv *Conversation, _ int) string {
-		return conv.FilePath
-	})
-	return lo.Uniq(filePaths), nil
+func (n NullMessaging) GetFileConversationSummary(filePath string) (*FileConversationSummary, error) {
+	return nil, errors.New("No conversation for filePath " + filePath)
+}
+
+func (n NullMessaging) ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error) {
+	return nil, errors.New("No such conversation " + conversationUUID)
+}
+
+func (n NullMessaging) CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error) {
+	return nil, errors.New("Cannot create conversation")
+}
+
+func (n NullMessaging) MarkAsResolved(conversationUUID string) error {
+	return errors.New("No such conversation " + conversationUUID)
+}
+
+func (n NullMessaging) MarkAsUnresolved(conversationUUID string) error {
+	return errors.New("No such conversation " + conversationUUID)
+}
+
+func (n NullMessaging) MarkAsRead(messageUUID string) error {
+	return errors.New("No such message " + messageUUID)
+}
+
+func (n NullMessaging) MarkAsReadByAI(conversationUUID string) error {
+	return errors.New("No such conversation " + conversationUUID)
+}
+
+func (n NullMessaging) Close() error {
+	return nil
 }
