@@ -42,9 +42,9 @@ type FilesListView struct {
 	totalFiles    int // Total files before filtering (for "No files match filter" message)
 }
 
-// NewFilesListView creates a new file listView widget
+// NewFilesListView creates a new file listView widget.
+// Session can be nil for testing purposes.
 func NewFilesListView(ses *session.Session, messaging critic.Messaging) *FilesListView {
-	preconditions.Check(ses != nil, "ses must be set")
 	preconditions.Check(messaging != nil, "messaging must be set")
 	w := &FilesListView{session: ses, messaging: messaging}
 
@@ -69,8 +69,8 @@ func NewFilesListView(ses *session.Session, messaging critic.Messaging) *FilesLi
 			}
 
 			ses.Transaction(func(txn *observable.Txn) {
-				txn.SetValueAtKey(session.KeySelectedFileIndex, index)
-				txn.SetValueAtKey(session.KeySelectedFilePath, filePath)
+				txn.SetValueAtKey(session.Keys.SelectedFileIndex, index)
+				txn.SetValueAtKey(session.Keys.SelectedFilePath, filePath)
 			})
 		})
 
@@ -286,21 +286,21 @@ func (w *FilesListView) SetSession(s *session.Session) {
 	}
 
 	// Subscribe to diff.files changes
-	filesSub := s.OnKeyChange(session.KeyFiles, func(key string) {
+	filesSub := s.OnKeyChange(session.Keys.Files, func(key string) {
 		files := s.GetFiles()
 		w.updateFilesFromSession(files)
 	})
 	w.subscriptions = append(w.subscriptions, filesSub)
 
 	// Subscribe to tui.fileIndex changes
-	indexSub := s.OnKeyChange(session.KeySelectedFileIndex, func(key string) {
+	indexSub := s.OnKeyChange(session.Keys.SelectedFileIndex, func(key string) {
 		index := s.GetSelectedFileIndex()
 		w.updateSelectionFromSession(index)
 	})
 	w.subscriptions = append(w.subscriptions, indexSub)
 
 	// Subscribe to tui.focusedPane changes
-	focusSub := s.OnKeyChange(session.KeyFocusedPane, func(key string) {
+	focusSub := s.OnKeyChange(session.Keys.FocusedPane, func(key string) {
 		pane := s.GetFocusedPane()
 		focused := pane == "fileList"
 		if w.Focused() != focused {

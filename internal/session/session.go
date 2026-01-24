@@ -11,34 +11,53 @@ import (
 	"git.15b.it/eno/critic/simple-go/observable"
 )
 
-// State keys for the observable data structure
-const (
+// Keys holds all observable state key names for the session.
+// Use the global Keys variable to access key names.
+type keys struct {
 	// Diff arguments
-	KeyDiffArgs    = "diffArgs"
-	KeyBasesRefs   = "diffArgs.bases"       // []string - list of base refs (e.g., ["main", "origin/main", "HEAD"])
-	KeyCurrentBase = "diffArgs.currentBase" // int - index of current base
-	KeyPaths       = "diffArgs.paths"       // []string - file path patterns to diff
-	KeyExtensions  = "diffArgs.extensions"  // []string - file extensions to include
+	DiffArgs    string // "diffArgs"
+	BasesRefs   string // "diffArgs.bases" - []string - list of base refs
+	CurrentBase string // "diffArgs.currentBase" - int - index of current base
+	Paths       string // "diffArgs.paths" - []string - file path patterns to diff
+	Extensions  string // "diffArgs.extensions" - []string - file extensions to include
 
 	// Resolved git refs
-	KeyResolvedBases = "resolvedBases" // map[string]string - base ref -> resolved SHA
+	ResolvedBases string // "resolvedBases" - map[string]string - base ref -> resolved SHA
 
 	// Diff data
-	KeyDiff  = "diff"       // *types.Diff - the parsed diff
-	KeyFiles = "diff.files" // []*types.FileDiff - list of files in the diff
+	Diff  string // "diff" - *types.Diff - the parsed diff
+	Files string // "diff.files" - []*types.FileDiff - list of files in the diff
 
 	// TUI state
-	KeySelectedFileIndex = "tui.fileIndex"   // int - index of currently selected file
-	KeySelectedFilePath  = "tui.filePath"    // string - path of currently selected file
-	KeyFocusedPane       = "tui.focusedPane" // string - "fileList" or "diffView"
+	SelectedFileIndex string // "tui.fileIndex" - int - index of currently selected file
+	SelectedFilePath  string // "tui.filePath" - string - path of currently selected file
+	FocusedPane       string // "tui.focusedPane" - string - "fileList" or "diffView"
 
 	// Conversations
-	KeyConversations         = "conversations"         // map[string][]*critic.Conversation - file path -> conversations
-	KeyConversationSummaries = "conversationSummaries" // map[string]*critic.FileConversationSummary
+	Conversations         string // "conversations" - map[string][]*critic.Conversation
+	ConversationSummaries string // "conversationSummaries" - map[string]*critic.FileConversationSummary
 
 	// Filter
-	KeyFilterMode = "filterMode" // int - current filter mode (0=None, 1=WithComments, 2=WithUnresolved)
-)
+	FilterMode string // "filterMode" - int - current filter mode
+}
+
+// Keys is the global accessor for all session state key names
+var Keys = keys{
+	DiffArgs:              "diffArgs",
+	BasesRefs:             "diffArgs.bases",
+	CurrentBase:           "diffArgs.currentBase",
+	Paths:                 "diffArgs.paths",
+	Extensions:            "diffArgs.extensions",
+	ResolvedBases:         "resolvedBases",
+	Diff:                  "diff",
+	Files:                 "diff.files",
+	SelectedFileIndex:     "tui.fileIndex",
+	SelectedFilePath:      "tui.filePath",
+	FocusedPane:           "tui.focusedPane",
+	Conversations:         "conversations",
+	ConversationSummaries: "conversationSummaries",
+	FilterMode:            "filterMode",
+}
 
 // FilterMode represents the current file/hunk filter mode
 type FilterMode int
@@ -118,26 +137,26 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 	}
 
 	s := &Session{
-		Observable:   observable.New().WithSchema(KeyDiffArgs, DiffArgsSchema),
+		Observable:   observable.New().WithSchema(Keys.DiffArgs, DiffArgsSchema),
 		messaging:    messaging,
 		gitRoot:      gitRoot,
 		internalSubs: make([]observable.Subscription, 0),
 	}
 
 	// Initialize with default values
-	s.SetValueAtKey(KeyDiffArgs, map[string]any{
+	s.SetValueAtKey(Keys.DiffArgs, map[string]any{
 		"bases":       []any{},
 		"currentBase": 0,
 		"paths":       []any{},
 		"extensions":  []any{},
 	})
-	s.SetValueAtKey(KeyResolvedBases, map[string]any{})
-	s.SetValueAtKey(KeyFilterMode, int(FilterModeNone))
-	s.SetValueAtKey(KeySelectedFileIndex, 0)
-	s.SetValueAtKey(KeySelectedFilePath, "")
-	s.SetValueAtKey(KeyFocusedPane, "fileList")
-	s.SetValueAtKey(KeyConversations, map[string]any{})
-	s.SetValueAtKey(KeyConversationSummaries, map[string]any{})
+	s.SetValueAtKey(Keys.ResolvedBases, map[string]any{})
+	s.SetValueAtKey(Keys.FilterMode, int(FilterModeNone))
+	s.SetValueAtKey(Keys.SelectedFileIndex, 0)
+	s.SetValueAtKey(Keys.SelectedFilePath, "")
+	s.SetValueAtKey(Keys.FocusedPane, "fileList")
+	s.SetValueAtKey(Keys.Conversations, map[string]any{})
+	s.SetValueAtKey(Keys.ConversationSummaries, map[string]any{})
 
 	// Create processor
 	s.processor = NewDiffProcessor(s)
@@ -164,19 +183,19 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 
 	// Wire up internal state change subscriptions
 	// When diff args change, load diff
-	diffArgsSubs := s.OnKeyChange(KeyDiffArgs, func(key string) {
+	diffArgsSubs := s.OnKeyChange(Keys.DiffArgs, func(key string) {
 		logger.Info("Session: DiffArgs changed (%s), loading diff", key)
 		s.processor.LoadDiff()
 	})
 	s.internalSubs = append(s.internalSubs, diffArgsSubs)
-	baseSubs := s.OnKeyChange(KeyCurrentBase, func(key string) {
+	baseSubs := s.OnKeyChange(Keys.CurrentBase, func(key string) {
 		logger.Info("Session: CurrentBase changed (%s), loading diff", key)
 		s.processor.LoadDiff()
 	})
 	s.internalSubs = append(s.internalSubs, baseSubs)
 
 	// When selection changes, load selected file
-	selectionSubs := s.OnKeyChange(KeySelectedFileIndex, func(key string) {
+	selectionSubs := s.OnKeyChange(Keys.SelectedFileIndex, func(key string) {
 		filePath := s.GetSelectedFilePath()
 		fileIndex := s.GetSelectedFileIndex()
 		logger.Info("Session: Selection changed to %s (index %d)", filePath, fileIndex)
@@ -219,7 +238,7 @@ func (s *Session) SetDiffArgs(args DiffArgs) {
 
 	// Set values without holding the lock - observable has its own internal mutex
 	// and subscriptions may need to access session state
-	s.SetValueAtKey(KeyDiffArgs, map[string]any{
+	s.SetValueAtKey(Keys.DiffArgs, map[string]any{
 		"bases":       bases,
 		"currentBase": args.CurrentBase,
 		"paths":       paths,
@@ -232,19 +251,19 @@ func (s *Session) GetDiffArgs() DiffArgs {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return observable.GetValueAs[DiffArgs](s.Observable, KeyDiffArgs)
+	return observable.GetValueAs[DiffArgs](s.Observable, Keys.DiffArgs)
 }
 
 // SetCurrentBase sets the current base index
 func (s *Session) SetCurrentBase(index int) {
 	// Set value without holding the lock - observable has its own internal mutex
 	// and subscriptions may need to access session state
-	s.SetValueAtKey(KeyCurrentBase, index)
+	s.SetValueAtKey(Keys.CurrentBase, index)
 }
 
 // GetCurrentBase returns the current base index
 func (s *Session) GetCurrentBase() int {
-	return observable.GetValueAs[int](s.Observable, KeyCurrentBase)
+	return observable.GetValueAs[int](s.Observable, Keys.CurrentBase)
 }
 
 // GetCurrentBaseName returns the name of the current base ref
@@ -278,7 +297,7 @@ func (s *Session) SetResolvedBases(resolved map[string]string) {
 	}
 
 	// Set value without holding the lock - observable has its own internal mutex
-	s.SetValueAtKey(KeyResolvedBases, bases)
+	s.SetValueAtKey(Keys.ResolvedBases, bases)
 }
 
 // GetResolvedBase returns the resolved SHA for a base ref
@@ -286,7 +305,7 @@ func (s *Session) GetResolvedBase(baseRef string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	resolved := observable.GetValueAs[map[string]any](s.Observable, KeyResolvedBases)
+	resolved := observable.GetValueAs[map[string]any](s.Observable, Keys.ResolvedBases)
 	if resolved == nil {
 		return "", false
 	}
@@ -323,7 +342,7 @@ func (s *Session) SetDiff(diff *types.Diff) {
 
 	// Set value without holding the lock - observable has its own internal mutex
 	// and subscriptions may need to access session state
-	s.SetValueAtKey(KeyFiles, files)
+	s.SetValueAtKey(Keys.Files, files)
 }
 
 // GetDiff returns the current diff
@@ -369,8 +388,8 @@ func (s *Session) SetSelectedFile(index int) {
 
 	// Set values without holding the lock - observable has its own internal mutex
 	// and subscriptions may need to access session state
-	s.SetValueAtKey(KeySelectedFilePath, filePath)
-	s.SetValueAtKey(KeySelectedFileIndex, index) // Set index last to trigger subscription after path is set
+	s.SetValueAtKey(Keys.SelectedFilePath, filePath)
+	s.SetValueAtKey(Keys.SelectedFileIndex, index) // Set index last to trigger subscription after path is set
 }
 
 // SetSelectedFilePath sets the selected file by path
@@ -394,12 +413,12 @@ func (s *Session) SetSelectedFilePath(path string) {
 
 // GetSelectedFileIndex returns the index of the selected file
 func (s *Session) GetSelectedFileIndex() int {
-	return observable.GetValueAs[int](s.Observable, KeySelectedFileIndex)
+	return observable.GetValueAs[int](s.Observable, Keys.SelectedFileIndex)
 }
 
 // GetSelectedFilePath returns the path of the selected file
 func (s *Session) GetSelectedFilePath() string {
-	return observable.GetValueAs[string](s.Observable, KeySelectedFilePath)
+	return observable.GetValueAs[string](s.Observable, Keys.SelectedFilePath)
 }
 
 // GetSelectedFile returns the selected file diff
@@ -440,12 +459,12 @@ func (s *Session) SelectPrevFile() bool {
 
 // SetFocusedPane sets the focused pane ("fileList" or "diffView")
 func (s *Session) SetFocusedPane(pane string) {
-	s.SetValueAtKey(KeyFocusedPane, pane)
+	s.SetValueAtKey(Keys.FocusedPane, pane)
 }
 
 // GetFocusedPane returns the focused pane
 func (s *Session) GetFocusedPane() string {
-	return observable.GetValueAs[string](s.Observable, KeyFocusedPane)
+	return observable.GetValueAs[string](s.Observable, Keys.FocusedPane)
 }
 
 // ToggleFocus toggles focus between file list and diff view
@@ -461,12 +480,12 @@ func (s *Session) ToggleFocus() {
 
 // SetFilterMode sets the filter mode
 func (s *Session) SetFilterMode(mode FilterMode) {
-	s.SetValueAtKey(KeyFilterMode, int(mode))
+	s.SetValueAtKey(Keys.FilterMode, int(mode))
 }
 
 // GetFilterMode returns the current filter mode
 func (s *Session) GetFilterMode() FilterMode {
-	return FilterMode(observable.GetValueAs[int](s.Observable, KeyFilterMode))
+	return FilterMode(observable.GetValueAs[int](s.Observable, Keys.FilterMode))
 }
 
 // CycleFilterMode cycles through filter modes
@@ -480,7 +499,7 @@ func (s *Session) CycleFilterMode() FilterMode {
 
 // SetConversationsForFile sets the conversations for a specific file
 func (s *Session) SetConversationsForFile(filePath string, conversations []*critic.Conversation) {
-	key := KeyConversations + "." + filePath
+	key := Keys.Conversations + "." + filePath
 
 	// Convert to observable-compatible type
 	convs := make([]any, len(conversations))
@@ -505,7 +524,7 @@ func (s *Session) GetConversationsForFile(filePath string) ([]*critic.Conversati
 
 // SetConversationSummary sets the conversation summary for a file
 func (s *Session) SetConversationSummary(filePath string, summary *critic.FileConversationSummary) {
-	key := KeyConversationSummaries + "." + filePath
+	key := Keys.ConversationSummaries + "." + filePath
 
 	// Prepare value
 	var value any

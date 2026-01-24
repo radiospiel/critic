@@ -228,10 +228,10 @@ func TestConversations(t *testing.T) {
 func TestOnKeyChange(t *testing.T) {
 	session := createTestSession(t, nil)
 
-	// Test subscription to KeyFiles changes (replaces old OnDiffLoaded callback)
+	// Test subscription to Keys.Files changes (replaces old OnDiffLoaded callback)
 	filesChangeCalled := false
 	var changedKey string
-	subs := session.OnKeyChange(KeyFiles, func(key string) {
+	subs := session.OnKeyChange(Keys.Files, func(key string) {
 		filesChangeCalled = true
 		changedKey = key
 	})
@@ -243,11 +243,11 @@ func TestOnKeyChange(t *testing.T) {
 	}}
 	session.SetDiff(diff)
 	assert.True(t, filesChangeCalled, "OnKeyChange callback should be called")
-	assert.Equals(t, changedKey, KeyFiles, "changed key should be KeyFiles")
+	assert.Equals(t, changedKey, Keys.Files, "changed key should be Keys.Files")
 
 	// Test subscription to selection changes
 	selectionChangeCalled := false
-	selSubs := session.OnKeyChange(KeySelectedFileIndex, func(key string) {
+	selSubs := session.OnKeyChange(Keys.SelectedFileIndex, func(key string) {
 		selectionChangeCalled = true
 	})
 	defer session.ClearSubscriptions(selSubs)
@@ -263,14 +263,14 @@ func TestSubscriptions(t *testing.T) {
 	// Subscribe to filter mode changes using OnKeyChange
 	filterChangeCalled := false
 	var changedKey string
-	subs := session.OnKeyChange(KeyFilterMode, func(key string) {
+	subs := session.OnKeyChange(Keys.FilterMode, func(key string) {
 		filterChangeCalled = true
 		changedKey = key
 	})
 
 	session.SetFilterMode(FilterModeWithComments)
 	assert.True(t, filterChangeCalled, "filter change callback should be called")
-	assert.Equals(t, changedKey, KeyFilterMode, "changed key should match")
+	assert.Equals(t, changedKey, Keys.FilterMode, "changed key should match")
 
 	// Unsubscribe using ClearSubscriptions
 	filterChangeCalled = false
@@ -482,7 +482,7 @@ func TestDiffArgsSchemaRejectsInvalidCurrentBase(t *testing.T) {
 	session := createTestSession(t, nil)
 
 	// Attempting to set invalid currentBase type should return error
-	err := session.SetValueAtKey(KeyDiffArgs, map[string]any{
+	err := session.SetValueAtKey(Keys.DiffArgs, map[string]any{
 		"bases":       []any{"main"},
 		"currentBase": "not-a-number", // invalid: should be integer
 		"paths":       []any{},
@@ -495,7 +495,7 @@ func TestDiffArgsSchemaRejectsInvalidBasesType(t *testing.T) {
 	session := createTestSession(t, nil)
 
 	// Attempting to set invalid bases type should return error
-	err := session.SetValueAtKey(KeyDiffArgs, map[string]any{
+	err := session.SetValueAtKey(Keys.DiffArgs, map[string]any{
 		"bases":       []any{123}, // invalid: items should be strings
 		"currentBase": 0,
 		"paths":       []any{},

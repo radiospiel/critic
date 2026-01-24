@@ -13,6 +13,7 @@ import (
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
+	"git.15b.it/eno/critic/simple-go/observable"
 	"git.15b.it/eno/critic/teapot"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -38,6 +39,7 @@ const (
 type DiffView struct {
 	teapot.BaseView      // Embed BaseWidget to implement the Widget interface
 	session              *session.Session
+	subscriptions        []observable.Subscription
 	file                 *ctypes.FileDiff
 	viewport             viewport.Model
 	ready                bool
@@ -75,6 +77,19 @@ func NewDiffView(ses *session.Session, messaging critic.Messaging) *DiffView {
 	}
 	m.SetFocusable(true)
 	m.SetName("DiffView")
+
+	// Subscribe to file selection changes
+	if ses != nil {
+		sub := ses.OnKeyChange(session.Keys.SelectedFilePath, func(key string) {
+			file := ses.GetSelectedFile()
+			if file != nil {
+				m.SetFile(file)
+				m.Repaint()
+			}
+		})
+		m.subscriptions = append(m.subscriptions, sub)
+	}
+
 	return m
 }
 
@@ -96,30 +111,36 @@ func (m *DiffView) Update(msg tea.Msg) tea.Cmd {
 					m.ensureCursorVisible()
 					return m.refreshContent()
 				} else if m.isAtTop() {
-					// At top of file, request previous file
-					return func() tea.Msg { return RequestPrevFileMsg{} }
+					// At top of file, go to previous file (starting at bottom)
+					m.SetGotoBottomOnLoad()
+					m.session.SelectPrevFile()
+					return nil
 				}
 			case "down", "j":
 				if m.moveCursorDown() {
 					m.ensureCursorVisible()
 					return m.refreshContent()
 				} else if m.isAtBottom() {
-					// At bottom of file, request next file
-					return func() tea.Msg { return RequestNextFileMsg{} }
+					// At bottom of file, go to next file
+					m.session.SelectNextFile()
+					return nil
 				}
 			case "shift+up":
 				if m.moveCursorUpN(config.ShiftArrowJumpSize) {
 					m.ensureCursorVisible()
 					return m.refreshContent()
 				} else if m.isAtTop() {
-					return func() tea.Msg { return RequestPrevFileMsg{} }
+					m.SetGotoBottomOnLoad()
+					m.session.SelectPrevFile()
+					return nil
 				}
 			case "shift+down":
 				if m.moveCursorDownN(config.ShiftArrowJumpSize) {
 					m.ensureCursorVisible()
 					return m.refreshContent()
 				} else if m.isAtBottom() {
-					return func() tea.Msg { return RequestNextFileMsg{} }
+					m.session.SelectNextFile()
+					return nil
 				}
 			case "g": // Go to top
 				if len(m.navigableLines) > 0 {
@@ -324,11 +345,6 @@ type diffRenderedMsg struct {
 	navigableLines []int
 }
 
-// RequestNextFileMsg is sent when the user scrolls past the last line
-type RequestNextFileMsg struct{}
-
-// RequestPrevFileMsg is sent when the user scrolls before the first line
-type RequestPrevFileMsg struct{}
 
 // renderDiffAsync renders the diff in a background goroutine
 func (m *DiffView) renderDiffAsync(file *ctypes.FileDiff) tea.Cmd {
@@ -519,8 +535,8 @@ func (m *DiffView) ensureCursorVisible() {
 }
 
 // ScrollPageDown scrolls down by viewport height minus 3 (but at least 1 row)
-// and positions cursor on the second navigable line in the viewport
-// If already at the bottom, returns RequestNextFileMsg to load the next file
+// and positions cursor on the second navigable line in the viewport.
+// If already at the bottom, navigates to the next file.
 func (m *DiffView) ScrollPageDown() tea.Cmd {
 	if !m.ready || len(m.navigableLines) == 0 {
 		return nil
@@ -532,8 +548,9 @@ func (m *DiffView) ScrollPageDown() tea.Cmd {
 		maxOffset = 0
 	}
 	if m.viewport.YOffset >= maxOffset && m.isAtBottom() {
-		// Already at the bottom, request next file
-		return func() tea.Msg { return RequestNextFileMsg{} }
+		// Already at the bottom, go to next file
+		m.session.SelectNextFile()
+		return nil
 	}
 
 	scrollAmount := m.viewport.Height - 3
@@ -594,8 +611,8 @@ func (m *DiffView) positionCursorInViewport(nth int) {
 }
 
 // ScrollPageUp scrolls up by viewport height minus 3 (but at least 1 row)
-// and positions cursor on the second navigable line in the viewport
-// If already at the top, returns RequestPrevFileMsg to load the previous file
+// and positions cursor on the second navigable line in the viewport.
+// If already at the top, navigates to the previous file.
 func (m *DiffView) ScrollPageUp() tea.Cmd {
 	if !m.ready || len(m.navigableLines) == 0 {
 		return nil
@@ -603,8 +620,10 @@ func (m *DiffView) ScrollPageUp() tea.Cmd {
 
 	// Check if we're already at the top
 	if m.viewport.YOffset <= 0 && m.isAtTop() {
-		// Already at the top, request previous file
-		return func() tea.Msg { return RequestPrevFileMsg{} }
+		// Already at the top, go to previous file (starting at bottom)
+		m.SetGotoBottomOnLoad()
+		m.session.SelectPrevFile()
+		return nil
 	}
 
 	scrollAmount := m.viewport.Height - 3

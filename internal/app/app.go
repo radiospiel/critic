@@ -424,19 +424,6 @@ func (d *Delegate) HandleMessage(msg tea.Msg) tea.Cmd {
 		logger.Info("Update: Received baseChangedMsg, reloading diff")
 		return loadDiffCmd(d)
 
-	case tui.RequestNextFileMsg:
-		if d.fileList.SelectNext() {
-			cmd := d.diffView.SetFile(d.fileList.GetActiveFile())
-			cmds = append(cmds, cmd)
-		}
-
-	case tui.RequestPrevFileMsg:
-		if d.fileList.SelectPrev() {
-			d.diffView.SetGotoBottomOnLoad()
-			cmd := d.diffView.SetFile(d.fileList.GetActiveFile())
-			cmds = append(cmds, cmd)
-		}
-
 	case tui.CommentSavedMsg:
 		activeFile := d.fileList.GetActiveFile()
 		if activeFile != nil && msg.Comment != "" {
