@@ -152,7 +152,7 @@ func TestRenderProfile(t *testing.T) {
 	}
 
 	// Create widgets
-	fileListWidget := tui.NewFileListView(nil, critic.NewDummyMessaging())
+	fileListWidget := tui.NewFilesListView(nil, critic.NewDummyMessaging())
 	fileListWidget.SetFiles(diff.Files)
 
 	diffViewWidget := tui.NewDiffView(nil, nil)
@@ -178,7 +178,7 @@ func TestRenderProfile(t *testing.T) {
 // BenchmarkFileListWidgetRender benchmarks FileListWidget rendering.
 func BenchmarkFileListWidgetRender(b *testing.B) {
 	files := createSampleFiles(50)
-	widget := tui.NewFileListView(nil, critic.NewDummyMessaging())
+	widget := tui.NewFilesListView(nil, critic.NewDummyMessaging())
 	widget.SetFiles(files)
 	widget.SetBounds(teapot.NewRect(0, 0, 40, 50))
 
@@ -218,7 +218,7 @@ func BenchmarkCombinedRender(b *testing.B) {
 	files := createSampleFiles(50)
 	fileDiff := createSampleFileDiff(10, 30)
 
-	fileListWidget := tui.NewFileListView(nil, critic.NewDummyMessaging())
+	fileListWidget := tui.NewFilesListView(nil, critic.NewDummyMessaging())
 	fileListWidget.SetFiles(files)
 	fileListWidget.SetBounds(teapot.NewRect(0, 0, 40, 50))
 
@@ -269,7 +269,7 @@ func BenchmarkCompositorView(b *testing.B) {
 	fileDiff := createSampleFileDiff(10, 30)
 
 	// Create widgets
-	fileListWidget := tui.NewFileListView(nil, critic.NewDummyMessaging())
+	fileListWidget := tui.NewFilesListView(nil, critic.NewDummyMessaging())
 	fileListWidget.SetFiles(files)
 
 	diffViewWidget := tui.NewDiffView(nil, nil)
@@ -305,7 +305,7 @@ func BenchmarkCompositorViewCached(b *testing.B) {
 	files := createSampleFiles(50)
 	fileDiff := createSampleFileDiff(10, 30)
 
-	fileListWidget := tui.NewFileListView(nil, critic.NewDummyMessaging())
+	fileListWidget := tui.NewFilesListView(nil, critic.NewDummyMessaging())
 	fileListWidget.SetFiles(files)
 
 	diffViewWidget := tui.NewDiffView(nil, nil)
@@ -333,7 +333,7 @@ func TestCompositorRenderProfile(t *testing.T) {
 	files := createSampleFiles(50)
 	fileDiff := createSampleFileDiff(10, 30)
 
-	fileListWidget := tui.NewFileListView(nil, critic.NewDummyMessaging())
+	fileListWidget := tui.NewFilesListView(nil, critic.NewDummyMessaging())
 	fileListWidget.SetFiles(files)
 
 	diffViewWidget := tui.NewDiffView(nil, nil)

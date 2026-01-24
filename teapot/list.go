@@ -20,9 +20,9 @@ type ListItem interface {
 // and the available width. It should render to the buffer at y=0.
 type ItemRenderer[T ListItem] func(buf *SubBuffer, item T, selected bool, focused bool, width int)
 
-// List is a generic scrollable list with selection.
+// ListView is a generic scrollable list with selection.
 // It can be used for file lists, branch selectors, commit selectors, etc.
-type List[T ListItem] struct {
+type ListView[T ListItem] struct {
 	BaseView
 	items        []T
 	selected     int // Index of selected item
@@ -35,12 +35,13 @@ type List[T ListItem] struct {
 	normalStyle            lipgloss.Style
 
 	// Callbacks
-	onChange func(items []T) // Called when items change
+	onChange          func(items []T)          // Called when items change
+	onSelectionChange func(index int, item *T) // Called when selection changes
 }
 
 // NewSelectableList creates a new selectable list with the given renderer.
-func NewSelectableList[T ListItem](renderer ItemRenderer[T]) *List[T] {
-	list := &List[T]{
+func NewSelectableList[T ListItem](renderer ItemRenderer[T]) *ListView[T] {
+	list := &ListView[T]{
 		BaseView: NewBaseView(),
 		renderer: renderer,
 		selectedStyle: lipgloss.NewStyle().
@@ -55,7 +56,7 @@ func NewSelectableList[T ListItem](renderer ItemRenderer[T]) *List[T] {
 }
 
 // SetItems sets the list items.
-func (l *List[T]) SetItems(items []T) {
+func (l *ListView[T]) SetItems(items []T) {
 	l.items = items
 	// Adjust selection if needed
 	if l.selected >= len(items) {
@@ -69,12 +70,12 @@ func (l *List[T]) SetItems(items []T) {
 }
 
 // Items returns all items.
-func (l *List[T]) Items() []T {
+func (l *ListView[T]) Items() []T {
 	return l.items
 }
 
 // Selected returns the currently selected item.
-func (l *List[T]) Selected() (T, bool) {
+func (l *ListView[T]) Selected() (T, bool) {
 	var zero T
 	if l.selected < 0 || l.selected >= len(l.items) {
 		return zero, false
@@ -83,36 +84,49 @@ func (l *List[T]) Selected() (T, bool) {
 }
 
 // SelectedIndex returns the index of the selected item.
-func (l *List[T]) SelectedIndex() int {
+func (l *ListView[T]) SelectedIndex() int {
 	return l.selected
 }
 
 // SetSelectedIndex sets the selected index.
-func (l *List[T]) SetSelectedIndex(index int) {
+func (l *ListView[T]) SetSelectedIndex(index int) {
 	l.selected = utils.Clamp(index, 0, len(l.items)-1)
 	l.ensureVisible()
 	l.Repaint() // Mark as dirty for compositor re-render
+	l.notifySelectionChange()
 }
 
 // SetStyles sets the selection styles.
-func (l *List[T]) SetStyles(selected, selectedUnfocused, normal lipgloss.Style) {
+func (l *ListView[T]) SetStyles(selected, selectedUnfocused, normal lipgloss.Style) {
 	l.selectedStyle = selected
 	l.selectedUnfocusedStyle = selectedUnfocused
 	l.normalStyle = normal
 }
 
 // OnChange sets a callback for when items change.
-func (l *List[T]) OnChange(fn func(items []T)) {
+func (l *ListView[T]) OnChange(fn func(items []T)) {
 	l.onChange = fn
 }
 
+// OnSelectionChange sets a callback for when selection changes.
+func (l *ListView[T]) OnSelectionChange(fn func(index int, item *T)) {
+	l.onSelectionChange = fn
+}
+
+// notifySelectionChange calls the onSelectionChange callback if set.
+func (l *ListView[T]) notifySelectionChange() {
+	if l.onSelectionChange != nil && l.selected >= 0 && l.selected < len(l.items) {
+		l.onSelectionChange(l.selected, &l.items[l.selected])
+	}
+}
+
 // visibleCount returns the number of visible items.
-func (l *List[T]) visibleCount() int {
+func (l *ListView[T]) visibleCount() int {
 	return l.bounds.Height
 }
 
 // ensureVisible ensures the selected item is visible.
-func (l *List[T]) ensureVisible() {
+func (l *ListView[T]) ensureVisible() {
 	visible := l.visibleCount()
 	if visible <= 0 {
 		return
@@ -130,7 +144,7 @@ func (l *List[T]) ensureVisible() {
 }
 
 // Render renders the list to the buffer.
-func (l *List[T]) Render(buf *SubBuffer) {
+func (l *ListView[T]) Render(buf *SubBuffer) {
 	visible := l.visibleCount()
 	if visible <= 0 || len(l.items) == 0 {
 		return
@@ -185,7 +199,7 @@ func (l *List[T]) Render(buf *SubBuffer) {
 }
 
 // HandleKey handles keyboard input.
-func (l *List[T]) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
+func (l *ListView[T]) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	logger.Info("*** List.HandleKey")
 
 	switch msg.String() {
@@ -217,29 +231,31 @@ func (l *List[T]) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-func (l *List[T]) moveUp() {
+func (l *ListView[T]) moveUp() {
 	if l.selected > 0 {
 		l.selected--
 		l.ensureVisible()
 		l.Repaint()
+		l.notifySelectionChange()
 	}
 }
 
-func (l *List[T]) moveDown() {
+func (l *ListView[T]) moveDown() {
 	if l.selected < len(l.items)-1 {
 		l.selected++
 		l.ensureVisible()
 		l.Repaint()
+		l.notifySelectionChange()
 	}
 }
 
-func (l *List[T]) pageUp() {
+func (l *ListView[T]) pageUp() {
 	visible := l.visibleCount()
 	newSelected := max(0, l.selected-visible)
 	l.SetSelectedIndex(newSelected)
 }
 
-func (l *List[T]) pageDown() {
+func (l *ListView[T]) pageDown() {
 	visible := l.visibleCount()
 	newSelected := min(len(l.items)-1, l.selected+visible)
 	l.SetSelectedIndex(newSelected)

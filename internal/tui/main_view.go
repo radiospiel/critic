@@ -12,7 +12,7 @@ type MainView struct {
 	pot.BaseView
 
 	// Child widgets
-	fileList  *FileListView
+	fileList  *FilesListView
 	diffView  *DiffView
 	statusBar *StatusBarView
 
@@ -24,7 +24,7 @@ type MainView struct {
 }
 
 // NewMainView creates a new main layout with the given widgets.
-func NewMainView(fileList *FileListView, diffView *DiffView, statusBar *StatusBarView) *MainView {
+func NewMainView(fileList *FilesListView, diffView *DiffView, statusBar *StatusBarView) *MainView {
 	m := &MainView{
 		BaseView:  pot.NewBaseView(),
 		fileList:  fileList,
@@ -133,7 +133,7 @@ func (m *MainView) Children() []pot.View {
 }
 
 // FileList returns the file list widget.
-func (m *MainView) FileList() *FileListView {
+func (m *MainView) FileList() *FilesListView {
 	return m.fileList
 }
 

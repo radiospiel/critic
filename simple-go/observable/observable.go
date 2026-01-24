@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"git.15b.it/eno/critic/simple-go/fnmatch"
+	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/simple-go/preconditions"
 	"git.15b.it/eno/critic/simple-go/utils"
 )
@@ -206,6 +207,7 @@ func (o *Observable) setAtPath(current any, parts []string, value any) any {
 		return value
 	}
 
+	logger.Warn("observable.setAtPath path=%v value=%v", parts, value)
 	part := parts[0]
 	isLastPart := len(parts) == 1
 

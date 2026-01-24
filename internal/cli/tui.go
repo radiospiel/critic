@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"git.15b.it/eno/critic/internal/app"
+	"git.15b.it/eno/critic/simple-go/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +17,7 @@ func newTUICmd(handler func(*app.Args) error) *cobra.Command {
 	var extensionsFlag []string
 	var debugFlag bool
 	var cpuprofileFlag string
+	var quietFlag int
 
 	cmd := &cobra.Command{
 		Use:   "tui [flags] [base1,base2,...] [-- path1 path2 ...]",
@@ -53,6 +55,18 @@ Examples:
 					fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 				}
 			}()
+
+			// Set log level based on quiet flag
+			switch quietFlag {
+			case 1:
+				logger.SetLevel(logger.WARN)
+			case 2:
+				logger.SetLevel(logger.ERROR)
+			default:
+				if quietFlag > 2 {
+					logger.SetLevel(logger.FATAL)
+				}
+			}
 
 			// CPU profiling
 			if cpuprofileFlag != "" {
@@ -96,6 +110,7 @@ Examples:
 	cmd.Flags().StringSliceVar(&extensionsFlag, "extensions", nil, "Comma-separated list of file extensions to include")
 	cmd.Flags().BoolVar(&debugFlag, "debug", false, "Enable debug mode (shows UUIDs, etc.)")
 	cmd.Flags().StringVar(&cpuprofileFlag, "cpuprofile", "", "Write CPU profile to file")
+	cmd.Flags().CountVarP(&quietFlag, "quiet", "q", "Reduce log verbosity (-q for WARN, -qq for ERROR)")
 
 	return cmd
 }

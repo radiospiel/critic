@@ -125,7 +125,7 @@ func Run(args *Args) error {
 type Delegate struct {
 	app           *teapot.App // Set after app creation
 	session       *session.Session
-	fileList      *tui.FileListView
+	fileList      *tui.FilesListView
 	diffView      *tui.DiffView
 	commentEditor tui.CommentEditor
 	statusBar     *tui.StatusBarView
@@ -168,7 +168,7 @@ func NewDelegate(args *Args) *Delegate {
 	}
 
 	diffView := tui.NewDiffView(ses, mdb)
-	fileList := tui.NewFileListView(ses, mdb)
+	fileList := tui.NewFilesListView(ses, mdb)
 	fileList.SetFocused(true) // Start with file list focused
 
 	statusBar := tui.NewStatusBarView()
