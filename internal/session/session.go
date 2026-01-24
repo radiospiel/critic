@@ -9,6 +9,7 @@ import (
 	"git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/simple-go/observable"
+	"git.15b.it/eno/critic/simple-go/preconditions"
 )
 
 // Keys holds all observable state key names for the session.
@@ -130,12 +131,10 @@ type Session struct {
 	internalSubs []observable.Subscription
 }
 
-// NewSession creates a new Session with the given parameters
+// NewSession creates a new Session with the given parameters.
+// messaging must not be nil - use critic.DummyMessaging{} for testing.
 func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Session, error) {
-	if messaging == nil {
-		messaging = &critic.DummyMessaging{}
-	}
-
+	preconditions.Check(messaging != nil, "messaging must not be nil")
 	s := &Session{
 		Observable:   observable.New().WithSchema(Keys.DiffArgs, DiffArgsSchema),
 		messaging:    messaging,

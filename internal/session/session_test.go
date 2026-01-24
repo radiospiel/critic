@@ -13,8 +13,12 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// createTestSession creates a Session for testing with a temp directory
+// createTestSession creates a Session for testing with a temp directory.
+// If messaging is nil, it defaults to DummyMessaging.
 func createTestSession(t *testing.T, messaging critic.Messaging) *Session {
+	if messaging == nil {
+		messaging = &critic.DummyMessaging{}
+	}
 	tempDir := t.TempDir()
 	session, err := NewSession(tempDir, messaging, DiffArgs{})
 	assert.NoError(t, err, "should create session")
@@ -23,7 +27,7 @@ func createTestSession(t *testing.T, messaging critic.Messaging) *Session {
 
 func TestNewSession(t *testing.T) {
 	tempDir := t.TempDir()
-	session, err := NewSession(tempDir, nil, DiffArgs{})
+	session, err := NewSession(tempDir, &critic.DummyMessaging{}, DiffArgs{})
 	assert.NoError(t, err, "should create session")
 	assert.NotNil(t, session, "session should not be nil")
 	assert.NotNil(t, session.Observable, "embedded observable should not be nil")
@@ -381,6 +385,9 @@ func TestDBWatcherWithTriggers(t *testing.T) {
 	assert.NoError(t, err, "should start watcher")
 	defer watcher.Stop()
 
+	// Give the poll loop goroutine time to start
+	time.Sleep(10 * time.Millisecond)
+
 	// Open a separate connection to insert data (triggers will fire on insert)
 	db, err := sql.Open("sqlite3", dbPath)
 	assert.NoError(t, err, "should open db")
@@ -393,8 +400,8 @@ func TestDBWatcherWithTriggers(t *testing.T) {
 	`)
 	assert.NoError(t, err, "should insert message")
 
-	// Wait for poll to detect change
-	time.Sleep(100 * time.Millisecond)
+	// Wait for poll to detect change (5x poll interval for reliability under load)
+	time.Sleep(250 * time.Millisecond)
 
 	mu.Lock()
 	count := callCount
@@ -409,8 +416,8 @@ func TestDBWatcherWithTriggers(t *testing.T) {
 	`)
 	assert.NoError(t, err, "should insert another message")
 
-	// Wait for poll
-	time.Sleep(100 * time.Millisecond)
+	// Wait for poll (5x poll interval for reliability under load)
+	time.Sleep(250 * time.Millisecond)
 
 	mu.Lock()
 	count = callCount
@@ -447,7 +454,7 @@ func TestStartWatchers(t *testing.T) {
 	assert.NoError(t, err, "should create messagedb")
 	defer msgDB.Close()
 
-	session, err := NewSession(tempDir, nil, DiffArgs{})
+	session, err := NewSession(tempDir, &critic.DummyMessaging{}, DiffArgs{})
 	assert.NoError(t, err, "should create session")
 
 	// Start watchers (in goroutines)

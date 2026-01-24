@@ -16,7 +16,6 @@ import (
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
-	"git.15b.it/eno/critic/simple-go/observable"
 	"git.15b.it/eno/critic/teapot"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -149,15 +148,7 @@ type Delegate struct {
 func NewDelegate(args *Args) *Delegate {
 	logger.Info("NewDelegate: Creating delegate with %d paths, %d bases", len(args.Paths), len(args.Bases))
 
-	ses := &session.Session{
-		Observable: observable.New(),
-	}
-	ses.OnKeyChange("", func(key string) {
-		logger.Warn("session change: %s", key)
-	})
-	logger.Warn("created session")
-
-	// Initialize message database
+	// Initialize message database first (needed for session)
 	gitRoot, err := git.GetGitRoot()
 	if err != nil {
 		logger.Fatal("Failed to get git root: %v", err)
@@ -166,6 +157,22 @@ func NewDelegate(args *Args) *Delegate {
 	if err != nil {
 		logger.Fatal("Failed to initialize message database: %v", err)
 	}
+
+	// Create session with messaging and diff args
+	diffArgs := session.DiffArgs{
+		Bases:       args.Bases,
+		CurrentBase: 0,
+		Paths:       args.Paths,
+		Extensions:  args.Extensions,
+	}
+	ses, err := session.NewSession(gitRoot, mdb, diffArgs)
+	if err != nil {
+		logger.Fatal("Failed to create session: %v", err)
+	}
+	ses.OnKeyChange("", func(key string) {
+		logger.Warn("session change: %s", key)
+	})
+	logger.Warn("created session")
 
 	diffView := tui.NewDiffView(ses, mdb)
 	fileList := tui.NewFilesListView(ses, mdb)
