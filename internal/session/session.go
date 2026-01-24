@@ -14,11 +14,11 @@ import (
 // State keys for the observable data structure
 const (
 	// Diff arguments
-	KeyDiffArgs       = "diffArgs"
-	KeyBasesRefs      = "diffArgs.bases"       // []string - list of base refs (e.g., ["main", "origin/main", "HEAD"])
-	KeyCurrentBase    = "diffArgs.currentBase" // int - index of current base
-	KeyPaths          = "diffArgs.paths"       // []string - file path patterns to diff
-	KeyExtensions     = "diffArgs.extensions"  // []string - file extensions to include
+	KeyDiffArgs    = "diffArgs"
+	KeyBasesRefs   = "diffArgs.bases"       // []string - list of base refs (e.g., ["main", "origin/main", "HEAD"])
+	KeyCurrentBase = "diffArgs.currentBase" // int - index of current base
+	KeyPaths       = "diffArgs.paths"       // []string - file path patterns to diff
+	KeyExtensions  = "diffArgs.extensions"  // []string - file extensions to include
 
 	// Resolved git refs
 	KeyResolvedBases = "resolvedBases" // map[string]string - base ref -> resolved SHA
@@ -113,6 +113,10 @@ type Session struct {
 
 // NewSession creates a new Session with the given parameters
 func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Session, error) {
+	if messaging == nil {
+		messaging = &critic.DummyMessaging{}
+	}
+
 	s := &Session{
 		Observable:   observable.New().WithSchema(KeyDiffArgs, DiffArgsSchema),
 		messaging:    messaging,
@@ -187,7 +191,6 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 
 	return s, nil
 }
-
 
 // --- Diff Args ---
 
@@ -497,9 +500,6 @@ func (s *Session) SetConversationsForFile(filePath string, conversations []*crit
 
 // GetConversationsForFile returns conversations for a specific file from the messaging interface
 func (s *Session) GetConversationsForFile(filePath string) ([]*critic.Conversation, error) {
-	if s.messaging == nil {
-		return nil, nil
-	}
 	return s.messaging.GetConversationsForFile(filePath)
 }
 
@@ -526,16 +526,13 @@ func (s *Session) SetConversationSummary(filePath string, summary *critic.FileCo
 
 // GetConversationSummary returns the conversation summary for a file
 func (s *Session) GetConversationSummary(filePath string) (*critic.FileConversationSummary, error) {
-	if s.messaging == nil {
-		return nil, nil
-	}
 	return s.messaging.GetFileConversationSummary(filePath)
 }
 
 // RefreshConversations refreshes conversation data for all files in the diff
 func (s *Session) RefreshConversations() error {
 	diff := s.GetDiff()
-	if diff == nil || s.messaging == nil {
+	if diff == nil {
 		return nil
 	}
 
@@ -560,7 +557,6 @@ func (s *Session) RefreshConversations() error {
 
 	return nil
 }
-
 
 // --- Watchers ---
 

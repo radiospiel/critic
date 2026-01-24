@@ -1,7 +1,6 @@
 package critic
 
 import (
-	"errors"
 	"time"
 )
 
@@ -45,7 +44,7 @@ type Conversation struct {
 	ReadByAI    bool // Whether the AI has read this conversation via MCP
 }
 
-// FileConversationSummary contains information about conversations for a specific file
+// FileConversationSummary contains information about Conversations for a specific file
 type FileConversationSummary struct {
 	FilePath              string
 	HasUnresolvedComments bool
@@ -53,11 +52,11 @@ type FileConversationSummary struct {
 	HasUnreadAIMessages   bool
 }
 
-// Messaging defines the interface for managing critic conversations
+// Messaging defines the interface for managing critic Conversations
 type Messaging interface {
-	// GetConversations returns a list of root-level conversations
+	// GetConversations returns a list of root-level Conversations
 	// If status is provided, filters by that status (e.g., "unresolved")
-	// If status is empty, returns all conversations
+	// If status is empty, returns all Conversations
 	// Only returns the root message info, not the full thread
 	GetConversations(status string) ([]Conversation, error)
 
@@ -65,10 +64,10 @@ type Messaging interface {
 	// Messages are ordered by created_at (root message first, then replies in chronological order)
 	GetFullConversation(uuid string) (*Conversation, error)
 
-	// GetConversationsForFile returns all conversations for a specific file
+	// GetConversationsForFile returns all Conversations for a specific file
 	GetConversationsForFile(filePath string) ([]*Conversation, error)
 
-	// GetFileConversationSummary returns a summary of conversations for a file
+	// GetFileConversationSummary returns a summary of Conversations for a file
 	// This is used for efficient file list rendering
 	GetFileConversationSummary(filePath string) (*FileConversationSummary, error)
 
@@ -94,50 +93,58 @@ type Messaging interface {
 	Close() error
 }
 
-// DummyMessaging implements the Messaging interface as no-ops
+// DummyMessaging implements critic.Messaging for testing
 type DummyMessaging struct {
+	Conversations map[string][]*Conversation
+	Summaries     map[string]*FileConversationSummary
 }
 
-func (n DummyMessaging) GetConversations(status string) ([]Conversation, error) {
-	return []Conversation{}, nil
+func NewDummyMessaging() *DummyMessaging {
+	return &DummyMessaging{
+		Conversations: make(map[string][]*Conversation),
+		Summaries:     make(map[string]*FileConversationSummary),
+	}
 }
 
-func (n DummyMessaging) GetFullConversation(uuid string) (*Conversation, error) {
-	return nil, errors.New("No such conversation")
+func (m *DummyMessaging) GetConversations(status string) ([]Conversation, error) {
+	var all []Conversation
+	for _, convs := range m.Conversations {
+		for _, c := range convs {
+			all = append(all, *c)
+		}
+	}
+	return all, nil
 }
 
-func (n DummyMessaging) GetConversationsForFile(filePath string) ([]*Conversation, error) {
-	return nil, errors.New("No conversation for filePath " + filePath)
+func (m *DummyMessaging) GetFullConversation(uuid string) (*Conversation, error) {
+	for _, convs := range m.Conversations {
+		for _, c := range convs {
+			if c.UUID == uuid {
+				return c, nil
+			}
+		}
+	}
+	return nil, nil
 }
 
-func (n DummyMessaging) GetFileConversationSummary(filePath string) (*FileConversationSummary, error) {
-	return nil, errors.New("No conversation for filePath " + filePath)
+func (m *DummyMessaging) GetConversationsForFile(filePath string) ([]*Conversation, error) {
+	return m.Conversations[filePath], nil
 }
 
-func (n DummyMessaging) ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error) {
-	return nil, errors.New("No such conversation " + conversationUUID)
+func (m *DummyMessaging) GetFileConversationSummary(filePath string) (*FileConversationSummary, error) {
+	return m.Summaries[filePath], nil
 }
 
-func (n DummyMessaging) CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error) {
-	return nil, errors.New("Cannot create conversation")
+func (m *DummyMessaging) ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error) {
+	return &Message{UUID: "reply-1"}, nil
 }
 
-func (n DummyMessaging) MarkAsResolved(conversationUUID string) error {
-	return errors.New("No such conversation " + conversationUUID)
+func (m *DummyMessaging) CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error) {
+	return &Conversation{UUID: "conv-1"}, nil
 }
 
-func (n DummyMessaging) MarkAsUnresolved(conversationUUID string) error {
-	return errors.New("No such conversation " + conversationUUID)
-}
-
-func (n DummyMessaging) MarkAsRead(messageUUID string) error {
-	return errors.New("No such message " + messageUUID)
-}
-
-func (n DummyMessaging) MarkAsReadByAI(conversationUUID string) error {
-	return errors.New("No such conversation " + conversationUUID)
-}
-
-func (n DummyMessaging) Close() error {
-	return nil
-}
+func (m *DummyMessaging) MarkAsResolved(conversationUUID string) error   { return nil }
+func (m *DummyMessaging) MarkAsUnresolved(conversationUUID string) error { return nil }
+func (m *DummyMessaging) MarkAsRead(messageUUID string) error            { return nil }
+func (m *DummyMessaging) MarkAsReadByAI(conversationUUID string) error   { return nil }
+func (m *DummyMessaging) Close() error                                   { return nil }

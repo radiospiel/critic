@@ -13,62 +13,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// mockMessaging implements critic.Messaging for testing
-type mockMessaging struct {
-	conversations map[string][]*critic.Conversation
-	summaries     map[string]*critic.FileConversationSummary
-}
-
-func newMockMessaging() *mockMessaging {
-	return &mockMessaging{
-		conversations: make(map[string][]*critic.Conversation),
-		summaries:     make(map[string]*critic.FileConversationSummary),
-	}
-}
-
-func (m *mockMessaging) GetConversations(status string) ([]critic.Conversation, error) {
-	var all []critic.Conversation
-	for _, convs := range m.conversations {
-		for _, c := range convs {
-			all = append(all, *c)
-		}
-	}
-	return all, nil
-}
-
-func (m *mockMessaging) GetFullConversation(uuid string) (*critic.Conversation, error) {
-	for _, convs := range m.conversations {
-		for _, c := range convs {
-			if c.UUID == uuid {
-				return c, nil
-			}
-		}
-	}
-	return nil, nil
-}
-
-func (m *mockMessaging) GetConversationsForFile(filePath string) ([]*critic.Conversation, error) {
-	return m.conversations[filePath], nil
-}
-
-func (m *mockMessaging) GetFileConversationSummary(filePath string) (*critic.FileConversationSummary, error) {
-	return m.summaries[filePath], nil
-}
-
-func (m *mockMessaging) ReplyToConversation(conversationUUID string, message string, author critic.Author) (*critic.Message, error) {
-	return &critic.Message{UUID: "reply-1"}, nil
-}
-
-func (m *mockMessaging) CreateConversation(author critic.Author, message, filePath string, lineNumber int, codeVersion string, context string) (*critic.Conversation, error) {
-	return &critic.Conversation{UUID: "conv-1"}, nil
-}
-
-func (m *mockMessaging) MarkAsResolved(conversationUUID string) error   { return nil }
-func (m *mockMessaging) MarkAsUnresolved(conversationUUID string) error { return nil }
-func (m *mockMessaging) MarkAsRead(messageUUID string) error            { return nil }
-func (m *mockMessaging) MarkAsReadByAI(conversationUUID string) error   { return nil }
-func (m *mockMessaging) Close() error                                   { return nil }
-
 // createTestSession creates a Session for testing with a temp directory
 func createTestSession(t *testing.T, messaging critic.Messaging) *Session {
 	tempDir := t.TempDir()
@@ -257,12 +201,12 @@ func TestFilterMode(t *testing.T) {
 }
 
 func TestConversations(t *testing.T) {
-	messaging := newMockMessaging()
-	messaging.conversations["file1.go"] = []*critic.Conversation{
+	messaging := critic.NewDummyMessaging()
+	messaging.Conversations["file1.go"] = []*critic.Conversation{
 		{UUID: "conv-1", FilePath: "file1.go", LineNumber: 10},
 		{UUID: "conv-2", FilePath: "file1.go", LineNumber: 20},
 	}
-	messaging.summaries["file1.go"] = &critic.FileConversationSummary{
+	messaging.Summaries["file1.go"] = &critic.FileConversationSummary{
 		FilePath:              "file1.go",
 		HasUnresolvedComments: true,
 	}
