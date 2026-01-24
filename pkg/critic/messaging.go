@@ -94,50 +94,50 @@ type Messaging interface {
 	Close() error
 }
 
-// Messaging defines the interface for managing critic conversations
-type NullMessaging struct {
+// DummyMessaging implements the Messaging interface as no-ops
+type DummyMessaging struct {
 }
 
-func (n NullMessaging) GetConversations(status string) ([]Conversation, error) {
+func (n DummyMessaging) GetConversations(status string) ([]Conversation, error) {
 	return []Conversation{}, nil
 }
 
-func (n NullMessaging) GetFullConversation(uuid string) (*Conversation, error) {
+func (n DummyMessaging) GetFullConversation(uuid string) (*Conversation, error) {
 	return nil, errors.New("No such conversation")
 }
 
-func (n NullMessaging) GetConversationsForFile(filePath string) ([]*Conversation, error) {
+func (n DummyMessaging) GetConversationsForFile(filePath string) ([]*Conversation, error) {
 	return nil, errors.New("No conversation for filePath " + filePath)
 }
 
-func (n NullMessaging) GetFileConversationSummary(filePath string) (*FileConversationSummary, error) {
+func (n DummyMessaging) GetFileConversationSummary(filePath string) (*FileConversationSummary, error) {
 	return nil, errors.New("No conversation for filePath " + filePath)
 }
 
-func (n NullMessaging) ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error) {
+func (n DummyMessaging) ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error) {
 	return nil, errors.New("No such conversation " + conversationUUID)
 }
 
-func (n NullMessaging) CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error) {
+func (n DummyMessaging) CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error) {
 	return nil, errors.New("Cannot create conversation")
 }
 
-func (n NullMessaging) MarkAsResolved(conversationUUID string) error {
+func (n DummyMessaging) MarkAsResolved(conversationUUID string) error {
 	return errors.New("No such conversation " + conversationUUID)
 }
 
-func (n NullMessaging) MarkAsUnresolved(conversationUUID string) error {
+func (n DummyMessaging) MarkAsUnresolved(conversationUUID string) error {
 	return errors.New("No such conversation " + conversationUUID)
 }
 
-func (n NullMessaging) MarkAsRead(messageUUID string) error {
+func (n DummyMessaging) MarkAsRead(messageUUID string) error {
 	return errors.New("No such message " + messageUUID)
 }
 
-func (n NullMessaging) MarkAsReadByAI(conversationUUID string) error {
+func (n DummyMessaging) MarkAsReadByAI(conversationUUID string) error {
 	return errors.New("No such conversation " + conversationUUID)
 }
 
-func (n NullMessaging) Close() error {
+func (n DummyMessaging) Close() error {
 	return nil
 }

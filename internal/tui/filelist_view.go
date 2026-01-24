@@ -44,7 +44,7 @@ type FileListView struct {
 
 // NewFileListView creates a new file list widget
 func NewFileListView(session *session.Session, messaging critic.Messaging) *FileListView {
-	messaging = &critic.NullMessaging{}
+	messaging = &critic.DummyMessaging{}
 	w := &FileListView{session: session, messaging: messaging}
 
 	// Create the List with a custom renderer
