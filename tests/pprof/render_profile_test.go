@@ -18,9 +18,9 @@ func createSampleFileDiff(numHunks, linesPerHunk int) *ctypes.FileDiff {
 	hunks := make([]*ctypes.Hunk, numHunks)
 	lineNum := 1
 
-	for h := 0; h < numHunks; h++ {
+	for h := range numHunks {
 		lines := make([]*ctypes.Line, linesPerHunk)
-		for l := 0; l < linesPerHunk; l++ {
+		for l := range linesPerHunk {
 			lineType := ctypes.LineContext
 			switch l % 3 {
 			case 0:
@@ -64,7 +64,7 @@ func createSampleFileDiff(numHunks, linesPerHunk int) *ctypes.FileDiff {
 // createSampleFiles creates multiple sample FileDiff objects for FileListWidget testing.
 func createSampleFiles(count int) []*ctypes.FileDiff {
 	files := make([]*ctypes.FileDiff, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		files[i] = &ctypes.FileDiff{
 			OldPath:   "",
 			NewPath:   "pkg/example/file_" + string(rune('a'+i%26)) + ".go",
@@ -187,7 +187,7 @@ func BenchmarkFileListWidgetRender(b *testing.B) {
 	widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 40, 50)))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf.Clear()
 		widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 40, 50)))
 	}
@@ -206,7 +206,7 @@ func BenchmarkDiffViewWidgetRender(b *testing.B) {
 	widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 120, 50)))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf.Clear()
 		widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 120, 50)))
 	}
@@ -233,7 +233,7 @@ func BenchmarkCombinedRender(b *testing.B) {
 	diffViewWidget.Render(teapot.NewSubBuffer(diffViewBuf, teapot.NewRect(0, 0, 120, 50)))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		fileListBuf.Clear()
 		diffViewBuf.Clear()
 		fileListWidget.Render(teapot.NewSubBuffer(fileListBuf, teapot.NewRect(0, 0, 40, 50)))
@@ -255,7 +255,7 @@ func BenchmarkLargeDiffViewRender(b *testing.B) {
 	widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 200, 100)))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		buf.Clear()
 		widget.Render(teapot.NewSubBuffer(buf, teapot.NewRect(0, 0, 200, 100)))
 	}
@@ -291,7 +291,7 @@ func BenchmarkCompositorView(b *testing.B) {
 	_ = compositor.View()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Mark dirty to ensure actual rendering happens
 		compositor.MarkDirty()
 		_ = compositor.View()
@@ -321,7 +321,7 @@ func BenchmarkCompositorViewCached(b *testing.B) {
 	_ = compositor.View()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// Don't mark dirty - test cached path
 		_ = compositor.View()
 	}
@@ -351,7 +351,7 @@ func TestCompositorRenderProfile(t *testing.T) {
 
 	// Profile the subsequent rerenders
 	cpuProfile(t, "compositor_profile.prof", "compositor rerenders (10x)", func() {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			compositor.MarkDirty()
 			_ = compositor.View()
 		}

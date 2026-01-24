@@ -11,6 +11,7 @@ import (
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/simple-go/observable"
+	"git.15b.it/eno/critic/simple-go/preconditions"
 	pot "git.15b.it/eno/critic/teapot"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -44,9 +45,7 @@ type FileListView struct {
 
 // NewFileListView creates a new file list widget
 func NewFileListView(session *session.Session, messaging critic.Messaging) *FileListView {
-	if messaging == nil {
-		messaging = &critic.DummyMessaging{}
-	}
+	preconditions.Check(messaging != nil, "Must set messaging")
 	w := &FileListView{session: session, messaging: messaging}
 
 	// Create the List with a custom renderer
