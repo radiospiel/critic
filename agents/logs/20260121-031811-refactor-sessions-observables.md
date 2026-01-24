@@ -14,7 +14,7 @@ Refactor the sessions package to:
 
 ## Progress
 - [x] Explore sessions package structure
-- [x] Read ses.go, processor.go, observable.go
+- [x] Read ses.go, diffProcessor.go, observable.go
 - [x] Create task log
 - [x] Run existing tests to verify they pass
 - [x] Refactor Session to embed *observable.Observable

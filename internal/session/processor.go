@@ -22,11 +22,21 @@ type DiffProcessor struct {
 	onFileLoaded func(file *types.FileDiff, err error)
 }
 
-// NewDiffProcessor creates a new diff processor
+// NewDiffProcessor creates a new diff diffProcessor
 func NewDiffProcessor(state *Session) *DiffProcessor {
-	return &DiffProcessor{
+	p := &DiffProcessor{
 		state: state,
 	}
+
+	// Subscribe to file selection changes
+	state.OnKeyChange(Keys.SelectedFileIndex, func(key string) {
+		filePath := state.GetSelectedFilePath()
+		fileIndex := state.GetSelectedFileIndex()
+		logger.Info("DiffProcessor: Selection changed to %s (index %d)", filePath, fileIndex)
+		p.LoadSelectedFile()
+	})
+
+	return p
 }
 
 // OnDiffLoaded sets the callback for when diff loading completes
@@ -241,4 +251,3 @@ func filterFilesByExtension(files []*types.FileDiff, extensions []string) []*typ
 
 	return filtered
 }
-

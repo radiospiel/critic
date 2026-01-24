@@ -423,8 +423,8 @@ func TestDiffProcessor(t *testing.T) {
 	session := createTestSession(t, nil)
 	processor := NewDiffProcessor(session)
 
-	assert.NotNil(t, processor, "processor should not be nil")
-	assert.False(t, processor.IsLoading(), "processor should not be loading initially")
+	assert.NotNil(t, processor, "diffProcessor should not be nil")
+	assert.False(t, processor.IsLoading(), "diffProcessor should not be loading initially")
 
 	// Test callbacks (registered but not called in this test since we don't have a git repo)
 	processor.OnDiffLoaded(func(diff *types.Diff, err error) {
@@ -436,7 +436,7 @@ func TestDiffProcessor(t *testing.T) {
 	})
 
 	// Note: We can't fully test LoadDiff without a git repo
-	assert.NotNil(t, processor, "processor should still be valid")
+	assert.NotNil(t, processor, "diffProcessor should still be valid")
 }
 
 func TestStartWatchers(t *testing.T) {

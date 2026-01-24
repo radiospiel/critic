@@ -124,7 +124,7 @@ type Session struct {
 	gitWatcher *GitWatcher
 
 	// Processor
-	processor *DiffProcessor
+	diffProcessor *DiffProcessor
 
 	// Internal subscriptions (for cleanup)
 	internalSubs []observable.Subscription
@@ -158,8 +158,8 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 	s.SetValueAtKey(Keys.Conversations, map[string]any{})
 	s.SetValueAtKey(Keys.ConversationSummaries, map[string]any{})
 
-	// Create processor
-	s.processor = NewDiffProcessor(s)
+	// Create diffProcessor
+	s.diffProcessor = NewDiffProcessor(s)
 
 	// Create watchers
 	dbWatcher, err := NewDBWatcher(gitRoot, func() {
@@ -175,33 +175,24 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 
 	gitWatcher := NewGitWatcher(s)
 	gitWatcher.SetBases(args.Bases)
-	gitWatcher.OnBasesChanged(func() {
-		logger.Info("Session: Git bases changed, loading diff")
-		s.processor.LoadDiff()
-	})
+	// gitWatcher.OnBasesChanged(func() {
+	// 	logger.Info("Session: Git bases changed, loading diff")
+	// 	s.diffProcessor.LoadDiff()
+	// })
 	s.gitWatcher = gitWatcher
 
 	// Wire up internal state change subscriptions
 	// When diff args change, load diff
-	diffArgsSubs := s.OnKeyChange(Keys.DiffArgs, func(key string) {
-		logger.Info("Session: DiffArgs changed (%s), loading diff", key)
-		s.processor.LoadDiff()
-	})
-	s.internalSubs = append(s.internalSubs, diffArgsSubs)
-	baseSubs := s.OnKeyChange(Keys.CurrentBase, func(key string) {
-		logger.Info("Session: CurrentBase changed (%s), loading diff", key)
-		s.processor.LoadDiff()
-	})
-	s.internalSubs = append(s.internalSubs, baseSubs)
-
-	// When selection changes, load selected file
-	selectionSubs := s.OnKeyChange(Keys.SelectedFileIndex, func(key string) {
-		filePath := s.GetSelectedFilePath()
-		fileIndex := s.GetSelectedFileIndex()
-		logger.Info("Session: Selection changed to %s (index %d)", filePath, fileIndex)
-		s.processor.LoadSelectedFile()
-	})
-	s.internalSubs = append(s.internalSubs, selectionSubs)
+	// diffArgsSubs := s.OnKeyChange(Keys.DiffArgs, func(key string) {
+	// 	logger.Info("Session: DiffArgs changed (%s), loading diff", key)
+	// 	s.diffProcessor.LoadDiff()
+	// })
+	// s.internalSubs = append(s.internalSubs, diffArgsSubs)
+	// baseSubs := s.OnKeyChange(Keys.CurrentBase, func(key string) {
+	// 	logger.Info("Session: CurrentBase changed (%s), loading diff", key)
+	// 	s.diffProcessor.LoadDiff()
+	// })
+	// s.internalSubs = append(s.internalSubs, baseSubs)
 
 	// Set initial diff args
 	if len(args.Bases) > 0 {
