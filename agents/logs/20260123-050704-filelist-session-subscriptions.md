@@ -8,7 +8,7 @@
 **Used Models:** Opus
 
 ## Objective
-1. FileListView subscribes to session keys: "diff.files", "tui.fileIndex", "tui.filePath", "tui.focusedPane"
+1. FileListView subscribes to ses keys: "diff.files", "tui.fileIndex", "tui.filePath", "tui.focusedPane"
 2. Only rerender when these keys change
 3. Rename "selection." keys to "tui." keys
 4. Implement focus navigation for LayoutView with FocusNext/FocusPrev
@@ -16,12 +16,12 @@
 
 ## Progress
 - [x] Explore codebase structure
-- [x] Rename session keys from "selection." to "tui."
+- [x] Rename ses keys from "selection." to "tui."
 - [x] Update View interface: add FocusNext()/FocusPrev(), rename Focused() to HasFocus(), drop Focusable()
 - [x] BaseView.AcceptsFocus() returns false by default
 - [x] BaseView.FocusNext()/FocusPrev() panic when AcceptsFocus() is false, return false otherwise
 - [x] LayoutView implements FocusNext/FocusPrev to cycle through focusable children
-- [x] Add session subscription to FileListView
+- [x] Add ses subscription to FileListView
 - [x] Update app.go to use FocusNext/FocusPrev
 - [x] Leaf views (FileListView, DiffView, ScrollView, TextAreaView) override AcceptsFocus()/FocusNext()/FocusPrev()
 - [x] Consolidate mainLayout and layout - remove LayoutView, add FocusManager to MainView
@@ -43,7 +43,7 @@ Successfully implemented:
   - `FocusPrev() bool` - panics when AcceptsFocus() is false, returns false for leaf views
   - `HasFocus() bool` - renamed from Focused()
   - Removed `Focusable()` method
-- FileListView now subscribes to session keys: diff.files, tui.fileIndex, tui.focusedPane
+- FileListView now subscribes to ses keys: diff.files, tui.fileIndex, tui.focusedPane
 
 ### Phase 2: Layout Consolidation
 - Deleted `internal/tui/layout.go` (LayoutView was redundant)
@@ -67,11 +67,11 @@ Successfully implemented:
 - This eliminates redundant references while keeping typed access through MainView
 
 ### Files Changed
-- `internal/session/session.go` - renamed keys
+- `internal/ses/ses.go` - renamed keys
 - `internal/tui/layout.go` - deleted
 - `internal/tui/focus_manager.go` - new
 - `internal/tui/main_view.go` - added FocusManager
-- `internal/tui/filelist_view.go` - added session subscriptions
+- `internal/tui/filelist_view.go` - added ses subscriptions
 - `internal/tui/diffview.go` - focus method updates
 - `internal/app/app.go` - consolidated layout usage
 - `teapot/widget.go` - removed FocusManager code

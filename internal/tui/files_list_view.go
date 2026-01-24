@@ -29,10 +29,10 @@ func (f FileItem) FilterValue() string {
 	return f.File.NewPath
 }
 
-// FilesListView is a teapot-based file list widget.
+// FilesListView is a teapot-based file listView widget.
 type FilesListView struct {
 	pot.BaseView
-	list          *pot.ListView[FileItem]
+	listView      *pot.ListView[FileItem]
 	messaging     critic.Messaging
 	session       *session.Session
 	subscriptions []observable.Subscription
@@ -42,43 +42,39 @@ type FilesListView struct {
 	totalFiles    int // Total files before filtering (for "No files match filter" message)
 }
 
-// NewFilesListView creates a new file list widget
-func NewFilesListView(session *session.Session, messaging critic.Messaging) *FilesListView {
-	preconditions.Check(messaging != nil, "Must set messaging")
-	w := &FilesListView{session: session, messaging: messaging}
+// NewFilesListView creates a new file listView widget
+func NewFilesListView(ses *session.Session, messaging critic.Messaging) *FilesListView {
+	preconditions.Check(ses != nil, "ses must be set")
+	preconditions.Check(messaging != nil, "messaging must be set")
+	w := &FilesListView{session: ses, messaging: messaging}
 
 	// Create the List with a custom renderer
-	w.list = pot.NewSelectableList[FileItem](w.renderItem)
+	w.listView = pot.NewSelectableList[FileItem](w.renderItem)
 
 	// Configure styles
-	w.list.SetStyles(
+	w.listView.SetStyles(
 		selectedFileActiveStyle,
 		selectedFileInactiveStyle,
 		normalFileStyle,
 	)
 
-	// Register selection change callback to update session
-	w.list.OnSelectionChange(w.onSelectionChange)
+	// Register selection change callback to update ses
+	w.listView.OnSelectionChange(
+		func(index int, item *FileItem) {
+			preconditions.Check(item != nil, "item must be set")
+
+			filePath := item.File.NewPath
+			if filePath == "" {
+				filePath = item.File.OldPath
+			}
+
+			ses.Transaction(func(txn *observable.Txn) {
+				txn.SetValueAtKey(session.KeySelectedFileIndex, index)
+				txn.SetValueAtKey(session.KeySelectedFilePath, filePath)
+			})
+		})
 
 	return w
-}
-
-// onSelectionChange is called when the ListView selection changes.
-// It updates the tui.* session settings.
-func (w *FilesListView) onSelectionChange(index int, item *FileItem) {
-	if w.session == nil || item == nil {
-		return
-	}
-
-	filePath := item.File.NewPath
-	if filePath == "" {
-		filePath = item.File.OldPath
-	}
-
-	w.session.Transaction(func(txn *observable.Txn) {
-		txn.SetValueAtKey(session.KeySelectedFileIndex, index)
-		txn.SetValueAtKey(session.KeySelectedFilePath, filePath)
-	})
 }
 
 // renderItem renders a single file item
@@ -218,19 +214,19 @@ func (w *FilesListView) getFileAnimationSummary(gitPath string) FileAnimationSum
 	return summary
 }
 
-// SetFiles updates the file list
+// SetFiles updates the file listView
 func (w *FilesListView) SetFiles(files []*ctypes.FileDiff) {
 	items := make([]FileItem, len(files))
 	for i, f := range files {
 		items[i] = FileItem{File: f}
 	}
-	w.list.SetItems(items)
+	w.listView.SetItems(items)
 	w.Repaint() // Propagate dirty state to parent (MainView)
 }
 
 // GetActiveFile returns the currently selected file
 func (w *FilesListView) GetActiveFile() *ctypes.FileDiff {
-	if item, ok := w.list.Selected(); ok {
+	if item, ok := w.listView.Selected(); ok {
 		return item.File
 	}
 	return nil
@@ -238,7 +234,7 @@ func (w *FilesListView) GetActiveFile() *ctypes.FileDiff {
 
 // SelectByPath selects a file by its path
 func (w *FilesListView) SelectByPath(path string) bool {
-	index := slices.IndexFunc(w.list.Items(), func(item FileItem) bool {
+	index := slices.IndexFunc(w.listView.Items(), func(item FileItem) bool {
 		filePath := item.File.NewPath
 		if filePath == "" {
 			filePath = item.File.OldPath
@@ -250,30 +246,30 @@ func (w *FilesListView) SelectByPath(path string) bool {
 }
 
 func (w *FilesListView) SetSelectedIndex(idx int) bool {
-	if idx < 0 || idx >= len(w.list.Items())-1 {
+	if idx < 0 || idx >= len(w.listView.Items())-1 {
 		return false
 	}
 
 	// ListView.SetSelectedIndex will trigger onSelectionChange callback
-	w.list.SetSelectedIndex(idx)
+	w.listView.SetSelectedIndex(idx)
 	return true
 }
 
 // SelectNext moves to the next file
 func (w *FilesListView) SelectNext() bool {
-	idx := w.list.SelectedIndex()
+	idx := w.listView.SelectedIndex()
 	return w.SetSelectedIndex(idx + 1)
 }
 
 // SelectPrev moves to the previous file
 func (w *FilesListView) SelectPrev() bool {
-	idx := w.list.SelectedIndex()
+	idx := w.listView.SelectedIndex()
 	return w.SetSelectedIndex(idx - 1)
 }
 
 // SetSession sets the session and subscribes to relevant keys.
 // The view will automatically update when these session keys change:
-// - diff.files: Updates the file list
+// - diff.files: Updates the file listView
 // - tui.fileIndex: Updates selection
 // - tui.filePath: Updates selection by path
 // - tui.focusedPane: Updates focus state
@@ -315,21 +311,21 @@ func (w *FilesListView) SetSession(s *session.Session) {
 	w.subscriptions = append(w.subscriptions, focusSub)
 }
 
-// updateFilesFromSession updates the file list from session data
+// updateFilesFromSession updates the file listView from session data
 func (w *FilesListView) updateFilesFromSession(files []*ctypes.FileDiff) {
 	items := make([]FileItem, len(files))
 	for i, f := range files {
 		items[i] = FileItem{File: f}
 	}
-	w.list.SetItems(items)
+	w.listView.SetItems(items)
 	w.totalFiles = len(files)
 	w.Repaint()
 }
 
 // updateSelectionFromSession updates the selection from session data
 func (w *FilesListView) updateSelectionFromSession(index int) {
-	if w.list.SelectedIndex() != index {
-		w.list.SetSelectedIndex(index)
+	if w.listView.SelectedIndex() != index {
+		w.listView.SetSelectedIndex(index)
 		w.Repaint()
 	}
 }
@@ -352,7 +348,7 @@ func (w *FilesListView) SetFilterMode(filterMode int, totalFiles int) {
 // GetFilterInfo returns the current filtered file count and total file count
 // This is used by the status bar to avoid re-filtering on every render
 func (w *FilesListView) GetFilterInfo() (filteredCount, totalCount int) {
-	return len(w.list.Items()), w.totalFiles
+	return len(w.listView.Items()), w.totalFiles
 }
 
 // SetBounds implements pot.View
@@ -360,18 +356,18 @@ func (w *FilesListView) SetBounds(bounds pot.Rect) {
 	w.BaseView.SetBounds(bounds)
 	w.width = bounds.Width
 	w.height = bounds.Height
-	w.list.SetBounds(bounds)
+	w.listView.SetBounds(bounds)
 }
 
 // SetFocused implements pot.View
 func (w *FilesListView) SetFocused(focused bool) {
 	w.BaseView.SetFocused(focused)
-	w.list.SetFocused(focused)
+	w.listView.SetFocused(focused)
 }
 
 // Render implements pot.View.
 func (w *FilesListView) Render(buf *pot.SubBuffer) {
-	if len(w.list.Items()) == 0 {
+	if len(w.listView.Items()) == 0 {
 		style := lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"})
 		// Show appropriate message based on filter mode
@@ -385,12 +381,12 @@ func (w *FilesListView) Render(buf *pot.SubBuffer) {
 		buf.SetString(1, 1, msg, style)
 		return
 	}
-	w.list.Render(buf)
+	w.listView.Render(buf)
 }
 
 // HandleKey implements pot.View
 func (w *FilesListView) HandleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
-	return w.list.HandleKey(msg)
+	return w.listView.HandleKey(msg)
 }
 
 // Children returns the child widgets
@@ -398,17 +394,17 @@ func (w *FilesListView) Children() []pot.View {
 	return nil
 }
 
-// AcceptsFocus returns true as the file list can receive focus.
+// AcceptsFocus returns true as the file listView can receive focus.
 func (w *FilesListView) AcceptsFocus() bool {
 	return true
 }
 
-// FocusNext is a no-op for file list as it has no focusable children.
+// FocusNext is a no-op for file listView as it has no focusable children.
 func (w *FilesListView) FocusNext() bool {
 	return false
 }
 
-// FocusPrev is a no-op for file list as it has no focusable children.
+// FocusPrev is a no-op for file listView as it has no focusable children.
 func (w *FilesListView) FocusPrev() bool {
 	return false
 }

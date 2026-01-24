@@ -18,6 +18,7 @@ func newLogCmd() *cobra.Command {
 	var follow bool
 	var topic string
 	var ignoreCase bool
+	var quietFlag int
 
 	cmd := &cobra.Command{
 		Use:   "log [filter...]",
@@ -38,6 +39,8 @@ Examples:
   critic log -f -i error         # Case-insensitive filter for "error"
   critic log -f "/error|warn/"   # Filter using regex
   critic log -f ERROR -t git     # Multiple filters (AND)
+  critic log -f -q               # Show only WARN, ERROR, FATAL
+  critic log -f -qq              # Show only ERROR, FATAL
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -56,13 +59,14 @@ Examples:
 				filters = append(filters, "["+topic+"]")
 			}
 
-			return watchLogFile(logPath, filters, ignoreCase)
+			return watchLogFile(logPath, filters, ignoreCase, quietFlag)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow the log file output")
 	cmd.Flags().StringVarP(&topic, "topic", "t", "", "Filter log output by topic (e.g., -t git shows only [git] entries)")
 	cmd.Flags().BoolVarP(&ignoreCase, "ignore-case", "i", false, "Case-insensitive filtering")
+	cmd.Flags().CountVarP(&quietFlag, "quiet", "q", "Filter by log level (-q for WARN+, -qq for ERROR+)")
 
 	return cmd
 }
@@ -113,7 +117,8 @@ func (f *filter) matches(line string) bool {
 
 // watchLogFile watches the log file and prints new content to stdout
 // All filters must match for a line to be printed (AND logic)
-func watchLogFile(logPath string, filterPatterns []string, ignoreCase bool) error {
+// quietLevel filters by log level: 0=all, 1=WARN+, 2=ERROR+, 3+=FATAL only
+func watchLogFile(logPath string, filterPatterns []string, ignoreCase bool, quietLevel int) error {
 	// Compile filters
 	var filters []*filter
 	for _, pattern := range filterPatterns {
@@ -122,6 +127,19 @@ func watchLogFile(logPath string, filterPatterns []string, ignoreCase bool) erro
 			return err
 		}
 		filters = append(filters, f)
+	}
+
+	// Build level filter based on quiet flag
+	var minLevel logger.Level
+	switch quietLevel {
+	case 0:
+		minLevel = logger.DEBUG
+	case 1:
+		minLevel = logger.WARN
+	case 2:
+		minLevel = logger.ERROR
+	default:
+		minLevel = logger.FATAL
 	}
 
 	// Open the log file
@@ -177,8 +195,8 @@ func watchLogFile(logPath string, filterPatterns []string, ignoreCase bool) erro
 					if err != nil {
 						break
 					}
-					// Check if line matches all filters (AND logic)
-					if matchesAllFilters(line, filters) {
+					// Check if line matches log level and all filters (AND logic)
+					if matchesLogLevel(line, minLevel) && matchesAllFilters(line, filters) {
 						fmt.Print(line)
 					}
 				}
@@ -191,6 +209,31 @@ func watchLogFile(logPath string, filterPatterns []string, ignoreCase bool) erro
 			return fmt.Errorf("watcher error: %w", err)
 		}
 	}
+}
+
+// matchesLogLevel returns true if the line's log level is >= minLevel
+// Log lines contain level prefixes like "INFO:", "WARN:", "ERROR:", "FATAL:", "DEBUG:"
+func matchesLogLevel(line string, minLevel logger.Level) bool {
+	// If no filtering (DEBUG level), accept all lines
+	if minLevel == logger.DEBUG {
+		return true
+	}
+
+	// Extract log level from line
+	lineLevel := logger.DEBUG // Default to lowest level if not found
+	if strings.Contains(line, "FATAL:") {
+		lineLevel = logger.FATAL
+	} else if strings.Contains(line, "ERROR:") {
+		lineLevel = logger.ERROR
+	} else if strings.Contains(line, "WARN:") {
+		lineLevel = logger.WARN
+	} else if strings.Contains(line, "INFO:") {
+		lineLevel = logger.INFO
+	} else if strings.Contains(line, "DEBUG:") {
+		lineLevel = logger.DEBUG
+	}
+
+	return lineLevel >= minLevel
 }
 
 // matchesAllFilters returns true if the line matches all filters

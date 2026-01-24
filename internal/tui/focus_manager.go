@@ -83,7 +83,7 @@ func (fm *FocusManager) moveFocus(delta int) bool {
 		return false
 	}
 
-	// Build list of focusable children indices
+	// Build listView of focusable children indices
 	var focusableIndices []int
 	for i, child := range fm.children {
 		if child.AcceptsFocus() {
@@ -96,7 +96,7 @@ func (fm *FocusManager) moveFocus(delta int) bool {
 		return false
 	}
 
-	// Find current position in focusable list
+	// Find current position in focusable listView
 	currentPos := -1
 	for i, idx := range focusableIndices {
 		if idx == fm.focusedIndex {
