@@ -232,7 +232,7 @@ func TestConversations(t *testing.T) {
 func TestOnKeyChange(t *testing.T) {
 	session := createTestSession(t, nil)
 
-	// Test subscription to Keys.Files changes (replaces old OnDiffLoaded callback)
+	// Test subscription to Keys.Files changes
 	filesChangeCalled := false
 	var changedKey string
 	subs := session.OnKeyChange(Keys.Files, func(key string) {
@@ -424,26 +424,6 @@ func TestDBWatcherWithTriggers(t *testing.T) {
 	mu.Unlock()
 
 	assert.True(t, count >= 2, "callback should be called at least twice, got %d", count)
-}
-
-func TestDiffProcessor(t *testing.T) {
-	session := createTestSession(t, nil)
-	processor := NewDiffProcessor(session)
-
-	assert.NotNil(t, processor, "diffProcessor should not be nil")
-	assert.False(t, processor.IsLoading(), "diffProcessor should not be loading initially")
-
-	// Test callbacks (registered but not called in this test since we don't have a git repo)
-	processor.OnDiffLoaded(func(diff *types.Diff, err error) {
-		// Would be called when diff loads
-	})
-
-	processor.OnFileLoaded(func(file *types.FileDiff, err error) {
-		// Would be called when file loads
-	})
-
-	// Note: We can't fully test LoadDiff without a git repo
-	assert.NotNil(t, processor, "diffProcessor should still be valid")
 }
 
 func TestStartWatchers(t *testing.T) {

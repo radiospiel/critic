@@ -175,30 +175,24 @@ func (o *Observable) SetValueAtKey(key string, value any) error {
 	})
 }
 
-// setValueInternal sets the value without locking (caller must hold lock).
-func (o *Observable) setValueInternal(key string, value any) {
-	if key == "" {
-		// Setting the root
-		if value != nil {
-			preconditions.Check(
-				isMap(value) || isSlice(value),
-				"root value must be nil, map, or slice, got %T", value,
-			)
-		}
-		o.data = value
-		return
-	}
+// setValue sets the value without locking (caller must hold lock).
+func (o *Observable) setValue(key string, value any) {
+	logger.Warn("observable.setValue path=%v value=%v", key, value)
+
+	preconditions.Check(key != "", "Cannot set root value")
 
 	parts := strings.Split(key, ".")
 
-	// Ensure root is a map (since first part is a string key in a path like "x.1.a")
-	if o.data == nil {
-		o.data = make(map[string]any)
-	}
-	preconditions.Check(isMap(o.data), "root must be a map when setting path %q, got %T", key, o.data)
-
 	// Use the recursive setter that returns the modified value
 	o.data = o.setAtPath(o.data, parts, value)
+
+	// For complex types, marshal to JSON
+	// json, err := json.MarshalIndent(o.data, "", "  ")
+	json, err := json.Marshal(o.data)
+	if err != nil {
+		panic("cannot json marshal data")
+	}
+	logger.Warn("observable.data %v", string(json))
 }
 
 // setAtPath recursively sets a value at the given path parts and returns the modified container.
@@ -207,7 +201,6 @@ func (o *Observable) setAtPath(current any, parts []string, value any) any {
 		return value
 	}
 
-	logger.Warn("observable.setAtPath path=%v value=%v", parts, value)
 	part := parts[0]
 	isLastPart := len(parts) == 1
 
@@ -492,7 +485,7 @@ func (o *Observable) setValuesAtKeys(changes []change) error {
 
 	o.mu.Lock()
 	for _, c := range changes {
-		o.setValueInternal(c.key, c.value)
+		o.setValue(c.key, c.value)
 	}
 
 	// Validate all schemas against the final state

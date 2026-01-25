@@ -7,9 +7,12 @@ import (
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
+	"git.15b.it/eno/critic/simple-go/observable"
 )
 
 // DiffProcessor handles loading and processing diffs
+//
+// It subscribes to
 type DiffProcessor struct {
 	state *Session
 	mu    sync.Mutex
@@ -19,38 +22,21 @@ type DiffProcessor struct {
 
 	// Callbacks
 	onDiffLoaded func(diff *types.Diff, err error)
-	onFileLoaded func(file *types.FileDiff, err error)
 }
 
 // NewDiffProcessor creates a new diff diffProcessor
 func NewDiffProcessor(state *Session) *DiffProcessor {
-	p := &DiffProcessor{
+	diffProcessor := &DiffProcessor{
 		state: state,
 	}
 
-	// Subscribe to file selection changes
-	state.OnKeyChange(Keys.SelectedFileIndex, func(key string) {
-		filePath := state.GetSelectedFilePath()
-		fileIndex := state.GetSelectedFileIndex()
-		logger.Info("DiffProcessor: Selection changed to %s (index %d)", filePath, fileIndex)
-		p.LoadSelectedFile()
+	state.OnKeyChange(Keys.SelectedFilePath, func(key string) {
+		selectedFilePath :=
+			observable.GetValueAs[string](state.Observable, Keys.SelectedFilePath)
+		diffProcessor.loadSelectedFile(selectedFilePath)
 	})
 
-	return p
-}
-
-// OnDiffLoaded sets the callback for when diff loading completes
-func (p *DiffProcessor) OnDiffLoaded(callback func(diff *types.Diff, err error)) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.onDiffLoaded = callback
-}
-
-// OnFileLoaded sets the callback for when file loading completes
-func (p *DiffProcessor) OnFileLoaded(callback func(file *types.FileDiff, err error)) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.onFileLoaded = callback
+	return diffProcessor
 }
 
 // LoadDiff loads the diff based on current state
@@ -139,20 +125,8 @@ func (p *DiffProcessor) loadDiffAsync() {
 	p.notifyDiffLoaded(diff, nil)
 }
 
-// LoadSelectedFile loads/parses the currently selected file
-func (p *DiffProcessor) LoadSelectedFile() error {
-	file := p.state.GetSelectedFile()
-	if file == nil {
-		return nil
-	}
-
-	// The file is already parsed as part of the diff, but we can refresh
-	// conversations for this specific file
-	filePath := file.NewPath
-	if file.IsDeleted {
-		filePath = file.OldPath
-	}
-
+// loadSelectedFile loads/parses the currently selected file
+func (p *DiffProcessor) loadSelectedFile(filePath string) error {
 	conversations, err := p.state.GetConversationsForFile(filePath)
 	if err != nil {
 		logger.Warn("DiffProcessor: Failed to get conversations for %s: %v", filePath, err)
@@ -167,7 +141,6 @@ func (p *DiffProcessor) LoadSelectedFile() error {
 		p.state.SetConversationSummary(filePath, summary)
 	}
 
-	p.notifyFileLoaded(file, nil)
 	return nil
 }
 
@@ -179,17 +152,6 @@ func (p *DiffProcessor) notifyDiffLoaded(diff *types.Diff, err error) {
 
 	if callback != nil {
 		callback(diff, err)
-	}
-}
-
-// notifyFileLoaded calls the file loaded callback
-func (p *DiffProcessor) notifyFileLoaded(file *types.FileDiff, err error) {
-	p.mu.Lock()
-	callback := p.onFileLoaded
-	p.mu.Unlock()
-
-	if callback != nil {
-		callback(file, err)
 	}
 }
 

@@ -1,6 +1,10 @@
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"git.15b.it/eno/critic/simple-go/utils"
+)
 
 // Diff represents a git diff with multiple file changes
 type Diff struct {
@@ -20,6 +24,10 @@ type FileDiff struct {
 	Hunks     []*Hunk `json:"hunks"`
 }
 
+func (d FileDiff) GetPath() string {
+	return utils.IfElse(d.IsDeleted, d.OldPath, d.NewPath)
+}
+
 // HunkStats holds line statistics for a hunk
 type HunkStats struct {
 	Added   int `json:"added"`
@@ -28,13 +36,13 @@ type HunkStats struct {
 
 // Hunk represents a chunk of changes within a file
 type Hunk struct {
-	OldStart int        `json:"old_start"`
-	OldLines int        `json:"old_lines"`
-	NewStart int        `json:"new_start"`
-	NewLines int        `json:"new_lines"`
-	Header   string     `json:"header,omitempty"` // The @@ ... @@ header line
-	Lines    []*Line    `json:"lines"`
-	Stats    HunkStats  `json:"stats"`
+	OldStart int       `json:"old_start"`
+	OldLines int       `json:"old_lines"`
+	NewStart int       `json:"new_start"`
+	NewLines int       `json:"new_lines"`
+	Header   string    `json:"header,omitempty"` // The @@ ... @@ header line
+	Lines    []*Line   `json:"lines"`
+	Stats    HunkStats `json:"stats"`
 }
 
 // Line represents a single line in a diff hunk

@@ -39,6 +39,19 @@ func Partition[T any](collection []T, predicate func(T) bool) ([]T, []T) {
 	return matched, unmatched
 }
 
+func Null[T any]() T {
+	var null T
+	return null
+}
+
+// Iff returns ifTrue if condition is true, or T's null value
+func Iff[T any](condition bool, ifTrue T) T {
+	if condition {
+		return ifTrue
+	}
+	return Null[T]()
+}
+
 // IfElse returns ifTrue if condition is true, otherwise returns ifFalse.
 func IfElse[T any](condition bool, ifTrue T, ifFalse T) T {
 	if condition {
