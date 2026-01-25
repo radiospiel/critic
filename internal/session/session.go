@@ -10,6 +10,7 @@ import (
 	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/simple-go/observable"
 	"git.15b.it/eno/critic/simple-go/preconditions"
+	"git.15b.it/eno/critic/simple-go/utils"
 )
 
 // Keys holds all observable state key names for the session.
@@ -30,9 +31,8 @@ type keys struct {
 	Files string // "diff.files" - []*types.FileDiff - list of files in the diff
 
 	// TUI state
-	SelectedFileIndex string // "tui.fileIndex" - int - index of currently selected file
-	SelectedFilePath  string // "tui.filePath" - string - path of currently selected file
-	FocusedPane       string // "tui.focusedPane" - string - "fileList" or "diffView"
+	SelectedFilePath string // "tui.filePath" - string - path of currently selected file
+	FocusedPane      string // "tui.focusedPane" - string - "fileList" or "diffView"
 
 	// Conversations
 	Conversations         string // "conversations" - map[string][]*critic.Conversation
@@ -52,7 +52,6 @@ var Keys = keys{
 	ResolvedBases:         "resolvedBases",
 	Diff:                  "diff",
 	Files:                 "diff.files",
-	SelectedFileIndex:     "tui.fileIndex",
 	SelectedFilePath:      "tui.filePath",
 	FocusedPane:           "tui.focusedPane",
 	Conversations:         "conversations",
@@ -135,6 +134,9 @@ type Session struct {
 // messaging must not be nil - use critic.DummyMessaging{} for testing.
 func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Session, error) {
 	preconditions.Check(messaging != nil, "messaging must not be nil")
+
+	logger.Warn("*** NewSession: created session w/gitRoot: %v", gitRoot)
+
 	s := &Session{
 		Observable:   observable.New().WithSchema(Keys.DiffArgs, DiffArgsSchema),
 		messaging:    messaging,
@@ -151,7 +153,6 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 	})
 	s.SetValueAtKey(Keys.ResolvedBases, map[string]any{})
 	s.SetValueAtKey(Keys.FilterMode, int(FilterModeNone))
-	s.SetValueAtKey(Keys.SelectedFileIndex, 0)
 	s.SetValueAtKey(Keys.SelectedFilePath, "")
 	s.SetValueAtKey(Keys.FocusedPane, "fileList")
 	s.SetValueAtKey(Keys.Conversations, map[string]any{})
@@ -363,23 +364,8 @@ func (s *Session) GetFileCount() int {
 // --- Selection ---
 
 // SetSelectedFile sets the selected file by index
-func (s *Session) SetSelectedFile(index int) {
-	// Get file path while holding the lock
-	s.mu.RLock()
-	var filePath string
-	if s.diff != nil && index >= 0 && index < len(s.diff.Files) {
-		f := s.diff.Files[index]
-		filePath = f.NewPath
-		if f.IsDeleted {
-			filePath = f.OldPath
-		}
-	}
-	s.mu.RUnlock()
-
-	// Set values without holding the lock - observable has its own internal mutex
-	// and subscriptions may need to access session state
-	s.SetValueAtKey(Keys.SelectedFilePath, filePath)
-	s.SetValueAtKey(Keys.SelectedFileIndex, index) // Set index last to trigger subscription after path is set
+func (s *Session) SetSelectedFile(filePath string) {
+	s.SetSelectedFilePath(filePath)
 }
 
 // SetSelectedFilePath sets the selected file by path
@@ -389,21 +375,12 @@ func (s *Session) SetSelectedFilePath(path string) {
 		return
 	}
 
-	for i, f := range diff.Files {
-		fp := f.NewPath
-		if f.IsDeleted {
-			fp = f.OldPath
-		}
-		if fp == path {
-			s.SetSelectedFile(i)
+	for _, file := range diff.Files {
+		if file.GetPath() == path {
+			s.SetValueAtKey(Keys.SelectedFilePath, path)
 			return
 		}
 	}
-}
-
-// GetSelectedFileIndex returns the index of the selected file
-func (s *Session) GetSelectedFileIndex() int {
-	return observable.GetValueAs[int](s.Observable, Keys.SelectedFileIndex)
 }
 
 // GetSelectedFilePath returns the path of the selected file
@@ -413,36 +390,66 @@ func (s *Session) GetSelectedFilePath() string {
 
 // GetSelectedFile returns the selected file diff
 func (s *Session) GetSelectedFile() *types.FileDiff {
+	filePath := observable.GetValueAs[string](s.Observable, Keys.SelectedFilePath)
+	return s.GetFileFromDiff(filePath)
+}
+
+func (s *Session) GetFileFromDiff(filePath string) *types.FileDiff {
 	diff := s.GetDiff()
 	if diff == nil {
 		return nil
 	}
-	index := s.GetSelectedFileIndex()
-	if index < 0 || index >= len(diff.Files) {
-		return nil
+
+	for index, file := range diff.Files {
+		if file.GetPath() == filePath {
+			return diff.Files[index]
+		}
 	}
-	return diff.Files[index]
+
+	return nil
+}
+
+func (s *Session) getSelectedFilePath() string {
+	return observable.GetValueAs[string](s.Observable, Keys.SelectedFilePath)
+}
+
+func (s *Session) getSelectedFileIndex() int {
+	diff := s.GetDiff()
+	if diff == nil {
+		return -1
+	}
+
+	filePath := s.getSelectedFilePath()
+	for index, file := range diff.Files {
+		if file.GetPath() == filePath {
+			return index
+		}
+	}
+
+	return -1
+}
+
+func (s *Session) moveFileSelection(offset int) bool {
+	diff := s.GetDiff()
+	if diff == nil {
+		return false
+	}
+
+	index := s.getSelectedFileIndex() + offset
+	index = utils.Clamp(index, 0, s.GetFileCount())
+
+	s.SetSelectedFilePath(diff.Files[index].GetPath())
+	return true
 }
 
 // SelectNextFile selects the next file
 func (s *Session) SelectNextFile() bool {
-	index := s.GetSelectedFileIndex()
-	count := s.GetFileCount()
-	if index < count-1 {
-		s.SetSelectedFile(index + 1)
-		return true
-	}
-	return false
+	return s.moveFileSelection(1)
 }
 
 // SelectPrevFile selects the previous file
 func (s *Session) SelectPrevFile() bool {
-	index := s.GetSelectedFileIndex()
-	if index > 0 {
-		s.SetSelectedFile(index - 1)
-		return true
-	}
-	return false
+	return s.moveFileSelection(-1)
 }
 
 // --- Focus ---

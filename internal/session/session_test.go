@@ -251,7 +251,7 @@ func TestOnKeyChange(t *testing.T) {
 
 	// Test subscription to selection changes
 	selectionChangeCalled := false
-	selSubs := session.OnKeyChange(Keys.SelectedFileIndex, func(key string) {
+	selSubs := session.OnKeyChange(Keys.SelectedFilePath, func(key string) {
 		selectionChangeCalled = true
 	})
 	defer session.ClearSubscriptions(selSubs)

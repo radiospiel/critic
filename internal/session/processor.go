@@ -112,11 +112,6 @@ func (p *DiffProcessor) loadDiffAsync() {
 	// Update state
 	p.state.SetDiff(diff)
 
-	// Reset selection if needed
-	if p.state.GetSelectedFileIndex() >= len(diff.Files) {
-		p.state.SetSelectedFile(0)
-	}
-
 	// Refresh conversations for all files
 	if err := p.state.RefreshConversations(); err != nil {
 		logger.Warn("DiffProcessor: Failed to refresh conversations: %v", err)

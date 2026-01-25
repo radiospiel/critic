@@ -32,14 +32,13 @@ func (f FileItem) FilterValue() string {
 // FilesListView is a teapot-based file listView widget.
 type FilesListView struct {
 	pot.BaseView
-	listView      *pot.ListView[FileItem]
-	messaging     critic.Messaging
-	session       *session.Session
-	subscriptions []observable.Subscription
-	width         int
-	height        int
-	filterMode    int // 0 = all, 1 = with comments, 2 = unresolved only
-	totalFiles    int // Total files before filtering (for "No files match filter" message)
+	listView   *pot.ListView[FileItem]
+	messaging  critic.Messaging
+	session    *session.Session
+	width      int
+	height     int
+	filterMode int // 0 = all, 1 = with comments, 2 = unresolved only
+	totalFiles int // Total files before filtering (for "No files match filter" message)
 }
 
 // NewFilesListView creates a new file listView widget.
@@ -69,7 +68,6 @@ func NewFilesListView(ses *session.Session, messaging critic.Messaging) *FilesLi
 			}
 
 			ses.Transaction(func(txn *observable.Txn) {
-				txn.SetValueAtKey(session.Keys.SelectedFileIndex, index)
 				txn.SetValueAtKey(session.Keys.SelectedFilePath, filePath)
 			})
 		})
@@ -267,50 +265,6 @@ func (w *FilesListView) SelectPrev() bool {
 	return w.SetSelectedIndex(idx - 1)
 }
 
-// SetSession sets the session and subscribes to relevant keys.
-// The view will automatically update when these session keys change:
-// - diff.files: Updates the file listView
-// - tui.fileIndex: Updates selection
-// - tui.filePath: Updates selection by path
-// - tui.focusedPane: Updates focus state
-func (w *FilesListView) SetSession(s *session.Session) {
-	// Clear previous subscriptions
-	if w.session != nil && len(w.subscriptions) > 0 {
-		w.session.ClearSubscriptions(w.subscriptions...)
-		w.subscriptions = nil
-	}
-
-	w.session = s
-	if s == nil {
-		return
-	}
-
-	// Subscribe to diff.files changes
-	filesSub := s.OnKeyChange(session.Keys.Files, func(key string) {
-		files := s.GetFiles()
-		w.updateFilesFromSession(files)
-	})
-	w.subscriptions = append(w.subscriptions, filesSub)
-
-	// Subscribe to tui.fileIndex changes
-	indexSub := s.OnKeyChange(session.Keys.SelectedFileIndex, func(key string) {
-		index := s.GetSelectedFileIndex()
-		w.updateSelectionFromSession(index)
-	})
-	w.subscriptions = append(w.subscriptions, indexSub)
-
-	// Subscribe to tui.focusedPane changes
-	focusSub := s.OnKeyChange(session.Keys.FocusedPane, func(key string) {
-		pane := s.GetFocusedPane()
-		focused := pane == "fileList"
-		if w.Focused() != focused {
-			w.SetFocused(focused)
-			w.Repaint()
-		}
-	})
-	w.subscriptions = append(w.subscriptions, focusSub)
-}
-
 // updateFilesFromSession updates the file listView from session data
 func (w *FilesListView) updateFilesFromSession(files []*ctypes.FileDiff) {
 	items := make([]FileItem, len(files))
@@ -327,14 +281,6 @@ func (w *FilesListView) updateSelectionFromSession(index int) {
 	if w.listView.SelectedIndex() != index {
 		w.listView.SetSelectedIndex(index)
 		w.Repaint()
-	}
-}
-
-// ClearSubscriptions clears all session subscriptions
-func (w *FilesListView) ClearSubscriptions() {
-	if w.session != nil && len(w.subscriptions) > 0 {
-		w.session.ClearSubscriptions(w.subscriptions...)
-		w.subscriptions = nil
 	}
 }
 
