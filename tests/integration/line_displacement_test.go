@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"git.15b.it/eno/critic/simple-go/assert"
-	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/src/git"
 	"git.15b.it/eno/critic/simple-go/must"
 )
 

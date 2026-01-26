@@ -6,10 +6,10 @@ import (
 	"runtime/pprof"
 	"testing"
 
-	"git.15b.it/eno/critic/internal/git"
-	"git.15b.it/eno/critic/internal/tui"
-	"git.15b.it/eno/critic/pkg/critic"
-	ctypes "git.15b.it/eno/critic/pkg/types"
+	"git.15b.it/eno/critic/src/git"
+	"git.15b.it/eno/critic/src/tui"
+	"git.15b.it/eno/critic/src/pkg/critic"
+	ctypes "git.15b.it/eno/critic/src/pkg/types"
 	"git.15b.it/eno/critic/teapot"
 )
 

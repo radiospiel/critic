@@ -7,7 +7,7 @@ BINDIR := $(PREFIX)/bin
 all: test integration
 
 build:
-	go build -o $(BINARY) ./cmd/critic
+	go build -o $(BINARY) ./src/cmd
 
 test:
 	go test ./...
