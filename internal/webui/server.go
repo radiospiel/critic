@@ -148,10 +148,7 @@ func (s *Server) loadDiff() error {
 	// Get bases - use default bases if none specified
 	bases := s.config.Bases
 	if len(bases) == 0 {
-		defaultBases, err := app.GetDefaultBases()
-		if err != nil {
-			return fmt.Errorf("failed to get default bases: %w", err)
-		}
+		defaultBases := app.GetDefaultBases()
 		bases = defaultBases
 	}
 

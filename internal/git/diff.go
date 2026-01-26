@@ -177,3 +177,10 @@ func ResolveRef(ref string) (string, error) {
 func IsCommitSHA(s string) bool {
 	return validCommitHash.MatchString(s)
 }
+
+// HasRef checks if a git ref exists
+func HasRef(ref string) bool {
+	// Try to resolve the ref
+	_, err := ResolveRef(ref)
+	return err == nil
+}

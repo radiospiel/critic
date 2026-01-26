@@ -16,9 +16,11 @@ import (
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/simple-go/logger"
+	"git.15b.it/eno/critic/simple-go/must"
 	"git.15b.it/eno/critic/teapot"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/samber/lo"
 )
 
 // FilterMode represents the current file/hunk filter mode
@@ -54,37 +56,14 @@ type Args struct {
 }
 
 // GetDefaultBases returns the default base points based on git state
-func GetDefaultBases() ([]string, error) {
-	bases := []string{}
-
-	// 1. Add main/master if it exists (will use merge-base automatically)
-	if branchExists("main") {
-		bases = append(bases, "main")
-	} else if branchExists("master") {
-		bases = append(bases, "master")
+func GetDefaultBases() []string {
+	candidates := []string{
+		"main", "master", "origin/" + must.Must2(git.GetCurrentBranch()), "HEAD",
 	}
 
-	// 2. Add origin/<current-branch> if it exists
-	branch, err := git.GetCurrentBranch()
-	if err == nil && branch != "" {
-		originBranch := "origin/" + branch
-		// Check if origin branch exists
-		if branchExists(originBranch) {
-			bases = append(bases, originBranch)
-		}
-	}
-
-	// 3. Add HEAD (last committed version)
-	bases = append(bases, "HEAD")
-
-	return bases, nil
-}
-
-// branchExists checks if a git ref exists
-func branchExists(ref string) bool {
-	// Try to resolve the ref
-	_, err := git.ResolveRef(ref)
-	return err == nil
+	return lo.Filter(candidates, func(ref string, _ int) bool {
+		return git.HasRef(ref)
+	})
 }
 
 // Run runs the application with the given arguments
@@ -98,11 +77,7 @@ func Run(args *Args) error {
 
 	// Set default bases if none were specified
 	if len(args.Bases) == 0 {
-		bases, err := GetDefaultBases()
-		if err != nil {
-			return fmt.Errorf("failed to determine default bases: %w", err)
-		}
-		args.Bases = bases
+		args.Bases = GetDefaultBases()
 	}
 
 	// Set default extensions if none were specified
