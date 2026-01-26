@@ -413,7 +413,8 @@ func (s *Session) getSelectedFilePath() string {
 	return observable.GetValueAs[string](s.Observable, Keys.SelectedFilePath)
 }
 
-func (s *Session) getSelectedFileIndex() int {
+// GetSelectedFileIndex returns the index of the selected file (-1 if no selection)
+func getSelectedFileIndex(s *Session) int {
 	diff := s.GetDiff()
 	if diff == nil {
 		return -1
@@ -435,10 +436,15 @@ func (s *Session) moveFileSelection(offset int) bool {
 		return false
 	}
 
-	index := s.getSelectedFileIndex() + offset
-	index = utils.Clamp(index, 0, s.GetFileCount())
+	oldIndex := getSelectedFileIndex(s)
+	newIndex := oldIndex + offset
+	newIndex = utils.Clamp(newIndex, 0, s.GetFileCount()-1)
 
-	s.SetSelectedFilePath(diff.Files[index].GetPath())
+	if newIndex == oldIndex {
+		return false
+	}
+
+	s.SetSelectedFilePath(diff.Files[newIndex].GetPath())
 	return true
 }
 

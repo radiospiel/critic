@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -29,6 +30,9 @@ var fileLogger = newFileLogger(logFilePath)
 
 // logMessage holds the data for a log entry
 type logMessage struct {
+	file string
+	line int
+
 	topic  string
 	format string
 	args   []any
@@ -37,6 +41,8 @@ type logMessage struct {
 // logChannel is a buffered channel for log messages
 var logChannel = make(chan logMessage, 1000)
 
+var wd = (func() string { dir, _ := os.Getwd(); return dir })()
+
 func init() {
 	// Start background writer goroutine
 	go func() {
@@ -44,6 +50,13 @@ func init() {
 			msg := fmt.Sprintf(entry.format, entry.args...)
 			if entry.topic != "" {
 				msg = "[" + entry.topic + "]: " + msg
+			}
+			if entry.file != "" && entry.line != 0 {
+				file := entry.file
+				if file[0:len(wd)] == wd {
+					file = file[len(wd)+1:]
+				}
+				msg = fmt.Sprintf("%s(%d): ", file, entry.line) + msg
 			}
 			fileLogger.Println(msg)
 		}
@@ -122,8 +135,11 @@ func OnTopic(topic string) *TopicLogger {
 }
 
 // Printf writes a log message with optional topic prefix
-func (t *TopicLogger) Printf(format string, v ...any) {
+func (t *TopicLogger) printf(format string, v ...any) {
+	_, file, line, _ := runtime.Caller(3)
 	logChannel <- logMessage{
+		file:   file,
+		line:   line,
 		topic:  t.topic,
 		format: format,
 		args:   v,
@@ -135,7 +151,7 @@ func (t *TopicLogger) Error(format string, v ...any) {
 	if minLogLevel > ERROR {
 		return
 	}
-	t.Printf("ERROR: "+format, v...)
+	t.printf("ERROR: "+format, v...)
 }
 
 // Warn writes a warning log message with topic prefix
@@ -143,12 +159,12 @@ func (t *TopicLogger) Warn(format string, v ...any) {
 	if minLogLevel > WARN {
 		return
 	}
-	t.Printf("WARN: "+format, v...)
+	t.printf("WARN: "+format, v...)
 }
 
 // Fatal writes a fatal error log message with topic prefix and exits
 func (t *TopicLogger) Fatal(format string, v ...any) {
-	t.Printf("FATAL: "+format, v...)
+	t.printf("FATAL: "+format, v...)
 	os.Exit(1)
 }
 
@@ -157,7 +173,7 @@ func (t *TopicLogger) Info(format string, v ...any) {
 	if minLogLevel > INFO {
 		return
 	}
-	t.Printf("INFO: "+format, v...)
+	t.printf("INFO: "+format, v...)
 }
 
 // Debug writes a debug log message with topic prefix
@@ -165,15 +181,10 @@ func (t *TopicLogger) Debug(format string, v ...any) {
 	if minLogLevel > DEBUG {
 		return
 	}
-	t.Printf("DEBUG: "+format, v...)
+	t.printf("DEBUG: "+format, v...)
 }
 
 // Package-minLogLevel convenience functions that delegate to defaultLogger
-
-// Printf writes a log message
-func Printf(format string, v ...any) {
-	defaultLogger.Printf(format, v...)
-}
 
 // Error writes an error log message
 func Error(format string, v ...any) {

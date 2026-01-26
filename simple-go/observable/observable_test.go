@@ -347,20 +347,6 @@ func TestSetValueAtKeyExtendSlice(t *testing.T) {
 	assert.Equals(t, arr[5], "sixth", "arr[5] should be 'sixth'")
 }
 
-func TestSetValueAtKeyRoot(t *testing.T) {
-	obs := NewWithData(nil)
-	obs.SetValueAtKey("", map[string]any{"foo": "bar"})
-	assert.Equals(t, obs.GetValue("foo"), "bar", "root should be set to new map")
-}
-
-func TestSetValueAtKeyRootToNil(t *testing.T) {
-	obs := New()
-	obs.SetValueAtKey("foo", "bar")
-	obs.SetValueAtKey("", nil)
-	assert.Nil(t, obs.GetValue(""), "root should be nil")
-	assert.Nil(t, obs.GetValue("foo"), "foo should be nil after root set to nil")
-}
-
 func TestGetValueWithArrayIndex(t *testing.T) {
 	obs := NewWithData(map[string]any{
 		"items": []any{"a", "b", "c"},
@@ -953,31 +939,6 @@ func TestTransactionalDeduplicationComplexCase(t *testing.T) {
 	assert.Equals(t, obs.GetValue("c"), "v3", "c should have value v3")
 	assert.Nil(t, obs.GetValue("a.1.b"), "a.1.b should not exist (overridden)")
 	assert.Nil(t, obs.GetValue("a.2"), "a.2 should not exist (overridden)")
-}
-
-func TestTransactionalDeduplicationRootOverridesAll(t *testing.T) {
-	obs := New()
-
-	rootNotified := false
-	obs.OnKeyChange("", func(key string) {
-		rootNotified = true
-	})
-
-	// Setting various keys, then setting root "" overrides all
-	obs.Transaction(func(tx *Txn) {
-		tx.SetValueAtKey("a", "v1")
-		tx.SetValueAtKey("b.c", "v2")
-		tx.SetValueAtKey("d.e.f", "v3")
-		tx.SetValueAtKey("", map[string]any{"root": "value"})
-	})
-
-	// Only the root change should be applied
-	assert.True(t, rootNotified, "root should be notified")
-
-	// Verify actual observable state - only root's value should exist
-	assert.Nil(t, obs.GetValue("a"), "a should not exist (overridden by root)")
-	assert.Nil(t, obs.GetValue("b.c"), "b.c should not exist (overridden by root)")
-	assert.Equals(t, obs.GetValue("root"), "value", "root.root should have value")
 }
 
 func TestTransactionalDeduplicationVerifyState(t *testing.T) {

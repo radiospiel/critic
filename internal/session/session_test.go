@@ -135,12 +135,16 @@ func TestSelection(t *testing.T) {
 	}
 	session.SetDiff(diff)
 
-	// Initial selection
-	assert.Equals(t, session.GetSelectedFileIndex(), 0, "initial index should be 0")
+	// Initial selection is empty (no file selected yet)
+	assert.Equals(t, getSelectedFileIndex(session), -1, "initial index should be -1 (no selection)")
 
-	// Select by index
-	session.SetSelectedFile(1)
-	assert.Equals(t, session.GetSelectedFileIndex(), 1, "index should be 1")
+	// Select first file
+	session.SetSelectedFile("file1.go")
+	assert.Equals(t, getSelectedFileIndex(session), 0, "index should be 0")
+
+	// Select by path
+	session.SetSelectedFile("file2.go")
+	assert.Equals(t, getSelectedFileIndex(session), 1, "index should be 1")
 	assert.Equals(t, session.GetSelectedFilePath(), "file2.go", "path should be file2.go")
 
 	selected := session.GetSelectedFile()
@@ -150,21 +154,21 @@ func TestSelection(t *testing.T) {
 	// Select next
 	ok := session.SelectNextFile()
 	assert.True(t, ok, "should select next")
-	assert.Equals(t, session.GetSelectedFileIndex(), 2, "index should be 2")
+	assert.Equals(t, getSelectedFileIndex(session), 2, "index should be 2")
 
 	// Select next at end
 	ok = session.SelectNextFile()
 	assert.False(t, ok, "should not select next at end")
-	assert.Equals(t, session.GetSelectedFileIndex(), 2, "index should still be 2")
+	assert.Equals(t, getSelectedFileIndex(session), 2, "index should still be 2")
 
 	// Select prev
 	ok = session.SelectPrevFile()
 	assert.True(t, ok, "should select prev")
-	assert.Equals(t, session.GetSelectedFileIndex(), 1, "index should be 1")
+	assert.Equals(t, getSelectedFileIndex(session), 1, "index should be 1")
 
 	// Select by path
 	session.SetSelectedFilePath("file1.go")
-	assert.Equals(t, session.GetSelectedFileIndex(), 0, "index should be 0")
+	assert.Equals(t, getSelectedFileIndex(session), 0, "index should be 0")
 }
 
 func TestFocus(t *testing.T) {
@@ -256,8 +260,8 @@ func TestOnKeyChange(t *testing.T) {
 	})
 	defer session.ClearSubscriptions(selSubs)
 
-	// Select file at index 1 (different from initial 0)
-	session.SetSelectedFile(1)
+	// Select file at index 1 (different from initial empty)
+	session.SetSelectedFile("test2.go")
 	assert.True(t, selectionChangeCalled, "Selection change callback should be called")
 }
 
@@ -297,7 +301,7 @@ func TestDeletedFileSelection(t *testing.T) {
 	session.SetDiff(diff)
 
 	// Select deleted file
-	session.SetSelectedFile(1)
+	session.SetSelectedFile("deleted.go")
 	assert.Equals(t, session.GetSelectedFilePath(), "deleted.go", "should use OldPath for deleted files")
 }
 
