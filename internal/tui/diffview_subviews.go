@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"git.15b.it/eno/critic/internal/session"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
 	"git.15b.it/eno/critic/teapot"
@@ -721,7 +722,7 @@ type DiffContentView struct {
 	highlightedOld  map[int]string
 	highlightedNew  map[int]string
 	highlightedCtx  map[int]string
-	filterMode      FilterMode
+	filterMode      session.FilterMode
 	selectedRow     int // Global row number of selected item
 }
 
@@ -753,7 +754,7 @@ func (w *DiffContentView) SetFile(
 }
 
 // SetFilterMode sets the filter mode.
-func (w *DiffContentView) SetFilterMode(mode FilterMode) {
+func (w *DiffContentView) SetFilterMode(mode session.FilterMode) {
 	w.filterMode = mode
 }
 
@@ -784,7 +785,7 @@ func (w *DiffContentView) rebuildHunks() {
 
 // filterHunks filters hunks based on the current filter mode.
 func (w *DiffContentView) filterHunks(hunks []*ctypes.Hunk) []*ctypes.Hunk {
-	if w.filterMode == FILTER_MODE_NONE {
+	if w.filterMode == session.FilterModeNone {
 		return hunks
 	}
 
@@ -803,9 +804,9 @@ func (w *DiffContentView) hunkMatchesFilter(hunk *ctypes.Hunk) bool {
 		if line.NewNum > 0 {
 			if conv, exists := w.conversationMap[line.NewNum]; exists {
 				switch w.filterMode {
-				case FILTER_MODE_COMMENTED:
+				case session.FilterModeWithComments:
 					return true
-				case FILTER_MODE_UNRESOLVED:
+				case session.FilterModeWithUnresolved:
 					if conv.Status != critic.StatusResolved {
 						return true
 					}

@@ -1,4 +1,4 @@
-package app
+package tui
 
 import (
 	"fmt"
@@ -6,11 +6,11 @@ import (
 	"os/exec"
 	"strings"
 
+	app2 "git.15b.it/eno/critic/internal/app"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/matrix"
 	"git.15b.it/eno/critic/internal/messagedb"
 	"git.15b.it/eno/critic/internal/session"
-	"git.15b.it/eno/critic/internal/tui"
 	"git.15b.it/eno/critic/internal/version"
 	"git.15b.it/eno/critic/pkg/critic"
 	ctypes "git.15b.it/eno/critic/pkg/types"
@@ -24,20 +24,20 @@ import (
 type Delegate struct {
 	app           *teapot.App // Set after app creation
 	session       *session.Session
-	fileList      *tui.FilesListView
-	diffView      *tui.DiffView
-	commentEditor tui.CommentEditor
-	statusBar     *tui.StatusBarView
-	mainLayout    *tui.MainView
+	fileList      *FilesListView
+	diffView      *DiffView
+	commentEditor CommentEditor
+	statusBar     *StatusBarView
+	mainLayout    *MainView
 	diff          *ctypes.Diff
-	bases         []string          // List of base refs
-	currentBase   int               // Index of current base
-	paths         []string          // Paths to diff
-	extensions    []string          // File extensions to include
-	resolver      *git.BaseResolver // Base resolver with polling
-	messaging     critic.Messaging  // Messaging interface for conversations
-	filterMode    FilterMode        // Current filter mode (None, WithComments, WithUnresolved)
-	debug         bool              // Debug mode enabled
+	bases         []string           // List of base refs
+	currentBase   int                // Index of current base
+	paths         []string           // Paths to diff
+	extensions    []string           // File extensions to include
+	resolver      *git.BaseResolver  // Base resolver with polling
+	messaging     critic.Messaging   // Messaging interface for conversations
+	filterMode    session.FilterMode // Current filter mode (None, WithComments, WithUnresolved)
+	debug         bool               // Debug mode enabled
 	err           error
 	showHelp      bool                // Whether to show help screen
 	screensaver   *matrix.Screensaver // Matrix screensaver
@@ -45,7 +45,7 @@ type Delegate struct {
 }
 
 // NewDelegate creates a new critic delegate
-func NewDelegate(args *Args) *Delegate {
+func NewDelegate(args *app2.Args) *Delegate {
 	logger.Info("NewDelegate: Creating delegate with %d paths, %d bases", len(args.Paths), len(args.Bases))
 
 	// Initialize message database first (needed for session)
@@ -74,18 +74,18 @@ func NewDelegate(args *Args) *Delegate {
 	})
 	logger.Warn("created session")
 
-	diffView := tui.NewDiffView(ses, mdb)
-	fileList := tui.NewFilesListView(ses, mdb)
+	diffView := NewDiffView(ses, mdb)
+	fileList := NewFilesListView(ses, mdb)
 	fileList.SetFocused(true) // Start with file list focused
 
-	statusBar := tui.NewStatusBarView()
+	statusBar := NewStatusBarView()
 	statusBar.SetFilter("All") // Default filter mode
 
 	// Subscribe statusbar to receive tick notifications for clock updates
 	teapot.SubscribeToGlobalTicks(statusBar)
 
 	// Create the main layout (VBox with HSplit and StatusBar)
-	mainLayout := tui.NewMainView(fileList, diffView, statusBar)
+	mainLayout := NewMainView(fileList, diffView, statusBar)
 
 	// Create the Matrix screensaver
 	screensaver := matrix.NewScreensaver()
@@ -100,7 +100,7 @@ func NewDelegate(args *Args) *Delegate {
 		session:       ses,
 		fileList:      fileList,
 		diffView:      diffView,
-		commentEditor: tui.NewCommentEditor(),
+		commentEditor: NewCommentEditor(),
 		statusBar:     statusBar,
 		mainLayout:    mainLayout,
 		bases:         args.Bases,
@@ -221,7 +221,7 @@ func (d *Delegate) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 
 	case "enter":
 		// Activate comment editor when focused on diff view
-		if d.mainLayout.GetFocusedPane() == tui.DiffViewPane {
+		if d.mainLayout.GetFocusedPane() == DiffViewPane {
 			activeFile := d.fileList.GetActiveFile()
 			if activeFile != nil {
 				cursorLine := d.diffView.GetCursorLine()
@@ -259,7 +259,7 @@ func (d *Delegate) HandleKey(msg tea.KeyMsg) (handled bool, cmd tea.Cmd) {
 
 	default:
 		// Route key messages to focused pane
-		if d.mainLayout.GetFocusedPane() == tui.FileListPane {
+		if d.mainLayout.GetFocusedPane() == FileListPane {
 			prevFile := d.fileList.GetActiveFile()
 			_, cmd := d.fileList.HandleKey(msg)
 			if d.fileList.GetActiveFile() != prevFile {
@@ -331,7 +331,7 @@ func (d *Delegate) HandleMessage(msg tea.Msg) tea.Cmd {
 		logger.Info("Update: Received baseChangedMsg, reloading diff")
 		return loadDiffCmd(d)
 
-	case tui.CommentSavedMsg:
+	case CommentSavedMsg:
 		activeFile := d.fileList.GetActiveFile()
 		if activeFile != nil && msg.Comment != "" {
 			filePath := activeFile.NewPath
@@ -640,7 +640,7 @@ func (d *Delegate) applyFilterMode() {
 	d.fileList.SetFilterMode(int(d.filterMode), len(d.diff.Files))
 	d.fileList.SelectByPath(currentPath)
 
-	d.diffView.SetFilterMode(tui.FilterMode(d.filterMode))
+	d.diffView.SetFilterMode(d.filterMode)
 
 	logger.Info("applyFilterMode: mode=%s, filtered=%d/%d files",
 		d.filterMode.String(), len(filteredFiles), len(d.diff.Files))
@@ -648,7 +648,7 @@ func (d *Delegate) applyFilterMode() {
 
 // filterFiles returns files that match the current filter mode
 func (d *Delegate) filterFiles(files []*ctypes.FileDiff) []*ctypes.FileDiff {
-	if d.filterMode == FilterModeNone {
+	if d.filterMode == session.FilterModeNone {
 		return files
 	}
 
@@ -666,12 +666,12 @@ func (d *Delegate) filterFiles(files []*ctypes.FileDiff) []*ctypes.FileDiff {
 		}
 
 		switch d.filterMode {
-		case FilterModeWithComments:
+		case session.FilterModeWithComments:
 			if summary.HasUnresolvedComments || summary.HasResolvedComments {
 				filtered = append(filtered, file)
 				logger.Debug("filterFiles: including %s (has comments)", gitPath)
 			}
-		case FilterModeWithUnresolved:
+		case session.FilterModeWithUnresolved:
 			if summary.HasUnresolvedComments {
 				filtered = append(filtered, file)
 				logger.Debug("filterFiles: including %s (has unresolved)", gitPath)

@@ -21,18 +21,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// FilterMode represents the current file/hunk filter mode
-type FilterMode int
-
-const (
-	// FILTER_MODE_NONE shows all files and hunks (default)
-	FILTER_MODE_NONE FilterMode = iota
-	// FILTER_MODE_COMMENTED shows only files with comments, and only hunks with comments
-	FILTER_MODE_COMMENTED
-	// FILTER_MODE_UNRESOLVED shows only files with unresolved comments, and only hunks with unresolved comments
-	FILTER_MODE_UNRESOLVED
-)
-
 // DiffView represents the diff viewer pane.
 // It is a proper teapot Widget that wraps DiffContentView with additional
 // functionality like syntax highlighting, cursor management, and scrolling.
@@ -50,12 +38,12 @@ type DiffView struct {
 	totalLines           int   // Total number of lines in rendered diff
 	navigableLines       []int // Line numbers that can have cursor (diff lines only)
 	messaging            critic.Messaging
-	commentLines         map[int]int    // Maps rendered line number to source line number for comment lines
-	sourceLines          map[int]int    // Maps rendered line number to source line number for all diff lines
-	preserveCursorLine   int            // Source line to restore cursor to after refresh (0 = don't preserve)
-	lineConversationUUID map[int]string // Maps rendered line number to conversation UUID
-	gotoBottomOnLoad     bool           // If true, go to bottom after next file load
-	filterMode           FilterMode     // Current filter mode for hunk filtering
+	commentLines         map[int]int        // Maps rendered line number to source line number for comment lines
+	sourceLines          map[int]int        // Maps rendered line number to source line number for all diff lines
+	preserveCursorLine   int                // Source line to restore cursor to after refresh (0 = don't preserve)
+	lineConversationUUID map[int]string     // Maps rendered line number to conversation UUID
+	gotoBottomOnLoad     bool               // If true, go to bottom after next file load
+	filterMode           session.FilterMode // Current filter mode for hunk filtering
 	// Widget-based rendering
 	diffWidget *DiffContentView // The widget that renders the vertical layout of hunks
 
@@ -344,7 +332,6 @@ type diffRenderedMsg struct {
 	totalLines     int
 	navigableLines []int
 }
-
 
 // renderDiffAsync renders the diff in a background goroutine
 func (m *DiffView) renderDiffAsync(file *ctypes.FileDiff) tea.Cmd {
@@ -709,7 +696,7 @@ func (m *DiffView) FocusPrev() bool {
 }
 
 // SetFilterMode sets the filter mode for hunk filtering
-func (m *DiffView) SetFilterMode(mode FilterMode) {
+func (m *DiffView) SetFilterMode(mode session.FilterMode) {
 	if m.filterMode != mode {
 		m.filterMode = mode
 		// Clear cache to force re-render with new filter
@@ -720,7 +707,7 @@ func (m *DiffView) SetFilterMode(mode FilterMode) {
 // filterHunks filters hunks based on the current filter mode
 func (m *DiffView) filterHunks(hunks []*ctypes.Hunk, conversationsByLine map[int]*critic.Conversation) []*ctypes.Hunk {
 	// If no filter, return all hunks
-	if m.filterMode == FILTER_MODE_NONE {
+	if m.filterMode == session.FilterModeNone {
 		return hunks
 	}
 
@@ -743,10 +730,10 @@ func (m *DiffView) hunkMatchesFilter(hunk *ctypes.Hunk, conversationsByLine map[
 		if line.NewNum > 0 {
 			if conv, exists := conversationsByLine[line.NewNum]; exists {
 				switch m.filterMode {
-				case FILTER_MODE_COMMENTED:
+				case session.FilterModeWithComments:
 					// Any comment matches
 					return true
-				case FILTER_MODE_UNRESOLVED:
+				case session.FilterModeWithUnresolved:
 					// Only unresolved comments match
 					if conv.Status != critic.StatusResolved {
 						return true
