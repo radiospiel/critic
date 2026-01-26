@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"strings"
 
-	app2 "git.15b.it/eno/critic/internal/app"
 	"git.15b.it/eno/critic/internal/git"
 	"git.15b.it/eno/critic/internal/matrix"
 	"git.15b.it/eno/critic/internal/messagedb"
@@ -45,7 +44,7 @@ type Delegate struct {
 }
 
 // NewDelegate creates a new critic delegate
-func NewDelegate(args *app2.Args) *Delegate {
+func NewDelegate(args *Args) *Delegate {
 	logger.Info("NewDelegate: Creating delegate with %d paths, %d bases", len(args.Paths), len(args.Bases))
 
 	// Initialize message database first (needed for session)

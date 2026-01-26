@@ -1,34 +1,10 @@
 package tui
 
 import (
-	"fmt"
-
-	"git.15b.it/eno/critic/internal/app"
-	"git.15b.it/eno/critic/internal/config"
-	"git.15b.it/eno/critic/internal/git"
-	"git.15b.it/eno/critic/simple-go/logger"
 	"git.15b.it/eno/critic/teapot"
 )
 
-// Run runs the application with the given arguments
-func Run(args *app.Args) error {
-	logger.Info("=== Critic starting ===")
-
-	// Check if we're in a git repository
-	if !git.IsGitRepo() {
-		return fmt.Errorf("not a git repository")
-	}
-
-	// Set default bases if none were specified
-	if len(args.Bases) == 0 {
-		args.Bases = app.GetDefaultBases()
-	}
-
-	// Set default extensions if none were specified
-	if len(args.Extensions) == 0 {
-		args.Extensions = config.DefaultFileExtensions
-	}
-
+func Run(args *Args) error {
 	// Create delegate (critic-specific logic)
 	delegate := NewDelegate(args)
 

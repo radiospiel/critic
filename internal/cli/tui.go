@@ -8,12 +8,15 @@ import (
 	"strings"
 
 	"git.15b.it/eno/critic/internal/app"
+	"git.15b.it/eno/critic/internal/config"
+	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/internal/tui"
 	"git.15b.it/eno/critic/simple-go/logger"
 	"github.com/spf13/cobra"
 )
 
 // newTUICmd creates the tui subcommand
-func newTUICmd(handler func(*app.Args) error) *cobra.Command {
+func newTUICmd() *cobra.Command {
 	var extensionsFlag []string
 	var debugFlag bool
 	var cpuprofileFlag string
@@ -77,7 +80,7 @@ Examples:
 				pprof.StartCPUProfile(f)
 				defer pprof.StopCPUProfile()
 			}
-			parsedArgs := &app.Args{
+			parsedArgs := &tui.Args{
 				Extensions: ensureSlice(extensionsFlag),
 				Paths:      []string{"."},
 				Debug:      debugFlag,
@@ -103,7 +106,7 @@ Examples:
 				parsedArgs.Bases = strings.Split(baseArg, ",")
 			}
 
-			return handler(parsedArgs)
+			return runTui(parsedArgs)
 		},
 	}
 
@@ -113,4 +116,26 @@ Examples:
 	cmd.Flags().CountVarP(&quietFlag, "quiet", "q", "Reduce log verbosity (-q for WARN, -qq for ERROR)")
 
 	return cmd
+}
+
+// runTui runs the application with the given arguments
+func runTui(args *tui.Args) error {
+	logger.Info("=== Critic starting ===")
+
+	// Check if we're in a git repository
+	if !git.IsGitRepo() {
+		return fmt.Errorf("not a git repository")
+	}
+
+	// Set default bases if none were specified
+	if len(args.Bases) == 0 {
+		args.Bases = app.GetDefaultBases()
+	}
+
+	// Set default extensions if none were specified
+	if len(args.Extensions) == 0 {
+		args.Extensions = config.DefaultFileExtensions
+	}
+
+	return tui.Run(args)
 }
