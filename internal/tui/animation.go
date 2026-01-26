@@ -2,7 +2,7 @@ package tui
 
 import (
 	"git.15b.it/eno/critic/pkg/critic"
-	"git.15b.it/eno/critic/simple-tui/animation"
+	"git.15b.it/eno/critic/internal/tui/animation"
 	"git.15b.it/eno/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
 )

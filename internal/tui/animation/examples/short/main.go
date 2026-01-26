@@ -1,26 +1,26 @@
-// Demo program showing all available single-cell animation types.
-// Run with: go run ./simple-tui/animation/examples/demo
+// Demo program showing all available short (multi-character) animation types.
+// Run with: go run ./internal/tui/animation/examples/short
 package main
 
 import (
 	"fmt"
 	"os"
 
-	"git.15b.it/eno/critic/simple-tui/animation"
+	"git.15b.it/eno/critic/internal/tui/animation"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type model struct {
 	anim        *animation.Animation
-	animType    animation.Type
+	animType    animation.ShortType
 	speedFactor float64
 	quitting    bool
 }
 
 func initialModel() model {
 	return model{
-		anim:        animation.NewSingleCellAnimation(animation.StarBurst, true, 1.0),
-		animType:    animation.StarBurst,
+		anim:        animation.NewShortAnimation(animation.Wave, true, 1.0),
+		animType:    animation.Wave,
 		speedFactor: 1.0,
 	}
 }
@@ -29,9 +29,9 @@ func (m model) Init() tea.Cmd {
 	return m.anim.TickCmd()
 }
 
-func (m *model) switchAnim(t animation.Type) {
+func (m *model) switchAnim(t animation.ShortType) {
 	m.animType = t
-	m.anim = animation.NewSingleCellAnimation(t, m.anim.Colored, m.speedFactor)
+	m.anim = animation.NewShortAnimation(t, m.anim.Colored, m.speedFactor)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -59,28 +59,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "1":
-			m.switchAnim(animation.BrailleSpinner)
+			m.switchAnim(animation.Wave)
 			return m, m.anim.TickCmd()
 		case "2":
-			m.switchAnim(animation.CircleQuarters)
+			m.switchAnim(animation.ProgressBar)
 			return m, m.anim.TickCmd()
 		case "3":
-			m.switchAnim(animation.DotPulse)
+			m.switchAnim(animation.Snake)
 			return m, m.anim.TickCmd()
 		case "4":
-			m.switchAnim(animation.VerticalBounce)
+			m.switchAnim(animation.Pulse)
 			return m, m.anim.TickCmd()
 		case "5":
-			m.switchAnim(animation.StarBurst)
+			m.switchAnim(animation.Scan)
 			return m, m.anim.TickCmd()
 		case "6":
-			m.switchAnim(animation.ExpandingRings)
+			m.switchAnim(animation.Bounce)
 			return m, m.anim.TickCmd()
 		case "7":
-			m.switchAnim(animation.BrailleSnake)
+			m.switchAnim(animation.Fire)
 			return m, m.anim.TickCmd()
 		case "8":
-			m.switchAnim(animation.BlockQuadrants)
+			m.switchAnim(animation.Matrix)
+			return m, m.anim.TickCmd()
+		case "9":
+			m.switchAnim(animation.Equalizer)
+			return m, m.anim.TickCmd()
+		case "0":
+			m.switchAnim(animation.Loading)
+			return m, m.anim.TickCmd()
+		case "r":
+			m.switchAnim(animation.Ripple)
+			return m, m.anim.TickCmd()
+		case "k":
+			m.switchAnim(animation.Knight)
 			return m, m.anim.TickCmd()
 		}
 	case animation.TickMsg:
@@ -105,7 +117,8 @@ func (m model) View() string {
 	}
 
 	return fmt.Sprintf("\n  %s\n\n"+
-		"  1:Braille 2:Circle 3:Dot 4:Bounce 5:Star 6:Rings 7:Snake 8:Block\n"+
+		"  1:Wave 2:Progress 3:Snake 4:Pulse 5:Scan 6:Bounce\n"+
+		"  7:Fire 8:Matrix 9:Equalizer 0:Loading r:Ripple k:Knight\n"+
 		"  +/-:speed c:color q:quit\n\n"+
 		"  %s (%.0f%%, %s)\n",
 		m.anim.Render(),

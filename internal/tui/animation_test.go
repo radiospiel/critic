@@ -5,7 +5,7 @@ import (
 
 	"git.15b.it/eno/critic/pkg/critic"
 	"git.15b.it/eno/critic/simple-go/assert"
-	"git.15b.it/eno/critic/simple-tui/animation"
+	"git.15b.it/eno/critic/internal/tui/animation"
 )
 
 func TestUpdateFromConversation_NoChange(t *testing.T) {
