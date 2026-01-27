@@ -7,7 +7,6 @@ import (
 
 	"github.com/radiospiel/critic/simple-go/assert"
 	"github.com/radiospiel/critic/src/git"
-	"github.com/radiospiel/critic/simple-go/must"
 )
 
 func TestLineDisplacement(t *testing.T) {
@@ -167,14 +166,21 @@ func TestLineDisplacement(t *testing.T) {
 	}
 }
 
-// SetupFixtureGitRepo creates a temporary git repository for testing and changes into it.
+// SetupFixtureGitRepo changes into the fixtures/repo directory for testing.
 // IMPORTANT: Tests using this function cannot run in parallel due to os.Chdir().
 // Use -p 1 flag when running tests: go test -p 1 -v
+// This function skips the test if fixtures/repo doesn't exist (run `make fixtures` first).
 func SetupFixtureGitRepo(t *testing.T) {
 	t.Helper()
 
 	originalDir, _ := os.Getwd()
 	t.Cleanup(func() { os.Chdir(originalDir) })
 
-	must.Chdir("fixtures/repo")
+	if _, err := os.Stat("fixtures/repo"); os.IsNotExist(err) {
+		t.Skip("skipping: fixtures/repo not found (run 'make fixtures' in tests/integration first)")
+	}
+
+	if err := os.Chdir("fixtures/repo"); err != nil {
+		t.Fatalf("failed to chdir to fixtures/repo: %v", err)
+	}
 }
