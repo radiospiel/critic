@@ -1,19 +1,21 @@
-name: Test
+name: Build
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
   pull_request:
-    branches: [master]
+    branches: [master, main]
+
+env:
+  PROTOC_GEN_GO_VERSION: v1.36.11
+  PROTOC_GEN_CONNECT_GO_VERSION: v1.19.1
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -21,14 +23,53 @@ jobs:
           go-version: '1.24'
           cache: true
 
-      - name: Install dependencies
-        run: go mod download
+      - name: Cache protoc
+        id: cache-protoc
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/protoc
+          key: protoc-${{ runner.os }}-v29.4
 
-      - name: Build the project
-        run: go build ./...
+      - name: Install protoc
+        if: steps.cache-protoc.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
-      - name: Run unit tests
-        run: make unit-tests
+      - name: Cache buf
+        id: cache-buf
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/buf
+          key: buf-${{ runner.os }}-latest
 
-      - name: Run integration tests
-        run: make integration
+      - name: Install buf
+        if: steps.cache-buf.outputs.cache-hit != 'true'
+        run: |
+          curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-Linux-x86_64" -o /tmp/buf
+          sudo install -m 755 /tmp/buf /usr/local/bin/buf
+
+      - name: Cache Go protoc plugins
+        id: cache-protoc-plugins
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/bin/protoc-gen-go
+            ~/go/bin/protoc-gen-connect-go
+          key: protoc-plugins-${{ runner.os }}-${{ env.PROTOC_GEN_GO_VERSION }}-${{ env.PROTOC_GEN_CONNECT_GO_VERSION }}
+
+      - name: Install protoc-gen-go
+        if: steps.cache-protoc-plugins.outputs.cache-hit != 'true'
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@${{ env.PROTOC_GEN_GO_VERSION }}
+
+      - name: Install protoc-gen-connect-go
+        if: steps.cache-protoc-plugins.outputs.cache-hit != 'true'
+        run: go install connectrpc.com/connect/cmd/protoc-gen-connect-go@${{ env.PROTOC_GEN_CONNECT_GO_VERSION }}
+
+      - name: Generate proto files
+        run: make proto
+
+      - name: Build
+        run: go build -o critic ./src/cmd
+
+      - name: Test
+        run: go test ./...
