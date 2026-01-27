@@ -10,7 +10,6 @@ import (
 
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/simple-go/preconditions"
-	"github.com/radiospiel/critic/src/app"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
@@ -161,8 +160,8 @@ func (s *Server) loadDiff() error {
 			candidateBases = append(candidateBases, "origin/main")
 		}
 	}
-	// Then add the default bases
-	candidateBases = append(candidateBases, bases...)
+	// Then add the configured bases
+	candidateBases = append(candidateBases, s.config.Bases...)
 
 	// Find a base that is different from HEAD
 	baseName := ""
