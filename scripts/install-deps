@@ -11,9 +11,7 @@ PROTOC_GEN_CONNECT_GO_VERSION="v1.19.1"
 GOBIN="${GOPATH:-$HOME/go}/bin"
 
 # Install protoc if not present
-if type -p protoc >/dev/null 2>&1; then
-    echo "protoc already installed: $(protoc --version)"
-else
+type -p protoc >/dev/null 2>&1 || (
     echo "Installing protoc..."
     if [ "$OS" = "Darwin" ]; then
         brew install protobuf
@@ -23,12 +21,10 @@ else
         echo "Unknown OS: $OS. Please install protoc manually."
         exit 1
     fi
-fi
+)
 
 # Install buf if not present
-if type -p buf >/dev/null 2>&1; then
-    echo "buf already installed: $(buf --version)"
-else
+type -p buf >/dev/null 2>&1 || (
     echo "Installing buf..."
     if [ "$OS" = "Darwin" ]; then
         brew install bufbuild/buf/buf
@@ -40,42 +36,27 @@ else
         echo "Unknown OS: $OS. Please install buf manually."
         exit 1
     fi
-fi
+)
 
 # Install protoc-gen-go if not present in GOPATH
-if [ -x "$GOBIN/protoc-gen-go" ]; then
-    echo "protoc-gen-go already installed in $GOBIN"
-else
+[ -x "$GOBIN/protoc-gen-go" ] || (
     echo "Installing protoc-gen-go@$PROTOC_GEN_GO_VERSION..."
     go install google.golang.org/protobuf/cmd/protoc-gen-go@$PROTOC_GEN_GO_VERSION
-fi
+)
 
 # Install protoc-gen-connect-go if not present in GOPATH
-if [ -x "$GOBIN/protoc-gen-connect-go" ]; then
-    echo "protoc-gen-connect-go already installed in $GOBIN"
-else
-    echo "Installing protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION..."
-    go install connectrpc.com/connect/cmd/protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION
-fi
+[ -x "$GOBIN/protoc-gen-connect-go" ] || (
+	echo "Installing protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION..."
+	go install connectrpc.com/connect/cmd/protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION
+)
 
 # Install TypeScript generators via npm if npm is available
-if type -p npm >/dev/null 2>&1; then
-    # Check if packages are installed globally
-    if npm list -g @bufbuild/protoc-gen-es >/dev/null 2>&1; then
-        echo "@bufbuild/protoc-gen-es already installed"
-    else
-        echo "Installing @bufbuild/protoc-gen-es..."
-        npm install -g @bufbuild/protoc-gen-es
-    fi
-
-    if npm list -g @connectrpc/protoc-gen-connect-es >/dev/null 2>&1; then
-        echo "@connectrpc/protoc-gen-connect-es already installed"
-    else
-        echo "Installing @connectrpc/protoc-gen-connect-es..."
-        npm install -g @connectrpc/protoc-gen-connect-es
-    fi
+if ! type -p npm >/dev/null 2>&1; then
+	echo "npm not found, skipping TypeScript generator installation"
 else
-    echo "npm not found, skipping TypeScript generator installation"
+    # Check if packages are installed globally
+    npm list -g @bufbuild/protoc-gen-es@1.10.1 @connectrpc/protoc-gen-connect-es@1.7.0 >/dev/null 2>&1 || (
+		echo "Installing npm protoc dependencies"
+		npm install -g @bufbuild/protoc-gen-es@1.10.1 @connectrpc/protoc-gen-connect-es@1.7.0
+	)
 fi
-
-echo "All dependencies installed successfully."

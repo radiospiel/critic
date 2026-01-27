@@ -37,10 +37,9 @@ clean:
 
 .install-deps.mtime: scripts/install-deps Makefile
 	./scripts/install-deps
-	touch $@
+	@touch $@
 
-install-deps:
-	./scripts/install-deps
+install-deps: .install-deps.mtime
 
 # Generate .pb.go and .connect.go from .proto files
 src/api/%.pb.go src/api/apiconnect/%.connect.go: $(PROTO_DIR)/%.proto
