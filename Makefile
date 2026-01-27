@@ -2,7 +2,7 @@ BINARY := critic
 PREFIX := /usr/local
 BINDIR := $(PREFIX)/bin
 
-.PHONY: all build test unit-tests integration install uninstall clean
+.PHONY: all build test unit-tests integration install uninstall clean install-deps
 
 all: test integration
 
@@ -27,3 +27,7 @@ uninstall:
 
 clean:
 	rm -f $(BINARY)
+
+install-deps:
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
