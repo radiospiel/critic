@@ -4,11 +4,17 @@ BINDIR := $(PREFIX)/bin
 GOBIN := $(shell go env GOPATH)/bin
 OS := $(shell uname -s)
 
+# Proto source and generated files
+PROTO_DIR := src/api/proto
+PROTO_FILES := $(wildcard $(PROTO_DIR)/*.proto)
+PROTO_GEN_GO := $(PROTO_FILES:$(PROTO_DIR)/%.proto=src/api/%.pb.go)
+PROTO_GEN_CONNECT := $(PROTO_FILES:$(PROTO_DIR)/%.proto=src/api/apiconnect/%.connect.go)
+
 .PHONY: all build test unit-tests integration install uninstall clean install-deps install-buf install-protoc proto
 
 all: test integration
 
-build: .install-deps.mtime
+build: .install-deps.mtime $(PROTO_GEN_GO)
 	go build -o $(BINARY) ./src/cmd
 
 test:
@@ -56,8 +62,12 @@ install-protoc:
 		exit 1; \
 	fi
 
-proto:
-	protoc -I src/api \
+# Generate .pb.go and .connect.go from .proto files
+src/api/%.pb.go src/api/apiconnect/%.connect.go: $(PROTO_DIR)/%.proto
+	protoc -I $(PROTO_DIR) \
 		--go_out=src/api --go_opt=paths=source_relative \
-		--connect-go_out=src/api --connect-go_opt=paths=source_relative \
-		src/api/critic.proto
+		--connect-go_out=src/api/apiconnect --connect-go_opt=paths=source_relative \
+		$<
+
+# Convenience target to regenerate all proto files
+proto: $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT)
