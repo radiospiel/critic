@@ -4,6 +4,7 @@ critic.bin
 *.prof
 .critic.db*
 .critic.version
+.install-deps.mtime
 
 
 # Build artifacts

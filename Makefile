@@ -1,12 +1,14 @@
 BINARY := critic
 PREFIX := /usr/local
 BINDIR := $(PREFIX)/bin
+PROTOC_VERSION := 29.4
+GOBIN := $(shell go env GOPATH)/bin
 
-.PHONY: all build test unit-tests integration install uninstall clean install-deps install-buf install-protoc
+.PHONY: all build test unit-tests integration install uninstall clean install-deps install-buf install-protoc proto
 
 all: test integration
 
-build:
+build: .install-deps.mtime
 	go build -o $(BINARY) ./src/cmd
 
 test:
@@ -27,9 +29,11 @@ uninstall:
 
 clean:
 	rm -f $(BINARY)
+	rm -f .install-deps.mtime
 
-PROTOC_VERSION := 29.4
-GOBIN := $(shell go env GOPATH)/bin
+.install-deps.mtime: Makefile
+	$(MAKE) install-deps
+	touch $@
 
 install-deps: install-protoc install-buf
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
@@ -48,3 +52,9 @@ install-protoc:
 		rm "protoc-$(PROTOC_VERSION)-$(shell uname -s | tr '[:upper:]' '[:lower:]')-$(shell uname -m).zip"; \
 		echo "protoc installed to $(GOBIN)/protoc"; \
 	fi
+
+proto:
+	protoc -I src/api \
+		--go_out=src/api --go_opt=paths=source_relative \
+		--connect-go_out=src/api --connect-go_opt=paths=source_relative \
+		src/api/critic.proto
