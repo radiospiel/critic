@@ -1,8 +1,8 @@
 BINARY := critic
 PREFIX := /usr/local
 BINDIR := $(PREFIX)/bin
-PROTOC_VERSION := 29.4
 GOBIN := $(shell go env GOPATH)/bin
+OS := $(shell uname -s)
 
 .PHONY: all build test unit-tests integration install uninstall clean install-deps install-buf install-protoc proto
 
@@ -45,12 +45,15 @@ install-buf:
 install-protoc:
 	@if command -v protoc >/dev/null 2>&1; then \
 		echo "protoc already installed: $$(protoc --version)"; \
+	elif [ "$(OS)" = "Darwin" ]; then \
+		echo "Installing protoc via Homebrew..."; \
+		brew install protobuf; \
+	elif [ "$(OS)" = "Linux" ]; then \
+		echo "Installing protoc via apt..."; \
+		sudo apt-get update && sudo apt-get install -y protobuf-compiler; \
 	else \
-		echo "Installing protoc $(PROTOC_VERSION)..."; \
-		curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v$(PROTOC_VERSION)/protoc-$(PROTOC_VERSION)-$(shell uname -s | tr '[:upper:]' '[:lower:]')-$(shell uname -m).zip"; \
-		unzip -o "protoc-$(PROTOC_VERSION)-$(shell uname -s | tr '[:upper:]' '[:lower:]')-$(shell uname -m).zip" -d $(GOBIN)/.. bin/protoc; \
-		rm "protoc-$(PROTOC_VERSION)-$(shell uname -s | tr '[:upper:]' '[:lower:]')-$(shell uname -m).zip"; \
-		echo "protoc installed to $(GOBIN)/protoc"; \
+		echo "Unknown OS: $(OS). Please install protoc manually."; \
+		exit 1; \
 	fi
 
 proto:
