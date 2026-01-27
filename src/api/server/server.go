@@ -44,9 +44,9 @@ func (s *Server) GetLastChange(
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
-	// Register the CriticService handler
+	// Register the CriticService handler under /api prefix
 	path, handler := apiconnect.NewCriticServiceHandler(s)
-	mux.Handle(path, handler)
+	mux.Handle("/api"+path, http.StripPrefix("/api", handler))
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	fmt.Printf("API server listening on %s\n", addr)
