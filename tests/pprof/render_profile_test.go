@@ -123,12 +123,11 @@ func cpuProfile(t *testing.T, filename string, msg string, fn func()) {
 
 // TestRenderProfile profiles rendering of FileListWidget and DiffViewWidget in a compositor.
 // It loads a real git diff between ex1 and ex2 commits and profiles the initial render.
-// This test is skipped if the required git commits are not available (e.g., in CI with shallow clone).
 func TestRenderProfile(t *testing.T) {
 	// Get real diff between ex1 and ex2 commits
 	diffOutput, err := getGitDiffBetweenTags("2ce5966eb06280e48496372b1c0ab11f81d1b138", "e85a45510b488e01f4119448281c5318fe1b7644")
 	if err != nil {
-		t.Skipf("skipping: required git commits not available (shallow clone?): %v", err)
+		t.Fatalf("failed to get git diff: %v", err)
 	}
 
 	diff, err := git.ParseDiff(diffOutput)
