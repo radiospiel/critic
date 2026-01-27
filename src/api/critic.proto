@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package critic.v1;
+
+option go_package = "git.15b.it/eno/critic/src/api;api";
+
+// CriticService provides API methods for the critic code review tool.
+service CriticService {
+  // GetLastChange returns the timestamp of the last change.
+  rpc GetLastChange(GetLastChangeRequest) returns (GetLastChangeResponse);
+}
+
+// GetLastChangeRequest is an empty request for GetLastChange.
+message GetLastChangeRequest {}
+
+// GetLastChangeResponse contains the timestamp of the last change.
+message GetLastChangeResponse {
+  // mtime_msecs is the timestamp in milliseconds since Unix epoch.
+  uint64 mtime_msecs = 1;
+}
