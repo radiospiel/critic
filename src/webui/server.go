@@ -8,12 +8,13 @@ import (
 	"net/http"
 	"sync"
 
-	"git.15b.it/eno/critic/src/app"
-	"git.15b.it/eno/critic/src/git"
-	"git.15b.it/eno/critic/src/messagedb"
-	"git.15b.it/eno/critic/src/pkg/critic"
-	"git.15b.it/eno/critic/src/pkg/types"
-	"git.15b.it/eno/critic/simple-go/logger"
+	"github.org/radiospiel/critic/simple-go/logger"
+	"github.org/radiospiel/critic/simple-go/preconditions"
+	"github.org/radiospiel/critic/src/app"
+	"github.org/radiospiel/critic/src/git"
+	"github.org/radiospiel/critic/src/messagedb"
+	"github.org/radiospiel/critic/src/pkg/critic"
+	"github.org/radiospiel/critic/src/pkg/types"
 )
 
 //go:embed templates/*.html static/*
@@ -43,6 +44,9 @@ func NewServer(config Config) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get git root: %w", err)
 	}
+
+	// Get bases - use default bases if none specified
+	preconditions.Check(len(config.Bases) > 0, "bases must not be empty")
 
 	mdb, err := messagedb.New(gitRoot)
 	if err != nil {
@@ -143,13 +147,6 @@ func (s *Server) loadDiff() error {
 	headCommit, err := git.ResolveRef("HEAD")
 	if err != nil {
 		return fmt.Errorf("failed to resolve HEAD: %w", err)
-	}
-
-	// Get bases - use default bases if none specified
-	bases := s.config.Bases
-	if len(bases) == 0 {
-		defaultBases := app.GetDefaultBases()
-		bases = defaultBases
 	}
 
 	// Find a base that produces a non-empty diff

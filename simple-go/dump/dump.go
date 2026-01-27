@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"git.15b.it/eno/critic/simple-go/preconditions"
+	"github.org/radiospiel/critic/simple-go/preconditions"
 	"github.com/samber/lo"
 )
 

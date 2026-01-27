@@ -7,10 +7,10 @@ import (
 	"io"
 	"os"
 
-	"git.15b.it/eno/critic/src/git"
-	"git.15b.it/eno/critic/src/messagedb"
-	"git.15b.it/eno/critic/src/pkg/critic"
-	"git.15b.it/eno/critic/simple-go/logger"
+	"github.org/radiospiel/critic/src/git"
+	"github.org/radiospiel/critic/src/messagedb"
+	"github.org/radiospiel/critic/src/pkg/critic"
+	"github.org/radiospiel/critic/simple-go/logger"
 )
 
 const (

@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	"github.com/samber/lo"
-	"git.15b.it/eno/critic/simple-go/assert"
-	"git.15b.it/eno/critic/src/git"
-	"git.15b.it/eno/critic/simple-go/must"
-	ctypes "git.15b.it/eno/critic/src/pkg/types"
+	"github.org/radiospiel/critic/simple-go/assert"
+	"github.org/radiospiel/critic/src/git"
+	"github.org/radiospiel/critic/simple-go/must"
+	ctypes "github.org/radiospiel/critic/src/pkg/types"
 )
 
 // TestDeletedLinesContent verifies that deleted lines show the correct content

@@ -1,4 +1,4 @@
-module git.15b.it/eno/critic
+module github.org/radiospiel/critic
 
 go 1.24.0
 

@@ -1,6 +1,6 @@
 package tui
 
-import pot "git.15b.it/eno/critic/teapot"
+import pot "github.org/radiospiel/critic/teapot"
 
 // Pane represents which pane is currently focused
 type Pane int

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"git.15b.it/eno/critic/src/cli"
+	"github.org/radiospiel/critic/src/cli"
 )
 
 func main() {

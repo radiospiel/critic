@@ -5,12 +5,12 @@ package session
 import (
 	"sync"
 
-	"git.15b.it/eno/critic/src/pkg/critic"
-	"git.15b.it/eno/critic/src/pkg/types"
-	"git.15b.it/eno/critic/simple-go/logger"
-	"git.15b.it/eno/critic/simple-go/observable"
-	"git.15b.it/eno/critic/simple-go/preconditions"
-	"git.15b.it/eno/critic/simple-go/utils"
+	"github.org/radiospiel/critic/src/pkg/critic"
+	"github.org/radiospiel/critic/src/pkg/types"
+	"github.org/radiospiel/critic/simple-go/logger"
+	"github.org/radiospiel/critic/simple-go/observable"
+	"github.org/radiospiel/critic/simple-go/preconditions"
+	"github.org/radiospiel/critic/simple-go/utils"
 )
 
 // Keys holds all observable state key names for the session.

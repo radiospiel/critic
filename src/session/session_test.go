@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"git.15b.it/eno/critic/src/messagedb"
-	"git.15b.it/eno/critic/src/pkg/critic"
-	"git.15b.it/eno/critic/src/pkg/types"
-	"git.15b.it/eno/critic/simple-go/assert"
+	"github.org/radiospiel/critic/src/messagedb"
+	"github.org/radiospiel/critic/src/pkg/critic"
+	"github.org/radiospiel/critic/src/pkg/types"
+	"github.org/radiospiel/critic/simple-go/assert"
 	_ "github.com/mattn/go-sqlite3"
 )
 

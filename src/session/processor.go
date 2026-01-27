@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sync"
 
-	"git.15b.it/eno/critic/src/git"
-	"git.15b.it/eno/critic/src/pkg/types"
-	"git.15b.it/eno/critic/simple-go/logger"
-	"git.15b.it/eno/critic/simple-go/observable"
+	"github.org/radiospiel/critic/src/git"
+	"github.org/radiospiel/critic/src/pkg/types"
+	"github.org/radiospiel/critic/simple-go/logger"
+	"github.org/radiospiel/critic/simple-go/observable"
 )
 
 // DiffProcessor handles loading and processing diffs

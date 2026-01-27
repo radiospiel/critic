@@ -7,12 +7,12 @@ import (
 	"runtime/pprof"
 	"strings"
 
-	"git.15b.it/eno/critic/src/app"
-	"git.15b.it/eno/critic/src/config"
-	"git.15b.it/eno/critic/src/git"
-	"git.15b.it/eno/critic/src/tui"
-	"git.15b.it/eno/critic/simple-go/logger"
 	"github.com/spf13/cobra"
+	"github.org/radiospiel/critic/simple-go/logger"
+	"github.org/radiospiel/critic/simple-go/preconditions"
+	"github.org/radiospiel/critic/src/config"
+	"github.org/radiospiel/critic/src/git"
+	"github.org/radiospiel/critic/src/tui"
 )
 
 // newTUICmd creates the tui subcommand
@@ -104,6 +104,8 @@ Examples:
 
 			if baseArg != "" {
 				parsedArgs.Bases = strings.Split(baseArg, ",")
+			} else {
+				parsedArgs.Bases = getDefaultBases()
 			}
 
 			return runTui(parsedArgs)
@@ -128,9 +130,7 @@ func runTui(args *tui.Args) error {
 	}
 
 	// Set default bases if none were specified
-	if len(args.Bases) == 0 {
-		args.Bases = app.GetDefaultBases()
-	}
+	preconditions.Check(len(args.Bases) > 0, "Must have args.Bases")
 
 	// Set default extensions if none were specified
 	if len(args.Extensions) == 0 {

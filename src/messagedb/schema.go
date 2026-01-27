@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"git.15b.it/eno/critic/simple-go/logger"
+	"github.org/radiospiel/critic/simple-go/logger"
 )
 
 const currentSchemaVersion = "4"

@@ -3,7 +3,7 @@ package config
 import (
 	"testing"
 
-	"git.15b.it/eno/critic/simple-go/assert"
+	"github.org/radiospiel/critic/simple-go/assert"
 )
 
 func TestHasExtension(t *testing.T) {

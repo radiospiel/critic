@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"git.15b.it/eno/critic/src/pkg/critic"
-	pot "git.15b.it/eno/critic/teapot"
+	"github.org/radiospiel/critic/src/pkg/critic"
+	pot "github.org/radiospiel/critic/teapot"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

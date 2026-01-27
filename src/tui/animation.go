@@ -1,9 +1,9 @@
 package tui
 
 import (
-	"git.15b.it/eno/critic/src/pkg/critic"
-	"git.15b.it/eno/critic/src/tui/animation"
-	"git.15b.it/eno/critic/teapot"
+	"github.org/radiospiel/critic/src/pkg/critic"
+	"github.org/radiospiel/critic/src/tui/animation"
+	"github.org/radiospiel/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
 )
 

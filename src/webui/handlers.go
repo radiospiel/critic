@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"strings"
 
-	"git.15b.it/eno/critic/src/git"
-	"git.15b.it/eno/critic/src/highlight"
-	"git.15b.it/eno/critic/src/pkg/critic"
-	"git.15b.it/eno/critic/src/pkg/types"
-	"git.15b.it/eno/critic/simple-go/logger"
+	"github.org/radiospiel/critic/src/git"
+	"github.org/radiospiel/critic/src/highlight"
+	"github.org/radiospiel/critic/src/pkg/critic"
+	"github.org/radiospiel/critic/src/pkg/types"
+	"github.org/radiospiel/critic/simple-go/logger"
 )
 
 // PageData holds data for page templates

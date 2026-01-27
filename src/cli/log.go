@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"git.15b.it/eno/critic/simple-go/logger"
+	"github.org/radiospiel/critic/simple-go/logger"
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 )

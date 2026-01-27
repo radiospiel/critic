@@ -3,9 +3,9 @@ package tui
 import (
 	"testing"
 
-	"git.15b.it/eno/critic/src/pkg/critic"
-	"git.15b.it/eno/critic/simple-go/assert"
-	"git.15b.it/eno/critic/src/tui/animation"
+	"github.org/radiospiel/critic/src/pkg/critic"
+	"github.org/radiospiel/critic/simple-go/assert"
+	"github.org/radiospiel/critic/src/tui/animation"
 )
 
 func TestUpdateFromConversation_NoChange(t *testing.T) {

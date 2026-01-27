@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"git.15b.it/eno/critic/src/webui"
 	"github.com/spf13/cobra"
+	"github.org/radiospiel/critic/src/webui"
 )
 
 // newWebUICmd creates the webui subcommand
@@ -71,6 +71,8 @@ Examples:
 
 			if baseArg != "" {
 				config.Bases = strings.Split(baseArg, ",")
+			} else {
+				config.Bases = getDefaultBases()
 			}
 
 			server, err := webui.NewServer(config)

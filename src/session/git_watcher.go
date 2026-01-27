@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"git.15b.it/eno/critic/src/git"
-	"git.15b.it/eno/critic/simple-go/logger"
+	"github.org/radiospiel/critic/src/git"
+	"github.org/radiospiel/critic/simple-go/logger"
 )
 
 // GitWatcher watches for changes to git references and kicks off diff reloading

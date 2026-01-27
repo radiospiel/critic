@@ -3,7 +3,7 @@ package observable
 import (
 	"testing"
 
-	"git.15b.it/eno/critic/simple-go/assert"
+	"github.org/radiospiel/critic/simple-go/assert"
 )
 
 // Tests for JSON schema validation support

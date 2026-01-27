@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"git.15b.it/eno/critic/simple-go/logger"
+	"github.org/radiospiel/critic/simple-go/logger"
 	"github.com/samber/lo"
 )
 

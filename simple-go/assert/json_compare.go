@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"git.15b.it/eno/critic/simple-go/must"
+	"github.org/radiospiel/critic/simple-go/must"
 )
 
 // JSONDiff represents a difference found during JSON comparison

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"git.15b.it/eno/critic/src/session"
-	"git.15b.it/eno/critic/src/pkg/critic"
-	ctypes "git.15b.it/eno/critic/src/pkg/types"
-	"git.15b.it/eno/critic/teapot"
+	"github.org/radiospiel/critic/src/session"
+	"github.org/radiospiel/critic/src/pkg/critic"
+	ctypes "github.org/radiospiel/critic/src/pkg/types"
+	"github.org/radiospiel/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
 )
 

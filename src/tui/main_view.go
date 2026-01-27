@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"git.15b.it/eno/critic/simple-go/logger"
-	pot "git.15b.it/eno/critic/teapot"
+	"github.org/radiospiel/critic/simple-go/logger"
+	pot "github.org/radiospiel/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
 )
 

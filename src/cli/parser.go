@@ -2,7 +2,21 @@ package cli
 
 import (
 	"github.com/spf13/cobra"
+	"github.org/radiospiel/critic/simple-go/must"
+	"github.com/samber/lo"
+	"github.org/radiospiel/critic/src/git"
 )
+
+// getDefaultBases returns the default base points based on git state
+func getDefaultBases() []string {
+	candidates := []string{
+		"main", "master", "origin/" + must.Must2(git.GetCurrentBranch()), "HEAD",
+	}
+
+	return lo.Filter(candidates, func(ref string, _ int) bool {
+		return git.HasRef(ref)
+	})
+}
 
 // Execute runs the CLI application with the given handler
 func Execute() error {

@@ -3,7 +3,7 @@ package teapot
 import (
 	"testing"
 
-	"git.15b.it/eno/critic/simple-go/assert"
+	"github.org/radiospiel/critic/simple-go/assert"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

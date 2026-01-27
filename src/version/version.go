@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"git.15b.it/eno/critic/simple-go/logger"
+	"github.org/radiospiel/critic/simple-go/logger"
 )
 
 var (

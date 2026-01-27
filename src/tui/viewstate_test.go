@@ -3,8 +3,8 @@ package tui
 import (
 	"testing"
 
-	"git.15b.it/eno/critic/simple-go/assert"
-	ctypes "git.15b.it/eno/critic/src/pkg/types"
+	"github.org/radiospiel/critic/simple-go/assert"
+	ctypes "github.org/radiospiel/critic/src/pkg/types"
 )
 
 func TestNewViewState(t *testing.T) {

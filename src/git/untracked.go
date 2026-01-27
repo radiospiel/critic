@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"git.15b.it/eno/critic/src/config"
-	ctypes "git.15b.it/eno/critic/src/pkg/types"
+	"github.org/radiospiel/critic/src/config"
+	ctypes "github.org/radiospiel/critic/src/pkg/types"
 )
 
 // GetUntrackedFiles returns a list of untracked files (respecting .gitignore)

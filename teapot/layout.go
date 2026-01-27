@@ -3,7 +3,7 @@ package teapot
 import (
 	"strings"
 
-	"git.15b.it/eno/critic/simple-go/utils"
+	"github.org/radiospiel/critic/simple-go/utils"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

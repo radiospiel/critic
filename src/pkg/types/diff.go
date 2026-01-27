@@ -3,7 +3,7 @@ package types
 import (
 	"encoding/json"
 
-	"git.15b.it/eno/critic/simple-go/utils"
+	"github.org/radiospiel/critic/simple-go/utils"
 )
 
 // Diff represents a git diff with multiple file changes

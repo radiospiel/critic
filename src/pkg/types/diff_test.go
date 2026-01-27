@@ -3,7 +3,7 @@ package types
 import (
 	"testing"
 
-	"git.15b.it/eno/critic/simple-go/assert"
+	"github.org/radiospiel/critic/simple-go/assert"
 )
 
 func TestLineType_String(t *testing.T) {

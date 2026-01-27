@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"git.15b.it/eno/critic/simple-go/assert"
+	"github.org/radiospiel/critic/simple-go/assert"
 )
 
 func TestReverseEmpty(t *testing.T) {
