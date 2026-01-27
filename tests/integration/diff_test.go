@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"github.com/samber/lo"
-	"git.15b.it/eno/critic/internal/git"
+	"git.15b.it/eno/critic/src/git"
 	"git.15b.it/eno/critic/simple-go/assert"
 	"git.15b.it/eno/critic/simple-go/must"
-	ctypes "git.15b.it/eno/critic/pkg/types"
+	ctypes "git.15b.it/eno/critic/src/pkg/types"
 )
 
 // commitFileForDiff creates and commits a file
