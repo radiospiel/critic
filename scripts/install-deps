@@ -1,0 +1,47 @@
+#!/bin/bash
+set -e
+
+# Detect OS
+OS=$(uname -s)
+
+# Install protoc if not present
+if type -p protoc >/dev/null 2>&1; then
+    echo "protoc already installed: $(protoc --version)"
+else
+    echo "Installing protoc..."
+    if [ "$OS" = "Darwin" ]; then
+        brew install protobuf
+    elif [ "$OS" = "Linux" ]; then
+        sudo apt-get update && sudo apt-get install -y protobuf-compiler
+    else
+        echo "Unknown OS: $OS. Please install protoc manually."
+        exit 1
+    fi
+fi
+
+# Install buf if not present
+if type -p buf >/dev/null 2>&1; then
+    echo "buf already installed: $(buf --version)"
+else
+    echo "Installing buf..."
+    if [ "$OS" = "Darwin" ]; then
+        brew install bufbuild/buf/buf
+    elif [ "$OS" = "Linux" ]; then
+        # Install buf via official script
+        curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$(uname -s)-$(uname -m)" -o /tmp/buf
+        sudo install -m 755 /tmp/buf /usr/local/bin/buf
+        rm /tmp/buf
+    else
+        echo "Unknown OS: $OS. Please install buf manually."
+        exit 1
+    fi
+fi
+
+# Install Go protoc plugins
+echo "Installing protoc-gen-go..."
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
+echo "Installing protoc-gen-connect-go..."
+go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
+
+echo "All dependencies installed successfully."
