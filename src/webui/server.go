@@ -3,7 +3,6 @@ package webui
 import (
 	"embed"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"net/http"
 	"sync"
@@ -16,7 +15,7 @@ import (
 	"github.com/radiospiel/critic/src/pkg/types"
 )
 
-//go:embed templates/*.html static/*
+//go:embed dist/*
 var embeddedFS embed.FS
 
 // Config holds the configuration for the web server
@@ -29,7 +28,6 @@ type Config struct {
 // Server represents the web UI server
 type Server struct {
 	config    Config
-	templates *template.Template
 	messaging critic.Messaging
 	hub       *Hub // WebSocket hub
 	diff      *types.Diff
@@ -52,46 +50,13 @@ func NewServer(config Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to initialize message database: %w", err)
 	}
 
-	// Parse templates
-	tmpl, err := template.New("").Funcs(templateFuncs()).ParseFS(embeddedFS, "templates/*.html")
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse templates: %w", err)
-	}
-
 	server := &Server{
 		config:    config,
-		templates: tmpl,
 		messaging: mdb,
 		hub:       NewHub(),
 	}
 
 	return server, nil
-}
-
-// templateFuncs returns custom template functions
-func templateFuncs() template.FuncMap {
-	return template.FuncMap{
-		"add":      func(a, b int) int { return a + b },
-		"sub":      func(a, b int) int { return a - b },
-		"safeHTML": func(s string) template.HTML { return template.HTML(s) },
-		"js": func(s string) template.JSStr {
-			return template.JSStr(s)
-		},
-		"dict": func(values ...interface{}) map[string]interface{} {
-			if len(values)%2 != 0 {
-				return nil
-			}
-			dict := make(map[string]interface{})
-			for i := 0; i < len(values); i += 2 {
-				key, ok := values[i].(string)
-				if !ok {
-					continue
-				}
-				dict[key] = values[i+1]
-			}
-			return dict
-		},
-	}
 }
 
 // Start starts the web server
@@ -107,18 +72,7 @@ func (s *Server) Start() error {
 	// Set up routes
 	mux := http.NewServeMux()
 
-	// Static files
-	staticFS, err := fs.Sub(embeddedFS, "static")
-	if err != nil {
-		return fmt.Errorf("failed to create static fs: %w", err)
-	}
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
-
-	// Pages
-	mux.HandleFunc("GET /", s.handleIndex)
-	mux.HandleFunc("GET /file/{path...}", s.handleFile)
-
-	// API endpoints (for htmx)
+	// API endpoints (JSON)
 	mux.HandleFunc("GET /api/files", s.handleFileList)
 	mux.HandleFunc("GET /api/diff/{path...}", s.handleDiff)
 	mux.HandleFunc("GET /api/conversations/{path...}", s.handleConversations)
@@ -129,6 +83,13 @@ func (s *Server) Start() error {
 
 	// WebSocket
 	mux.HandleFunc("GET /ws", s.handleWebSocket)
+
+	// Serve React app (static files from dist/)
+	distFS, err := fs.Sub(embeddedFS, "dist")
+	if err != nil {
+		return fmt.Errorf("failed to create dist fs: %w", err)
+	}
+	mux.Handle("GET /", http.FileServer(http.FS(distFS)))
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	logger.Info("Starting web UI server on http://localhost%s", addr)

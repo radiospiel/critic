@@ -23,3 +23,7 @@ go.work
 /package-lock.json
 itermx.sh
 docs/plans
+
+# Frontend (webui)
+node_modules/
+src/webui/frontend/package-lock.json

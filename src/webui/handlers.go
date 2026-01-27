@@ -2,136 +2,15 @@ package webui
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/highlight"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/pkg/types"
-	"github.com/radiospiel/critic/simple-go/logger"
 )
-
-// PageData holds data for page templates
-type PageData struct {
-	Title       string
-	Files       []FileListItem
-	CurrentFile *types.FileDiff
-	FilePath    string
-	Theme       string
-}
-
-// handleIndex renders the main page
-func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	diff := s.getDiff()
-	var files []FileListItem
-	if diff != nil {
-		for _, f := range diff.Files {
-			path := f.NewPath
-			if f.IsDeleted {
-				path = f.OldPath
-			}
-
-			status := "M"
-			if f.IsNew {
-				status = "A"
-			} else if f.IsDeleted {
-				status = "D"
-			} else if f.IsRenamed {
-				status = "R"
-			}
-
-			// Get conversation summary for this file
-			summary, _ := s.messaging.GetFileConversationSummary(path)
-			hasComments := summary != nil && (summary.HasUnresolvedComments || summary.HasResolvedComments)
-			hasUnresolved := summary != nil && summary.HasUnresolvedComments
-
-			files = append(files, FileListItem{
-				Path:        path,
-				Status:      status,
-				HasComments: hasComments,
-				Unresolved:  boolToInt(hasUnresolved),
-			})
-		}
-	}
-
-	data := PageData{
-		Title: "Critic - Code Review",
-		Files: files,
-		Theme: "", // Theme is managed client-side via localStorage
-	}
-
-	if err := s.templates.ExecuteTemplate(w, "index.html", data); err != nil {
-		logger.Error("Failed to render index: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-	}
-}
-
-// handleFile renders a specific file's diff
-func (s *Server) handleFile(w http.ResponseWriter, r *http.Request) {
-	filePath := r.PathValue("path")
-	if filePath == "" {
-		http.Error(w, "File path required", http.StatusBadRequest)
-		return
-	}
-
-	diff := s.getDiff()
-	if diff == nil {
-		http.Error(w, "No diff available", http.StatusNotFound)
-		return
-	}
-
-	var currentFile *types.FileDiff
-	var files []FileListItem
-	for _, f := range diff.Files {
-		path := f.NewPath
-		if f.IsDeleted {
-			path = f.OldPath
-		}
-		if path == filePath {
-			currentFile = f
-		}
-
-		status := "M"
-		if f.IsNew {
-			status = "A"
-		} else if f.IsDeleted {
-			status = "D"
-		} else if f.IsRenamed {
-			status = "R"
-		}
-
-		summary, _ := s.messaging.GetFileConversationSummary(path)
-		hasComments := summary != nil && (summary.HasUnresolvedComments || summary.HasResolvedComments)
-		hasUnresolved := summary != nil && summary.HasUnresolvedComments
-
-		files = append(files, FileListItem{
-			Path:        path,
-			Status:      status,
-			HasComments: hasComments,
-			Unresolved:  boolToInt(hasUnresolved),
-		})
-	}
-
-	if currentFile == nil {
-		http.Error(w, "File not found", http.StatusNotFound)
-		return
-	}
-
-	data := PageData{
-		Title:       fmt.Sprintf("Critic - %s", filePath),
-		Files:       files,
-		CurrentFile: currentFile,
-		FilePath:    filePath,
-		Theme:       "", // Theme is managed client-side via localStorage
-	}
-
-	if err := s.templates.ExecuteTemplate(w, "file.html", data); err != nil {
-		logger.Error("Failed to render file: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-	}
-}
 
 // FileListItem represents a file in the list
 type FileListItem struct {
@@ -141,11 +20,17 @@ type FileListItem struct {
 	Unresolved  int    `json:"unresolved"`
 }
 
-// handleFileList returns the file list as HTML (for htmx)
+// FileListResponse is the JSON response for the file list API
+type FileListResponse struct {
+	Files []FileListItem `json:"files"`
+}
+
+// handleFileList returns the file list as JSON
 func (s *Server) handleFileList(w http.ResponseWriter, r *http.Request) {
 	diff := s.getDiff()
 	if diff == nil {
-		http.Error(w, "No diff available", http.StatusNotFound)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(FileListResponse{Files: []FileListItem{}})
 		return
 	}
 
@@ -178,10 +63,8 @@ func (s *Server) handleFileList(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if err := s.templates.ExecuteTemplate(w, "filelist.html", items); err != nil {
-		logger.Error("Failed to render file list: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(FileListResponse{Files: items})
 }
 
 // DiffLine represents a line in the diff view
@@ -211,7 +94,7 @@ type DiffData struct {
 	OldPath      string                 `json:"oldPath"`
 }
 
-// handleDiff returns the diff for a file as HTML (for htmx)
+// handleDiff returns the diff for a file as JSON
 func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 	filePath := r.PathValue("path")
 	if filePath == "" {
@@ -300,13 +183,16 @@ func (s *Server) handleDiff(w http.ResponseWriter, r *http.Request) {
 		OldPath:       file.OldPath,
 	}
 
-	if err := s.templates.ExecuteTemplate(w, "diff.html", data); err != nil {
-		logger.Error("Failed to render diff: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
 }
 
-// handleConversations returns conversations for a file
+// ConversationsResponse is the JSON response for conversations
+type ConversationsResponse struct {
+	Conversations []*critic.Conversation `json:"conversations"`
+}
+
+// handleConversations returns conversations for a file as JSON
 func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 	filePath := r.PathValue("path")
 	if filePath == "" {
@@ -330,10 +216,8 @@ func (s *Server) handleConversations(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.templates.ExecuteTemplate(w, "conversations.html", fileConvs); err != nil {
-		logger.Error("Failed to render conversations: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ConversationsResponse{Conversations: fileConvs})
 }
 
 // CommentRequest represents a new comment request
@@ -345,30 +229,27 @@ type CommentRequest struct {
 
 // handleCreateComment creates a new conversation
 func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
+	var req CommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	filePath := r.FormValue("filePath")
-	lineNumber := 0
-	fmt.Sscanf(r.FormValue("lineNumber"), "%d", &lineNumber)
-	message := strings.TrimSpace(r.FormValue("message"))
-
-	if filePath == "" || lineNumber == 0 || message == "" {
+	req.Message = strings.TrimSpace(req.Message)
+	if req.FilePath == "" || req.LineNumber == 0 || req.Message == "" {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
 	// Get current code version
 	codeVersion, _ := git.ResolveRef("HEAD")
-	context := git.GetLineContext(filePath, lineNumber, codeVersion)
+	context := git.GetLineContext(req.FilePath, req.LineNumber, codeVersion)
 
 	conv, err := s.messaging.CreateConversation(
 		critic.AuthorHuman,
-		message,
-		filePath,
-		lineNumber,
+		req.Message,
+		req.FilePath,
+		req.LineNumber,
 		codeVersion,
 		context,
 	)
@@ -381,11 +262,10 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 	// Broadcast update to all clients
 	s.broadcastUpdate("conversation", conv.UUID)
 
-	// Return the new conversation HTML
+	// Return the new conversation as JSON
 	fullConv, _ := s.messaging.GetFullConversation(conv.UUID)
-	if err := s.templates.ExecuteTemplate(w, "conversation.html", fullConv); err != nil {
-		logger.Error("Failed to render conversation: %v", err)
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(fullConv)
 }
 
 // ReplyRequest represents a reply request
@@ -396,20 +276,19 @@ type ReplyRequest struct {
 
 // handleReply adds a reply to a conversation
 func (s *Server) handleReply(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
+	var req ReplyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
-	conversationID := r.FormValue("conversationId")
-	message := strings.TrimSpace(r.FormValue("message"))
-
-	if conversationID == "" || message == "" {
+	req.Message = strings.TrimSpace(req.Message)
+	if req.ConversationID == "" || req.Message == "" {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
-	_, err := s.messaging.ReplyToConversation(conversationID, message, critic.AuthorHuman)
+	_, err := s.messaging.ReplyToConversation(req.ConversationID, req.Message, critic.AuthorHuman)
 	if err != nil {
 		logger.Error("Failed to create reply: %v", err)
 		http.Error(w, "Failed to create reply", http.StatusInternalServerError)
@@ -417,13 +296,12 @@ func (s *Server) handleReply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Broadcast update
-	s.broadcastUpdate("conversation", conversationID)
+	s.broadcastUpdate("conversation", req.ConversationID)
 
-	// Return the updated conversation HTML
-	fullConv, _ := s.messaging.GetFullConversation(conversationID)
-	if err := s.templates.ExecuteTemplate(w, "conversation.html", fullConv); err != nil {
-		logger.Error("Failed to render conversation: %v", err)
-	}
+	// Return the updated conversation as JSON
+	fullConv, _ := s.messaging.GetFullConversation(req.ConversationID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(fullConv)
 }
 
 // handleResolve marks a conversation as resolved
@@ -443,11 +321,10 @@ func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
 	// Broadcast update
 	s.broadcastUpdate("conversation", uuid)
 
-	// Return updated conversation
+	// Return updated conversation as JSON
 	fullConv, _ := s.messaging.GetFullConversation(uuid)
-	if err := s.templates.ExecuteTemplate(w, "conversation.html", fullConv); err != nil {
-		logger.Error("Failed to render conversation: %v", err)
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(fullConv)
 }
 
 // handleUnresolve marks a conversation as unresolved
@@ -467,11 +344,10 @@ func (s *Server) handleUnresolve(w http.ResponseWriter, r *http.Request) {
 	// Broadcast update
 	s.broadcastUpdate("conversation", uuid)
 
-	// Return updated conversation
+	// Return updated conversation as JSON
 	fullConv, _ := s.messaging.GetFullConversation(uuid)
-	if err := s.templates.ExecuteTemplate(w, "conversation.html", fullConv); err != nil {
-		logger.Error("Failed to render conversation: %v", err)
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(fullConv)
 }
 
 // broadcastUpdate sends an update notification to all WebSocket clients
