@@ -1,10 +1,10 @@
 package cli
 
 import (
-	"github.com/spf13/cobra"
 	"github.com/radiospiel/critic/simple-go/must"
-	"github.com/samber/lo"
 	"github.com/radiospiel/critic/src/git"
+	"github.com/samber/lo"
+	"github.com/spf13/cobra"
 )
 
 // getDefaultBases returns the default base points based on git state
@@ -43,7 +43,7 @@ func newRootCmd() *cobra.Command {
 Available commands:
   tui     Start the terminal user interface
   webui   Start the web user interface
-  api     Start the gRPC/HTTP API server
+  api     Start the HTTP/connect API server
   mcp     Start the MCP server
   convo   Manage conversations
 

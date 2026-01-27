@@ -13,11 +13,11 @@ func newAPICmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "api [flags]",
-		Short: "Start the gRPC/HTTP API server",
-		Long: `Start the gRPC/HTTP API server using Connect.
+		Short: "Start the HTTP API server",
+		Long: `Start the HTTP API server using Connect.
 
 The API server provides a programmatic interface for interacting with critic.
-It supports Connect, gRPC, and gRPC-Web protocols over HTTP.
+It uses Connect-RPC. Read more at https://connectrpc.com/
 
 Examples:
   critic api                    # Start on default port 65432

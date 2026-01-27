@@ -45,13 +45,8 @@ func (s *Server) Start() error {
 	path, handler := apiconnect.NewCriticServiceHandler(s)
 	mux.Handle("/api"+path, http.StripPrefix("/api", handler))
 
-	// Also register at root path for grpcurl compatibility
-	mux.Handle(path, handler)
-
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	fmt.Printf("API server listening on %s\n", addr)
-	fmt.Printf("\nTest with grpcurl:\n")
-	fmt.Printf("  grpcurl -plaintext -import-path src/api/proto -proto critic.proto localhost:%d critic.v1.CriticService/GetLastChange\n", s.config.Port)
 	fmt.Printf("\nTest with curl:\n")
 	fmt.Printf("  curl -X POST http://localhost:%d/api/critic.v1.CriticService/GetLastChange -H 'Content-Type: application/json' -d '{}'\n", s.config.Port)
 	return http.ListenAndServe(addr, mux)
