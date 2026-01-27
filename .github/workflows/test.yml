@@ -71,5 +71,8 @@ jobs:
       - name: Build
         run: go build -o critic ./src/cmd
 
-      - name: Test
-        run: go test ./...
+      - name: Unit Tests
+        run: make unit-tests
+
+      - name: Integration Tests
+        run: make -C tests/integration/
