@@ -1,43 +1,40 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"net/http"
-	"time"
 
-	"connectrpc.com/connect"
-	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/api/apiconnect"
+	"github.com/radiospiel/critic/src/pkg/critic"
 )
 
 // Config holds the configuration for the API server.
 type Config struct {
-	Port int
+	Port      int
+	GitRoot   string
+	Messaging critic.Messaging
+	Args      DiffArgs
 }
 
 // Server implements the CriticService API.
 type Server struct {
-	config Config
+	config  Config
+	session *Session
 }
 
 // NewServer creates a new API server with the given configuration.
+// It initializes a default session with the provided configuration values.
 func NewServer(config Config) *Server {
+	session := NewSession(config.GitRoot, config.Messaging, config.Args)
 	return &Server{
-		config: config,
+		config:  config,
+		session: session,
 	}
 }
 
-// GetLastChange returns the current time in milliseconds.
-func (s *Server) GetLastChange(
-	ctx context.Context,
-	req *connect.Request[api.GetLastChangeRequest],
-) (*connect.Response[api.GetLastChangeResponse], error) {
-	now := time.Now().UnixMilli()
-	res := connect.NewResponse(&api.GetLastChangeResponse{
-		MtimeMsecs: uint64(now),
-	})
-	return res, nil
+// GetSession returns the server's session
+func (s *Server) GetSession() *Session {
+	return s.session
 }
 
 // Start starts the API server and blocks until it receives an error.
