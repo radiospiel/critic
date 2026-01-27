@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.org/radiospiel/critic/src/webui"
+	"github.com/radiospiel/critic/src/webui"
 )
 
 // newWebUICmd creates the webui subcommand

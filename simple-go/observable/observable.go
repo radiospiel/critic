@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.org/radiospiel/critic/simple-go/fnmatch"
-	"github.org/radiospiel/critic/simple-go/logger"
-	"github.org/radiospiel/critic/simple-go/preconditions"
-	"github.org/radiospiel/critic/simple-go/utils"
+	"github.com/radiospiel/critic/simple-go/fnmatch"
+	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/preconditions"
+	"github.com/radiospiel/critic/simple-go/utils"
 )
 
 // maxArrayIndex is the maximum allowed array index to prevent accidental huge allocations.

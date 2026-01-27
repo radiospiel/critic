@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.org/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/simple-go/assert"
 )
 
 func TestNewBaseResolver(t *testing.T) {

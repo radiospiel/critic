@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.org/radiospiel/critic/src/messagedb"
-	"github.org/radiospiel/critic/src/pkg/critic"
-	"github.org/radiospiel/critic/src/pkg/types"
-	"github.org/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/src/messagedb"
+	"github.com/radiospiel/critic/src/pkg/critic"
+	"github.com/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/simple-go/assert"
 	_ "github.com/mattn/go-sqlite3"
 )
 

@@ -3,7 +3,7 @@ package matrix
 import (
 	"math/rand"
 
-	"github.org/radiospiel/critic/teapot"
+	"github.com/radiospiel/critic/teapot"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"

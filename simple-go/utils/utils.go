@@ -4,7 +4,7 @@ import (
 	"cmp"
 	"slices"
 
-	"github.org/radiospiel/critic/simple-go/preconditions"
+	"github.com/radiospiel/critic/simple-go/preconditions"
 )
 
 // Reverse reverses a slice in place

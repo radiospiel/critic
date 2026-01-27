@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.org/radiospiel/critic/simple-go/preconditions"
+	"github.com/radiospiel/critic/simple-go/preconditions"
 )
 
 // testingT is an interface that abstracts the testing.T API.

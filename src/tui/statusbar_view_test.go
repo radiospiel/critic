@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
-	"github.org/radiospiel/critic/teapot"
+	"github.com/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/teapot"
 )
 
 func TestStatusBarView_Render(t *testing.T) {

@@ -8,13 +8,12 @@ import (
 	"net/http"
 	"sync"
 
-	"github.org/radiospiel/critic/simple-go/logger"
-	"github.org/radiospiel/critic/simple-go/preconditions"
-	"github.org/radiospiel/critic/src/app"
-	"github.org/radiospiel/critic/src/git"
-	"github.org/radiospiel/critic/src/messagedb"
-	"github.org/radiospiel/critic/src/pkg/critic"
-	"github.org/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/preconditions"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/src/messagedb"
+	"github.com/radiospiel/critic/src/pkg/critic"
+	"github.com/radiospiel/critic/src/pkg/types"
 )
 
 //go:embed templates/*.html static/*
@@ -161,8 +160,8 @@ func (s *Server) loadDiff() error {
 			candidateBases = append(candidateBases, "origin/main")
 		}
 	}
-	// Then add the default bases
-	candidateBases = append(candidateBases, bases...)
+	// Then add the configured bases
+	candidateBases = append(candidateBases, s.config.Bases...)
 
 	// Find a base that is different from HEAD
 	baseName := ""

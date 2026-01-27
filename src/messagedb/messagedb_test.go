@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/simple-go/assert"
 )
 
 func setupTestDB(t *testing.T) (*DB, func()) {

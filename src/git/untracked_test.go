@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/simple-go/assert"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
 func TestGetUntrackedFiles(t *testing.T) {

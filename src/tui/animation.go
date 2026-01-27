@@ -1,9 +1,9 @@
 package tui
 
 import (
-	"github.org/radiospiel/critic/src/pkg/critic"
-	"github.org/radiospiel/critic/src/tui/animation"
-	"github.org/radiospiel/critic/teapot"
+	"github.com/radiospiel/critic/src/pkg/critic"
+	"github.com/radiospiel/critic/src/tui/animation"
+	"github.com/radiospiel/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
 )
 

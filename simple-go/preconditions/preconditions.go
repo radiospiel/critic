@@ -3,7 +3,7 @@ package preconditions
 import (
 	"fmt"
 
-	"github.org/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/logger"
 )
 
 // Check ensures that a condition is true.

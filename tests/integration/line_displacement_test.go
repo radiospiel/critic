@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
-	"github.org/radiospiel/critic/src/git"
-	"github.org/radiospiel/critic/simple-go/must"
+	"github.com/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/simple-go/must"
 )
 
 func TestLineDisplacement(t *testing.T) {

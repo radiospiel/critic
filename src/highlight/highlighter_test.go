@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/simple-go/assert"
 )
 
 func TestNewHighlighter(t *testing.T) {

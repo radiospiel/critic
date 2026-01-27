@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.org/radiospiel/critic/src/tui/animation"
+	"github.com/radiospiel/critic/src/tui/animation"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

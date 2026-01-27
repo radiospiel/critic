@@ -3,8 +3,8 @@ package teapot
 import (
 	"strings"
 
-	"github.org/radiospiel/critic/simple-go/logger"
-	"github.org/radiospiel/critic/simple-go/utils"
+	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/utils"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

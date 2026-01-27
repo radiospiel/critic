@@ -3,7 +3,7 @@ package teapot
 import (
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/simple-go/assert"
 )
 
 // mockView is a simple widget for testing layouts

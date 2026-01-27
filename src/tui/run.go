@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.org/radiospiel/critic/teapot"
+	"github.com/radiospiel/critic/teapot"
 )
 
 func Run(args *Args) error {

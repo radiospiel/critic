@@ -3,9 +3,9 @@ package critic_integration
 import (
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
-	"github.org/radiospiel/critic/src/git"
-	"github.org/radiospiel/critic/simple-go/must"
+	"github.com/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/simple-go/must"
 )
 
 func TestGetFileContent_FromGit(t *testing.T) {

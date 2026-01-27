@@ -3,9 +3,9 @@ package git
 import (
 	"testing"
 
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
 
-	"github.org/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/simple-go/assert"
 )
 
 func TestParseDiff_Empty(t *testing.T) {

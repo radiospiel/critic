@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.org/radiospiel/critic/src/config"
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/src/config"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
 // GetUntrackedFiles returns a list of untracked files (respecting .gitignore)

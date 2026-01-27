@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.org/radiospiel/critic/src/session"
-	"github.org/radiospiel/critic/src/pkg/critic"
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
-	"github.org/radiospiel/critic/teapot"
+	"github.com/radiospiel/critic/src/session"
+	"github.com/radiospiel/critic/src/pkg/critic"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
 )
 

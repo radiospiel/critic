@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.org/radiospiel/critic/teapot"
+	"github.com/radiospiel/critic/teapot"
 	"github.com/charmbracelet/lipgloss"
 )
 
