@@ -7,7 +7,7 @@ import (
 	"io"
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/simple-go/assert"
 )
 
 // testServer creates a server with custom io for testing

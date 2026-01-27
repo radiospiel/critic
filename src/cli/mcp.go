@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.org/radiospiel/critic/src/mcp"
+	"github.com/radiospiel/critic/src/mcp"
 	"github.com/spf13/cobra"
 )
 

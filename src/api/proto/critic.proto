@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package critic.v1;
 
-option go_package = "git.15b.it/eno/critic/src/api;api";
+option go_package = "github.com/radiospiel/critic/src/api;api";
 
 // CriticService provides API methods for the critic code review tool.
 service CriticService {

@@ -3,8 +3,8 @@ package messagedb
 import (
 	"fmt"
 
-	"github.org/radiospiel/critic/src/pkg/critic"
-	"github.org/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/src/pkg/critic"
+	"github.com/radiospiel/critic/simple-go/logger"
 )
 
 // Ensure DB implements the critic.Messaging interface

@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"git.15b.it/eno/critic/src/api/server"
+	"github.com/radiospiel/critic/src/api/server"
 	"github.com/spf13/cobra"
 )
 

@@ -8,7 +8,7 @@ import (
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
-	api "git.15b.it/eno/critic/src/api"
+	api "github.com/radiospiel/critic/src/api"
 	http "net/http"
 	strings "strings"
 )

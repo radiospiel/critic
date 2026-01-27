@@ -6,11 +6,11 @@ import (
 	"runtime/pprof"
 	"testing"
 
-	"github.org/radiospiel/critic/src/git"
-	"github.org/radiospiel/critic/src/tui"
-	"github.org/radiospiel/critic/src/pkg/critic"
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
-	"github.org/radiospiel/critic/teapot"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/src/tui"
+	"github.com/radiospiel/critic/src/pkg/critic"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/teapot"
 )
 
 // createSampleFileDiff creates a sample FileDiff with multiple hunks and lines

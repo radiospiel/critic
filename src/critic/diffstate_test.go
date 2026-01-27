@@ -3,8 +3,8 @@ package critic
 import (
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/simple-go/assert"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
 func TestFileState_String(t *testing.T) {

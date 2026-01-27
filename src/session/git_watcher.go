@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.org/radiospiel/critic/src/git"
-	"github.org/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/simple-go/logger"
 )
 
 // GitWatcher watches for changes to git references and kicks off diff reloading

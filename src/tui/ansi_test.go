@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/simple-go/assert"
 )
 
 func TestStripBackgroundCodes(t *testing.T) {

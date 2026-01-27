@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"git.15b.it/eno/critic/src/api"
-	"git.15b.it/eno/critic/src/api/apiconnect"
+	"github.com/radiospiel/critic/src/api"
+	"github.com/radiospiel/critic/src/api/apiconnect"
 )
 
 // Config holds the configuration for the API server.

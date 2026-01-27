@@ -3,7 +3,7 @@ package teapot
 import (
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/simple-go/assert"
 )
 
 func TestRectContains(t *testing.T) {

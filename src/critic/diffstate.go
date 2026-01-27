@@ -1,7 +1,7 @@
 package critic
 
 import (
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
 // FileState represents the state of a file in the diff

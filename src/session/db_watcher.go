@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.org/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/logger"
 	_ "github.com/mattn/go-sqlite3"
 )
 

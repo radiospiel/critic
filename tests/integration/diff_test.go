@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"github.com/samber/lo"
-	"github.org/radiospiel/critic/src/git"
-	"github.org/radiospiel/critic/simple-go/assert"
-	"github.org/radiospiel/critic/simple-go/must"
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/simple-go/must"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
 // commitFileForDiff creates and commits a file

@@ -1,7 +1,7 @@
 package tui
 
 import (
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
 // HunkPosition represents the position within a hunk

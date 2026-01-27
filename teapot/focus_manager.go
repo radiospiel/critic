@@ -1,7 +1,7 @@
 package teapot
 
 import (
-	"github.org/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/logger"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

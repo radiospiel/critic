@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.org/radiospiel/critic/simple-go/logger"
-	"github.org/radiospiel/critic/simple-go/preconditions"
+	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/preconditions"
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/samber/lo"

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.org/radiospiel/critic/src/cli"
+	"github.com/radiospiel/critic/src/cli"
 )
 
 func main() {

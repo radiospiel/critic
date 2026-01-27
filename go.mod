@@ -1,4 +1,4 @@
-module github.org/radiospiel/critic
+module github.com/radiospiel/critic
 
 go 1.24.0
 

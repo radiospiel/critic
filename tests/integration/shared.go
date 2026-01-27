@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/must"
+	"github.com/radiospiel/critic/simple-go/must"
 )
 
 func TestMain(m *testing.M) {

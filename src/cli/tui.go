@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.org/radiospiel/critic/simple-go/logger"
-	"github.org/radiospiel/critic/simple-go/preconditions"
-	"github.org/radiospiel/critic/src/config"
-	"github.org/radiospiel/critic/src/git"
-	"github.org/radiospiel/critic/src/tui"
+	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/preconditions"
+	"github.com/radiospiel/critic/src/config"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/src/tui"
 )
 
 // newTUICmd creates the tui subcommand

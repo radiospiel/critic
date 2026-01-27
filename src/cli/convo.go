@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.org/radiospiel/critic/src/git"
-	"github.org/radiospiel/critic/src/messagedb"
-	"github.org/radiospiel/critic/src/pkg/critic"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/src/messagedb"
+	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/spf13/cobra"
 )
 

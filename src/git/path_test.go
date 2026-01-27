@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.org/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/simple-go/assert"
 )
 
 func TestAbsPathToGitPath(t *testing.T) {

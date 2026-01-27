@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.org/radiospiel/critic/simple-go/must"
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/simple-go/must"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
 var (

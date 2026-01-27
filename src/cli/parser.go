@@ -2,9 +2,9 @@ package cli
 
 import (
 	"github.com/spf13/cobra"
-	"github.org/radiospiel/critic/simple-go/must"
+	"github.com/radiospiel/critic/simple-go/must"
 	"github.com/samber/lo"
-	"github.org/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/src/git"
 )
 
 // getDefaultBases returns the default base points based on git state

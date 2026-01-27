@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.org/radiospiel/critic/src/git"
-	"github.org/radiospiel/critic/src/pkg/types"
-	"github.org/radiospiel/critic/simple-go/logger"
-	"github.org/radiospiel/critic/simple-go/observable"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/observable"
 )
 
 // DiffProcessor handles loading and processing diffs

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.org/radiospiel/critic/src/git"
-	ctypes "github.org/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/src/git"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
 // GitDiffState implements DiffState using git as the source

@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.org/radiospiel/critic/simple-go/must"
-	"github.org/radiospiel/critic/simple-go/preconditions"
-	"github.org/radiospiel/critic/simple-go/utils"
+	"github.com/radiospiel/critic/simple-go/must"
+	"github.com/radiospiel/critic/simple-go/preconditions"
+	"github.com/radiospiel/critic/simple-go/utils"
 	"github.com/samber/lo"
 )
 
