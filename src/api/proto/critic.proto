@@ -8,6 +8,8 @@ option go_package = "github.com/radiospiel/critic/src/api;api";
 service CriticService {
   // GetLastChange returns the timestamp of the last change.
   rpc GetLastChange(GetLastChangeRequest) returns (GetLastChangeResponse);
+  // GetDiffs returns the current diffs and state from the session.
+  rpc GetDiffs(GetDiffsRequest) returns (GetDiffsResponse);
 }
 
 // GetLastChangeRequest is an empty request for GetLastChange.
@@ -17,4 +19,59 @@ message GetLastChangeRequest {}
 message GetLastChangeResponse {
   // mtime_msecs is the timestamp in milliseconds since Unix epoch.
   uint64 mtime_msecs = 1;
+}
+
+// GetDiffsRequest is an empty request for GetDiffs.
+message GetDiffsRequest {}
+
+// GetDiffsResponse contains the current state and diffs from the session.
+message GetDiffsResponse {
+  // state is the current session state ("INITIALISING" or "READY").
+  string state = 1;
+  // diff contains the file diffs (may be null if state is INITIALISING).
+  Diff diff = 2;
+}
+
+// Diff represents a git diff with multiple file changes.
+message Diff {
+  repeated FileDiff files = 1;
+}
+
+// FileDiff represents changes to a single file.
+message FileDiff {
+  string old_path = 1;
+  string new_path = 2;
+  string old_mode = 3;
+  string new_mode = 4;
+  bool is_new = 5;
+  bool is_deleted = 6;
+  bool is_renamed = 7;
+  bool is_binary = 8;
+  repeated Hunk hunks = 9;
+}
+
+// Hunk represents a chunk of changes within a file.
+message Hunk {
+  int32 old_start = 1;
+  int32 old_lines = 2;
+  int32 new_start = 3;
+  int32 new_lines = 4;
+  string header = 5;
+  repeated Line lines = 6;
+  HunkStats stats = 7;
+}
+
+// HunkStats holds line statistics for a hunk.
+message HunkStats {
+  int32 added = 1;
+  int32 deleted = 2;
+}
+
+// Line represents a single line in a diff hunk.
+message Line {
+  // type is the line type: "context", "added", or "deleted".
+  string type = 1;
+  string content = 2;
+  int32 old_num = 3;
+  int32 new_num = 4;
 }

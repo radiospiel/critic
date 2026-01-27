@@ -36,12 +36,17 @@ const (
 	// CriticServiceGetLastChangeProcedure is the fully-qualified name of the CriticService's
 	// GetLastChange RPC.
 	CriticServiceGetLastChangeProcedure = "/critic.v1.CriticService/GetLastChange"
+	// CriticServiceGetDiffsProcedure is the fully-qualified name of the CriticService's
+	// GetDiffs RPC.
+	CriticServiceGetDiffsProcedure = "/critic.v1.CriticService/GetDiffs"
 )
 
 // CriticServiceClient is a client for the critic.v1.CriticService service.
 type CriticServiceClient interface {
 	// GetLastChange returns the timestamp of the last change.
 	GetLastChange(context.Context, *connect.Request[api.GetLastChangeRequest]) (*connect.Response[api.GetLastChangeResponse], error)
+	// GetDiffs returns the current diffs and state from the session.
+	GetDiffs(context.Context, *connect.Request[api.GetDiffsRequest]) (*connect.Response[api.GetDiffsResponse], error)
 }
 
 // NewCriticServiceClient constructs a client for the critic.v1.CriticService service. By default,
@@ -59,12 +64,18 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			baseURL+CriticServiceGetLastChangeProcedure,
 			connect.WithClientOptions(opts...),
 		),
+		getDiffs: connect.NewClient[api.GetDiffsRequest, api.GetDiffsResponse](
+			httpClient,
+			baseURL+CriticServiceGetDiffsProcedure,
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // criticServiceClient implements CriticServiceClient.
 type criticServiceClient struct {
 	getLastChange *connect.Client[api.GetLastChangeRequest, api.GetLastChangeResponse]
+	getDiffs      *connect.Client[api.GetDiffsRequest, api.GetDiffsResponse]
 }
 
 // GetLastChange calls critic.v1.CriticService.GetLastChange.
@@ -72,10 +83,17 @@ func (c *criticServiceClient) GetLastChange(ctx context.Context, req *connect.Re
 	return c.getLastChange.CallUnary(ctx, req)
 }
 
+// GetDiffs calls critic.v1.CriticService.GetDiffs.
+func (c *criticServiceClient) GetDiffs(ctx context.Context, req *connect.Request[api.GetDiffsRequest]) (*connect.Response[api.GetDiffsResponse], error) {
+	return c.getDiffs.CallUnary(ctx, req)
+}
+
 // CriticServiceHandler is an implementation of the critic.v1.CriticService service.
 type CriticServiceHandler interface {
 	// GetLastChange returns the timestamp of the last change.
 	GetLastChange(context.Context, *connect.Request[api.GetLastChangeRequest]) (*connect.Response[api.GetLastChangeResponse], error)
+	// GetDiffs returns the current diffs and state from the session.
+	GetDiffs(context.Context, *connect.Request[api.GetDiffsRequest]) (*connect.Response[api.GetDiffsResponse], error)
 }
 
 // NewCriticServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -89,10 +107,17 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		svc.GetLastChange,
 		connect.WithHandlerOptions(opts...),
 	)
+	criticServiceGetDiffsHandler := connect.NewUnaryHandler(
+		CriticServiceGetDiffsProcedure,
+		svc.GetDiffs,
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/critic.v1.CriticService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CriticServiceGetLastChangeProcedure:
 			criticServiceGetLastChangeHandler.ServeHTTP(w, r)
+		case CriticServiceGetDiffsProcedure:
+			criticServiceGetDiffsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -104,4 +129,8 @@ type UnimplementedCriticServiceHandler struct{}
 
 func (UnimplementedCriticServiceHandler) GetLastChange(context.Context, *connect.Request[api.GetLastChangeRequest]) (*connect.Response[api.GetLastChangeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetLastChange is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) GetDiffs(context.Context, *connect.Request[api.GetDiffsRequest]) (*connect.Response[api.GetDiffsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetDiffs is not implemented"))
 }

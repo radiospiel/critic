@@ -104,6 +104,250 @@ func (x *GetLastChangeResponse) GetMtimeMsecs() uint64 {
 	return 0
 }
 
+// GetDiffsRequest is an empty request for GetDiffs.
+type GetDiffsRequest struct{}
+
+func (*GetDiffsRequest) ProtoMessage() {}
+
+// GetDiffsResponse contains the current state and diffs from the session.
+type GetDiffsResponse struct {
+	// State is the current session state ("INITIALISING" or "READY").
+	State string `json:"state,omitempty"`
+	// Diff contains the file diffs (may be nil if state is INITIALISING).
+	Diff *Diff `json:"diff,omitempty"`
+}
+
+func (*GetDiffsResponse) ProtoMessage() {}
+
+func (x *GetDiffsResponse) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *GetDiffsResponse) GetDiff() *Diff {
+	if x != nil {
+		return x.Diff
+	}
+	return nil
+}
+
+// Diff represents a git diff with multiple file changes.
+type Diff struct {
+	Files []*FileDiff `json:"files,omitempty"`
+}
+
+func (*Diff) ProtoMessage() {}
+
+func (x *Diff) GetFiles() []*FileDiff {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
+// FileDiff represents changes to a single file.
+type FileDiff struct {
+	OldPath   string  `json:"old_path,omitempty"`
+	NewPath   string  `json:"new_path,omitempty"`
+	OldMode   string  `json:"old_mode,omitempty"`
+	NewMode   string  `json:"new_mode,omitempty"`
+	IsNew     bool    `json:"is_new,omitempty"`
+	IsDeleted bool    `json:"is_deleted,omitempty"`
+	IsRenamed bool    `json:"is_renamed,omitempty"`
+	IsBinary  bool    `json:"is_binary,omitempty"`
+	Hunks     []*Hunk `json:"hunks,omitempty"`
+}
+
+func (*FileDiff) ProtoMessage() {}
+
+func (x *FileDiff) GetOldPath() string {
+	if x != nil {
+		return x.OldPath
+	}
+	return ""
+}
+
+func (x *FileDiff) GetNewPath() string {
+	if x != nil {
+		return x.NewPath
+	}
+	return ""
+}
+
+func (x *FileDiff) GetOldMode() string {
+	if x != nil {
+		return x.OldMode
+	}
+	return ""
+}
+
+func (x *FileDiff) GetNewMode() string {
+	if x != nil {
+		return x.NewMode
+	}
+	return ""
+}
+
+func (x *FileDiff) GetIsNew() bool {
+	if x != nil {
+		return x.IsNew
+	}
+	return false
+}
+
+func (x *FileDiff) GetIsDeleted() bool {
+	if x != nil {
+		return x.IsDeleted
+	}
+	return false
+}
+
+func (x *FileDiff) GetIsRenamed() bool {
+	if x != nil {
+		return x.IsRenamed
+	}
+	return false
+}
+
+func (x *FileDiff) GetIsBinary() bool {
+	if x != nil {
+		return x.IsBinary
+	}
+	return false
+}
+
+func (x *FileDiff) GetHunks() []*Hunk {
+	if x != nil {
+		return x.Hunks
+	}
+	return nil
+}
+
+// Hunk represents a chunk of changes within a file.
+type Hunk struct {
+	OldStart int32      `json:"old_start,omitempty"`
+	OldLines int32      `json:"old_lines,omitempty"`
+	NewStart int32      `json:"new_start,omitempty"`
+	NewLines int32      `json:"new_lines,omitempty"`
+	Header   string     `json:"header,omitempty"`
+	Lines    []*Line    `json:"lines,omitempty"`
+	Stats    *HunkStats `json:"stats,omitempty"`
+}
+
+func (*Hunk) ProtoMessage() {}
+
+func (x *Hunk) GetOldStart() int32 {
+	if x != nil {
+		return x.OldStart
+	}
+	return 0
+}
+
+func (x *Hunk) GetOldLines() int32 {
+	if x != nil {
+		return x.OldLines
+	}
+	return 0
+}
+
+func (x *Hunk) GetNewStart() int32 {
+	if x != nil {
+		return x.NewStart
+	}
+	return 0
+}
+
+func (x *Hunk) GetNewLines() int32 {
+	if x != nil {
+		return x.NewLines
+	}
+	return 0
+}
+
+func (x *Hunk) GetHeader() string {
+	if x != nil {
+		return x.Header
+	}
+	return ""
+}
+
+func (x *Hunk) GetLines() []*Line {
+	if x != nil {
+		return x.Lines
+	}
+	return nil
+}
+
+func (x *Hunk) GetStats() *HunkStats {
+	if x != nil {
+		return x.Stats
+	}
+	return nil
+}
+
+// HunkStats holds line statistics for a hunk.
+type HunkStats struct {
+	Added   int32 `json:"added,omitempty"`
+	Deleted int32 `json:"deleted,omitempty"`
+}
+
+func (*HunkStats) ProtoMessage() {}
+
+func (x *HunkStats) GetAdded() int32 {
+	if x != nil {
+		return x.Added
+	}
+	return 0
+}
+
+func (x *HunkStats) GetDeleted() int32 {
+	if x != nil {
+		return x.Deleted
+	}
+	return 0
+}
+
+// Line represents a single line in a diff hunk.
+type Line struct {
+	// Type is the line type: "context", "added", or "deleted".
+	Type    string `json:"type,omitempty"`
+	Content string `json:"content,omitempty"`
+	OldNum  int32  `json:"old_num,omitempty"`
+	NewNum  int32  `json:"new_num,omitempty"`
+}
+
+func (*Line) ProtoMessage() {}
+
+func (x *Line) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *Line) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *Line) GetOldNum() int32 {
+	if x != nil {
+		return x.OldNum
+	}
+	return 0
+}
+
+func (x *Line) GetNewNum() int32 {
+	if x != nil {
+		return x.NewNum
+	}
+	return 0
+}
+
 var File_critic_proto protoreflect.FileDescriptor
 
 const file_critic_proto_rawDesc = "" +
