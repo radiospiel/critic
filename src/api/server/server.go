@@ -9,13 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/fsnotify/fsnotify"
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api/apiconnect"
 	"github.com/radiospiel/critic/src/pkg/critic"
@@ -123,73 +120,6 @@ func (s *Server) stopNpmDevServer() {
 	}
 }
 
-// startDevFileWatcher watches src/webui for Go file changes and broadcasts reload events
-func (s *Server) startDevFileWatcher() {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		logger.Error("Failed to create file watcher: %v", err)
-		return
-	}
-
-	// Watch src/webui directory
-	webuiDir := "src/webui"
-	if err := watcher.Add(webuiDir); err != nil {
-		logger.Error("Failed to watch %s: %v", webuiDir, err)
-		watcher.Close()
-		return
-	}
-
-	// Also watch subdirectories (but not frontend/node_modules)
-	filepath.Walk(webuiDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() {
-			// Skip frontend directory (Vite handles that)
-			if strings.Contains(path, "frontend") {
-				return filepath.SkipDir
-			}
-			watcher.Add(path)
-		}
-		return nil
-	})
-
-	logger.Info("Watching %s for changes (will trigger browser reload)", webuiDir)
-
-	go func() {
-		defer watcher.Close()
-		var debounceTimer *time.Timer
-
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				// Only react to Go files
-				if !strings.HasSuffix(event.Name, ".go") {
-					continue
-				}
-				if event.Op&(fsnotify.Write|fsnotify.Create) != 0 {
-					// Debounce: wait 500ms before broadcasting reload
-					if debounceTimer != nil {
-						debounceTimer.Stop()
-					}
-					debounceTimer = time.AfterFunc(500*time.Millisecond, func() {
-						logger.Info("Backend file changed: %s, broadcasting reload", event.Name)
-						s.wsHub.Broadcast([]byte(`{"type":"reload"}`))
-					})
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				logger.Error("File watcher error: %v", err)
-			}
-		}
-	}()
-}
-
 // Start starts the API server and blocks until it receives an error.
 func (s *Server) Start() error {
 	// Start WebSocket hub
@@ -211,9 +141,6 @@ func (s *Server) Start() error {
 		// Try to start npm dev server
 		devServerStarted = s.startNpmDevServer()
 		if devServerStarted {
-			// Start file watcher for backend code changes
-			s.startDevFileWatcher()
-
 			// Give Vite a moment to start
 			time.Sleep(2 * time.Second)
 
