@@ -67,6 +67,32 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;')
 }
 
+function parseHunkHeader(header: string): { context: string } | null {
+  // Header format: @@ -10,5 +10,7 @@ optional context like function name
+  const match = header.match(/^@@[^@]+@@\s*(.*)$/)
+  if (match && match[1].trim()) {
+    return { context: match[1].trim() }
+  }
+  return null
+}
+
+interface HunkHeaderProps {
+  header: string
+}
+
+function HunkHeader({ header }: HunkHeaderProps) {
+  const parsed = parseHunkHeader(header)
+  if (parsed) {
+    return (
+      <>
+        <span className="diff-hunk-label">Below </span>
+        <code className="diff-hunk-context">{parsed.context}</code>
+      </>
+    )
+  }
+  return <code className="diff-hunk-context">{header}</code>
+}
+
 function getStatusDescription(status: FileStatus): string {
   switch (status) {
     case FileStatus.NEW:
@@ -202,7 +228,7 @@ function SplitView({ hunks, language }: SplitViewProps) {
             return (
               <tr key={idx} className="diff-hunk-header-row">
                 <td colSpan={4} className="diff-hunk-header">
-                  {hunk?.header || '@@'}
+                  <HunkHeader header={hunk?.header || '@@'} />
                 </td>
               </tr>
             )
@@ -322,7 +348,7 @@ function DiffView({ fileDiff }: DiffViewProps) {
                 <Fragment key={hunkIdx}>
                   <tr className="diff-hunk-header-row">
                     <td colSpan={4} className="diff-hunk-header">
-                      {hunk.header}
+                      <HunkHeader header={hunk.header} />
                     </td>
                   </tr>
                   {hunk.lines.map((line, lineIdx) => (
