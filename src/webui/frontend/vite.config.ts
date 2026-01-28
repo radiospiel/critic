@@ -9,12 +9,8 @@ export default defineConfig({
   },
   clearScreen: false,
   server: {
-    // Configure HMR to connect directly to Vite when accessed via Go proxy
-    hmr: {
-      host: 'localhost',
-      port: 5173,
-      protocol: 'ws',
-    },
+    port: 5173,
+    strictPort: true, // Fail if port is in use (ensures consistent HMR port)
     proxy: {
       // Proxy Connect RPC requests to the Go API server
       '/critic.v1.CriticService': {
