@@ -26,5 +26,4 @@ docs/plans
 
 # Frontend (webui)
 node_modules/
-src/webui/frontend/package-lock.json
 src/webui/dist/
