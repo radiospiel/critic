@@ -1,21 +1,48 @@
 import { useState } from 'react'
+import { ThemeProvider, useTheme } from './context/ThemeContext'
 import FileList from './components/FileList'
+import DiffView from './components/DiffView'
+import { FileDiff } from './gen/critic_pb'
 
-function App() {
+function AppContent() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [selectedFileDiff, setSelectedFileDiff] = useState<FileDiff | null>(null)
+  const { theme, toggleTheme } = useTheme()
+
+  const handleSelectFile = (file: string, fileDiff: FileDiff) => {
+    setSelectedFile(file)
+    setSelectedFileDiff(fileDiff)
+  }
 
   return (
     <div className="app">
       <aside className="sidebar">
-        <FileList
-          selectedFile={selectedFile}
-          onSelectFile={setSelectedFile}
-        />
+        <div className="app-header">
+          <span>Critic</span>
+          <button className="theme-toggle" onClick={toggleTheme}>
+            {theme === 'light' ? 'Dark' : 'Light'}
+          </button>
+        </div>
+        <FileList selectedFile={selectedFile} onSelectFile={handleSelectFile} />
       </aside>
       <main className="main-content">
-        {/* File content will be rendered here */}
+        {selectedFileDiff ? (
+          <DiffView fileDiff={selectedFileDiff} />
+        ) : (
+          <div className="empty-state">
+            <span>Select a file to view changes</span>
+          </div>
+        )}
       </main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   )
 }
 

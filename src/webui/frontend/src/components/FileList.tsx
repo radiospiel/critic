@@ -2,14 +2,9 @@ import { useEffect, useState } from 'react'
 import { criticClient } from '../api/client'
 import { FileDiff, FileStatus } from '../gen/critic_pb'
 
-interface FileInfo {
-  path: string
-  status: FileStatus
-}
-
 interface FileListProps {
   selectedFile: string | null
-  onSelectFile: (file: string) => void
+  onSelectFile: (file: string, fileDiff: FileDiff) => void
 }
 
 function getFilePath(file: FileDiff): string {
@@ -31,7 +26,7 @@ function getStatusLabel(status: FileStatus): string {
 }
 
 function FileList({ selectedFile, onSelectFile }: FileListProps) {
-  const [files, setFiles] = useState<FileInfo[]>([])
+  const [files, setFiles] = useState<FileDiff[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -39,11 +34,7 @@ function FileList({ selectedFile, onSelectFile }: FileListProps) {
     criticClient
       .getDiffs({})
       .then((response) => {
-        const fileInfos: FileInfo[] = (response.diff?.files || []).map((f) => ({
-          path: getFilePath(f),
-          status: f.status,
-        }))
-        setFiles(fileInfos)
+        setFiles(response.diff?.files || [])
         setLoading(false)
       })
       .catch((err) => {
@@ -56,7 +47,7 @@ function FileList({ selectedFile, onSelectFile }: FileListProps) {
     return (
       <div>
         <div className="file-list-header">Files (loading)</div>
-        <div style={{ padding: '16px', color: '#666' }}>Loading...</div>
+        <div className="file-list-message">Loading...</div>
       </div>
     )
   }
@@ -65,7 +56,7 @@ function FileList({ selectedFile, onSelectFile }: FileListProps) {
     return (
       <div>
         <div className="file-list-header">Files (error)</div>
-        <div style={{ padding: '16px', color: '#c00' }}>{error}</div>
+        <div className="file-list-message file-list-error">{error}</div>
       </div>
     )
   }
@@ -74,21 +65,24 @@ function FileList({ selectedFile, onSelectFile }: FileListProps) {
     <div>
       <div className="file-list-header">{files.length} Files</div>
       <ul className="file-list">
-        {files.map((file) => (
-          <li
-            key={file.path}
-            className={`file-item ${selectedFile === file.path ? 'selected' : ''}`}
-            onClick={() => onSelectFile(file.path)}
-            title={file.path}
-          >
-            <span className={`file-status status-${getStatusLabel(file.status).toLowerCase()}`}>
-              {getStatusLabel(file.status)}
-            </span>
-            <span className="file-path">{file.path}</span>
-          </li>
-        ))}
+        {files.map((file) => {
+          const path = getFilePath(file)
+          return (
+            <li
+              key={path}
+              className={`file-item ${selectedFile === path ? 'selected' : ''}`}
+              onClick={() => onSelectFile(path, file)}
+              title={path}
+            >
+              <span className={`file-status status-${getStatusLabel(file.status).toLowerCase()}`}>
+                {getStatusLabel(file.status)}
+              </span>
+              <span className="file-path">{path}</span>
+            </li>
+          )
+        })}
         {files.length === 0 && (
-          <li style={{ padding: '16px', color: '#666' }}>No files found</li>
+          <li className="file-list-message">No files found</li>
         )}
       </ul>
     </div>
