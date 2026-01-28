@@ -1,12 +1,18 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"os/exec"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api/apiconnect"
 	"github.com/radiospiel/critic/src/pkg/critic"
@@ -46,9 +52,10 @@ type Config struct {
 
 // Server implements the CriticService API.
 type Server struct {
-	config  Config
-	session *Session
-	wsHub   *webui.Hub
+	config     Config
+	session    *Session
+	wsHub      *webui.Hub
+	npmProcess *exec.Cmd
 }
 
 // NewServer creates a new API server with the given configuration.
@@ -67,6 +74,39 @@ func (s *Server) GetSession() *Session {
 	return s.session
 }
 
+// startNpmDevServer starts the Vite dev server in the frontend directory
+func (s *Server) startNpmDevServer() error {
+	// Find the frontend directory relative to the working directory
+	frontendDir := "src/webui/frontend"
+
+	s.npmProcess = exec.Command("npm", "run", "dev")
+	s.npmProcess.Dir = frontendDir
+	s.npmProcess.Stdout = os.Stdout
+	s.npmProcess.Stderr = os.Stderr
+
+	if err := s.npmProcess.Start(); err != nil {
+		return fmt.Errorf("failed to start npm dev server: %w", err)
+	}
+
+	logger.Info("Started Vite dev server (PID %d)", s.npmProcess.Process.Pid)
+	return nil
+}
+
+// stopNpmDevServer stops the Vite dev server if running
+func (s *Server) stopNpmDevServer() {
+	if s.npmProcess != nil && s.npmProcess.Process != nil {
+		logger.Info("Stopping Vite dev server (PID %d)", s.npmProcess.Process.Pid)
+		// Send SIGTERM for graceful shutdown
+		if err := s.npmProcess.Process.Signal(syscall.SIGTERM); err != nil {
+			logger.Error("Failed to send SIGTERM to npm process: %v", err)
+			// Try SIGKILL as fallback
+			s.npmProcess.Process.Kill()
+		}
+		s.npmProcess.Wait()
+		logger.Info("Vite dev server stopped")
+	}
+}
+
 // Start starts the API server and blocks until it receives an error.
 func (s *Server) Start() error {
 	// Start WebSocket hub
@@ -74,8 +114,9 @@ func (s *Server) Start() error {
 
 	mux := http.NewServeMux()
 
-	// Connect RPC API
-	path, handler := apiconnect.NewCriticServiceHandler(s)
+	// Connect RPC API with logging interceptor
+	interceptors := connect.WithInterceptors(loggingInterceptor())
+	path, handler := apiconnect.NewCriticServiceHandler(s, interceptors)
 	mux.Handle(path, handler)
 
 	// WebSocket
@@ -83,15 +124,23 @@ func (s *Server) Start() error {
 
 	// Serve React app
 	if s.config.Dev {
+		// Start npm dev server
+		if err := s.startNpmDevServer(); err != nil {
+			return err
+		}
+
+		// Give Vite a moment to start
+		time.Sleep(2 * time.Second)
+
 		// Development mode: proxy to Vite dev server
 		viteURL, err := url.Parse("http://localhost:5173")
 		if err != nil {
+			s.stopNpmDevServer()
 			return fmt.Errorf("failed to parse vite URL: %w", err)
 		}
 		proxy := httputil.NewSingleHostReverseProxy(viteURL)
 		mux.Handle("/", proxy)
 		fmt.Println("Development mode: proxying to Vite dev server at http://localhost:5173")
-		fmt.Println("Run 'npm run dev' in src/webui/frontend/ to start the Vite dev server")
 	} else {
 		// Production mode: serve embedded files
 		distFS, err := webui.DistFS()
@@ -101,7 +150,44 @@ func (s *Server) Start() error {
 		mux.Handle("/", http.FileServer(distFS))
 	}
 
+	// Set up HTTP server with graceful shutdown
 	addr := fmt.Sprintf(":%d", s.config.Port)
-	fmt.Printf("Critic running at http://localhost%s\n", addr)
-	return http.ListenAndServe(addr, loggingMiddleware(mux))
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: loggingMiddleware(mux),
+	}
+
+	// Channel to listen for shutdown signals
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	// Start server in goroutine
+	serverErr := make(chan error, 1)
+	go func() {
+		fmt.Printf("Critic running at http://localhost%s\n", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+	}()
+
+	// Wait for shutdown signal or server error
+	select {
+	case <-stop:
+		logger.Info("Shutdown signal received")
+	case err := <-serverErr:
+		return err
+	}
+
+	// Graceful shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Error("HTTP server shutdown error: %v", err)
+	}
+
+	// Stop npm dev server if running
+	s.stopNpmDevServer()
+
+	return nil
 }
