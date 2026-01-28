@@ -24,7 +24,6 @@ func Execute() error {
 
 	// Add subcommands
 	rootCmd.AddCommand(newTUICmd())
-	rootCmd.AddCommand(newWebUICmd())
 	rootCmd.AddCommand(newAPICmd())
 	rootCmd.AddCommand(newMCPCmd())
 	rootCmd.AddCommand(newConvoCmd())
@@ -42,16 +41,13 @@ func newRootCmd() *cobra.Command {
 
 Available commands:
   tui     Start the terminal user interface
-  webui   Start the web user interface
-  api     Start the HTTP/connect API server
+  api     Start the HTTP/connect API server (includes web UI)
   mcp     Start the MCP server
   convo   Manage conversations
 
 Examples:
   critic tui                    # Start TUI with default bases
   critic tui main               # Compare against main branch
-  critic webui                  # Start web interface on localhost:8080
-  critic webui --port=3000      # Start web interface on port 3000
   critic api                    # Start API server on localhost:65432
   critic api --port=8000        # Start API server on custom port
 `,

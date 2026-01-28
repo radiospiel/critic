@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+// Inspect is an interface for custom log formatting.
+// Types implementing this interface will use InspectForLog() for %v formatting in log messages.
+type Inspect interface {
+	InspectForLog() string
+}
+
 // Level represents a log minLogLevel
 type Level int
 
@@ -43,11 +49,25 @@ var logChannel = make(chan logMessage, 1000)
 
 var wd = (func() string { dir, _ := os.Getwd(); return dir })()
 
+// transformArgs converts any Inspect-implementing values to their string representation
+func transformArgs(args []any) []any {
+	result := make([]any, len(args))
+	for i, arg := range args {
+		if inspector, ok := arg.(Inspect); ok {
+			result[i] = inspector.InspectForLog()
+		} else {
+			result[i] = arg
+		}
+	}
+	return result
+}
+
 func init() {
 	// Start background writer goroutine
 	go func() {
 		for entry := range logChannel {
-			msg := fmt.Sprintf(entry.format, entry.args...)
+			args := transformArgs(entry.args)
+			msg := fmt.Sprintf(entry.format, args...)
 			if entry.topic != "" {
 				msg = "[" + entry.topic + "]: " + msg
 			}
