@@ -8,12 +8,22 @@ PROTO_FILES := $(wildcard $(PROTO_DIR)/*.proto)
 PROTO_GEN_GO := $(PROTO_FILES:$(PROTO_DIR)/%.proto=src/api/%.pb.go)
 PROTO_GEN_CONNECT := $(PROTO_FILES:$(PROTO_DIR)/%.proto=src/api/apiconnect/%.connect.go)
 
-.PHONY: all build test unit-tests integration install uninstall clean install-deps proto
+# Frontend
+FRONTEND_DIR := src/webui/frontend
+FRONTEND_DIST := src/webui/dist
+
+.PHONY: all build test unit-tests integration install uninstall clean install-deps proto frontend
 
 all: test integration
 
-build: .install-deps.mtime $(PROTO_GEN_GO)
+build: .install-deps.mtime $(PROTO_GEN_GO) frontend
 	go build -o $(BINARY) ./src/cmd
+
+# Build frontend (React app)
+frontend: $(FRONTEND_DIST)/index.html
+
+$(FRONTEND_DIST)/index.html: $(FRONTEND_DIR)/package.json $(shell find $(FRONTEND_DIR)/src -type f 2>/dev/null)
+	cd $(FRONTEND_DIR) && npm install && npm run build
 
 test:
 	go test ./...
@@ -34,6 +44,7 @@ uninstall:
 clean:
 	rm -f $(BINARY)
 	rm -f .install-deps.mtime
+	rm -rf $(FRONTEND_DIST)
 
 .install-deps.mtime: scripts/install-deps Makefile
 	./scripts/install-deps
