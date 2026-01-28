@@ -79,15 +79,6 @@ func (s *Server) Start() error {
 	path, handler := apiconnect.NewCriticServiceHandler(s)
 	mux.Handle(path, handler)
 
-	// Legacy REST API endpoints (JSON)
-	mux.HandleFunc("GET /api/files", s.handleFileList)
-	mux.HandleFunc("GET /api/diff/{path...}", s.handleDiff)
-	mux.HandleFunc("GET /api/conversations/{path...}", s.handleConversations)
-	mux.HandleFunc("POST /api/comment", s.handleCreateComment)
-	mux.HandleFunc("POST /api/reply", s.handleReply)
-	mux.HandleFunc("POST /api/resolve/{uuid}", s.handleResolve)
-	mux.HandleFunc("POST /api/unresolve/{uuid}", s.handleUnresolve)
-
 	// WebSocket
 	mux.HandleFunc("GET /ws", s.handleWebSocket)
 
