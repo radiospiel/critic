@@ -78,21 +78,23 @@ func (h *Hub) Broadcast(message []byte) {
 	h.broadcast <- message
 }
 
-// handleWebSocket handles WebSocket connections
-func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	websocket.Handler(func(conn *websocket.Conn) {
-		client := &Client{
-			hub:  s.hub,
-			conn: conn,
-			send: make(chan []byte, 256),
-		}
+// WebSocketHandler returns an HTTP handler for WebSocket connections
+func WebSocketHandler(hub *Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		websocket.Handler(func(conn *websocket.Conn) {
+			client := &Client{
+				hub:  hub,
+				conn: conn,
+				send: make(chan []byte, 256),
+			}
 
-		s.hub.register <- client
+			hub.register <- client
 
-		// Start goroutines for reading and writing
-		go client.writePump()
-		client.readPump()
-	}).ServeHTTP(w, r)
+			// Start goroutines for reading and writing
+			go client.writePump()
+			client.readPump()
+		}).ServeHTTP(w, r)
+	}
 }
 
 // readPump reads messages from the WebSocket connection

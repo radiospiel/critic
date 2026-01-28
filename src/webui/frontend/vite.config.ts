@@ -9,7 +9,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:8080',
+      // Proxy Connect RPC requests to the Go API server
+      '/critic.v1.CriticService': {
+        target: 'http://localhost:65432',
+        changeOrigin: true,
+      },
+      // Proxy WebSocket connections
+      '/ws': {
+        target: 'ws://localhost:65432',
+        ws: true,
+      },
     },
   },
 })
