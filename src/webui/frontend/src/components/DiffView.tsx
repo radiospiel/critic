@@ -14,34 +14,194 @@ function getFileExtension(path: string): string {
 }
 
 function getLanguage(path: string): string | undefined {
-  const ext = getFileExtension(path)
+  const ext = getFileExtension(path).toLowerCase()
+
+  // Handle special filenames without extensions
+  const filename = path.split('/').pop()?.toLowerCase() || ''
+  const filenameMap: Record<string, string> = {
+    'dockerfile': 'dockerfile',
+    'makefile': 'makefile',
+    'gnumakefile': 'makefile',
+    'cmakelists.txt': 'cmake',
+    'rakefile': 'ruby',
+    'gemfile': 'ruby',
+    'podfile': 'ruby',
+    'vagrantfile': 'ruby',
+    'brewfile': 'ruby',
+    '.gitignore': 'bash',
+    '.dockerignore': 'bash',
+    '.env': 'bash',
+    '.env.local': 'bash',
+    '.env.development': 'bash',
+    '.env.production': 'bash',
+  }
+
+  if (filenameMap[filename]) {
+    return filenameMap[filename]
+  }
+
   const extMap: Record<string, string> = {
+    // JavaScript/TypeScript
     ts: 'typescript',
     tsx: 'typescript',
+    mts: 'typescript',
+    cts: 'typescript',
     js: 'javascript',
     jsx: 'javascript',
+    mjs: 'javascript',
+    cjs: 'javascript',
+
+    // Python
     py: 'python',
+    pyw: 'python',
+    pyi: 'python',
+
+    // Go
     go: 'go',
+    mod: 'go',
+
+    // Rust
     rs: 'rust',
+
+    // Ruby
     rb: 'ruby',
+    erb: 'erb',
+    rake: 'ruby',
+    gemspec: 'ruby',
+
+    // Java/JVM
     java: 'java',
+    kt: 'kotlin',
+    kts: 'kotlin',
+    scala: 'scala',
+    groovy: 'groovy',
+    gradle: 'groovy',
+    clj: 'clojure',
+    cljs: 'clojure',
+    cljc: 'clojure',
+
+    // C/C++/Objective-C
     c: 'c',
-    cpp: 'cpp',
     h: 'c',
+    cpp: 'cpp',
+    cxx: 'cpp',
+    cc: 'cpp',
     hpp: 'cpp',
+    hxx: 'cpp',
+    hh: 'cpp',
+    m: 'objectivec',
+    mm: 'objectivec',
+
+    // C#/F#
     cs: 'csharp',
+    fs: 'fsharp',
+    fsx: 'fsharp',
+    fsi: 'fsharp',
+
+    // Web
+    html: 'xml',
+    htm: 'xml',
+    xhtml: 'xml',
+    xml: 'xml',
+    svg: 'xml',
+    vue: 'xml',
+    svelte: 'xml',
+    astro: 'xml',
+
+    // CSS/Styling
     css: 'css',
     scss: 'scss',
-    html: 'html',
-    xml: 'xml',
-    json: 'json',
-    yaml: 'yaml',
-    yml: 'yaml',
-    md: 'markdown',
+    sass: 'scss',
+    less: 'less',
+    styl: 'stylus',
+
+    // Shell
     sh: 'bash',
     bash: 'bash',
+    zsh: 'bash',
+    fish: 'bash',
+    ps1: 'powershell',
+    psm1: 'powershell',
+    bat: 'dos',
+    cmd: 'dos',
+
+    // Data formats
+    json: 'json',
+    jsonc: 'json',
+    json5: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    toml: 'ini',
+    ini: 'ini',
+    cfg: 'ini',
+    conf: 'ini',
+    properties: 'properties',
+
+    // Documentation
+    md: 'markdown',
+    markdown: 'markdown',
+    rst: 'plaintext',
+    txt: 'plaintext',
+    tex: 'latex',
+
+    // Database
     sql: 'sql',
+    pgsql: 'pgsql',
+    plsql: 'sql',
+
+    // Other languages
+    php: 'php',
+    swift: 'swift',
+    pl: 'perl',
+    pm: 'perl',
+    lua: 'lua',
+    r: 'r',
+    R: 'r',
+    jl: 'julia',
+    ex: 'elixir',
+    exs: 'elixir',
+    erl: 'erlang',
+    hrl: 'erlang',
+    hs: 'haskell',
+    lhs: 'haskell',
+    ml: 'ocaml',
+    mli: 'ocaml',
+    elm: 'elm',
+    dart: 'dart',
+    zig: 'zig',
+    nim: 'nim',
+    v: 'verilog',
+    sv: 'verilog',
+    vhd: 'vhdl',
+    vhdl: 'vhdl',
+    d: 'd',
+
+    // Lisp family
+    lisp: 'lisp',
+    el: 'lisp',
+    scm: 'scheme',
+    rkt: 'scheme',
+
+    // Config/DevOps
     proto: 'protobuf',
+    graphql: 'graphql',
+    gql: 'graphql',
+    tf: 'hcl',
+    hcl: 'hcl',
+    nix: 'nix',
+    dhall: 'haskell',
+
+    // Assembly
+    asm: 'x86asm',
+    s: 'x86asm',
+
+    // Misc
+    coffee: 'coffeescript',
+    diff: 'diff',
+    patch: 'diff',
+    sol: 'solidity',
+    wasm: 'wasm',
+    wat: 'wasm',
   }
   return extMap[ext]
 }
