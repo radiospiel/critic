@@ -3,15 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
-	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -45,68 +39,6 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// isWebSocketRequest checks if the request is a WebSocket upgrade request
-func isWebSocketRequest(r *http.Request) bool {
-	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
-}
-
-// proxyWebSocket proxies a WebSocket connection to the target URL
-func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL) {
-	// Connect to the target WebSocket server
-	targetHost := target.Host
-	conn, err := net.Dial("tcp", targetHost)
-	if err != nil {
-		http.Error(w, "Failed to connect to upstream", http.StatusBadGateway)
-		return
-	}
-	defer conn.Close()
-
-	// Hijack the client connection
-	hijacker, ok := w.(http.Hijacker)
-	if !ok {
-		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
-		return
-	}
-	clientConn, _, err := hijacker.Hijack()
-	if err != nil {
-		http.Error(w, "Failed to hijack connection", http.StatusInternalServerError)
-		return
-	}
-	defer clientConn.Close()
-
-	// Forward the original request to the target
-	r.URL.Scheme = "ws"
-	r.URL.Host = targetHost
-	r.Host = targetHost
-	if err := r.Write(conn); err != nil {
-		return
-	}
-
-	// Bidirectional copy
-	done := make(chan struct{}, 2)
-	go func() {
-		io.Copy(conn, clientConn)
-		done <- struct{}{}
-	}()
-	go func() {
-		io.Copy(clientConn, conn)
-		done <- struct{}{}
-	}()
-	<-done
-}
-
-// newViteProxy creates a proxy handler that handles both HTTP and WebSocket requests
-func newViteProxy(target *url.URL) http.Handler {
-	httpProxy := httputil.NewSingleHostReverseProxy(target)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isWebSocketRequest(r) {
-			proxyWebSocket(w, r, target)
-		} else {
-			httpProxy.ServeHTTP(w, r)
-		}
-	})
-}
-
 // Config holds the configuration for the API server.
 type Config struct {
 	Port      int
@@ -118,10 +50,10 @@ type Config struct {
 
 // Server implements the CriticService API.
 type Server struct {
-	config     Config
-	session    *Session
-	wsHub      *webui.Hub
-	npmProcess *exec.Cmd
+	config    Config
+	session   *Session
+	wsHub     *webui.Hub
+	devServer *webui.DevServer
 }
 
 // NewServer creates a new API server with the given configuration.
@@ -141,52 +73,6 @@ func (s *Server) GetSession() *Session {
 	return s.session
 }
 
-// startNpmDevServer starts the Vite dev server in the frontend directory.
-// Returns true if the dev server was started successfully, false if it's not available.
-func (s *Server) startNpmDevServer() bool {
-	// Find the frontend directory relative to the working directory
-	frontendDir := "src/webui/frontend"
-
-	// Check if node_modules exists
-	nodeModulesPath := frontendDir + "/node_modules"
-	if _, err := os.Stat(nodeModulesPath); os.IsNotExist(err) {
-		fmt.Println("Warning: Dev server not available (node_modules not found)")
-		fmt.Println("To enable dev mode with hot reload, run:")
-		fmt.Printf("  cd %s && npm install\n", frontendDir)
-		fmt.Println("Falling back to serving embedded files.")
-		return false
-	}
-
-	s.npmProcess = exec.Command("npm", "run", "dev")
-	s.npmProcess.Dir = frontendDir
-	s.npmProcess.Stdout = os.Stdout
-	s.npmProcess.Stderr = os.Stderr
-
-	if err := s.npmProcess.Start(); err != nil {
-		fmt.Printf("Warning: Failed to start dev server: %v\n", err)
-		fmt.Println("Falling back to serving embedded files.")
-		return false
-	}
-
-	logger.Info("Started Vite dev server (PID %d)", s.npmProcess.Process.Pid)
-	return true
-}
-
-// stopNpmDevServer stops the Vite dev server if running
-func (s *Server) stopNpmDevServer() {
-	if s.npmProcess != nil && s.npmProcess.Process != nil {
-		logger.Info("Stopping Vite dev server (PID %d)", s.npmProcess.Process.Pid)
-		// Send SIGTERM for graceful shutdown
-		if err := s.npmProcess.Process.Signal(syscall.SIGTERM); err != nil {
-			logger.Error("Failed to send SIGTERM to npm process: %v", err)
-			// Try SIGKILL as fallback
-			s.npmProcess.Process.Kill()
-		}
-		s.npmProcess.Wait()
-		logger.Info("Vite dev server stopped")
-	}
-}
-
 // Start starts the API server and blocks until it receives an error.
 func (s *Server) Start() error {
 	// Start WebSocket hub
@@ -203,26 +89,16 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /ws", webui.WebSocketHandler(s.wsHub))
 
 	// Serve React app
-	devServerStarted := false
 	if s.config.Dev {
-		// Try to start npm dev server
-		devServerStarted = s.startNpmDevServer()
-		if devServerStarted {
-			// Give Vite a moment to start
-			time.Sleep(2 * time.Second)
-
-			// Development mode: proxy to Vite dev server (including WebSocket for HMR)
-			viteURL, err := url.Parse("http://localhost:5173")
-			if err != nil {
-				s.stopNpmDevServer()
-				return fmt.Errorf("failed to parse vite URL: %w", err)
-			}
-			mux.Handle("/", newViteProxy(viteURL))
+		// Try to start Vite dev server
+		s.devServer = webui.NewDevServer("src/webui/frontend", 5173)
+		if s.devServer.Start() {
+			mux.Handle("/", s.devServer.Handler())
 			fmt.Println("Development mode: proxying to Vite dev server at http://localhost:5173")
 		}
 	}
 
-	if !devServerStarted {
+	if s.devServer == nil || !s.devServer.Started() {
 		// Production mode or dev fallback: serve embedded files
 		distFS, err := webui.DistFS()
 		if err != nil {
@@ -267,8 +143,10 @@ func (s *Server) Start() error {
 		logger.Error("HTTP server shutdown error: %v", err)
 	}
 
-	// Stop npm dev server if running
-	s.stopNpmDevServer()
+	// Stop dev server if running
+	if s.devServer != nil {
+		s.devServer.Stop()
+	}
 
 	return nil
 }
