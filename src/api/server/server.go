@@ -3,12 +3,15 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -39,6 +42,68 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(rw, r)
 		duration := time.Since(start)
 		logger.Info("%s %s %d %v", r.Method, r.URL.Path, rw.statusCode, duration)
+	})
+}
+
+// isWebSocketRequest checks if the request is a WebSocket upgrade request
+func isWebSocketRequest(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+}
+
+// proxyWebSocket proxies a WebSocket connection to the target URL
+func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL) {
+	// Connect to the target WebSocket server
+	targetHost := target.Host
+	conn, err := net.Dial("tcp", targetHost)
+	if err != nil {
+		http.Error(w, "Failed to connect to upstream", http.StatusBadGateway)
+		return
+	}
+	defer conn.Close()
+
+	// Hijack the client connection
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
+		return
+	}
+	clientConn, _, err := hijacker.Hijack()
+	if err != nil {
+		http.Error(w, "Failed to hijack connection", http.StatusInternalServerError)
+		return
+	}
+	defer clientConn.Close()
+
+	// Forward the original request to the target
+	r.URL.Scheme = "ws"
+	r.URL.Host = targetHost
+	r.Host = targetHost
+	if err := r.Write(conn); err != nil {
+		return
+	}
+
+	// Bidirectional copy
+	done := make(chan struct{}, 2)
+	go func() {
+		io.Copy(conn, clientConn)
+		done <- struct{}{}
+	}()
+	go func() {
+		io.Copy(clientConn, conn)
+		done <- struct{}{}
+	}()
+	<-done
+}
+
+// newViteProxy creates a proxy handler that handles both HTTP and WebSocket requests
+func newViteProxy(target *url.URL) http.Handler {
+	httpProxy := httputil.NewSingleHostReverseProxy(target)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isWebSocketRequest(r) {
+			proxyWebSocket(w, r, target)
+		} else {
+			httpProxy.ServeHTTP(w, r)
+		}
 	})
 }
 
@@ -146,14 +211,13 @@ func (s *Server) Start() error {
 			// Give Vite a moment to start
 			time.Sleep(2 * time.Second)
 
-			// Development mode: proxy to Vite dev server
+			// Development mode: proxy to Vite dev server (including WebSocket for HMR)
 			viteURL, err := url.Parse("http://localhost:5173")
 			if err != nil {
 				s.stopNpmDevServer()
 				return fmt.Errorf("failed to parse vite URL: %w", err)
 			}
-			proxy := httputil.NewSingleHostReverseProxy(viteURL)
-			mux.Handle("/", proxy)
+			mux.Handle("/", newViteProxy(viteURL))
 			fmt.Println("Development mode: proxying to Vite dev server at http://localhost:5173")
 		}
 	}
