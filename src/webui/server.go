@@ -96,7 +96,8 @@ func (s *Server) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to create dist fs: %w", err)
 	}
-	mux.Handle("GET /", http.FileServer(http.FS(distFS)))
+	staticHandler := http.FileServer(http.FS(distFS))
+	mux.Handle("/", staticHandler)
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	logger.Info("Starting web UI server on http://localhost%s", addr)
