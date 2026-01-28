@@ -147,17 +147,43 @@ func (x *Diff) GetFiles() []*FileDiff {
 	return nil
 }
 
+// FileStatus represents the status of a file in a diff.
+type FileStatus int32
+
+const (
+	FileStatus_FILE_STATUS_UNSPECIFIED FileStatus = 0
+	FileStatus_FILE_STATUS_MODIFIED    FileStatus = 1
+	FileStatus_FILE_STATUS_NEW         FileStatus = 2
+	FileStatus_FILE_STATUS_DELETED     FileStatus = 3
+	FileStatus_FILE_STATUS_RENAMED     FileStatus = 4
+)
+
+func (x FileStatus) String() string {
+	switch x {
+	case FileStatus_FILE_STATUS_UNSPECIFIED:
+		return "FILE_STATUS_UNSPECIFIED"
+	case FileStatus_FILE_STATUS_MODIFIED:
+		return "FILE_STATUS_MODIFIED"
+	case FileStatus_FILE_STATUS_NEW:
+		return "FILE_STATUS_NEW"
+	case FileStatus_FILE_STATUS_DELETED:
+		return "FILE_STATUS_DELETED"
+	case FileStatus_FILE_STATUS_RENAMED:
+		return "FILE_STATUS_RENAMED"
+	default:
+		return "FILE_STATUS_UNSPECIFIED"
+	}
+}
+
 // FileDiff represents changes to a single file.
 type FileDiff struct {
-	OldPath   string  `json:"old_path,omitempty"`
-	NewPath   string  `json:"new_path,omitempty"`
-	OldMode   string  `json:"old_mode,omitempty"`
-	NewMode   string  `json:"new_mode,omitempty"`
-	IsNew     bool    `json:"is_new,omitempty"`
-	IsDeleted bool    `json:"is_deleted,omitempty"`
-	IsRenamed bool    `json:"is_renamed,omitempty"`
-	IsBinary  bool    `json:"is_binary,omitempty"`
-	Hunks     []*Hunk `json:"hunks,omitempty"`
+	OldPath     string     `json:"old_path,omitempty"`
+	NewPath     string     `json:"new_path,omitempty"`
+	FileModeOld string     `json:"file_mode_old,omitempty"`
+	FileModeNew string     `json:"file_mode_new,omitempty"`
+	Status      FileStatus `json:"status,omitempty"`
+	IsBinary    bool       `json:"is_binary,omitempty"`
+	Hunks       []*Hunk    `json:"hunks,omitempty"`
 }
 
 func (*FileDiff) ProtoMessage() {}
@@ -176,39 +202,25 @@ func (x *FileDiff) GetNewPath() string {
 	return ""
 }
 
-func (x *FileDiff) GetOldMode() string {
+func (x *FileDiff) GetFileModeOld() string {
 	if x != nil {
-		return x.OldMode
+		return x.FileModeOld
 	}
 	return ""
 }
 
-func (x *FileDiff) GetNewMode() string {
+func (x *FileDiff) GetFileModeNew() string {
 	if x != nil {
-		return x.NewMode
+		return x.FileModeNew
 	}
 	return ""
 }
 
-func (x *FileDiff) GetIsNew() bool {
+func (x *FileDiff) GetStatus() FileStatus {
 	if x != nil {
-		return x.IsNew
+		return x.Status
 	}
-	return false
-}
-
-func (x *FileDiff) GetIsDeleted() bool {
-	if x != nil {
-		return x.IsDeleted
-	}
-	return false
-}
-
-func (x *FileDiff) GetIsRenamed() bool {
-	if x != nil {
-		return x.IsRenamed
-	}
-	return false
+	return FileStatus_FILE_STATUS_UNSPECIFIED
 }
 
 func (x *FileDiff) GetIsBinary() bool {
@@ -309,22 +321,46 @@ func (x *HunkStats) GetDeleted() int32 {
 	return 0
 }
 
+// LineType represents the type of a line in a diff.
+type LineType int32
+
+const (
+	LineType_LINE_TYPE_UNSPECIFIED LineType = 0
+	LineType_LINE_TYPE_CONTEXT     LineType = 1
+	LineType_LINE_TYPE_ADDED       LineType = 2
+	LineType_LINE_TYPE_DELETED     LineType = 3
+)
+
+func (x LineType) String() string {
+	switch x {
+	case LineType_LINE_TYPE_UNSPECIFIED:
+		return "LINE_TYPE_UNSPECIFIED"
+	case LineType_LINE_TYPE_CONTEXT:
+		return "LINE_TYPE_CONTEXT"
+	case LineType_LINE_TYPE_ADDED:
+		return "LINE_TYPE_ADDED"
+	case LineType_LINE_TYPE_DELETED:
+		return "LINE_TYPE_DELETED"
+	default:
+		return "LINE_TYPE_UNSPECIFIED"
+	}
+}
+
 // Line represents a single line in a diff hunk.
 type Line struct {
-	// Type is the line type: "context", "added", or "deleted".
-	Type    string `json:"type,omitempty"`
-	Content string `json:"content,omitempty"`
-	OldNum  int32  `json:"old_num,omitempty"`
-	NewNum  int32  `json:"new_num,omitempty"`
+	Type      LineType `json:"type,omitempty"`
+	Content   string   `json:"content,omitempty"`
+	LineNoOld int32    `json:"line_no_old,omitempty"`
+	LineNoNew int32    `json:"line_no_new,omitempty"`
 }
 
 func (*Line) ProtoMessage() {}
 
-func (x *Line) GetType() string {
+func (x *Line) GetType() LineType {
 	if x != nil {
 		return x.Type
 	}
-	return ""
+	return LineType_LINE_TYPE_UNSPECIFIED
 }
 
 func (x *Line) GetContent() string {
@@ -334,16 +370,16 @@ func (x *Line) GetContent() string {
 	return ""
 }
 
-func (x *Line) GetOldNum() int32 {
+func (x *Line) GetLineNoOld() int32 {
 	if x != nil {
-		return x.OldNum
+		return x.LineNoOld
 	}
 	return 0
 }
 
-func (x *Line) GetNewNum() int32 {
+func (x *Line) GetLineNoNew() int32 {
 	if x != nil {
-		return x.NewNum
+		return x.LineNoNew
 	}
 	return 0
 }

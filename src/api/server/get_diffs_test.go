@@ -53,7 +53,7 @@ func TestConvertDiff(t *testing.T) {
 	file := result.Files[0]
 	assert.Equals(t, file.OldPath, "old.go", "old path should match")
 	assert.Equals(t, file.NewPath, "new.go", "new path should match")
-	assert.Equals(t, file.IsRenamed, true, "is_renamed should be true")
+	assert.Equals(t, file.Status, api.FileStatus_FILE_STATUS_RENAMED, "status should be RENAMED")
 	assert.Equals(t, len(file.Hunks), 1, "should have 1 hunk")
 
 	hunk := file.Hunks[0]
@@ -67,10 +67,10 @@ func TestConvertDiff(t *testing.T) {
 	assert.Equals(t, len(hunk.Lines), 4, "should have 4 lines")
 
 	// Check line types
-	assert.Equals(t, hunk.Lines[0].Type, "context", "first line should be context")
-	assert.Equals(t, hunk.Lines[1].Type, "deleted", "second line should be deleted")
-	assert.Equals(t, hunk.Lines[2].Type, "added", "third line should be added")
-	assert.Equals(t, hunk.Lines[3].Type, "added", "fourth line should be added")
+	assert.Equals(t, hunk.Lines[0].Type, api.LineType_LINE_TYPE_CONTEXT, "first line should be context")
+	assert.Equals(t, hunk.Lines[1].Type, api.LineType_LINE_TYPE_DELETED, "second line should be deleted")
+	assert.Equals(t, hunk.Lines[2].Type, api.LineType_LINE_TYPE_ADDED, "third line should be added")
+	assert.Equals(t, hunk.Lines[3].Type, api.LineType_LINE_TYPE_ADDED, "fourth line should be added")
 }
 
 func TestConvertFileDiff(t *testing.T) {
@@ -78,7 +78,7 @@ func TestConvertFileDiff(t *testing.T) {
 	result := convertFileDiff(nil)
 	assert.Nil(t, result, "nil file diff should return nil")
 
-	// Test file diff with all fields
+	// Test file diff with all fields - renamed file
 	fd := &types.FileDiff{
 		OldPath:   "path/to/old.go",
 		NewPath:   "path/to/new.go",
@@ -94,12 +94,25 @@ func TestConvertFileDiff(t *testing.T) {
 	assert.NotNil(t, result, "result should not be nil")
 	assert.Equals(t, result.OldPath, "path/to/old.go", "old path should match")
 	assert.Equals(t, result.NewPath, "path/to/new.go", "new path should match")
-	assert.Equals(t, result.OldMode, "100644", "old mode should match")
-	assert.Equals(t, result.NewMode, "100755", "new mode should match")
-	assert.Equals(t, result.IsNew, false, "is_new should be false")
-	assert.Equals(t, result.IsDeleted, false, "is_deleted should be false")
-	assert.Equals(t, result.IsRenamed, true, "is_renamed should be true")
+	assert.Equals(t, result.FileModeOld, "100644", "file_mode_old should match")
+	assert.Equals(t, result.FileModeNew, "100755", "file_mode_new should match")
+	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_RENAMED, "status should be RENAMED")
 	assert.Equals(t, result.IsBinary, false, "is_binary should be false")
+
+	// Test new file
+	fd = &types.FileDiff{IsNew: true}
+	result = convertFileDiff(fd)
+	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_NEW, "status should be NEW")
+
+	// Test deleted file
+	fd = &types.FileDiff{IsDeleted: true}
+	result = convertFileDiff(fd)
+	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_DELETED, "status should be DELETED")
+
+	// Test modified file (default)
+	fd = &types.FileDiff{}
+	result = convertFileDiff(fd)
+	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_MODIFIED, "status should be MODIFIED")
 }
 
 func TestConvertHunk(t *testing.T) {
@@ -136,20 +149,20 @@ func TestConvertLine(t *testing.T) {
 	// Test context line
 	l := &types.Line{Type: types.LineContext, Content: "context", OldNum: 5, NewNum: 5}
 	result = convertLine(l)
-	assert.Equals(t, result.Type, "context", "type should be context")
+	assert.Equals(t, result.Type, api.LineType_LINE_TYPE_CONTEXT, "type should be context")
 	assert.Equals(t, result.Content, "context", "content should match")
-	assert.Equals(t, result.OldNum, int32(5), "old_num should be 5")
-	assert.Equals(t, result.NewNum, int32(5), "new_num should be 5")
+	assert.Equals(t, result.LineNoOld, int32(5), "line_no_old should be 5")
+	assert.Equals(t, result.LineNoNew, int32(5), "line_no_new should be 5")
 
 	// Test added line
 	l = &types.Line{Type: types.LineAdded, Content: "added", OldNum: 0, NewNum: 6}
 	result = convertLine(l)
-	assert.Equals(t, result.Type, "added", "type should be added")
+	assert.Equals(t, result.Type, api.LineType_LINE_TYPE_ADDED, "type should be added")
 
 	// Test deleted line
 	l = &types.Line{Type: types.LineDeleted, Content: "deleted", OldNum: 6, NewNum: 0}
 	result = convertLine(l)
-	assert.Equals(t, result.Type, "deleted", "type should be deleted")
+	assert.Equals(t, result.Type, api.LineType_LINE_TYPE_DELETED, "type should be deleted")
 }
 
 func TestGetDiffsResponseTypes(t *testing.T) {
@@ -174,4 +187,27 @@ func TestGetDiffsResponseTypes(t *testing.T) {
 	var nilResp *api.GetDiffsResponse
 	assert.Equals(t, nilResp.GetState(), "", "nil receiver should return empty string")
 	assert.Nil(t, nilResp.GetDiff(), "nil receiver should return nil diff")
+}
+
+func TestFileStatusEnum(t *testing.T) {
+	// Test FileStatus enum values
+	assert.Equals(t, api.FileStatus_FILE_STATUS_UNSPECIFIED, api.FileStatus(0), "UNSPECIFIED should be 0")
+	assert.Equals(t, api.FileStatus_FILE_STATUS_MODIFIED, api.FileStatus(1), "MODIFIED should be 1")
+	assert.Equals(t, api.FileStatus_FILE_STATUS_NEW, api.FileStatus(2), "NEW should be 2")
+	assert.Equals(t, api.FileStatus_FILE_STATUS_DELETED, api.FileStatus(3), "DELETED should be 3")
+	assert.Equals(t, api.FileStatus_FILE_STATUS_RENAMED, api.FileStatus(4), "RENAMED should be 4")
+
+	// Test String() method
+	assert.Equals(t, api.FileStatus_FILE_STATUS_MODIFIED.String(), "FILE_STATUS_MODIFIED", "String() should return correct name")
+}
+
+func TestLineTypeEnum(t *testing.T) {
+	// Test LineType enum values
+	assert.Equals(t, api.LineType_LINE_TYPE_UNSPECIFIED, api.LineType(0), "UNSPECIFIED should be 0")
+	assert.Equals(t, api.LineType_LINE_TYPE_CONTEXT, api.LineType(1), "CONTEXT should be 1")
+	assert.Equals(t, api.LineType_LINE_TYPE_ADDED, api.LineType(2), "ADDED should be 2")
+	assert.Equals(t, api.LineType_LINE_TYPE_DELETED, api.LineType(3), "DELETED should be 3")
+
+	// Test String() method
+	assert.Equals(t, api.LineType_LINE_TYPE_CONTEXT.String(), "LINE_TYPE_CONTEXT", "String() should return correct name")
 }

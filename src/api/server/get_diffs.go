@@ -51,16 +51,24 @@ func convertFileDiff(f *types.FileDiff) *api.FileDiff {
 		hunks[i] = convertHunk(h)
 	}
 
+	status := api.FileStatus_FILE_STATUS_MODIFIED
+	switch {
+	case f.IsNew:
+		status = api.FileStatus_FILE_STATUS_NEW
+	case f.IsDeleted:
+		status = api.FileStatus_FILE_STATUS_DELETED
+	case f.IsRenamed:
+		status = api.FileStatus_FILE_STATUS_RENAMED
+	}
+
 	return &api.FileDiff{
-		OldPath:   f.OldPath,
-		NewPath:   f.NewPath,
-		OldMode:   f.OldMode,
-		NewMode:   f.NewMode,
-		IsNew:     f.IsNew,
-		IsDeleted: f.IsDeleted,
-		IsRenamed: f.IsRenamed,
-		IsBinary:  f.IsBinary,
-		Hunks:     hunks,
+		OldPath:     f.OldPath,
+		NewPath:     f.NewPath,
+		FileModeOld: f.OldMode,
+		FileModeNew: f.NewMode,
+		Status:      status,
+		IsBinary:    f.IsBinary,
+		Hunks:       hunks,
 	}
 }
 
@@ -95,22 +103,22 @@ func convertLine(l *types.Line) *api.Line {
 		return nil
 	}
 
-	var lineType string
+	var lineType api.LineType
 	switch l.Type {
 	case types.LineContext:
-		lineType = "context"
+		lineType = api.LineType_LINE_TYPE_CONTEXT
 	case types.LineAdded:
-		lineType = "added"
+		lineType = api.LineType_LINE_TYPE_ADDED
 	case types.LineDeleted:
-		lineType = "deleted"
+		lineType = api.LineType_LINE_TYPE_DELETED
 	default:
-		lineType = "unknown"
+		lineType = api.LineType_LINE_TYPE_UNSPECIFIED
 	}
 
 	return &api.Line{
-		Type:    lineType,
-		Content: l.Content,
-		OldNum:  int32(l.OldNum),
-		NewNum:  int32(l.NewNum),
+		Type:      lineType,
+		Content:   l.Content,
+		LineNoOld: int32(l.OldNum),
+		LineNoNew: int32(l.NewNum),
 	}
 }

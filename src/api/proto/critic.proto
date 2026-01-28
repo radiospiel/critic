@@ -37,17 +37,24 @@ message Diff {
   repeated FileDiff files = 1;
 }
 
+// FileStatus represents the status of a file in a diff.
+enum FileStatus {
+  FILE_STATUS_UNSPECIFIED = 0;
+  FILE_STATUS_MODIFIED = 1;
+  FILE_STATUS_NEW = 2;
+  FILE_STATUS_DELETED = 3;
+  FILE_STATUS_RENAMED = 4;
+}
+
 // FileDiff represents changes to a single file.
 message FileDiff {
   string old_path = 1;
   string new_path = 2;
-  string old_mode = 3;
-  string new_mode = 4;
-  bool is_new = 5;
-  bool is_deleted = 6;
-  bool is_renamed = 7;
-  bool is_binary = 8;
-  repeated Hunk hunks = 9;
+  string file_mode_old = 3;
+  string file_mode_new = 4;
+  FileStatus status = 5;
+  bool is_binary = 6;
+  repeated Hunk hunks = 7;
 }
 
 // Hunk represents a chunk of changes within a file.
@@ -67,11 +74,18 @@ message HunkStats {
   int32 deleted = 2;
 }
 
+// LineType represents the type of a line in a diff.
+enum LineType {
+  LINE_TYPE_UNSPECIFIED = 0;
+  LINE_TYPE_CONTEXT = 1;
+  LINE_TYPE_ADDED = 2;
+  LINE_TYPE_DELETED = 3;
+}
+
 // Line represents a single line in a diff hunk.
 message Line {
-  // type is the line type: "context", "added", or "deleted".
-  string type = 1;
+  LineType type = 1;
   string content = 2;
-  int32 old_num = 3;
-  int32 new_num = 4;
+  int32 line_no_old = 3;
+  int32 line_no_new = 4;
 }
