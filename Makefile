@@ -42,10 +42,11 @@ clean:
 install-deps: .install-deps.mtime
 
 # Generate .pb.go and .connect.go from .proto files
+# Note: connect-go plugin creates an 'apiconnect' subdirectory automatically
 src/api/%.pb.go src/api/apiconnect/%.connect.go: $(PROTO_DIR)/%.proto
 	protoc -I $(PROTO_DIR) \
 		--go_out=src/api --go_opt=paths=source_relative \
-		--connect-go_out=src/api/apiconnect --connect-go_opt=paths=source_relative \
+		--connect-go_out=src/api --connect-go_opt=paths=source_relative \
 		$<
 
 # Convenience target to regenerate all proto files

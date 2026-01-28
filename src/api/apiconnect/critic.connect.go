@@ -36,8 +36,7 @@ const (
 	// CriticServiceGetLastChangeProcedure is the fully-qualified name of the CriticService's
 	// GetLastChange RPC.
 	CriticServiceGetLastChangeProcedure = "/critic.v1.CriticService/GetLastChange"
-	// CriticServiceGetDiffsProcedure is the fully-qualified name of the CriticService's
-	// GetDiffs RPC.
+	// CriticServiceGetDiffsProcedure is the fully-qualified name of the CriticService's GetDiffs RPC.
 	CriticServiceGetDiffsProcedure = "/critic.v1.CriticService/GetDiffs"
 )
 
@@ -58,15 +57,18 @@ type CriticServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) CriticServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
+	criticServiceMethods := api.File_critic_proto.Services().ByName("CriticService").Methods()
 	return &criticServiceClient{
 		getLastChange: connect.NewClient[api.GetLastChangeRequest, api.GetLastChangeResponse](
 			httpClient,
 			baseURL+CriticServiceGetLastChangeProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("GetLastChange")),
 			connect.WithClientOptions(opts...),
 		),
 		getDiffs: connect.NewClient[api.GetDiffsRequest, api.GetDiffsResponse](
 			httpClient,
 			baseURL+CriticServiceGetDiffsProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("GetDiffs")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -102,14 +104,17 @@ type CriticServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	criticServiceMethods := api.File_critic_proto.Services().ByName("CriticService").Methods()
 	criticServiceGetLastChangeHandler := connect.NewUnaryHandler(
 		CriticServiceGetLastChangeProcedure,
 		svc.GetLastChange,
+		connect.WithSchema(criticServiceMethods.ByName("GetLastChange")),
 		connect.WithHandlerOptions(opts...),
 	)
 	criticServiceGetDiffsHandler := connect.NewUnaryHandler(
 		CriticServiceGetDiffsProcedure,
 		svc.GetDiffs,
+		connect.WithSchema(criticServiceMethods.ByName("GetDiffs")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/critic.v1.CriticService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
