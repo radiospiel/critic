@@ -6,9 +6,11 @@ import (
 	"io/fs"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/simple-go/preconditions"
+	"github.com/radiospiel/critic/src/api/apiconnect"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
@@ -27,11 +29,12 @@ type Config struct {
 
 // Server represents the web UI server
 type Server struct {
-	config    Config
-	messaging critic.Messaging
-	hub       *Hub // WebSocket hub
-	diff      *types.Diff
-	diffMu    sync.RWMutex
+	config     Config
+	messaging  critic.Messaging
+	hub        *Hub // WebSocket hub
+	diff       *types.Diff
+	diffMu     sync.RWMutex
+	lastChange time.Time
 }
 
 // NewServer creates a new web UI server
@@ -72,7 +75,11 @@ func (s *Server) Start() error {
 	// Set up routes
 	mux := http.NewServeMux()
 
-	// API endpoints (JSON)
+	// Connect RPC API (proto-based)
+	path, handler := apiconnect.NewCriticServiceHandler(s)
+	mux.Handle(path, handler)
+
+	// Legacy REST API endpoints (JSON)
 	mux.HandleFunc("GET /api/files", s.handleFileList)
 	mux.HandleFunc("GET /api/diff/{path...}", s.handleDiff)
 	mux.HandleFunc("GET /api/conversations/{path...}", s.handleConversations)

@@ -1,23 +1,49 @@
 import { useEffect, useState } from 'react'
+import { criticClient } from '../api/client'
+import { FileDiff, FileStatus } from '../gen/critic_pb'
+
+interface FileInfo {
+  path: string
+  status: FileStatus
+}
 
 interface FileListProps {
   selectedFile: string | null
   onSelectFile: (file: string) => void
 }
 
+function getFilePath(file: FileDiff): string {
+  return file.status === FileStatus.DELETED ? file.oldPath : file.newPath
+}
+
+function getStatusLabel(status: FileStatus): string {
+  switch (status) {
+    case FileStatus.NEW:
+      return 'A'
+    case FileStatus.DELETED:
+      return 'D'
+    case FileStatus.RENAMED:
+      return 'R'
+    case FileStatus.MODIFIED:
+    default:
+      return 'M'
+  }
+}
+
 function FileList({ selectedFile, onSelectFile }: FileListProps) {
-  const [files, setFiles] = useState<string[]>([])
+  const [files, setFiles] = useState<FileInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/files')
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch files')
-        return res.json()
-      })
-      .then((data) => {
-        setFiles(data.files || [])
+    criticClient
+      .getDiffs({})
+      .then((response) => {
+        const fileInfos: FileInfo[] = (response.diff?.files || []).map((f) => ({
+          path: getFilePath(f),
+          status: f.status,
+        }))
+        setFiles(fileInfos)
         setLoading(false)
       })
       .catch((err) => {
@@ -50,12 +76,15 @@ function FileList({ selectedFile, onSelectFile }: FileListProps) {
       <ul className="file-list">
         {files.map((file) => (
           <li
-            key={file}
-            className={`file-item ${selectedFile === file ? 'selected' : ''}`}
-            onClick={() => onSelectFile(file)}
-            title={file}
+            key={file.path}
+            className={`file-item ${selectedFile === file.path ? 'selected' : ''}`}
+            onClick={() => onSelectFile(file.path)}
+            title={file.path}
           >
-            {file}
+            <span className={`file-status status-${getStatusLabel(file.status).toLowerCase()}`}>
+              {getStatusLabel(file.status)}
+            </span>
+            <span className="file-path">{file.path}</span>
           </li>
         ))}
         {files.length === 0 && (
