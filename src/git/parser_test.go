@@ -445,3 +445,86 @@ func TestSplitLines(t *testing.T) {
 		})
 	}
 }
+
+func TestParseDiffNameStatus_Empty(t *testing.T) {
+	actual, err := ParseDiffNameStatus("")
+	assert.NoError(t, err)
+	assert.Equals(t, len(actual.Files), 0, "empty output should have no files")
+}
+
+func TestParseDiffNameStatus_ModifiedFile(t *testing.T) {
+	output := "M\tpath/to/file.go"
+	actual, err := ParseDiffNameStatus(output)
+	assert.NoError(t, err)
+	assert.Equals(t, len(actual.Files), 1, "should have 1 file")
+	assert.Equals(t, actual.Files[0].OldPath, "path/to/file.go", "old path should match")
+	assert.Equals(t, actual.Files[0].NewPath, "path/to/file.go", "new path should match")
+	assert.Equals(t, actual.Files[0].IsNew, false, "should not be new")
+	assert.Equals(t, actual.Files[0].IsDeleted, false, "should not be deleted")
+	assert.Equals(t, actual.Files[0].IsRenamed, false, "should not be renamed")
+	assert.Equals(t, len(actual.Files[0].Hunks), 0, "hunks should be empty")
+}
+
+func TestParseDiffNameStatus_AddedFile(t *testing.T) {
+	output := "A\tnew_file.go"
+	actual, err := ParseDiffNameStatus(output)
+	assert.NoError(t, err)
+	assert.Equals(t, actual.Files[0].IsNew, true, "should be new")
+	assert.Equals(t, actual.Files[0].NewPath, "new_file.go", "new path should match")
+}
+
+func TestParseDiffNameStatus_DeletedFile(t *testing.T) {
+	output := "D\told_file.go"
+	actual, err := ParseDiffNameStatus(output)
+	assert.NoError(t, err)
+	assert.Equals(t, actual.Files[0].IsDeleted, true, "should be deleted")
+	assert.Equals(t, actual.Files[0].OldPath, "old_file.go", "old path should match")
+}
+
+func TestParseDiffNameStatus_RenamedFile(t *testing.T) {
+	output := "R100\told_name.go\tnew_name.go"
+	actual, err := ParseDiffNameStatus(output)
+	assert.NoError(t, err)
+	assert.Equals(t, actual.Files[0].IsRenamed, true, "should be renamed")
+	assert.Equals(t, actual.Files[0].OldPath, "old_name.go", "old path should match")
+	assert.Equals(t, actual.Files[0].NewPath, "new_name.go", "new path should match")
+}
+
+func TestParseDiffNameStatus_MultipleFiles(t *testing.T) {
+	output := "M\tfile1.go\nA\tfile2.go\nD\tfile3.go"
+	actual, err := ParseDiffNameStatus(output)
+	assert.NoError(t, err)
+	assert.Equals(t, len(actual.Files), 3, "should have 3 files")
+
+	// First file is modified
+	assert.Equals(t, actual.Files[0].NewPath, "file1.go", "first file path")
+	assert.Equals(t, actual.Files[0].IsNew, false, "first file not new")
+
+	// Second file is added
+	assert.Equals(t, actual.Files[1].NewPath, "file2.go", "second file path")
+	assert.Equals(t, actual.Files[1].IsNew, true, "second file is new")
+
+	// Third file is deleted
+	assert.Equals(t, actual.Files[2].OldPath, "file3.go", "third file path")
+	assert.Equals(t, actual.Files[2].IsDeleted, true, "third file is deleted")
+}
+
+func TestParseDiffNameStatus_TypeChange(t *testing.T) {
+	output := "T\tchanged_type.go"
+	actual, err := ParseDiffNameStatus(output)
+	assert.NoError(t, err)
+	assert.Equals(t, len(actual.Files), 1, "should have 1 file")
+	// T status is treated like M (modified)
+	assert.Equals(t, actual.Files[0].IsNew, false, "should not be new")
+	assert.Equals(t, actual.Files[0].IsDeleted, false, "should not be deleted")
+}
+
+func TestParseDiffNameStatus_CopiedFile(t *testing.T) {
+	output := "C100\tsource.go\tdest.go"
+	actual, err := ParseDiffNameStatus(output)
+	assert.NoError(t, err)
+	assert.Equals(t, actual.Files[0].OldPath, "source.go", "source path should match")
+	assert.Equals(t, actual.Files[0].NewPath, "dest.go", "dest path should match")
+	// Note: Copy status doesn't set IsRenamed
+	assert.Equals(t, actual.Files[0].IsRenamed, false, "copy should not be marked as renamed")
+}

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/radiospiel/critic/simple-go/tasks"
@@ -75,11 +76,31 @@ func (s *Session) GetCurrentBase() string {
 	return s.currentBase
 }
 
-// GetDiff returns the current diff
-func (s *Session) GetDiff() *types.Diff {
+// GetDiffSummary returns the current diff summary (file list without hunks)
+func (s *Session) GetDiffSummary() *types.Diff {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.diff
+}
+
+// GetFileDiff returns the full diff for a specific file path.
+// It loads the diff on-demand using git.GetDiffBetween.
+func (s *Session) GetFileDiff(path string) *types.FileDiff {
+	s.mu.RLock()
+	currentBase := s.currentBase
+	s.mu.RUnlock()
+
+	if currentBase == "" {
+		return nil
+	}
+
+	// Load the full diff for the specific file
+	diff, err := git.GetDiffBetween(currentBase, "current", []string{path})
+	if err != nil || diff == nil || len(diff.Files) == 0 {
+		return nil
+	}
+
+	return diff.Files[0]
 }
 
 // GetArgs returns the DiffArgs
@@ -108,7 +129,7 @@ func (s *Session) SetRefs(base string) error {
 	// Get paths from args
 	args := s.GetArgs()
 
-	// Start background task to load diff
+	// Start background task to load diff summary
 	task, err := tasks.RunExclusively("api-session-diff", func() diffResult {
 		// Resolve the base ref to a commit SHA
 		resolvedBase, err := git.ResolveRef(base)
@@ -116,8 +137,8 @@ func (s *Session) SetRefs(base string) error {
 			return diffResult{err: err}
 		}
 
-		// Run git diff for all files (passing nil paths gets all files)
-		diff, err := git.GetDiffBetween(resolvedBase, "current", args.Paths)
+		// Run git diff --name-status for file summary (no hunks)
+		diff, err := git.GetDiffNamesBetween(resolvedBase, "current")
 		if err != nil {
 			return diffResult{err: err}
 		}
@@ -125,6 +146,11 @@ func (s *Session) SetRefs(base string) error {
 		// Filter by extensions if specified
 		if len(args.Extensions) > 0 {
 			diff = filterDiffByExtensions(diff, args.Extensions)
+		}
+
+		// Filter by paths if specified
+		if len(args.Paths) > 0 {
+			diff = filterDiffByPaths(diff, args.Paths)
 		}
 
 		return diffResult{diff: diff}
@@ -187,6 +213,31 @@ func filterDiffByExtensions(diff *types.Diff, extensions []string) *types.Diff {
 		path := file.GetPath()
 		for ext := range extMap {
 			if len(path) >= len(ext) && path[len(path)-len(ext):] == ext {
+				filtered.Files = append(filtered.Files, file)
+				break
+			}
+		}
+	}
+
+	return filtered
+}
+
+// filterDiffByPaths filters the diff files to only include files that match
+// any of the specified path patterns.
+func filterDiffByPaths(diff *types.Diff, paths []string) *types.Diff {
+	if diff == nil || len(paths) == 0 {
+		return diff
+	}
+
+	filtered := &types.Diff{
+		Files: make([]*types.FileDiff, 0, len(diff.Files)),
+	}
+
+	for _, file := range diff.Files {
+		filePath := file.GetPath()
+		for _, pattern := range paths {
+			// Simple prefix matching for now
+			if strings.HasPrefix(filePath, pattern) || filePath == pattern {
 				filtered.Files = append(filtered.Files, file)
 				break
 			}

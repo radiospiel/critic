@@ -184,3 +184,42 @@ func HasRef(ref string) bool {
 	_, err := ResolveRef(ref)
 	return err == nil
 }
+
+// GetDiffNamesBetween returns a diff summary (file metadata only, no hunks) between a base commit and a target.
+// base is a commit SHA, target is either "current" for working directory or a commit SHA.
+// This is more efficient than GetDiffBetween when you only need to know which files changed.
+func GetDiffNamesBetween(base, target string) (*ctypes.Diff, error) {
+	// Validate base commit
+	if !validCommitHash.MatchString(base) {
+		return nil, fmt.Errorf("invalid base commit SHA: %s", base)
+	}
+
+	// Build git diff --name-status command
+	var args []string
+	if target == "current" {
+		// Compare base to working directory
+		args = []string{"diff", "--name-status", base}
+	} else {
+		// Validate target commit
+		if !validCommitHash.MatchString(target) {
+			return nil, fmt.Errorf("invalid target commit SHA: %s", target)
+		}
+		// Compare base to target commit
+		args = []string{"diff", "--name-status", base + ".." + target}
+	}
+	args = append(args, diffWhitespaceOpts...)
+
+	cmd := exec.Command("git", args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run git diff --name-status: %w", err)
+	}
+
+	// Parse the name-status output
+	diff, err := ParseDiffNameStatus(string(output))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse diff name-status: %w", err)
+	}
+
+	return diff, nil
+}

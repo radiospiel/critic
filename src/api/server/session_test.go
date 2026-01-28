@@ -19,7 +19,7 @@ func TestNewSession(t *testing.T) {
 	assert.NotNil(t, session, "session should not be nil")
 	assert.Equals(t, session.GetState(), StateReady, "initial state should be READY")
 	assert.Equals(t, session.GetCurrentBase(), "", "initial current base should be empty")
-	assert.Nil(t, session.GetDiff(), "initial diff should be nil")
+	assert.Nil(t, session.GetDiffSummary(), "initial diff should be nil")
 }
 
 func TestSessionGetArgs(t *testing.T) {
@@ -117,6 +117,44 @@ func TestDiffArgsWithoutCurrentBase(t *testing.T) {
 	assert.Equals(t, len(args.Extensions), 0, "should have 0 extensions")
 }
 
+func TestFilterDiffByPaths(t *testing.T) {
+	diff := &types.Diff{
+		Files: []*types.FileDiff{
+			{NewPath: "src/main.go", OldPath: "src/main.go"},
+			{NewPath: "src/lib/util.go", OldPath: "src/lib/util.go"},
+			{NewPath: "tests/main_test.go", OldPath: "tests/main_test.go"},
+			{NewPath: "readme.md", OldPath: "readme.md"},
+		},
+	}
+
+	// Filter for src/ prefix
+	filtered := filterDiffByPaths(diff, []string{"src/"})
+	assert.Equals(t, len(filtered.Files), 2, "should have 2 files with src/ prefix")
+	assert.Equals(t, filtered.Files[0].NewPath, "src/main.go", "first file should be src/main.go")
+	assert.Equals(t, filtered.Files[1].NewPath, "src/lib/util.go", "second file should be src/lib/util.go")
+
+	// Filter for multiple prefixes
+	filtered = filterDiffByPaths(diff, []string{"src/", "tests/"})
+	assert.Equals(t, len(filtered.Files), 3, "should have 3 files")
+
+	// Exact match
+	filtered = filterDiffByPaths(diff, []string{"readme.md"})
+	assert.Equals(t, len(filtered.Files), 1, "should have 1 file")
+	assert.Equals(t, filtered.Files[0].NewPath, "readme.md", "file should be readme.md")
+
+	// No paths - return all
+	filtered = filterDiffByPaths(diff, nil)
+	assert.Equals(t, len(filtered.Files), 4, "should have all 4 files")
+
+	// Empty paths slice - return all
+	filtered = filterDiffByPaths(diff, []string{})
+	assert.Equals(t, len(filtered.Files), 4, "should have all 4 files")
+
+	// Nil diff
+	filtered = filterDiffByPaths(nil, []string{"src/"})
+	assert.Nil(t, filtered, "nil diff should return nil")
+}
+
 func TestSessionConcurrentAccess(t *testing.T) {
 	session := NewSession("/test/root", &critic.DummyMessaging{}, DiffArgs{
 		Bases: []string{"main"},
@@ -128,7 +166,7 @@ func TestSessionConcurrentAccess(t *testing.T) {
 		go func() {
 			_ = session.GetState()
 			_ = session.GetCurrentBase()
-			_ = session.GetDiff()
+			_ = session.GetDiffSummary()
 			_ = session.GetArgs()
 			done <- true
 		}()
