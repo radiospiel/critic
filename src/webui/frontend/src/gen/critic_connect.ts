@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { GetDiffsRequest, GetDiffsResponse, GetLastChangeRequest, GetLastChangeResponse } from "./critic_pb.js";
+import { GetDiffSummaryRequest, GetDiffSummaryResponse, GetDiffRequest, GetDiffResponse, GetLastChangeRequest, GetLastChangeResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -26,14 +26,25 @@ export const CriticService = {
       kind: MethodKind.Unary,
     },
     /**
-     * GetDiffs returns the current diffs and state from the session.
+     * GetDiffSummary returns the current diff summary (file list without hunks) and state from the session.
      *
-     * @generated from rpc critic.v1.CriticService.GetDiffs
+     * @generated from rpc critic.v1.CriticService.GetDiffSummary
      */
-    getDiffs: {
-      name: "GetDiffs",
-      I: GetDiffsRequest,
-      O: GetDiffsResponse,
+    getDiffSummary: {
+      name: "GetDiffSummary",
+      I: GetDiffSummaryRequest,
+      O: GetDiffSummaryResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * GetDiff returns the full diff for a specific file path.
+     *
+     * @generated from rpc critic.v1.CriticService.GetDiff
+     */
+    getDiff: {
+      name: "GetDiff",
+      I: GetDiffRequest,
+      O: GetDiffResponse,
       kind: MethodKind.Unary,
     },
   }

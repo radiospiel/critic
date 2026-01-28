@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { criticClient } from '../api/client'
-import { FileDiff, FileStatus } from '../gen/critic_pb'
+import { FileSummary, FileStatus } from '../gen/critic_pb'
 
 interface FileListProps {
   selectedFile: string | null
-  onSelectFile: (file: string, fileDiff: FileDiff) => void
+  onSelectFile: (file: string, fileSummary: FileSummary) => void
 }
 
-function getFilePath(file: FileDiff): string {
+function getFilePath(file: FileSummary): string {
   return file.status === FileStatus.DELETED ? file.oldPath : file.newPath
 }
 
@@ -26,13 +26,13 @@ function getStatusLabel(status: FileStatus): string {
 }
 
 function FileList({ selectedFile, onSelectFile }: FileListProps) {
-  const [files, setFiles] = useState<FileDiff[]>([])
+  const [files, setFiles] = useState<FileSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     criticClient
-      .getDiffs({})
+      .getDiffSummary({})
       .then((response) => {
         setFiles(response.diff?.files || [])
         setLoading(false)
