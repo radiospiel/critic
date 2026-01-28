@@ -55,7 +55,7 @@ function FileList({ selectedFile, onSelectFile }: FileListProps) {
   if (loading) {
     return (
       <div>
-        <div className="file-list-header">Files</div>
+        <div className="file-list-header">Files (loading)</div>
         <div style={{ padding: '16px', color: '#666' }}>Loading...</div>
       </div>
     )
@@ -64,7 +64,7 @@ function FileList({ selectedFile, onSelectFile }: FileListProps) {
   if (error) {
     return (
       <div>
-        <div className="file-list-header">Files</div>
+        <div className="file-list-header">Files (error)</div>
         <div style={{ padding: '16px', color: '#c00' }}>{error}</div>
       </div>
     )
@@ -72,7 +72,7 @@ function FileList({ selectedFile, onSelectFile }: FileListProps) {
 
   return (
     <div>
-      <div className="file-list-header">Files</div>
+      <div className="file-list-header">{files.length} Files</div>
       <ul className="file-list">
         {files.map((file) => (
           <li

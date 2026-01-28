@@ -14,6 +14,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/must"
 	"github.com/radiospiel/critic/src/api/apiconnect"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/webui"
@@ -62,6 +63,7 @@ type Server struct {
 // It initializes a default session with the provided configuration values.
 func NewServer(config Config) *Server {
 	session := NewSession(config.GitRoot, config.Messaging, config.Args)
+	must.Must(session.SetRefs("master"))
 	return &Server{
 		config:  config,
 		session: session,
