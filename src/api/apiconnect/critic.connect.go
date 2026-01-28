@@ -36,16 +36,21 @@ const (
 	// CriticServiceGetLastChangeProcedure is the fully-qualified name of the CriticService's
 	// GetLastChange RPC.
 	CriticServiceGetLastChangeProcedure = "/critic.v1.CriticService/GetLastChange"
-	// CriticServiceGetDiffsProcedure is the fully-qualified name of the CriticService's GetDiffs RPC.
-	CriticServiceGetDiffsProcedure = "/critic.v1.CriticService/GetDiffs"
+	// CriticServiceGetDiffSummaryProcedure is the fully-qualified name of the CriticService's
+	// GetDiffSummary RPC.
+	CriticServiceGetDiffSummaryProcedure = "/critic.v1.CriticService/GetDiffSummary"
+	// CriticServiceGetDiffProcedure is the fully-qualified name of the CriticService's GetDiff RPC.
+	CriticServiceGetDiffProcedure = "/critic.v1.CriticService/GetDiff"
 )
 
 // CriticServiceClient is a client for the critic.v1.CriticService service.
 type CriticServiceClient interface {
 	// GetLastChange returns the timestamp of the last change.
 	GetLastChange(context.Context, *connect.Request[api.GetLastChangeRequest]) (*connect.Response[api.GetLastChangeResponse], error)
-	// GetDiffs returns the current diffs and state from the session.
-	GetDiffs(context.Context, *connect.Request[api.GetDiffsRequest]) (*connect.Response[api.GetDiffsResponse], error)
+	// GetDiffSummary returns the current diff summary (file list without hunks) and state.
+	GetDiffSummary(context.Context, *connect.Request[api.GetDiffSummaryRequest]) (*connect.Response[api.GetDiffSummaryResponse], error)
+	// GetDiff returns the full diff for a specific file path.
+	GetDiff(context.Context, *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error)
 }
 
 // NewCriticServiceClient constructs a client for the critic.v1.CriticService service. By default,
@@ -65,10 +70,16 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(criticServiceMethods.ByName("GetLastChange")),
 			connect.WithClientOptions(opts...),
 		),
-		getDiffs: connect.NewClient[api.GetDiffsRequest, api.GetDiffsResponse](
+		getDiffSummary: connect.NewClient[api.GetDiffSummaryRequest, api.GetDiffSummaryResponse](
 			httpClient,
-			baseURL+CriticServiceGetDiffsProcedure,
-			connect.WithSchema(criticServiceMethods.ByName("GetDiffs")),
+			baseURL+CriticServiceGetDiffSummaryProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("GetDiffSummary")),
+			connect.WithClientOptions(opts...),
+		),
+		getDiff: connect.NewClient[api.GetDiffRequest, api.GetDiffResponse](
+			httpClient,
+			baseURL+CriticServiceGetDiffProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("GetDiff")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -76,8 +87,9 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // criticServiceClient implements CriticServiceClient.
 type criticServiceClient struct {
-	getLastChange *connect.Client[api.GetLastChangeRequest, api.GetLastChangeResponse]
-	getDiffs      *connect.Client[api.GetDiffsRequest, api.GetDiffsResponse]
+	getLastChange  *connect.Client[api.GetLastChangeRequest, api.GetLastChangeResponse]
+	getDiffSummary *connect.Client[api.GetDiffSummaryRequest, api.GetDiffSummaryResponse]
+	getDiff        *connect.Client[api.GetDiffRequest, api.GetDiffResponse]
 }
 
 // GetLastChange calls critic.v1.CriticService.GetLastChange.
@@ -85,17 +97,24 @@ func (c *criticServiceClient) GetLastChange(ctx context.Context, req *connect.Re
 	return c.getLastChange.CallUnary(ctx, req)
 }
 
-// GetDiffs calls critic.v1.CriticService.GetDiffs.
-func (c *criticServiceClient) GetDiffs(ctx context.Context, req *connect.Request[api.GetDiffsRequest]) (*connect.Response[api.GetDiffsResponse], error) {
-	return c.getDiffs.CallUnary(ctx, req)
+// GetDiffSummary calls critic.v1.CriticService.GetDiffSummary.
+func (c *criticServiceClient) GetDiffSummary(ctx context.Context, req *connect.Request[api.GetDiffSummaryRequest]) (*connect.Response[api.GetDiffSummaryResponse], error) {
+	return c.getDiffSummary.CallUnary(ctx, req)
+}
+
+// GetDiff calls critic.v1.CriticService.GetDiff.
+func (c *criticServiceClient) GetDiff(ctx context.Context, req *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error) {
+	return c.getDiff.CallUnary(ctx, req)
 }
 
 // CriticServiceHandler is an implementation of the critic.v1.CriticService service.
 type CriticServiceHandler interface {
 	// GetLastChange returns the timestamp of the last change.
 	GetLastChange(context.Context, *connect.Request[api.GetLastChangeRequest]) (*connect.Response[api.GetLastChangeResponse], error)
-	// GetDiffs returns the current diffs and state from the session.
-	GetDiffs(context.Context, *connect.Request[api.GetDiffsRequest]) (*connect.Response[api.GetDiffsResponse], error)
+	// GetDiffSummary returns the current diff summary (file list without hunks) and state.
+	GetDiffSummary(context.Context, *connect.Request[api.GetDiffSummaryRequest]) (*connect.Response[api.GetDiffSummaryResponse], error)
+	// GetDiff returns the full diff for a specific file path.
+	GetDiff(context.Context, *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error)
 }
 
 // NewCriticServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -111,18 +130,26 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(criticServiceMethods.ByName("GetLastChange")),
 		connect.WithHandlerOptions(opts...),
 	)
-	criticServiceGetDiffsHandler := connect.NewUnaryHandler(
-		CriticServiceGetDiffsProcedure,
-		svc.GetDiffs,
-		connect.WithSchema(criticServiceMethods.ByName("GetDiffs")),
+	criticServiceGetDiffSummaryHandler := connect.NewUnaryHandler(
+		CriticServiceGetDiffSummaryProcedure,
+		svc.GetDiffSummary,
+		connect.WithSchema(criticServiceMethods.ByName("GetDiffSummary")),
+		connect.WithHandlerOptions(opts...),
+	)
+	criticServiceGetDiffHandler := connect.NewUnaryHandler(
+		CriticServiceGetDiffProcedure,
+		svc.GetDiff,
+		connect.WithSchema(criticServiceMethods.ByName("GetDiff")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/critic.v1.CriticService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CriticServiceGetLastChangeProcedure:
 			criticServiceGetLastChangeHandler.ServeHTTP(w, r)
-		case CriticServiceGetDiffsProcedure:
-			criticServiceGetDiffsHandler.ServeHTTP(w, r)
+		case CriticServiceGetDiffSummaryProcedure:
+			criticServiceGetDiffSummaryHandler.ServeHTTP(w, r)
+		case CriticServiceGetDiffProcedure:
+			criticServiceGetDiffHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -136,6 +163,10 @@ func (UnimplementedCriticServiceHandler) GetLastChange(context.Context, *connect
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetLastChange is not implemented"))
 }
 
-func (UnimplementedCriticServiceHandler) GetDiffs(context.Context, *connect.Request[api.GetDiffsRequest]) (*connect.Response[api.GetDiffsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetDiffs is not implemented"))
+func (UnimplementedCriticServiceHandler) GetDiffSummary(context.Context, *connect.Request[api.GetDiffSummaryRequest]) (*connect.Response[api.GetDiffSummaryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetDiffSummary is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) GetDiff(context.Context, *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetDiff is not implemented"))
 }
