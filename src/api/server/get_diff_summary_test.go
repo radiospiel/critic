@@ -8,18 +8,18 @@ import (
 	"github.com/radiospiel/critic/src/pkg/types"
 )
 
-func TestConvertDiffWithoutHunks(t *testing.T) {
+func TestConvertDiffSummary(t *testing.T) {
 	// Test nil diff
-	result := convertDiffWithoutHunks(nil)
+	result := convertDiffSummary(nil)
 	assert.Nil(t, result, "nil diff should return nil")
 
 	// Test empty diff
 	diff := &types.Diff{Files: []*types.FileDiff{}}
-	result = convertDiffWithoutHunks(diff)
+	result = convertDiffSummary(diff)
 	assert.NotNil(t, result, "empty diff should not be nil")
 	assert.Equals(t, len(result.Files), 0, "empty diff should have no files")
 
-	// Test diff with files (hunks should be dropped)
+	// Test diff with files
 	diff = &types.Diff{
 		Files: []*types.FileDiff{
 			{
@@ -43,7 +43,7 @@ func TestConvertDiffWithoutHunks(t *testing.T) {
 		},
 	}
 
-	result = convertDiffWithoutHunks(diff)
+	result = convertDiffSummary(diff)
 	assert.NotNil(t, result, "diff should not be nil")
 	assert.Equals(t, len(result.Files), 1, "should have 1 file")
 
@@ -51,14 +51,11 @@ func TestConvertDiffWithoutHunks(t *testing.T) {
 	assert.Equals(t, file.OldPath, "old.go", "old path should match")
 	assert.Equals(t, file.NewPath, "new.go", "new path should match")
 	assert.Equals(t, file.Status, api.FileStatus_FILE_STATUS_RENAMED, "status should be RENAMED")
-
-	// Key test: hunks should not be included in summary
-	assert.Nil(t, file.Hunks, "hunks should be nil in summary response")
 }
 
-func TestConvertFileDiffSummary(t *testing.T) {
+func TestConvertFileSummary(t *testing.T) {
 	// Test nil file diff
-	result := convertFileDiffSummary(nil)
+	result := convertFileSummary(nil)
 	assert.Nil(t, result, "nil file diff should return nil")
 
 	// Test file diff with all fields - renamed file
@@ -76,7 +73,7 @@ func TestConvertFileDiffSummary(t *testing.T) {
 		},
 	}
 
-	result = convertFileDiffSummary(fd)
+	result = convertFileSummary(fd)
 	assert.NotNil(t, result, "result should not be nil")
 	assert.Equals(t, result.OldPath, "path/to/old.go", "old path should match")
 	assert.Equals(t, result.NewPath, "path/to/new.go", "new path should match")
@@ -85,47 +82,67 @@ func TestConvertFileDiffSummary(t *testing.T) {
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_RENAMED, "status should be RENAMED")
 	assert.Equals(t, result.IsBinary, false, "is_binary should be false")
 
-	// Key test: hunks should not be included
-	assert.Nil(t, result.Hunks, "hunks should be nil in summary")
-
 	// Test new file
 	fd = &types.FileDiff{IsNew: true}
-	result = convertFileDiffSummary(fd)
+	result = convertFileSummary(fd)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_NEW, "status should be NEW")
 
 	// Test deleted file
 	fd = &types.FileDiff{IsDeleted: true}
-	result = convertFileDiffSummary(fd)
+	result = convertFileSummary(fd)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_DELETED, "status should be DELETED")
 
 	// Test modified file (default)
 	fd = &types.FileDiff{}
-	result = convertFileDiffSummary(fd)
+	result = convertFileSummary(fd)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_MODIFIED, "status should be MODIFIED")
 }
 
-func TestGetDiffsResponseTypes(t *testing.T) {
+func TestGetDiffSummaryResponseTypes(t *testing.T) {
 	// Test that the API types implement ProtoMessage
-	var _ interface{ ProtoMessage() } = (*api.GetDiffsRequest)(nil)
-	var _ interface{ ProtoMessage() } = (*api.GetDiffsResponse)(nil)
+	var _ interface{ ProtoMessage() } = (*api.GetDiffSummaryRequest)(nil)
+	var _ interface{ ProtoMessage() } = (*api.GetDiffSummaryResponse)(nil)
+	var _ interface{ ProtoMessage() } = (*api.DiffSummary)(nil)
+	var _ interface{ ProtoMessage() } = (*api.FileSummary)(nil)
+
+	// Test getters on GetDiffSummaryResponse
+	resp := &api.GetDiffSummaryResponse{
+		State: "READY",
+		Diff:  &api.DiffSummary{Files: []*api.FileSummary{}},
+	}
+	assert.Equals(t, resp.GetState(), "READY", "state should be READY")
+	assert.NotNil(t, resp.GetDiff(), "diff should not be nil")
+
+	// Test nil receiver
+	var nilResp *api.GetDiffSummaryResponse
+	assert.Equals(t, nilResp.GetState(), "", "nil receiver should return empty string")
+	assert.Nil(t, nilResp.GetDiff(), "nil receiver should return nil diff")
+}
+
+func TestGetDiffResponseTypes(t *testing.T) {
+	// Test that the API types implement ProtoMessage
+	var _ interface{ ProtoMessage() } = (*api.GetDiffRequest)(nil)
+	var _ interface{ ProtoMessage() } = (*api.GetDiffResponse)(nil)
 	var _ interface{ ProtoMessage() } = (*api.Diff)(nil)
 	var _ interface{ ProtoMessage() } = (*api.FileDiff)(nil)
 	var _ interface{ ProtoMessage() } = (*api.Hunk)(nil)
 	var _ interface{ ProtoMessage() } = (*api.HunkStats)(nil)
 	var _ interface{ ProtoMessage() } = (*api.Line)(nil)
 
-	// Test getters on GetDiffsResponse
-	resp := &api.GetDiffsResponse{
-		State: "READY",
-		Diff:  &api.Diff{Files: []*api.FileDiff{}},
+	// Test getters on GetDiffRequest
+	req := &api.GetDiffRequest{Path: "file.go"}
+	assert.Equals(t, req.GetPath(), "file.go", "path should match")
+
+	// Test getters on GetDiffResponse
+	resp := &api.GetDiffResponse{
+		File: &api.FileDiff{NewPath: "file.go"},
 	}
-	assert.Equals(t, resp.GetState(), "READY", "state should be READY")
-	assert.NotNil(t, resp.GetDiff(), "diff should not be nil")
+	assert.NotNil(t, resp.GetFile(), "file should not be nil")
+	assert.Equals(t, resp.GetFile().GetNewPath(), "file.go", "path should match")
 
 	// Test nil receiver
-	var nilResp *api.GetDiffsResponse
-	assert.Equals(t, nilResp.GetState(), "", "nil receiver should return empty string")
-	assert.Nil(t, nilResp.GetDiff(), "nil receiver should return nil diff")
+	var nilResp *api.GetDiffResponse
+	assert.Nil(t, nilResp.GetFile(), "nil receiver should return nil file")
 }
 
 func TestFileStatusEnum(t *testing.T) {
