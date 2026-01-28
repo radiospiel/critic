@@ -74,10 +74,21 @@ func (s *Server) GetSession() *Session {
 	return s.session
 }
 
-// startNpmDevServer starts the Vite dev server in the frontend directory
-func (s *Server) startNpmDevServer() error {
+// startNpmDevServer starts the Vite dev server in the frontend directory.
+// Returns true if the dev server was started successfully, false if it's not available.
+func (s *Server) startNpmDevServer() bool {
 	// Find the frontend directory relative to the working directory
 	frontendDir := "src/webui/frontend"
+
+	// Check if node_modules exists
+	nodeModulesPath := frontendDir + "/node_modules"
+	if _, err := os.Stat(nodeModulesPath); os.IsNotExist(err) {
+		fmt.Println("Warning: Dev server not available (node_modules not found)")
+		fmt.Println("To enable dev mode with hot reload, run:")
+		fmt.Printf("  cd %s && npm install\n", frontendDir)
+		fmt.Println("Falling back to serving embedded files.")
+		return false
+	}
 
 	s.npmProcess = exec.Command("npm", "run", "dev")
 	s.npmProcess.Dir = frontendDir
@@ -85,11 +96,13 @@ func (s *Server) startNpmDevServer() error {
 	s.npmProcess.Stderr = os.Stderr
 
 	if err := s.npmProcess.Start(); err != nil {
-		return fmt.Errorf("failed to start npm dev server: %w", err)
+		fmt.Printf("Warning: Failed to start dev server: %v\n", err)
+		fmt.Println("Falling back to serving embedded files.")
+		return false
 	}
 
 	logger.Info("Started Vite dev server (PID %d)", s.npmProcess.Process.Pid)
-	return nil
+	return true
 }
 
 // stopNpmDevServer stops the Vite dev server if running
@@ -123,26 +136,28 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /ws", webui.WebSocketHandler(s.wsHub))
 
 	// Serve React app
+	devServerStarted := false
 	if s.config.Dev {
-		// Start npm dev server
-		if err := s.startNpmDevServer(); err != nil {
-			return err
-		}
+		// Try to start npm dev server
+		devServerStarted = s.startNpmDevServer()
+		if devServerStarted {
+			// Give Vite a moment to start
+			time.Sleep(2 * time.Second)
 
-		// Give Vite a moment to start
-		time.Sleep(2 * time.Second)
-
-		// Development mode: proxy to Vite dev server
-		viteURL, err := url.Parse("http://localhost:5173")
-		if err != nil {
-			s.stopNpmDevServer()
-			return fmt.Errorf("failed to parse vite URL: %w", err)
+			// Development mode: proxy to Vite dev server
+			viteURL, err := url.Parse("http://localhost:5173")
+			if err != nil {
+				s.stopNpmDevServer()
+				return fmt.Errorf("failed to parse vite URL: %w", err)
+			}
+			proxy := httputil.NewSingleHostReverseProxy(viteURL)
+			mux.Handle("/", proxy)
+			fmt.Println("Development mode: proxying to Vite dev server at http://localhost:5173")
 		}
-		proxy := httputil.NewSingleHostReverseProxy(viteURL)
-		mux.Handle("/", proxy)
-		fmt.Println("Development mode: proxying to Vite dev server at http://localhost:5173")
-	} else {
-		// Production mode: serve embedded files
+	}
+
+	if !devServerStarted {
+		// Production mode or dev fallback: serve embedded files
 		distFS, err := webui.DistFS()
 		if err != nil {
 			return fmt.Errorf("failed to get dist fs: %w", err)
