@@ -7,6 +7,7 @@ export default defineConfig({
     outDir: '../dist',
     emptyOutDir: true,
   },
+  clearScreen: false,
   server: {
     proxy: {
       // Proxy Connect RPC requests to the Go API server
