@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api/server"
 	"github.com/spf13/cobra"
 )
@@ -33,6 +34,9 @@ Examples:
 					fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 				}
 			}()
+
+			// Log to stderr for the API server
+			logger.SetLogFile("/dev/stderr")
 
 			config := server.Config{
 				Port: port,

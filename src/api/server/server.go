@@ -5,11 +5,35 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"time"
 
+	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api/apiconnect"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/webui"
 )
+
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// loggingMiddleware logs HTTP requests
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(rw, r)
+		duration := time.Since(start)
+		logger.Info("%s %s %d %v", r.Method, r.URL.Path, rw.statusCode, duration)
+	})
+}
 
 // Config holds the configuration for the API server.
 type Config struct {
@@ -79,5 +103,5 @@ func (s *Server) Start() error {
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	fmt.Printf("Critic running at http://localhost%s\n", addr)
-	return http.ListenAndServe(addr, mux)
+	return http.ListenAndServe(addr, loggingMiddleware(mux))
 }
