@@ -3,17 +3,10 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-)
+	"strings"
 
-// JSONSchema represents a JSON Schema definition.
-type JSONSchema struct {
-	Type       string                 `json:"type"`
-	Properties map[string]*JSONSchema `json:"properties,omitempty"`
-	Required   []string               `json:"required,omitempty"`
-	Enum       []any                  `json:"enum,omitempty"`
-	MinLength  *int                   `json:"minLength,omitempty"`
-	MaxLength  *int                   `json:"maxLength,omitempty"`
-}
+	"github.com/santhosh-tekuri/jsonschema/v5"
+)
 
 // requestSchemaStrings defines JSON schemas as JSON string literals.
 // This makes schemas easier to read and maintain.
@@ -35,134 +28,60 @@ var requestSchemaStrings = map[string]string{
 	}`,
 }
 
-// RequestSchemas maps procedure names to their parsed JSON schemas.
-var RequestSchemas map[string]*JSONSchema
+// RequestSchemas maps procedure names to their compiled JSON schemas.
+var RequestSchemas map[string]*jsonschema.Schema
 
 func init() {
-	RequestSchemas = make(map[string]*JSONSchema)
+	RequestSchemas = make(map[string]*jsonschema.Schema)
 	for procedure, schemaStr := range requestSchemaStrings {
-		var schema JSONSchema
-		if err := json.Unmarshal([]byte(schemaStr), &schema); err != nil {
-			panic(fmt.Sprintf("failed to parse schema for %s: %v", procedure, err))
+		schema, err := jsonschema.CompileString(procedure, schemaStr)
+		if err != nil {
+			panic(fmt.Sprintf("failed to compile schema for %s: %v", procedure, err))
 		}
-		RequestSchemas[procedure] = &schema
+		RequestSchemas[procedure] = schema
 	}
 }
 
-// ValidationError represents a schema validation error.
-type ValidationError struct {
-	Field   string `json:"field"`
-	Message string `json:"message"`
-}
-
-func (e *ValidationError) Error() string {
-	return fmt.Sprintf("%s: %s", e.Field, e.Message)
-}
-
 // ValidateRequest validates a request against its JSON schema.
-func ValidateRequest(procedure string, data map[string]any) []*ValidationError {
+// Returns nil if valid, or an error describing validation failures.
+func ValidateRequest(procedure string, data map[string]any) error {
 	schema, ok := RequestSchemas[procedure]
 	if !ok {
 		// No schema defined, skip validation
 		return nil
 	}
 
-	return validateObject(schema, data, "")
+	return schema.Validate(data)
 }
 
-func validateObject(schema *JSONSchema, data map[string]any, path string) []*ValidationError {
-	var errors []*ValidationError
-
-	// Check required fields
-	for _, required := range schema.Required {
-		if _, ok := data[required]; !ok {
-			fieldPath := required
-			if path != "" {
-				fieldPath = path + "." + required
-			}
-			errors = append(errors, &ValidationError{
-				Field:   fieldPath,
-				Message: "required field is missing",
-			})
-		}
+// FormatValidationError converts a jsonschema validation error to a user-friendly string.
+func FormatValidationError(err error) string {
+	if err == nil {
+		return ""
 	}
 
-	// Validate properties
-	for name, propSchema := range schema.Properties {
-		value, ok := data[name]
-		if !ok {
-			continue
-		}
-
-		fieldPath := name
-		if path != "" {
-			fieldPath = path + "." + name
-		}
-
-		propErrors := validateValue(propSchema, value, fieldPath)
-		errors = append(errors, propErrors...)
+	validationErr, ok := err.(*jsonschema.ValidationError)
+	if !ok {
+		return err.Error()
 	}
 
-	return errors
+	var messages []string
+	collectErrors(validationErr, &messages)
+	return strings.Join(messages, "; ")
 }
 
-func validateValue(schema *JSONSchema, value any, path string) []*ValidationError {
-	var errors []*ValidationError
-
-	switch schema.Type {
-	case "string":
-		str, ok := value.(string)
-		if !ok {
-			errors = append(errors, &ValidationError{
-				Field:   path,
-				Message: fmt.Sprintf("expected string, got %T", value),
-			})
-			return errors
+func collectErrors(err *jsonschema.ValidationError, messages *[]string) {
+	if len(err.Causes) == 0 {
+		// Leaf error - format the message
+		path := err.InstanceLocation
+		if path == "" {
+			path = "/"
 		}
-
-		if schema.MinLength != nil && len(str) < *schema.MinLength {
-			errors = append(errors, &ValidationError{
-				Field:   path,
-				Message: fmt.Sprintf("string length %d is less than minimum %d", len(str), *schema.MinLength),
-			})
-		}
-
-		if schema.MaxLength != nil && len(str) > *schema.MaxLength {
-			errors = append(errors, &ValidationError{
-				Field:   path,
-				Message: fmt.Sprintf("string length %d exceeds maximum %d", len(str), *schema.MaxLength),
-			})
-		}
-
-		if schema.Enum != nil {
-			found := false
-			for _, e := range schema.Enum {
-				if e == str {
-					found = true
-					break
-				}
-			}
-			if !found {
-				errors = append(errors, &ValidationError{
-					Field:   path,
-					Message: fmt.Sprintf("value %q is not in allowed enum values", str),
-				})
-			}
-		}
-
-	case "object":
-		obj, ok := value.(map[string]any)
-		if !ok {
-			errors = append(errors, &ValidationError{
-				Field:   path,
-				Message: fmt.Sprintf("expected object, got %T", value),
-			})
-			return errors
-		}
-		errors = append(errors, validateObject(schema, obj, path)...)
+		*messages = append(*messages, fmt.Sprintf("%s: %s", path, err.Message))
 	}
-
-	return errors
+	for _, cause := range err.Causes {
+		collectErrors(cause, messages)
+	}
 }
 
 // ProtoToJSON converts a protobuf message to its JSON representation.

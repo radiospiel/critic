@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -73,15 +72,8 @@ func validateRequest(procedure string, msg any) error {
 		return fmt.Errorf("failed to parse request: %w", err)
 	}
 
-	errors := api.ValidateRequest(procedure, reqMap)
-	if len(errors) == 0 {
-		return nil
+	if err := api.ValidateRequest(procedure, reqMap); err != nil {
+		return fmt.Errorf("%s", api.FormatValidationError(err))
 	}
-
-	// Build error message from validation errors
-	var messages []string
-	for _, e := range errors {
-		messages = append(messages, e.Error())
-	}
-	return fmt.Errorf("%s", strings.Join(messages, "; "))
+	return nil
 }
