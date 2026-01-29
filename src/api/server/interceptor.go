@@ -64,10 +64,23 @@ func validatorInterceptor() connect.UnaryInterceptorFunc {
 	}
 }
 
+// protoToMap converts a protobuf message to a map for validation.
+func protoToMap(msg any) (map[string]any, error) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // validateRequest validates a request against its JSON schema.
 // Returns an error suitable for connect.NewError if validation fails.
 func validateRequest(procedure string, msg any) error {
-	reqMap, err := api.ProtoToMap(msg)
+	reqMap, err := protoToMap(msg)
 	if err != nil {
 		return fmt.Errorf("failed to parse request: %w", err)
 	}

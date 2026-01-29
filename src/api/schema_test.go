@@ -46,19 +46,6 @@ func TestValidateRequest_UnknownProcedure(t *testing.T) {
 	assert.NoError(t, err, "unknown procedure should pass validation")
 }
 
-func TestProtoToMap(t *testing.T) {
-	// Test with a simple struct
-	msg := struct {
-		Name  string `json:"name"`
-		Value int    `json:"value"`
-	}{Name: "test", Value: 42}
-
-	m, err := ProtoToMap(msg)
-	assert.NoError(t, err)
-	assert.Equals(t, m["name"], "test", "map should contain name field")
-	assert.Equals(t, m["value"], float64(42), "map should contain value field as float64")
-}
-
 func TestFormatValidationError(t *testing.T) {
 	// nil error should return empty string
 	assert.Equals(t, FormatValidationError(nil), "", "nil error should return empty string")

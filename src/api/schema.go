@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -82,19 +81,6 @@ func collectErrors(err *jsonschema.ValidationError, messages *[]string) {
 	for _, cause := range err.Causes {
 		collectErrors(cause, messages)
 	}
-}
-
-// ProtoToMap converts a protobuf message to a map for validation.
-func ProtoToMap(msg any) (map[string]any, error) {
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
-	var result map[string]any
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 // NewRpcError creates a new RpcError with the given code and message.
