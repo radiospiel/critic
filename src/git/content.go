@@ -20,6 +20,9 @@ func GetFileContent(path string, revision string) (string, error) {
 	}
 
 	// Read from git at specific revision
-	output := must.Exec("git", "show", revision+":"+path)
+	output, err := must.TryExec("git", "show", revision+":"+path)
+	if err != nil {
+		return "", err
+	}
 	return string(output), nil
 }

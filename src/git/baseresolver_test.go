@@ -32,9 +32,13 @@ func TestBaseResolver_ResolveOne(t *testing.T) {
 	sha := resolver.resolveOne("HEAD")
 	assert.NotEquals(t, sha, "", "resolveOne(HEAD) returned empty SHA")
 
-	// Test resolving merge-base (if available)
-	sha = resolver.resolveOne("merge-base")
-	assert.NotEquals(t, sha, "", "resolveOne(merge-base) returned empty SHA")
+	// Test resolving merge-base (skip if main/master not available, e.g., in CI)
+	if HasRef("main") || HasRef("master") {
+		sha = resolver.resolveOne("merge-base")
+		assert.NotEquals(t, sha, "", "resolveOne(merge-base) returned empty SHA")
+	} else {
+		t.Skip("Skipping merge-base test: no main or master branch available")
+	}
 }
 
 func TestBaseResolver_GetResolvedBases(t *testing.T) {

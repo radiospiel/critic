@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -97,7 +98,7 @@ func init() {
 			}
 			if entry.file != "" && entry.line != 0 {
 				file := entry.file
-				if file[0:len(wd)] == wd {
+				if strings.HasPrefix(file, wd+"/") {
 					file = file[len(wd)+1:]
 				}
 				msg = fmt.Sprintf("%s(%d): ", file, entry.line) + msg
