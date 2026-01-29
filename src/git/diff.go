@@ -2,21 +2,18 @@ package git
 
 import (
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strings"
 
+	"github.com/radiospiel/critic/simple-go/must"
+	"github.com/radiospiel/critic/simple-go/preconditions"
 	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
 // GetGitRoot returns the root directory of the git repository
-func GetGitRoot() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to get git root: %w", err)
-	}
-	return strings.TrimSpace(string(output)), nil
+func GetGitRoot() string {
+	output := must.Exec("git", "rev-parse", "--show-toplevel")
+	return strings.TrimSpace(string(output))
 }
 
 // validCommitHash checks if a string is a valid git commit hash (SHA-1 or short form)
@@ -60,16 +57,7 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 	switch mode {
 	case DiffToMergeBase:
 		// Get merge base
-		base, err := GetMergeBase()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get merge base: %w", err)
-		}
-
-		// Sanity check: git should always return valid commit hashes.
-		// If this fails, it indicates a catastrophic system failure.
-		if !validCommitHash.MatchString(base) {
-			panic(fmt.Sprintf("git returned invalid merge base format: %s", base))
-		}
+		base := GetMergeBase()
 
 		// Compare merge base to working directory (includes committed, staged, and unstaged changes)
 		args = []string{"diff", base, "--patch", "--no-color"}
@@ -98,11 +86,7 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 		}
 	}
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to run git diff: %w", err)
-	}
+	output := must.Exec("git", args...)
 
 	// Parse the diff output
 	diff, err := ParseDiff(string(output))
@@ -119,7 +103,10 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 func GetDiffBetween(base, target string, paths []string) (*ctypes.Diff, error) {
 	// Validate base commit
 	if !validCommitHash.MatchString(base) {
-		return nil, fmt.Errorf("invalid base commit SHA: %s", base)
+		base = ResolveRef(base)
+		if !validCommitHash.MatchString(base) {
+			return nil, fmt.Errorf("invalid base commit SHA: %s", base)
+		}
 	}
 
 	// Build git diff command
@@ -138,14 +125,13 @@ func GetDiffBetween(base, target string, paths []string) (*ctypes.Diff, error) {
 	args = append(args, diffWhitespaceOpts...)
 	if len(paths) > 0 {
 		args = append(args, "--")
+		for _, path := range paths {
+			preconditions.Check(len(path) > 0, "Path cannot be empty")
+		}
 		args = append(args, paths...)
 	}
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to run git diff: %w", err)
-	}
+	output := must.Exec("git", args...)
 
 	// Parse the diff output
 	diff, err := ParseDiff(string(output))
@@ -157,20 +143,13 @@ func GetDiffBetween(base, target string, paths []string) (*ctypes.Diff, error) {
 }
 
 // ResolveRef resolves a git reference (branch, tag, or commit) to a commit SHA
-// Returns the resolved SHA or an error if the ref doesn't exist
-func ResolveRef(ref string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--verify", ref)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve ref %s: %w", ref, err)
-	}
-
+func ResolveRef(ref string) string {
+	output := must.Exec("git", "rev-parse", "--verify", ref)
 	sha := strings.TrimSpace(string(output))
 	if !validCommitHash.MatchString(sha) {
-		return "", fmt.Errorf("invalid commit SHA returned for ref %s: %s", ref, sha)
+		panic(fmt.Sprintf("invalid commit SHA returned for ref %s: %s", ref, sha))
 	}
-
-	return sha, nil
+	return sha
 }
 
 // IsCommitSHA checks if a string looks like a commit SHA (hexadecimal, 6-40 chars)
@@ -181,7 +160,7 @@ func IsCommitSHA(s string) bool {
 // HasRef checks if a git ref exists
 func HasRef(ref string) bool {
 	// Try to resolve the ref
-	_, err := ResolveRef(ref)
+	_, err := must.TryExec("git", "rev-parse", "--verify", ref)
 	return err == nil
 }
 
@@ -190,6 +169,9 @@ func HasRef(ref string) bool {
 // This is more efficient than GetDiffBetween when you only need to know which files changed.
 func GetDiffNamesBetween(base, target string) (*ctypes.Diff, error) {
 	// Validate base commit
+	if !validCommitHash.MatchString(base) {
+		base = ResolveRef(base)
+	}
 	if !validCommitHash.MatchString(base) {
 		return nil, fmt.Errorf("invalid base commit SHA: %s", base)
 	}
@@ -209,11 +191,7 @@ func GetDiffNamesBetween(base, target string) (*ctypes.Diff, error) {
 	}
 	args = append(args, diffWhitespaceOpts...)
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to run git diff --name-status: %w", err)
-	}
+	output := must.Exec("git", args...)
 
 	// Parse the name-status output
 	diff, err := ParseDiffNameStatus(string(output))

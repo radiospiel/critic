@@ -2,66 +2,55 @@ package git
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
+
+	"github.com/radiospiel/critic/simple-go/must"
 )
 
 // GetMergeBase returns the merge base commit between HEAD and the main branch.
 // It tries "main" first, then falls back to "master".
-func GetMergeBase() (string, error) {
+func GetMergeBase() string {
 	// Try main first
-	base, err := getMergeBaseWithBranch("main")
-	if err == nil {
-		// Sanity check: git should always return valid commit hashes.
-		// If this fails, it indicates a catastrophic system failure.
-		if !validCommitHash.MatchString(base) {
-			panic(fmt.Sprintf("git returned invalid merge base format: %s", base))
+	base, ok := TryGetMergeBaseWithBranch("main")
+	if !ok {
+		// Fall back to master
+		base, ok = TryGetMergeBaseWithBranch("master")
+		if !ok {
+			panic("failed to find merge base with main or master")
 		}
-		return base, nil
-	}
-
-	// Fall back to master
-	base, err = getMergeBaseWithBranch("master")
-	if err != nil {
-		return "", fmt.Errorf("failed to find merge base with main or master: %w", err)
 	}
 
 	// Sanity check: git should always return valid commit hashes.
-	// If this fails, it indicates a catastrophic system failure.
 	if !validCommitHash.MatchString(base) {
 		panic(fmt.Sprintf("git returned invalid merge base format: %s", base))
 	}
 
-	return base, nil
+	return base
 }
 
-// getMergeBaseWithBranch gets the merge base between HEAD and the specified branch
-func getMergeBaseWithBranch(branch string) (string, error) {
-	cmd := exec.Command("git", "merge-base", branch, "HEAD")
-	output, err := cmd.Output()
+// TryGetMergeBaseWithBranch gets the merge base between HEAD and the specified branch.
+// Returns (base, true) on success, ("", false) if the branch doesn't exist or has no common ancestor.
+func TryGetMergeBaseWithBranch(branch string) (string, bool) {
+	output, err := must.TryExec("git", "merge-base", branch, "HEAD")
 	if err != nil {
-		return "", err
+		return "", false
 	}
 
 	base := strings.TrimSpace(string(output))
 	if base == "" {
-		return "", fmt.Errorf("empty merge base")
+		return "", false
 	}
 
-	return base, nil
+	return base, true
 }
 
 // GetMergeBaseBetween returns the merge base commit between two refs
-func GetMergeBaseBetween(ref1, ref2 string) (string, error) {
-	cmd := exec.Command("git", "merge-base", ref1, ref2)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to find merge base between %s and %s: %w", ref1, ref2, err)
-	}
+func GetMergeBaseBetween(ref1, ref2 string) string {
+	output := must.Exec("git", "merge-base", ref1, ref2)
 
 	base := strings.TrimSpace(string(output))
 	if base == "" {
-		return "", fmt.Errorf("empty merge base between %s and %s", ref1, ref2)
+		panic(fmt.Sprintf("empty merge base between %s and %s", ref1, ref2))
 	}
 
 	// Sanity check: git should always return valid commit hashes.
@@ -69,24 +58,17 @@ func GetMergeBaseBetween(ref1, ref2 string) (string, error) {
 		panic(fmt.Sprintf("git returned invalid merge base format: %s", base))
 	}
 
-	return base, nil
+	return base
 }
 
 // GetCurrentBranch returns the name of the current branch
-func GetCurrentBranch() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to get current branch: %w", err)
-	}
-
-	branch := strings.TrimSpace(string(output))
-	return branch, nil
+func GetCurrentBranch() string {
+	output := must.Exec("git", "rev-parse", "--abbrev-ref", "HEAD")
+	return strings.TrimSpace(string(output))
 }
 
 // IsGitRepo checks if the current directory is inside a git repository
 func IsGitRepo() bool {
-	cmd := exec.Command("git", "rev-parse", "--git-dir")
-	_, err := cmd.Output()
+	_, err := must.TryExec("git", "rev-parse", "--git-dir")
 	return err == nil
 }

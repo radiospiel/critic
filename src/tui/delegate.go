@@ -48,10 +48,7 @@ func NewDelegate(args *Args) *Delegate {
 	logger.Info("NewDelegate: Creating delegate with %d paths, %d bases", len(args.Paths), len(args.Bases))
 
 	// Initialize message database first (needed for session)
-	gitRoot, err := git.GetGitRoot()
-	if err != nil {
-		logger.Fatal("Failed to get git root: %v", err)
-	}
+	gitRoot := git.GetGitRoot()
 	mdb, err := messagedb.New(gitRoot)
 	if err != nil {
 		logger.Fatal("Failed to initialize message database: %v", err)
@@ -470,13 +467,9 @@ func checkTerminalColors() {
 
 func initBaseResolverCmd(d *Delegate) tea.Cmd {
 	return func() tea.Msg {
-		resolver, err := git.NewBaseResolver(d.bases, "HEAD", func() {
+		resolver := git.NewBaseResolver(d.bases, "HEAD", func() {
 			logger.Info("BaseResolver: Bases changed, triggering reload")
 		})
-		if err != nil {
-			logger.Error("Failed to initialize base resolver: %v", err)
-			return nil
-		}
 		return baseResolverInitializedMsg{resolver: resolver}
 	}
 }
@@ -489,26 +482,15 @@ func loadDiffCmd(d *Delegate) tea.Cmd {
 		if d.resolver != nil {
 			sha, ok := d.resolver.GetResolvedBase(baseName)
 			if !ok {
-				resolvedSHA, err := resolveBase(baseName)
-				if err != nil {
-					return diffLoadedMsg{diff: nil, err: fmt.Errorf("failed to resolve base %s: %w", baseName, err)}
-				}
-				baseCommit = resolvedSHA
+				baseCommit = resolveBase(baseName)
 			} else {
 				baseCommit = sha
 			}
 		} else {
-			resolvedSHA, err := resolveBase(baseName)
-			if err != nil {
-				return diffLoadedMsg{diff: nil, err: fmt.Errorf("failed to resolve base %s: %w", baseName, err)}
-			}
-			baseCommit = resolvedSHA
+			baseCommit = resolveBase(baseName)
 		}
 
-		targetCommit, err := git.ResolveRef("HEAD")
-		if err != nil {
-			return diffLoadedMsg{diff: nil, err: fmt.Errorf("failed to resolve HEAD: %w", err)}
-		}
+		targetCommit := git.ResolveRef("HEAD")
 
 		logger.Info("loadDiffCmd: Loading diff from %s (%s) to HEAD (%s)", baseName, baseCommit, targetCommit)
 
@@ -517,22 +499,13 @@ func loadDiffCmd(d *Delegate) tea.Cmd {
 	}
 }
 
-func resolveBase(base string) (string, error) {
+func resolveBase(base string) string {
 	if git.IsCommitSHA(base) {
 		return git.ResolveRef(base)
 	}
 
-	baseSHA, err := git.ResolveRef(base)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve ref %s: %w", base, err)
-	}
-
-	mergeBase, err := git.GetMergeBaseBetween("HEAD", baseSHA)
-	if err != nil {
-		return "", fmt.Errorf("failed to get merge base with %s: %w", base, err)
-	}
-
-	return mergeBase, nil
+	baseSHA := git.ResolveRef(base)
+	return git.GetMergeBaseBetween("HEAD", baseSHA)
 }
 
 // renderError renders an error message

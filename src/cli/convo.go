@@ -88,10 +88,7 @@ Examples:
   critic convo list --status resolved   # List resolved conversations
 `,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			gitRoot, err := git.GetGitRoot()
-			if err != nil {
-				return fmt.Errorf("failed to get git root: %w", err)
-			}
+			gitRoot := git.GetGitRoot()
 
 			mdb, err := messagedb.New(gitRoot)
 			if err != nil {
@@ -172,10 +169,7 @@ Example:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			uuid := args[0]
 
-			gitRoot, err := git.GetGitRoot()
-			if err != nil {
-				return fmt.Errorf("failed to get git root: %w", err)
-			}
+			gitRoot := git.GetGitRoot()
 
 			mdb, err := messagedb.New(gitRoot)
 			if err != nil {
@@ -255,10 +249,7 @@ Examples:
 				return fmt.Errorf("invalid author: %s (must be 'human' or 'ai')", author)
 			}
 
-			gitRoot, err := git.GetGitRoot()
-			if err != nil {
-				return fmt.Errorf("failed to get git root: %w", err)
-			}
+			gitRoot := git.GetGitRoot()
 
 			mdb, err := messagedb.New(gitRoot)
 			if err != nil {

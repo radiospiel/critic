@@ -33,11 +33,7 @@ type Server struct {
 // NewServer creates a new MCP server
 func NewServer() *Server {
 	// Initialize message database
-	gitRoot, err := git.GetGitRoot()
-	if err != nil {
-		logger.Error("Failed to get git root: %v", err)
-		return nil
-	}
+	gitRoot := git.GetGitRoot()
 
 	mdb, err := messagedb.New(gitRoot)
 	if err != nil {

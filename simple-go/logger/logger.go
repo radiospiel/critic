@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -26,9 +27,33 @@ const (
 	FATAL
 )
 
-var (
-	minLogLevel Level = INFO // default log minLogLevel
-)
+// SimpleLogger is a logger with support for topics, and filenames
+type SimpleLogger struct {
+	topic string
+	file  string
+	line  int
+	level Level
+}
+
+var defaultLogger = SimpleLogger{
+	topic: "",
+	file:  "",
+	line:  0,
+	level: INFO,
+}
+
+// WithCaller returns a logger that uses the provided caller info
+func (sl *SimpleLogger) deepCopy(fun func(copy *SimpleLogger)) *SimpleLogger {
+	copy := &SimpleLogger{
+		topic: sl.topic,
+		file:  sl.file,
+		line:  sl.line,
+		level: sl.level,
+	}
+
+	fun(copy)
+	return copy
+}
 
 // stores the path to the current log file
 var logFilePath = buildLogFilePath()
@@ -73,7 +98,7 @@ func init() {
 			}
 			if entry.file != "" && entry.line != 0 {
 				file := entry.file
-				if file[0:len(wd)] == wd {
+				if strings.HasPrefix(file, wd+"/") {
 					file = file[len(wd)+1:]
 				}
 				msg = fmt.Sprintf("%s(%d): ", file, entry.line) + msg
@@ -82,9 +107,6 @@ func init() {
 		}
 	}()
 }
-
-// defaultLogger is a TopicLogger with empty topic (no prefix)
-var defaultLogger = &TopicLogger{topic: ""}
 
 func Runtime[T any](msg string, fun func() T) T {
 	start := time.Now()
@@ -141,22 +163,47 @@ func SetNullLog() {
 
 // SetLevel sets the minimum log level
 func SetLevel(l Level) {
-	minLogLevel = l
+	defaultLogger.level = l
 }
 
-// TopicLogger is a logger that prepends a topic tag to all log messages
-type TopicLogger struct {
-	topic string
+// WithTopic returns a SimpleLogger that prepends [topic] to all log messages
+func WithTopic(topic string) *SimpleLogger {
+	return defaultLogger.WithTopic(topic)
 }
 
-// OnTopic returns a TopicLogger that prepends [topic] to all log messages
-func OnTopic(topic string) *TopicLogger {
-	return &TopicLogger{topic: topic}
+// WithCaller returns a logger that uses the provided caller info
+func WithCaller(file string, line int) *SimpleLogger {
+	return defaultLogger.WithCaller(file, line)
 }
 
-// Printf writes a log message with optional topic prefix
-func (t *TopicLogger) printf(format string, v ...any) {
-	_, file, line, _ := runtime.Caller(3)
+// WithCaller returns a logger that uses the provided caller info
+func (sl *SimpleLogger) WithLevel(level Level) *SimpleLogger {
+	return sl.deepCopy(func(copy *SimpleLogger) {
+		copy.level = level
+	})
+}
+
+// WithCaller returns a logger that uses the provided caller info
+func (sl *SimpleLogger) WithCaller(file string, line int) *SimpleLogger {
+	return sl.deepCopy(func(copy *SimpleLogger) {
+		copy.file = file
+		copy.line = line
+	})
+}
+
+// WithCaller returns a logger that uses the provided caller info
+func (sl *SimpleLogger) WithTopic(topic string) *SimpleLogger {
+	return sl.deepCopy(func(copy *SimpleLogger) {
+		copy.topic = topic
+	})
+}
+
+// printf writes a log message with optional topic prefix
+func (t *SimpleLogger) printf(format string, v ...any) {
+	file, line := t.file, t.line
+	if file == "" {
+		_, file, line, _ = runtime.Caller(3)
+	}
 	logChannel <- logMessage{
 		file:   file,
 		line:   line,
@@ -166,45 +213,48 @@ func (t *TopicLogger) printf(format string, v ...any) {
 	}
 }
 
+// Fatal writes a fatal error log message with topic prefix and exits
+func (t *SimpleLogger) Fatal(format string, v ...any) {
+	t.printf("FATAL: "+format, v...)
+	os.Exit(1)
+}
+
 // Error writes an error log message with topic prefix
-func (t *TopicLogger) Error(format string, v ...any) {
-	if minLogLevel > ERROR {
+func (t *SimpleLogger) Error(format string, v ...any) {
+	if t.level > ERROR {
 		return
 	}
 	t.printf("ERROR: "+format, v...)
 }
 
 // Warn writes a warning log message with topic prefix
-func (t *TopicLogger) Warn(format string, v ...any) {
-	if minLogLevel > WARN {
+func (t *SimpleLogger) Warn(format string, v ...any) {
+	if t.level > WARN {
 		return
 	}
 	t.printf("WARN: "+format, v...)
 }
 
-// Fatal writes a fatal error log message with topic prefix and exits
-func (t *TopicLogger) Fatal(format string, v ...any) {
-	t.printf("FATAL: "+format, v...)
-	os.Exit(1)
-}
-
 // Info writes an info log message with topic prefix
-func (t *TopicLogger) Info(format string, v ...any) {
-	if minLogLevel > INFO {
+func (t *SimpleLogger) Info(format string, v ...any) {
+	if t.level > INFO {
 		return
 	}
 	t.printf("INFO: "+format, v...)
 }
 
 // Debug writes a debug log message with topic prefix
-func (t *TopicLogger) Debug(format string, v ...any) {
-	if minLogLevel > DEBUG {
+func (t *SimpleLogger) Debug(format string, v ...any) {
+	if t.level > DEBUG {
 		return
 	}
 	t.printf("DEBUG: "+format, v...)
 }
 
-// Package-minLogLevel convenience functions that delegate to defaultLogger
+// Fatal writes a fatal error log message and exits
+func Fatal(format string, v ...any) {
+	defaultLogger.Fatal(format, v...)
+}
 
 // Error writes an error log message
 func Error(format string, v ...any) {
@@ -214,11 +264,6 @@ func Error(format string, v ...any) {
 // Warn writes a warning log message
 func Warn(format string, v ...any) {
 	defaultLogger.Warn(format, v...)
-}
-
-// Fatal writes a fatal error log message and exits
-func Fatal(format string, v ...any) {
-	defaultLogger.Fatal(format, v...)
 }
 
 // Info writes an info log message

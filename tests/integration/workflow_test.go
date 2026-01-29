@@ -145,7 +145,7 @@ func TestGitWorkflow_GetCurrentBranch(t *testing.T) {
 	must.WriteFile("test.go", "package main\n")
 	CommitFile(t, "test.go")
 
-	branch := must.Must2(git.GetCurrentBranch())
+	branch := git.GetCurrentBranch()
 
 	// Default branch is typically "master" or "main"
 	if branch != "master" && branch != "main" {
@@ -206,10 +206,8 @@ func TestGitWorkflow_MergeBaseWithMainBranch(t *testing.T) {
 	CommitFile(t, "feature.go")
 
 	// GetMergeBase should find the merge base with "main" branch
-	mergeBase := must.Must2(git.GetMergeBase())
+	mergeBase := git.GetMergeBase()
 
-	mergeBase, err := git.GetMergeBase()
-	assert.NoError(t, err)
 	assert.NotEquals(t, mergeBase, "", "GetMergeBase() should not return empty string")
 	assert.True(t, len(mergeBase) >= 7, "GetMergeBase() should return valid commit hash")
 
@@ -238,12 +236,12 @@ func TestGitWorkflow_MergeBaseFallbackToMaster(t *testing.T) {
 
 	// GetMergeBase should work even though there's no "main" branch
 	// It should fallback to "master"
-	mergeBase := must.Must2(git.GetMergeBase())
+	mergeBase := git.GetMergeBase()
 
 	// Verify it found a valid commit hash
 	assert.True(t, len(mergeBase) >= 7, "GetMergeBase() should return valid commit hash")
 
 	// Verify current branch is "feature"
-	currentBranch := must.Must2(git.GetCurrentBranch())
+	currentBranch := git.GetCurrentBranch()
 	assert.Equals(t, currentBranch, "feature")
 }

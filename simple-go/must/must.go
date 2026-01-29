@@ -9,6 +9,7 @@ import (
 
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/samber/lo"
+	"runtime"
 )
 
 // Must panics if err is not nil.
@@ -55,18 +56,30 @@ func escapeIfNecessary(s string, _ int) string {
 	return s
 }
 
-// Exec executes a command, panicking on error.
-func Exec(name string, args ...string) []byte {
+// tryExecWithCaller executes a command with explicit caller info for logging
+func tryExecWithCaller(logger *logger.SimpleLogger, name string, args []string) ([]byte, error) {
 	stringified := lo.Map(args, escapeIfNecessary)
 	logger.Info("%s %s", name, strings.Join(stringified, " "))
 
 	cmd := exec.Command(name, args...)
 	output, err := cmd.Output()
+	return output, err
+}
 
+// TryExec executes a command and returns (output, nil) on success or (nil, error) on failure.
+func TryExec(name string, args ...string) ([]byte, error) {
+	_, file, line, _ := runtime.Caller(1)
+	return tryExecWithCaller(logger.WithCaller(file, line), name, args)
+}
+
+// Exec executes a command, panicking on error.
+func Exec(name string, args ...string) []byte {
+	_, file, line, _ := runtime.Caller(1)
+	output, err := tryExecWithCaller(logger.WithCaller(file, line), name, args)
 	if err != nil {
 		msg := fmt.Sprintf("in %s: Exec(%s %v) failed: %v", Getwd(), name, args, err)
-		if err, ok := err.(*exec.ExitError); ok {
-			msg = msg + "\nerrout: " + string(err.Stderr)
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			msg = msg + "\nerrout: " + string(exitErr.Stderr)
 		}
 		panic(msg)
 	}

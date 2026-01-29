@@ -10,8 +10,7 @@ import (
 func TestNewBaseResolver(t *testing.T) {
 	// Test with real git refs
 	bases := []string{"HEAD"}
-	resolver, err := NewBaseResolver(bases, "current", nil)
-	assert.NoError(t, err)
+	resolver := NewBaseResolver(bases, "current", nil)
 	defer resolver.Stop()
 
 	// Check that bases were resolved
@@ -30,25 +29,21 @@ func TestBaseResolver_ResolveOne(t *testing.T) {
 	}
 
 	// Test resolving HEAD
-	sha, err := resolver.resolveOne("HEAD")
-	assert.NoError(t, err)
+	sha := resolver.resolveOne("HEAD")
 	assert.NotEquals(t, sha, "", "resolveOne(HEAD) returned empty SHA")
 
-	// Test resolving merge-base (if available)
-	sha, err = resolver.resolveOne("merge-base")
-	if err != nil {
-		// merge-base might not be available in all repos, so we just check
-		// that it returns an error rather than panicking
-		t.Logf("resolveOne(merge-base) error = %v (expected if not in a feature branch)", err)
-	} else {
+	// Test resolving merge-base (skip if main/master not available, e.g., in CI)
+	if HasRef("main") || HasRef("master") {
+		sha = resolver.resolveOne("merge-base")
 		assert.NotEquals(t, sha, "", "resolveOne(merge-base) returned empty SHA")
+	} else {
+		t.Skip("Skipping merge-base test: no main or master branch available")
 	}
 }
 
 func TestBaseResolver_GetResolvedBases(t *testing.T) {
 	bases := []string{"HEAD"}
-	resolver, err := NewBaseResolver(bases, "current", nil)
-	assert.NoError(t, err)
+	resolver := NewBaseResolver(bases, "current", nil)
 	defer resolver.Stop()
 
 	// Get resolved bases
@@ -73,8 +68,7 @@ func TestBaseResolver_OnChange(t *testing.T) {
 	}
 
 	bases := []string{"HEAD"}
-	resolver, err := NewBaseResolver(bases, "current", onChange)
-	assert.NoError(t, err)
+	resolver := NewBaseResolver(bases, "current", onChange)
 	defer resolver.Stop()
 
 	// Wait a bit to ensure polling goroutine is running
@@ -86,8 +80,7 @@ func TestBaseResolver_OnChange(t *testing.T) {
 
 func TestBaseResolver_Stop(t *testing.T) {
 	bases := []string{"HEAD"}
-	resolver, err := NewBaseResolver(bases, "current", nil)
-	assert.NoError(t, err)
+	resolver := NewBaseResolver(bases, "current", nil)
 
 	// Stop should not panic
 	resolver.Stop()
@@ -103,8 +96,7 @@ func TestBaseResolver_Stop(t *testing.T) {
 
 func TestBaseResolver_CheckForChanges(t *testing.T) {
 	bases := []string{"HEAD"}
-	resolver, err := NewBaseResolver(bases, "current", nil)
-	assert.NoError(t, err)
+	resolver := NewBaseResolver(bases, "current", nil)
 	defer resolver.Stop()
 
 	// First check should return false (nothing changed)
