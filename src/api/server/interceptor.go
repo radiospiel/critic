@@ -58,10 +58,11 @@ func loggingInterceptor() connect.UnaryInterceptorFunc {
 }
 
 // validateRequest validates a request against its JSON schema.
-func validateRequest(procedure string, msg any) *api.RpcError {
+// Returns an error suitable for connect.NewError if validation fails.
+func validateRequest(procedure string, msg any) error {
 	reqMap, err := api.ProtoToMap(msg)
 	if err != nil {
-		return api.InternalError("failed to parse request: " + err.Error())
+		return fmt.Errorf("failed to parse request: %w", err)
 	}
 
 	errors := api.ValidateRequest(procedure, reqMap)
@@ -74,5 +75,5 @@ func validateRequest(procedure string, msg any) *api.RpcError {
 	for _, e := range errors {
 		messages = append(messages, e.Error())
 	}
-	return api.InvalidArgument(strings.Join(messages, "; "))
+	return fmt.Errorf("%s", strings.Join(messages, "; "))
 }

@@ -99,3 +99,52 @@ func TestValidateStringType(t *testing.T) {
 	assert.Equals(t, len(errors), 1, "wrong type should fail")
 	assert.Contains(t, errors[0].Message, "expected string", "error should mention expected type")
 }
+
+func TestNewRpcError(t *testing.T) {
+	err := NewRpcError(ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "test message")
+
+	assert.NotNil(t, err, "error should not be nil")
+	assert.Equals(t, err.Code, ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "code should match")
+	assert.Equals(t, err.Message, "test message", "message should match")
+}
+
+func TestInvalidArgument(t *testing.T) {
+	err := InvalidArgument("bad input")
+
+	assert.Equals(t, err.Code, ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "code should be INVALID_ARGUMENT")
+	assert.Equals(t, err.Message, "bad input", "message should match")
+}
+
+func TestNotFound(t *testing.T) {
+	err := NotFound("resource not found")
+
+	assert.Equals(t, err.Code, ErrorCode_ERROR_CODE_NOT_FOUND, "code should be NOT_FOUND")
+	assert.Equals(t, err.Message, "resource not found", "message should match")
+}
+
+func TestInternalError(t *testing.T) {
+	err := InternalError("unexpected error")
+
+	assert.Equals(t, err.Code, ErrorCode_ERROR_CODE_INTERNAL, "code should be INTERNAL")
+	assert.Equals(t, err.Message, "unexpected error", "message should match")
+}
+
+func TestUnavailable(t *testing.T) {
+	err := Unavailable("service unavailable")
+
+	assert.Equals(t, err.Code, ErrorCode_ERROR_CODE_UNAVAILABLE, "code should be UNAVAILABLE")
+	assert.Equals(t, err.Message, "service unavailable", "message should match")
+}
+
+func TestRpcErrorMessage(t *testing.T) {
+	// Without details
+	err := NewRpcError(ErrorCode_ERROR_CODE_INTERNAL, "server error")
+	assert.Contains(t, RpcErrorMessage(err), "server error", "message should contain error text")
+
+	// With details
+	err = NewRpcError(ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "validation failed")
+	err.Details = "field 'name' is required"
+	msg := RpcErrorMessage(err)
+	assert.Contains(t, msg, "validation failed", "message should contain error text")
+	assert.Contains(t, msg, "field 'name' is required", "message should contain details")
+}

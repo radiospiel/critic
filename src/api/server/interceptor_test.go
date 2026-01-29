@@ -31,8 +31,7 @@ func TestValidateRequest_GetDiff_MissingPath(t *testing.T) {
 
 	err := validateRequest(procedure, req)
 	assert.NotNil(t, err, "should return error for missing path")
-	assert.Equals(t, err.Code, api.ErrorCodeInvalidArgument, "should be INVALID_ARGUMENT")
-	assert.Contains(t, err.Message, "path", "should mention path field")
+	assert.Contains(t, err.Error(), "path", "should mention path field")
 }
 
 func TestValidateRequest_GetDiff_EmptyPath(t *testing.T) {
@@ -41,7 +40,6 @@ func TestValidateRequest_GetDiff_EmptyPath(t *testing.T) {
 
 	err := validateRequest(procedure, req)
 	assert.NotNil(t, err, "should return error for empty path")
-	assert.Equals(t, err.Code, api.ErrorCodeInvalidArgument, "should be INVALID_ARGUMENT")
 }
 
 func TestValidateRequest_GetDiff_ValidPath(t *testing.T) {
