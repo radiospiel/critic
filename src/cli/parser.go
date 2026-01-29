@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/radiospiel/critic/simple-go/must"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
@@ -10,7 +9,7 @@ import (
 // getDefaultBases returns the default base points based on git state
 func getDefaultBases() []string {
 	candidates := []string{
-		"main", "master", "origin/" + must.Must2(git.GetCurrentBranch()), "HEAD",
+		"main", "master", "origin/" + git.GetCurrentBranch(), "HEAD",
 	}
 
 	return lo.Filter(candidates, func(ref string, _ int) bool {

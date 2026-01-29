@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
+	"github.com/radiospiel/critic/simple-go/must"
 	"github.com/radiospiel/critic/src/config"
 	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
@@ -19,11 +19,7 @@ func GetUntrackedFiles(paths []string, extensions []string) ([]string, error) {
 	args := []string{"ls-files", "--others", "--exclude-standard"}
 	args = append(args, paths...)
 
-	cmd := exec.Command("git", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list untracked files: %w", err)
-	}
+	output := must.Exec("git", args...)
 
 	// Parse output - one file per line
 	var files []string

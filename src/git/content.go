@@ -2,7 +2,8 @@ package git
 
 import (
 	"os"
-	"os/exec"
+
+	"github.com/radiospiel/critic/simple-go/must"
 )
 
 // GetFileContent retrieves file content from either the working directory or a git revision.
@@ -19,11 +20,6 @@ func GetFileContent(path string, revision string) (string, error) {
 	}
 
 	// Read from git at specific revision
-	cmd := exec.Command("git", "show", revision+":"+path)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-
+	output := must.Exec("git", "show", revision+":"+path)
 	return string(output), nil
 }

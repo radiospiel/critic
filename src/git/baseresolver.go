@@ -1,7 +1,6 @@
 package git
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -18,7 +17,7 @@ type BaseResolver struct {
 }
 
 // NewBaseResolver creates a new base resolver
-func NewBaseResolver(bases []string, current string, onChange func()) (*BaseResolver, error) {
+func NewBaseResolver(bases []string, current string, onChange func()) *BaseResolver {
 	r := &BaseResolver{
 		bases:         bases,
 		current:       current,
@@ -28,50 +27,34 @@ func NewBaseResolver(bases []string, current string, onChange func()) (*BaseReso
 	}
 
 	// Initial resolution
-	if err := r.resolve(); err != nil {
-		return nil, err
-	}
+	r.resolve()
 
 	// Start polling
 	go r.poll()
 
-	return r, nil
+	return r
 }
 
 // resolve resolves all bases to commit SHAs
-func (r *BaseResolver) resolve() error {
+func (r *BaseResolver) resolve() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	for _, base := range r.bases {
-		sha, err := r.resolveOne(base)
-		if err != nil {
-			return fmt.Errorf("failed to resolve base %s: %w", base, err)
-		}
+		sha := r.resolveOne(base)
 		r.resolvedBases[base] = sha
 	}
-
-	return nil
 }
 
 // resolveOne resolves a single base reference to a commit SHA
-func (r *BaseResolver) resolveOne(base string) (string, error) {
+func (r *BaseResolver) resolveOne(base string) string {
 	// Special case: "merge-base" resolves to the merge base with main/master
 	if base == "merge-base" {
-		sha, err := GetMergeBase()
-		if err != nil {
-			return "", fmt.Errorf("failed to get merge base: %w", err)
-		}
-		return sha, nil
+		return GetMergeBase()
 	}
 
 	// For other refs, use ResolveRef
-	sha, err := ResolveRef(base)
-	if err != nil {
-		return "", err
-	}
-
-	return sha, nil
+	return ResolveRef(base)
 }
 
 // poll checks every 10 seconds if any bases have changed
@@ -101,11 +84,7 @@ func (r *BaseResolver) checkForChanges() bool {
 
 	changed := false
 	for _, base := range r.bases {
-		sha, err := r.resolveOne(base)
-		if err != nil {
-			// If resolution fails, skip this base
-			continue
-		}
+		sha := r.resolveOne(base)
 
 		if r.resolvedBases[base] != sha {
 			r.resolvedBases[base] = sha

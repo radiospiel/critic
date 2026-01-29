@@ -4,6 +4,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/preconditions"
 	"github.com/radiospiel/critic/simple-go/tasks"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/pkg/critic"
@@ -91,12 +93,20 @@ func (s *Session) GetFileDiff(path string) *types.FileDiff {
 	s.mu.RUnlock()
 
 	if currentBase == "" {
+		logger.Error("session does not have current base")
 		return nil
 	}
 
+	preconditions.Check(path != "", "path required")
+
 	// Load the full diff for the specific file
 	diff, err := git.GetDiffBetween(currentBase, "current", []string{path})
-	if err != nil || diff == nil || len(diff.Files) == 0 {
+	if err != nil {
+		logger.Error("git.GetDiffBetween returns error %v", err)
+		return nil
+	}
+	if diff == nil || len(diff.Files) == 0 {
+		logger.Error("git.GetDiffBetween returns empty diff")
 		return nil
 	}
 
@@ -132,10 +142,7 @@ func (s *Session) SetRefs(base string) error {
 	// Start background task to load diff summary
 	task, err := tasks.RunExclusively("api-session-diff", func() diffResult {
 		// Resolve the base ref to a commit SHA
-		resolvedBase, err := git.ResolveRef(base)
-		if err != nil {
-			return diffResult{err: err}
-		}
+		resolvedBase := git.ResolveRef(base)
 
 		// Run git diff --name-status for file summary (no hunks)
 		diff, err := git.GetDiffNamesBetween(resolvedBase, "current")

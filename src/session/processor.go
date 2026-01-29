@@ -78,20 +78,11 @@ func (p *DiffProcessor) loadDiffAsync() {
 	baseSHA, ok := p.state.GetResolvedBase(baseName)
 	if !ok {
 		// Try to resolve it now
-		var err error
-		baseSHA, err = resolveBaseRef(baseName)
-		if err != nil {
-			p.notifyDiffLoaded(nil, fmt.Errorf("failed to resolve base %s: %w", baseName, err))
-			return
-		}
+		baseSHA = resolveBaseRef(baseName)
 	}
 
 	// Resolve HEAD
-	targetSHA, err := git.ResolveRef("HEAD")
-	if err != nil {
-		p.notifyDiffLoaded(nil, fmt.Errorf("failed to resolve HEAD: %w", err))
-		return
-	}
+	targetSHA := git.ResolveRef("HEAD")
 
 	logger.Info("DiffProcessor: Loading diff from %s (%s) to HEAD (%s)", baseName, truncateSHA(baseSHA), truncateSHA(targetSHA))
 
@@ -158,22 +149,13 @@ func (p *DiffProcessor) IsLoading() bool {
 }
 
 // resolveBaseRef resolves a base ref to a SHA
-func resolveBaseRef(base string) (string, error) {
+func resolveBaseRef(base string) string {
 	if git.IsCommitSHA(base) {
 		return git.ResolveRef(base)
 	}
 
-	baseSHA, err := git.ResolveRef(base)
-	if err != nil {
-		return "", err
-	}
-
-	mergeBase, err := git.GetMergeBaseBetween("HEAD", baseSHA)
-	if err != nil {
-		return baseSHA, nil // Fallback
-	}
-
-	return mergeBase, nil
+	baseSHA := git.ResolveRef(base)
+	return git.GetMergeBaseBetween("HEAD", baseSHA)
 }
 
 // filterFilesByExtension filters files by extension
