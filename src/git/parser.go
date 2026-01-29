@@ -277,3 +277,57 @@ func splitLines(text string) []string {
 
 	return lines
 }
+
+// ParseDiffNameStatus parses `git diff --name-status` output into a Diff object.
+// The output format is: STATUS\tPATH or STATUS\tOLD_PATH\tNEW_PATH for renames.
+// Status codes: A=Added, D=Deleted, M=Modified, R=Renamed, C=Copied, T=Type changed
+func ParseDiffNameStatus(output string) (*ctypes.Diff, error) {
+	lines := splitLines(output)
+
+	diff := &ctypes.Diff{
+		Files: []*ctypes.FileDiff{},
+	}
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Split(line, "\t")
+		if len(parts) < 2 {
+			continue
+		}
+
+		status := parts[0]
+		fileDiff := &ctypes.FileDiff{
+			Hunks: []*ctypes.Hunk{}, // Empty hunks for name-status output
+		}
+
+		// Handle different status codes
+		// Rename status can be R100, R095, etc. (with similarity percentage)
+		if len(status) > 0 && (status[0] == 'R' || status[0] == 'C') {
+			// Rename or Copy: has old path and new path
+			if len(parts) >= 3 {
+				fileDiff.IsRenamed = status[0] == 'R'
+				fileDiff.OldPath = parts[1]
+				fileDiff.NewPath = parts[2]
+			}
+		} else {
+			fileDiff.OldPath = parts[1]
+			fileDiff.NewPath = parts[1]
+
+			switch status {
+			case "A":
+				fileDiff.IsNew = true
+			case "D":
+				fileDiff.IsDeleted = true
+			case "M", "T":
+				// Modified or Type change - default state
+			}
+		}
+
+		diff.Files = append(diff.Files, fileDiff)
+	}
+
+	return diff, nil
+}

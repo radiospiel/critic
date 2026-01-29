@@ -2,16 +2,29 @@ import { useState } from 'react'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import FileList from './components/FileList'
 import DiffView from './components/DiffView'
-import { FileDiff } from './gen/critic_pb'
+import { criticClient } from './api/client'
+import { FileDiff, FileSummary } from './gen/critic_pb'
 
 function AppContent() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [selectedFileDiff, setSelectedFileDiff] = useState<FileDiff | null>(null)
+  const [loading, setLoading] = useState(false)
   const { theme, toggleTheme } = useTheme()
 
-  const handleSelectFile = (file: string, fileDiff: FileDiff) => {
+  const handleSelectFile = (file: string, _fileSummary: FileSummary) => {
     setSelectedFile(file)
-    setSelectedFileDiff(fileDiff)
+    setLoading(true)
+    criticClient
+      .getDiff({ path: file })
+      .then((response) => {
+        setSelectedFileDiff(response.file || null)
+        setLoading(false)
+      })
+      .catch((err) => {
+        console.error('Failed to load diff:', err)
+        setSelectedFileDiff(null)
+        setLoading(false)
+      })
   }
 
   return (
@@ -26,7 +39,11 @@ function AppContent() {
         <FileList selectedFile={selectedFile} onSelectFile={handleSelectFile} />
       </aside>
       <main className="main-content">
-        {selectedFileDiff ? (
+        {loading ? (
+          <div className="empty-state">
+            <span>Loading...</span>
+          </div>
+        ) : selectedFileDiff ? (
           <DiffView fileDiff={selectedFileDiff} />
         ) : (
           <div className="empty-state">

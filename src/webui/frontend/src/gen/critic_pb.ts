@@ -155,44 +155,44 @@ export class GetLastChangeResponse extends Message<GetLastChangeResponse> {
 }
 
 /**
- * GetDiffsRequest is an empty request for GetDiffs.
+ * GetDiffSummaryRequest is an empty request for GetDiffSummary.
  *
- * @generated from message critic.v1.GetDiffsRequest
+ * @generated from message critic.v1.GetDiffSummaryRequest
  */
-export class GetDiffsRequest extends Message<GetDiffsRequest> {
-  constructor(data?: PartialMessage<GetDiffsRequest>) {
+export class GetDiffSummaryRequest extends Message<GetDiffSummaryRequest> {
+  constructor(data?: PartialMessage<GetDiffSummaryRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "critic.v1.GetDiffsRequest";
+  static readonly typeName = "critic.v1.GetDiffSummaryRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffsRequest {
-    return new GetDiffsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffSummaryRequest {
+    return new GetDiffSummaryRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetDiffsRequest {
-    return new GetDiffsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetDiffSummaryRequest {
+    return new GetDiffSummaryRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetDiffsRequest {
-    return new GetDiffsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetDiffSummaryRequest {
+    return new GetDiffSummaryRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetDiffsRequest | PlainMessage<GetDiffsRequest> | undefined, b: GetDiffsRequest | PlainMessage<GetDiffsRequest> | undefined): boolean {
-    return proto3.util.equals(GetDiffsRequest, a, b);
+  static equals(a: GetDiffSummaryRequest | PlainMessage<GetDiffSummaryRequest> | undefined, b: GetDiffSummaryRequest | PlainMessage<GetDiffSummaryRequest> | undefined): boolean {
+    return proto3.util.equals(GetDiffSummaryRequest, a, b);
   }
 }
 
 /**
- * GetDiffsResponse contains the current state and diffs from the session.
+ * GetDiffSummaryResponse contains the current state and diff summary from the session.
  *
- * @generated from message critic.v1.GetDiffsResponse
+ * @generated from message critic.v1.GetDiffSummaryResponse
  */
-export class GetDiffsResponse extends Message<GetDiffsResponse> {
+export class GetDiffSummaryResponse extends Message<GetDiffSummaryResponse> {
   /**
    * state is the current session state ("INITIALISING" or "READY").
    *
@@ -201,38 +201,228 @@ export class GetDiffsResponse extends Message<GetDiffsResponse> {
   state = "";
 
   /**
-   * diff contains the file diffs (may be null if state is INITIALISING).
+   * diff contains the file summaries (may be null if state is INITIALISING).
    *
-   * @generated from field: critic.v1.Diff diff = 2;
+   * @generated from field: critic.v1.DiffSummary diff = 2;
    */
-  diff?: Diff;
+  diff?: DiffSummary;
 
-  constructor(data?: PartialMessage<GetDiffsResponse>) {
+  constructor(data?: PartialMessage<GetDiffSummaryResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "critic.v1.GetDiffsResponse";
+  static readonly typeName = "critic.v1.GetDiffSummaryResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "diff", kind: "message", T: Diff },
+    { no: 2, name: "diff", kind: "message", T: DiffSummary },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffsResponse {
-    return new GetDiffsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffSummaryResponse {
+    return new GetDiffSummaryResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetDiffsResponse {
-    return new GetDiffsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetDiffSummaryResponse {
+    return new GetDiffSummaryResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetDiffsResponse {
-    return new GetDiffsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetDiffSummaryResponse {
+    return new GetDiffSummaryResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetDiffsResponse | PlainMessage<GetDiffsResponse> | undefined, b: GetDiffsResponse | PlainMessage<GetDiffsResponse> | undefined): boolean {
-    return proto3.util.equals(GetDiffsResponse, a, b);
+  static equals(a: GetDiffSummaryResponse | PlainMessage<GetDiffSummaryResponse> | undefined, b: GetDiffSummaryResponse | PlainMessage<GetDiffSummaryResponse> | undefined): boolean {
+    return proto3.util.equals(GetDiffSummaryResponse, a, b);
+  }
+}
+
+/**
+ * GetDiffRequest requests the full diff for a specific file.
+ *
+ * @generated from message critic.v1.GetDiffRequest
+ */
+export class GetDiffRequest extends Message<GetDiffRequest> {
+  /**
+   * path is the file path to get the diff for.
+   *
+   * @generated from field: string path = 1;
+   */
+  path = "";
+
+  constructor(data?: PartialMessage<GetDiffRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetDiffRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffRequest {
+    return new GetDiffRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetDiffRequest {
+    return new GetDiffRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetDiffRequest {
+    return new GetDiffRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetDiffRequest | PlainMessage<GetDiffRequest> | undefined, b: GetDiffRequest | PlainMessage<GetDiffRequest> | undefined): boolean {
+    return proto3.util.equals(GetDiffRequest, a, b);
+  }
+}
+
+/**
+ * GetDiffResponse contains the full diff for a specific file.
+ *
+ * @generated from message critic.v1.GetDiffResponse
+ */
+export class GetDiffResponse extends Message<GetDiffResponse> {
+  /**
+   * file contains the full file diff with hunks.
+   *
+   * @generated from field: critic.v1.FileDiff file = 1;
+   */
+  file?: FileDiff;
+
+  constructor(data?: PartialMessage<GetDiffResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetDiffResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "file", kind: "message", T: FileDiff },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffResponse {
+    return new GetDiffResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetDiffResponse {
+    return new GetDiffResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetDiffResponse {
+    return new GetDiffResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetDiffResponse | PlainMessage<GetDiffResponse> | undefined, b: GetDiffResponse | PlainMessage<GetDiffResponse> | undefined): boolean {
+    return proto3.util.equals(GetDiffResponse, a, b);
+  }
+}
+
+/**
+ * DiffSummary represents a summary of git diff with multiple file changes (without hunks).
+ *
+ * @generated from message critic.v1.DiffSummary
+ */
+export class DiffSummary extends Message<DiffSummary> {
+  /**
+   * @generated from field: repeated critic.v1.FileSummary files = 1;
+   */
+  files: FileSummary[] = [];
+
+  constructor(data?: PartialMessage<DiffSummary>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.DiffSummary";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "files", kind: "message", T: FileSummary, repeated: true },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): DiffSummary {
+    return new DiffSummary().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): DiffSummary {
+    return new DiffSummary().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): DiffSummary {
+    return new DiffSummary().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: DiffSummary | PlainMessage<DiffSummary> | undefined, b: DiffSummary | PlainMessage<DiffSummary> | undefined): boolean {
+    return proto3.util.equals(DiffSummary, a, b);
+  }
+}
+
+/**
+ * FileSummary represents summary info for a single file (without hunks).
+ *
+ * @generated from message critic.v1.FileSummary
+ */
+export class FileSummary extends Message<FileSummary> {
+  /**
+   * @generated from field: string old_path = 1;
+   */
+  oldPath = "";
+
+  /**
+   * @generated from field: string new_path = 2;
+   */
+  newPath = "";
+
+  /**
+   * @generated from field: string file_mode_old = 3;
+   */
+  fileModeOld = "";
+
+  /**
+   * @generated from field: string file_mode_new = 4;
+   */
+  fileModeNew = "";
+
+  /**
+   * @generated from field: critic.v1.FileStatus status = 5;
+   */
+  status = FileStatus.UNSPECIFIED;
+
+  /**
+   * @generated from field: bool is_binary = 6;
+   */
+  isBinary = false;
+
+  constructor(data?: PartialMessage<FileSummary>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.FileSummary";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "old_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "new_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "file_mode_old", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "file_mode_new", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "status", kind: "enum", T: proto3.getEnumType(FileStatus) },
+    { no: 6, name: "is_binary", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileSummary {
+    return new FileSummary().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): FileSummary {
+    return new FileSummary().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): FileSummary {
+    return new FileSummary().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: FileSummary | PlainMessage<FileSummary> | undefined, b: FileSummary | PlainMessage<FileSummary> | undefined): boolean {
+    return proto3.util.equals(FileSummary, a, b);
   }
 }
 

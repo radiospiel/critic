@@ -8,39 +8,23 @@ import (
 	"github.com/radiospiel/critic/src/pkg/types"
 )
 
-// GetDiffs returns the current diffs and state from the session.
-func (s *Server) GetDiffs(
+// GetDiff returns the full diff for a specific file path.
+func (s *Server) GetDiff(
 	ctx context.Context,
-	req *connect.Request[api.GetDiffsRequest],
-) (*connect.Response[api.GetDiffsResponse], error) {
+	req *connect.Request[api.GetDiffRequest],
+) (*connect.Response[api.GetDiffResponse], error) {
 	session := s.GetSession()
-	state := session.GetState()
-	diff := session.GetDiff()
+	path := req.Msg.GetPath()
 
-	res := connect.NewResponse(&api.GetDiffsResponse{
-		State: string(state),
-		Diff:  convertDiff(diff),
+	fileDiff := session.GetFileDiff(path)
+
+	res := connect.NewResponse(&api.GetDiffResponse{
+		File: convertFileDiff(fileDiff),
 	})
 	return res, nil
 }
 
-// convertDiff converts a types.Diff to an api.Diff
-func convertDiff(d *types.Diff) *api.Diff {
-	if d == nil {
-		return nil
-	}
-
-	files := make([]*api.FileDiff, len(d.Files))
-	for i, f := range d.Files {
-		files[i] = convertFileDiff(f)
-	}
-
-	return &api.Diff{
-		Files: files,
-	}
-}
-
-// convertFileDiff converts a types.FileDiff to an api.FileDiff
+// convertFileDiff converts a types.FileDiff to an api.FileDiff (with hunks)
 func convertFileDiff(f *types.FileDiff) *api.FileDiff {
 	if f == nil {
 		return nil

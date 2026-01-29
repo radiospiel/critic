@@ -8,8 +8,10 @@ option go_package = "github.com/radiospiel/critic/src/api;api";
 service CriticService {
   // GetLastChange returns the timestamp of the last change.
   rpc GetLastChange(GetLastChangeRequest) returns (GetLastChangeResponse);
-  // GetDiffs returns the current diffs and state from the session.
-  rpc GetDiffs(GetDiffsRequest) returns (GetDiffsResponse);
+  // GetDiffSummary returns the current diff summary (file list without hunks) and state.
+  rpc GetDiffSummary(GetDiffSummaryRequest) returns (GetDiffSummaryResponse);
+  // GetDiff returns the full diff for a specific file path.
+  rpc GetDiff(GetDiffRequest) returns (GetDiffResponse);
 }
 
 // GetLastChangeRequest is an empty request for GetLastChange.
@@ -21,15 +23,42 @@ message GetLastChangeResponse {
   uint64 mtime_msecs = 1;
 }
 
-// GetDiffsRequest is an empty request for GetDiffs.
-message GetDiffsRequest {}
+// GetDiffSummaryRequest is an empty request for GetDiffSummary.
+message GetDiffSummaryRequest {}
 
-// GetDiffsResponse contains the current state and diffs from the session.
-message GetDiffsResponse {
+// GetDiffSummaryResponse contains the current state and diff summary from the session.
+message GetDiffSummaryResponse {
   // state is the current session state ("INITIALISING" or "READY").
   string state = 1;
-  // diff contains the file diffs (may be null if state is INITIALISING).
-  Diff diff = 2;
+  // diff contains the file summaries without hunks (may be null if state is INITIALISING).
+  DiffSummary diff = 2;
+}
+
+// GetDiffRequest requests the full diff for a specific file.
+message GetDiffRequest {
+  // path is the file path to get the diff for.
+  string path = 1;
+}
+
+// GetDiffResponse contains the full diff for a single file.
+message GetDiffResponse {
+  // file contains the full file diff with hunks.
+  FileDiff file = 1;
+}
+
+// DiffSummary represents a git diff summary with file metadata but no hunks.
+message DiffSummary {
+  repeated FileSummary files = 1;
+}
+
+// FileSummary represents metadata about a changed file (without hunks).
+message FileSummary {
+  string old_path = 1;
+  string new_path = 2;
+  string file_mode_old = 3;
+  string file_mode_new = 4;
+  FileStatus status = 5;
+  bool is_binary = 6;
 }
 
 // Diff represents a git diff with multiple file changes.
