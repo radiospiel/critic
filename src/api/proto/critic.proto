@@ -14,6 +14,25 @@ service CriticService {
   rpc GetDiff(GetDiffRequest) returns (GetDiffResponse);
 }
 
+// ErrorCode represents the type of RPC error.
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_INVALID_ARGUMENT = 1;
+  ERROR_CODE_NOT_FOUND = 2;
+  ERROR_CODE_INTERNAL = 3;
+  ERROR_CODE_UNAVAILABLE = 4;
+}
+
+// RpcError represents a structured error response.
+message RpcError {
+  // code is the error type.
+  ErrorCode code = 1;
+  // message is the error message for logs.
+  string message = 2;
+  // details is an optional human-readable description.
+  string details = 3;
+}
+
 // GetLastChangeRequest is an empty request for GetLastChange.
 message GetLastChangeRequest {}
 
@@ -21,6 +40,8 @@ message GetLastChangeRequest {}
 message GetLastChangeResponse {
   // mtime_msecs is the timestamp in milliseconds since Unix epoch.
   uint64 mtime_msecs = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
 }
 
 // GetDiffSummaryRequest is an empty request for GetDiffSummary.
@@ -32,6 +53,8 @@ message GetDiffSummaryResponse {
   string state = 1;
   // diff contains the file summaries without hunks (may be null if state is INITIALISING).
   DiffSummary diff = 2;
+  // error contains error details if the request failed.
+  RpcError error = 15;
 }
 
 // GetDiffRequest requests the full diff for a specific file.
@@ -44,6 +67,8 @@ message GetDiffRequest {
 message GetDiffResponse {
   // file contains the full file diff with hunks.
   FileDiff file = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
 }
 
 // DiffSummary represents a git diff summary with file metadata but no hunks.

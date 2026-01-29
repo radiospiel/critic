@@ -1,0 +1,177 @@
+package api
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+// JSONSchema represents a JSON Schema definition.
+type JSONSchema struct {
+	Type       string                 `json:"type"`
+	Properties map[string]*JSONSchema `json:"properties,omitempty"`
+	Required   []string               `json:"required,omitempty"`
+	Enum       []any                  `json:"enum,omitempty"`
+	MinLength  *int                   `json:"minLength,omitempty"`
+	MaxLength  *int                   `json:"maxLength,omitempty"`
+}
+
+// RequestSchemas maps procedure names to their JSON schemas.
+var RequestSchemas = map[string]*JSONSchema{
+	"/critic.v1.CriticService/GetLastChange": {
+		Type:       "object",
+		Properties: map[string]*JSONSchema{},
+	},
+	"/critic.v1.CriticService/GetDiffSummary": {
+		Type:       "object",
+		Properties: map[string]*JSONSchema{},
+	},
+	"/critic.v1.CriticService/GetDiff": {
+		Type: "object",
+		Properties: map[string]*JSONSchema{
+			"path": {Type: "string", MinLength: intPtr(1)},
+		},
+		Required: []string{"path"},
+	},
+}
+
+func intPtr(i int) *int {
+	return &i
+}
+
+// ValidationError represents a schema validation error.
+type ValidationError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Field, e.Message)
+}
+
+// ValidateRequest validates a request against its JSON schema.
+func ValidateRequest(procedure string, data map[string]any) []*ValidationError {
+	schema, ok := RequestSchemas[procedure]
+	if !ok {
+		// No schema defined, skip validation
+		return nil
+	}
+
+	return validateObject(schema, data, "")
+}
+
+func validateObject(schema *JSONSchema, data map[string]any, path string) []*ValidationError {
+	var errors []*ValidationError
+
+	// Check required fields
+	for _, required := range schema.Required {
+		if _, ok := data[required]; !ok {
+			fieldPath := required
+			if path != "" {
+				fieldPath = path + "." + required
+			}
+			errors = append(errors, &ValidationError{
+				Field:   fieldPath,
+				Message: "required field is missing",
+			})
+		}
+	}
+
+	// Validate properties
+	for name, propSchema := range schema.Properties {
+		value, ok := data[name]
+		if !ok {
+			continue
+		}
+
+		fieldPath := name
+		if path != "" {
+			fieldPath = path + "." + name
+		}
+
+		propErrors := validateValue(propSchema, value, fieldPath)
+		errors = append(errors, propErrors...)
+	}
+
+	return errors
+}
+
+func validateValue(schema *JSONSchema, value any, path string) []*ValidationError {
+	var errors []*ValidationError
+
+	switch schema.Type {
+	case "string":
+		str, ok := value.(string)
+		if !ok {
+			errors = append(errors, &ValidationError{
+				Field:   path,
+				Message: fmt.Sprintf("expected string, got %T", value),
+			})
+			return errors
+		}
+
+		if schema.MinLength != nil && len(str) < *schema.MinLength {
+			errors = append(errors, &ValidationError{
+				Field:   path,
+				Message: fmt.Sprintf("string length %d is less than minimum %d", len(str), *schema.MinLength),
+			})
+		}
+
+		if schema.MaxLength != nil && len(str) > *schema.MaxLength {
+			errors = append(errors, &ValidationError{
+				Field:   path,
+				Message: fmt.Sprintf("string length %d exceeds maximum %d", len(str), *schema.MaxLength),
+			})
+		}
+
+		if schema.Enum != nil {
+			found := false
+			for _, e := range schema.Enum {
+				if e == str {
+					found = true
+					break
+				}
+			}
+			if !found {
+				errors = append(errors, &ValidationError{
+					Field:   path,
+					Message: fmt.Sprintf("value %q is not in allowed enum values", str),
+				})
+			}
+		}
+
+	case "object":
+		obj, ok := value.(map[string]any)
+		if !ok {
+			errors = append(errors, &ValidationError{
+				Field:   path,
+				Message: fmt.Sprintf("expected object, got %T", value),
+			})
+			return errors
+		}
+		errors = append(errors, validateObject(schema, obj, path)...)
+	}
+
+	return errors
+}
+
+// ProtoToJSON converts a protobuf message to its JSON representation.
+func ProtoToJSON(msg any) (string, error) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// ProtoToMap converts a protobuf message to a map for validation.
+func ProtoToMap(msg any) (map[string]any, error) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
