@@ -80,8 +80,8 @@ func (s *Server) Start() error {
 
 	mux := http.NewServeMux()
 
-	// Connect RPC API with logging interceptor
-	interceptors := connect.WithInterceptors(loggingInterceptor())
+	// Connect RPC API with logging and validation interceptors
+	interceptors := connect.WithInterceptors(loggingInterceptor(), validatorInterceptor())
 	path, handler := apiconnect.NewCriticServiceHandler(s, interceptors)
 	mux.Handle(path, handler)
 

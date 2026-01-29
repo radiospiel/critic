@@ -10,18 +10,34 @@ PROTOC_GEN_CONNECT_GO_VERSION="v1.19.1"
 
 GOBIN="${GOPATH:-$HOME/go}/bin"
 
-# Install protoc if not present
-type -p protoc >/dev/null 2>&1 || (
+# Install protoc or buf if neither is present
+# buf (installed via npm) can be used as an alternative to protoc
+if ! type -p protoc >/dev/null 2>&1 && ! type -p buf >/dev/null 2>&1; then
     echo "Installing protoc..."
+    install_success=false
+
     if [ "$OS" = "Darwin" ]; then
-        brew install protobuf
+        if brew install protobuf 2>/dev/null; then
+            install_success=true
+        fi
     elif [ "$OS" = "Linux" ]; then
-        sudo apt-get update && sudo apt-get install -y protobuf-compiler
-    else
-        echo "Unknown OS: $OS. Please install protoc manually."
-        exit 1
+        if sudo apt-get update && sudo apt-get install -y protobuf-compiler 2>/dev/null; then
+            install_success=true
+        fi
     fi
-)
+
+    # Fallback to buf via npm if protoc installation failed
+    if [ "$install_success" = false ]; then
+        echo "protoc installation failed, trying buf via npm..."
+        if type -p npm >/dev/null 2>&1; then
+            npm install -g @bufbuild/buf
+            echo "Installed buf as protoc alternative"
+        else
+            echo "Neither protoc nor npm available. Please install protoc manually."
+            exit 1
+        fi
+    fi
+fi
 
 # Install buf if not present
 type -p buf >/dev/null 2>&1 || (
