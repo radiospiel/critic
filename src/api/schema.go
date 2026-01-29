@@ -15,27 +15,38 @@ type JSONSchema struct {
 	MaxLength  *int                   `json:"maxLength,omitempty"`
 }
 
-// RequestSchemas maps procedure names to their JSON schemas.
-var RequestSchemas = map[string]*JSONSchema{
-	"/critic.v1.CriticService/GetLastChange": {
-		Type:       "object",
-		Properties: map[string]*JSONSchema{},
-	},
-	"/critic.v1.CriticService/GetDiffSummary": {
-		Type:       "object",
-		Properties: map[string]*JSONSchema{},
-	},
-	"/critic.v1.CriticService/GetDiff": {
-		Type: "object",
-		Properties: map[string]*JSONSchema{
-			"path": {Type: "string", MinLength: intPtr(1)},
+// requestSchemaStrings defines JSON schemas as JSON string literals.
+// This makes schemas easier to read and maintain.
+var requestSchemaStrings = map[string]string{
+	"/critic.v1.CriticService/GetLastChange": `{
+		"type": "object",
+		"properties": {}
+	}`,
+	"/critic.v1.CriticService/GetDiffSummary": `{
+		"type": "object",
+		"properties": {}
+	}`,
+	"/critic.v1.CriticService/GetDiff": `{
+		"type": "object",
+		"properties": {
+			"path": {"type": "string", "minLength": 1}
 		},
-		Required: []string{"path"},
-	},
+		"required": ["path"]
+	}`,
 }
 
-func intPtr(i int) *int {
-	return &i
+// RequestSchemas maps procedure names to their parsed JSON schemas.
+var RequestSchemas map[string]*JSONSchema
+
+func init() {
+	RequestSchemas = make(map[string]*JSONSchema)
+	for procedure, schemaStr := range requestSchemaStrings {
+		var schema JSONSchema
+		if err := json.Unmarshal([]byte(schemaStr), &schema); err != nil {
+			panic(fmt.Sprintf("failed to parse schema for %s: %v", procedure, err))
+		}
+		RequestSchemas[procedure] = &schema
+	}
 }
 
 // ValidationError represents a schema validation error.
