@@ -46,19 +46,6 @@ func TestValidateRequest_UnknownProcedure(t *testing.T) {
 	assert.NoError(t, err, "unknown procedure should pass validation")
 }
 
-func TestProtoToJSON(t *testing.T) {
-	// Test with a simple struct
-	msg := struct {
-		Name  string `json:"name"`
-		Value int    `json:"value"`
-	}{Name: "test", Value: 42}
-
-	json, err := ProtoToJSON(msg)
-	assert.NoError(t, err)
-	assert.Contains(t, json, `"name":"test"`, "JSON should contain name field")
-	assert.Contains(t, json, `"value":42`, "JSON should contain value field")
-}
-
 func TestProtoToMap(t *testing.T) {
 	// Test with a simple struct
 	msg := struct {

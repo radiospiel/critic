@@ -84,15 +84,6 @@ func collectErrors(err *jsonschema.ValidationError, messages *[]string) {
 	}
 }
 
-// ProtoToJSON converts a protobuf message to its JSON representation.
-func ProtoToJSON(msg any) (string, error) {
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
 // ProtoToMap converts a protobuf message to a map for validation.
 func ProtoToMap(msg any) (map[string]any, error) {
 	data, err := json.Marshal(msg)
