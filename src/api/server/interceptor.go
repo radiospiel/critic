@@ -34,13 +34,6 @@ func loggingInterceptor() connect.UnaryInterceptorFunc {
 			// Log request as JSON
 			logger.Info("RPC request: %s req=%s", procedure, toJSON(req.Any()))
 
-			// Validate request against JSON schema
-			if validationErr := validateRequest(procedure, req.Any()); validationErr != nil {
-				duration := time.Since(start)
-				logger.Info("RPC response: %s err=%s duration=%v", procedure, toJSON(validationErr), duration)
-				return nil, connect.NewError(connect.CodeInvalidArgument, validationErr)
-			}
-
 			// Call the handler
 			resp, err := next(ctx, req)
 
@@ -53,6 +46,21 @@ func loggingInterceptor() connect.UnaryInterceptorFunc {
 			}
 
 			return resp, err
+		}
+	}
+}
+
+// validatorInterceptor validates requests against JSON schemas
+func validatorInterceptor() connect.UnaryInterceptorFunc {
+	return func(next connect.UnaryFunc) connect.UnaryFunc {
+		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			procedure := req.Spec().Procedure
+
+			if validationErr := validateRequest(procedure, req.Any()); validationErr != nil {
+				return nil, connect.NewError(connect.CodeInvalidArgument, validationErr)
+			}
+
+			return next(ctx, req)
 		}
 	}
 }
