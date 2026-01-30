@@ -25,7 +25,6 @@ func Execute() error {
 	rootCmd.AddCommand(newAPICmd())
 	rootCmd.AddCommand(newMCPCmd())
 	rootCmd.AddCommand(newConvoCmd())
-	rootCmd.AddCommand(newLogCmd())
 
 	return rootCmd.Execute()
 }
