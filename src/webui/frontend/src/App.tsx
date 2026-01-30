@@ -3,7 +3,6 @@ import { ThemeProvider, useTheme } from './context/ThemeContext'
 import FileList from './components/FileList'
 import DiffView from './components/DiffView'
 import HelpModal from './components/HelpModal'
-import CommentEditor, { CommentLineInfo } from './components/CommentEditor'
 import { criticClient } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
 
@@ -20,7 +19,6 @@ function AppContent() {
   const [files, setFiles] = useState<FileSummary[]>([])
   const [focusedPanel, setFocusedPanel] = useState<FocusedPanel>('fileList')
   const [showHelp, setShowHelp] = useState(false)
-  const [commentLineInfo, setCommentLineInfo] = useState<CommentLineInfo | null>(null)
   const { theme, toggleTheme } = useTheme()
 
   // Load file list for navigation
@@ -81,6 +79,10 @@ function AppContent() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
+      // Don't handle if in tiptap editor
+      if ((e.target as HTMLElement)?.closest?.('.tiptap')) {
+        return
+      }
 
       if (e.key === 'Tab') {
         e.preventDefault()
@@ -97,18 +99,6 @@ function AppContent() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showHelp])
-
-  const handleLineClick = (lineInfo: CommentLineInfo) => {
-    setCommentLineInfo(lineInfo)
-  }
-
-  const handleCommentClose = () => {
-    setCommentLineInfo(null)
-  }
-
-  const handleCommentSaved = () => {
-    console.log('Comment saved successfully')
-  }
 
   return (
     <div className="app">
@@ -141,7 +131,6 @@ function AppContent() {
             onNavigatePrevFile={handleNavigatePrevFile}
             onNavigateNextFile={handleNavigateNextFile}
             isFocused={focusedPanel === 'diffView'}
-            onLineClick={handleLineClick}
           />
         ) : (
           <div className="empty-state">
@@ -150,13 +139,6 @@ function AppContent() {
         )}
       </main>
       {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
-      {commentLineInfo && (
-        <CommentEditor
-          lineInfo={commentLineInfo}
-          onClose={handleCommentClose}
-          onSaved={handleCommentSaved}
-        />
-      )}
     </div>
   )
 }

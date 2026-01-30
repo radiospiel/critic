@@ -58,6 +58,24 @@ function HelpModal({ onClose }: HelpModalProps) {
           </section>
 
           <section className="shortcut-section">
+            <h3>Comments</h3>
+            <div className="shortcut-list">
+              <div className="shortcut-item">
+                <kbd>Enter</kbd>
+                <span>Open comment editor on selected line</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>Ctrl</kbd> + <kbd>S</kbd>
+                <span>Save comment</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>Esc</kbd>
+                <span>Close comment editor</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="shortcut-section">
             <h3>General</h3>
             <div className="shortcut-list">
               <div className="shortcut-item">

@@ -1,7 +1,7 @@
 import { useState, useMemo, Fragment, useEffect, useCallback, useRef } from 'react'
 import hljs from 'highlight.js'
 import { FileDiff, FileStatus, Hunk, Line, LineType } from '../gen/critic_pb'
-import { CommentLineInfo } from './CommentEditor'
+import InlineCommentEditor, { CommentLineInfo } from './CommentEditor'
 
 type ViewMode = 'unified' | 'split'
 
@@ -12,7 +12,6 @@ interface DiffViewProps {
   onNavigatePrevFile?: () => void
   onNavigateNextFile?: () => void
   isFocused?: boolean
-  onLineClick?: (lineInfo: CommentLineInfo) => void
 }
 
 function getFileExtension(path: string): string {
@@ -282,12 +281,9 @@ interface UnifiedLineProps {
   isFirstSelected?: boolean
   isLastSelected?: boolean
   lineRef?: React.RefObject<HTMLTableRowElement>
-  oldFile: string
-  newFile: string
-  onLineClick?: (lineInfo: CommentLineInfo) => void
 }
 
-function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef, oldFile, newFile, onLineClick }: UnifiedLineProps) {
+function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef }: UnifiedLineProps) {
   const lineClass =
     line.type === LineType.ADDED
       ? 'diff-line-added'
@@ -309,24 +305,8 @@ function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelect
     isLastSelected ? 'diff-line-selected-last' : '',
   ].filter(Boolean).join(' ')
 
-  const handleClick = () => {
-    if (onLineClick) {
-      onLineClick({
-        oldFile,
-        newFile,
-        oldLine: line.lineNoOld,
-        newLine: line.lineNoNew,
-      })
-    }
-  }
-
   return (
-    <tr
-      className={`${lineClass}${selectionClasses ? ' ' + selectionClasses : ''}`}
-      ref={lineRef}
-      onClick={handleClick}
-      style={{ cursor: onLineClick ? 'pointer' : 'default' }}
-    >
+    <tr className={`${lineClass}${selectionClasses ? ' ' + selectionClasses : ''}`} ref={lineRef}>
       <td className="diff-line-number diff-line-number-old">
         {line.type !== LineType.ADDED && line.lineNoOld > 0 ? line.lineNoOld : ''}
       </td>
@@ -515,9 +495,10 @@ interface SelectionRange {
   end: number
 }
 
-function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onLineClick }: DiffViewProps) {
+function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true }: DiffViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('unified')
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
+  const [editorOpen, setEditorOpen] = useState(false)
   const selectedLineRef = useRef<HTMLTableRowElement>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -535,6 +516,30 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
     return count
   }, [fileDiff.hunks])
 
+  // Build a flat array of all lines for easy indexing
+  const allLines = useMemo(() => {
+    const lines: { line: Line; hunkIdx: number; lineIdx: number }[] = []
+    fileDiff.hunks.forEach((hunk, hunkIdx) => {
+      hunk.lines.forEach((line, lineIdx) => {
+        lines.push({ line, hunkIdx, lineIdx })
+      })
+    })
+    return lines
+  }, [fileDiff.hunks])
+
+  // Get line info for the current selection (use the last selected line for positioning)
+  const getSelectionLineInfo = useCallback((): CommentLineInfo | null => {
+    if (allLines.length === 0) return null
+    const lastSelectedIdx = Math.min(selection.end, allLines.length - 1)
+    const { line } = allLines[lastSelectedIdx]
+    return {
+      oldFile,
+      newFile,
+      oldLine: line.lineNoOld,
+      newLine: line.lineNoNew,
+    }
+  }, [allLines, selection.end, oldFile, newFile])
+
   const stats = useMemo(() => {
     let added = 0
     let deleted = 0
@@ -548,6 +553,7 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
   // Reset selection when file changes
   useEffect(() => {
     setSelection({ start: 0, end: 0 })
+    setEditorOpen(false)
   }, [fileDiff])
 
   // Scroll selected line into view
@@ -563,6 +569,15 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
     [selection]
   )
 
+  const handleEditorClose = useCallback(() => {
+    setEditorOpen(false)
+  }, [])
+
+  const handleCommentSaved = useCallback(() => {
+    console.log('Comment saved successfully')
+    setEditorOpen(false)
+  }, [])
+
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -571,13 +586,30 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
+      // Don't handle if in tiptap editor
+      if ((e.target as HTMLElement)?.closest?.('.tiptap')) {
+        return
+      }
 
       const jumpSize = e.altKey ? ALT_JUMP_SIZE : 1
 
       switch (e.key) {
+        case 'Enter':
+          if (!editorOpen) {
+            e.preventDefault()
+            setEditorOpen(true)
+          }
+          break
+        case 'Escape':
+          if (editorOpen) {
+            e.preventDefault()
+            setEditorOpen(false)
+          }
+          break
         case 'ArrowUp':
         case 'k':
           e.preventDefault()
+          if (editorOpen) return // Don't navigate while editor is open
           if (e.shiftKey) {
             // Expand selection upward
             if (selection.start > 0) {
@@ -599,6 +631,7 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
         case 'ArrowDown':
         case 'j':
           e.preventDefault()
+          if (editorOpen) return // Don't navigate while editor is open
           if (e.shiftKey) {
             // Expand selection downward
             if (selection.end < totalLines - 1) {
@@ -618,18 +651,20 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
           }
           break
         case 'g':
-          if (!e.shiftKey) {
+          if (!e.shiftKey && !editorOpen) {
             e.preventDefault()
             setSelection({ start: 0, end: 0 })
           }
           break
         case 'G':
-          e.preventDefault()
-          setSelection({ start: totalLines - 1, end: totalLines - 1 })
+          if (!editorOpen) {
+            e.preventDefault()
+            setSelection({ start: totalLines - 1, end: totalLines - 1 })
+          }
           break
       }
     },
-    [isFocused, selection, totalLines, onNavigatePrevFile, onNavigateNextFile]
+    [isFocused, selection, totalLines, onNavigatePrevFile, onNavigateNextFile, editorOpen]
   )
 
   useEffect(() => {
@@ -650,6 +685,8 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
       </div>
     )
   }
+
+  const selectionLineInfo = getSelectionLineInfo()
 
   return (
     <div className="diff-view">
@@ -705,19 +742,31 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                       const isLastSelected = currentIndex === selection.end
                       // Attach ref to the last selected line for scroll-into-view
                       const shouldAttachRef = isLastSelected
+                      // Show editor after the last selected line
+                      const showEditorAfterLine = isLastSelected && editorOpen && selectionLineInfo
+
                       return (
-                        <UnifiedLine
-                          key={`${hunkIdx}-${lineIdx}`}
-                          line={line}
-                          language={language}
-                          isSelected={isSelected}
-                          isFirstSelected={isFirstSelected}
-                          isLastSelected={isLastSelected}
-                          lineRef={shouldAttachRef ? selectedLineRef : undefined}
-                          oldFile={oldFile}
-                          newFile={newFile}
-                          onLineClick={onLineClick}
-                        />
+                        <Fragment key={`${hunkIdx}-${lineIdx}`}>
+                          <UnifiedLine
+                            line={line}
+                            language={language}
+                            isSelected={isSelected}
+                            isFirstSelected={isFirstSelected}
+                            isLastSelected={isLastSelected}
+                            lineRef={shouldAttachRef ? selectedLineRef : undefined}
+                          />
+                          {showEditorAfterLine && (
+                            <tr className="diff-inline-editor-row">
+                              <td colSpan={4}>
+                                <InlineCommentEditor
+                                  lineInfo={selectionLineInfo}
+                                  onClose={handleEditorClose}
+                                  onSaved={handleCommentSaved}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       )
                     })}
                   </Fragment>
