@@ -44,8 +44,9 @@ type Config struct {
 	Port      int
 	GitRoot   string
 	Messaging critic.Messaging
-	Args      DiffArgs
 	Dev       bool // Development mode: proxy to Vite dev server instead of serving embedded files
+	DiffBases []string
+	Paths     []string
 }
 
 // Server implements the CriticService API.
@@ -59,8 +60,9 @@ type Server struct {
 // NewServer creates a new API server with the given configuration.
 // It initializes a default session with the provided configuration values.
 func NewServer(config Config) *Server {
-	session := NewSession(config.GitRoot, config.Messaging, config.Args)
-	must.Must(session.SetRefs("master"))
+	session := NewSession(config.GitRoot, config.Messaging, config.Paths)
+	// TODO(bot): pass in config.DiffBases into NewSession.
+	must.Must(session.SetDiffBases(config.DiffBases))
 	return &Server{
 		config:  config,
 		session: session,

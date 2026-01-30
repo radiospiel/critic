@@ -2,7 +2,6 @@ package server
 
 import (
 	"testing"
-	"time"
 
 	"github.com/radiospiel/critic/simple-go/assert"
 	"github.com/radiospiel/critic/src/pkg/critic"
@@ -10,11 +9,7 @@ import (
 )
 
 func TestNewSession(t *testing.T) {
-	session := NewSession("/test/root", &critic.DummyMessaging{}, DiffArgs{
-		Bases:      []string{"main", "HEAD"},
-		Paths:      []string{"src/"},
-		Extensions: []string{"go", "ts"},
-	})
+	session := NewSession("/test/root", &critic.DummyMessaging{}, []string{"src/"})
 
 	assert.NotNil(t, session, "session should not be nil")
 	assert.Equals(t, session.GetState(), StateReady, "initial state should be READY")
@@ -22,24 +17,8 @@ func TestNewSession(t *testing.T) {
 	assert.Nil(t, session.GetDiffSummary(), "initial diff should be nil")
 }
 
-func TestSessionGetArgs(t *testing.T) {
-	args := DiffArgs{
-		Bases:      []string{"main", "origin/main"},
-		Paths:      []string{"internal/", "src/"},
-		Extensions: []string{"go"},
-	}
-	session := NewSession("/test/root", &critic.DummyMessaging{}, args)
-
-	retrieved := session.GetArgs()
-	assert.Equals(t, len(retrieved.Bases), 2, "should have 2 bases")
-	assert.Equals(t, retrieved.Bases[0], "main", "first base should be main")
-	assert.Equals(t, retrieved.Bases[1], "origin/main", "second base should be origin/main")
-	assert.Equals(t, len(retrieved.Paths), 2, "should have 2 paths")
-	assert.Equals(t, len(retrieved.Extensions), 1, "should have 1 extension")
-}
-
 func TestSessionState(t *testing.T) {
-	session := NewSession("/test/root", &critic.DummyMessaging{}, DiffArgs{})
+	session := NewSession("/test/root", &critic.DummyMessaging{}, []string{})
 
 	// Initial state
 	assert.Equals(t, session.GetState(), StateReady, "initial state should be READY")
@@ -102,21 +81,6 @@ func TestFilterDiffByExtensionsWithDeletedFiles(t *testing.T) {
 	assert.Equals(t, len(filtered.Files), 2, "should have 2 go files (including deleted)")
 }
 
-func TestDiffArgsWithoutCurrentBase(t *testing.T) {
-	// Verify that api.DiffArgs does not have CurrentBase field
-	// (unlike session.DiffArgs which does)
-	args := DiffArgs{
-		Bases:      []string{"main"},
-		Paths:      []string{},
-		Extensions: []string{},
-	}
-
-	// This should compile - DiffArgs only has Bases, Paths, Extensions
-	assert.Equals(t, len(args.Bases), 1, "should have 1 base")
-	assert.Equals(t, len(args.Paths), 0, "should have 0 paths")
-	assert.Equals(t, len(args.Extensions), 0, "should have 0 extensions")
-}
-
 func TestFilterDiffByPaths(t *testing.T) {
 	diff := &types.Diff{
 		Files: []*types.FileDiff{
@@ -153,31 +117,4 @@ func TestFilterDiffByPaths(t *testing.T) {
 	// Nil diff
 	filtered = filterDiffByPaths(nil, []string{"src/"})
 	assert.Nil(t, filtered, "nil diff should return nil")
-}
-
-func TestSessionConcurrentAccess(t *testing.T) {
-	session := NewSession("/test/root", &critic.DummyMessaging{}, DiffArgs{
-		Bases: []string{"main"},
-	})
-
-	// Test concurrent reads don't panic
-	done := make(chan bool)
-	for i := 0; i < 10; i++ {
-		go func() {
-			_ = session.GetState()
-			_ = session.GetCurrentBase()
-			_ = session.GetDiffSummary()
-			_ = session.GetArgs()
-			done <- true
-		}()
-	}
-
-	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
-		select {
-		case <-done:
-		case <-time.After(time.Second):
-			t.Fatal("timeout waiting for goroutines")
-		}
-	}
 }

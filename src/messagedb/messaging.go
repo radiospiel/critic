@@ -3,8 +3,9 @@ package messagedb
 import (
 	"fmt"
 
-	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/preconditions"
+	"github.com/radiospiel/critic/src/pkg/critic"
 )
 
 // Ensure DB implements the critic.Messaging interface
@@ -126,6 +127,7 @@ func (db *DB) GetConversationsForFile(filePath string) ([]*critic.Conversation, 
 		return nil, fmt.Errorf("failed to get messages by file: %w", err)
 	}
 
+	preconditions.Check(rootMessages != nil, "rootMessages cannot be nil")
 	// Build full conversations for each root message
 	conversations := make([]*critic.Conversation, 0, len(rootMessages))
 	for _, rootMsg := range rootMessages {

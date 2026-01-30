@@ -24,9 +24,7 @@ const (
 // Unlike session.DiffArgs, this does not include currentBase as it is managed
 // separately in the Session.
 type DiffArgs struct {
-	Bases      []string `json:"bases"`      // List of base refs
-	Paths      []string `json:"paths"`      // File path patterns
-	Extensions []string `json:"extensions"` // File extensions to include
+	Paths []string `json:"paths"` // File path patterns
 }
 
 // Session manages the state for the API server.
@@ -37,7 +35,10 @@ type Session struct {
 	// Configuration
 	gitRoot   string
 	messaging critic.Messaging
-	args      DiffArgs
+	paths     []string
+	// TODO(bot): allow users to switch diffBases from the UI, using the B hotkey.
+	// Also show all valid diffBases in the UI in a dropdown menu.
+	diffBases []string
 
 	// State
 	state       State
@@ -55,11 +56,11 @@ type diffResult struct {
 }
 
 // NewSession creates a new API session.
-func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) *Session {
+func NewSession(gitRoot string, messaging critic.Messaging, paths []string) *Session {
 	return &Session{
 		gitRoot:   gitRoot,
 		messaging: messaging,
-		args:      args,
+		paths:     paths,
 		state:     StateReady,
 	}
 }
@@ -113,22 +114,26 @@ func (s *Session) GetFileDiff(path string) *types.FileDiff {
 	return diff.Files[0]
 }
 
-// GetArgs returns the DiffArgs
-func (s *Session) GetArgs() DiffArgs {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.args
-}
-
 // HeadCommit returns the current HEAD commit SHA
 func (s *Session) HeadCommit() string {
 	return git.ResolveRef("HEAD")
 }
 
-// SetRefs sets the base ref and starts loading the diff in the background.
-// It uses tasks.RunExclusively to ensure only one diff loading operation
-// runs at a time. If a diff load is already in progress, it will be aborted.
-func (s *Session) SetRefs(base string) error {
+// SetDiffBases sets all valid diff bases, and initialises the current base
+// to be the first of the passed in bases.
+func (s *Session) SetDiffBases(bases []string) error {
+	preconditions.Check(len(bases) > 0, "bases required")
+
+	s.mu.Lock()
+	s.diffBases = append([]string{}, bases...)
+	s.mu.Unlock()
+
+	return s.SetCurrentDiffBase(bases[0])
+}
+
+// SetCurrentDiffBase sets the current base ref for the session, and
+// starts loading the diff in the background.
+func (s *Session) SetCurrentDiffBase(base string) error {
 	s.mu.Lock()
 
 	// Abort any existing task
@@ -141,28 +146,27 @@ func (s *Session) SetRefs(base string) error {
 	s.state = StateInitialising
 	s.mu.Unlock()
 
-	// Get paths from args
-	args := s.GetArgs()
-
-	// Start background task to load diff summary
+	// Start background task to load diff summary. Only up to one diff loading
+	// operation runs at a time: if a diff load is already in progress, it will
+	// be aborted.
 	task, err := tasks.RunExclusively("api-session-diff", func() diffResult {
 		// Resolve the base ref to a commit SHA
-		resolvedBase := git.ResolveRef(base)
+		// base := git.ResolveRef(base)
 
 		// Run git diff --name-status for file summary (no hunks)
-		diff, err := git.GetDiffNamesBetween(resolvedBase, "current")
+		diff, err := git.GetDiffNamesBetween(base, "current")
 		if err != nil {
 			return diffResult{err: err}
 		}
 
-		// Filter by extensions if specified
-		if len(args.Extensions) > 0 {
-			diff = filterDiffByExtensions(diff, args.Extensions)
-		}
+		// TODO(bot): add support for filtering by type:
+		// - Use "rg --type-list" to collect a filelist and their extensions
+		// - add a -t/--type argument to include one or more types
+		// - add a -T/--skip-type argument to exclude one or more types
 
 		// Filter by paths if specified
-		if len(args.Paths) > 0 {
-			diff = filterDiffByPaths(diff, args.Paths)
+		if len(s.paths) > 0 {
+			diff = filterDiffByPaths(diff, s.paths)
 		}
 
 		return diffResult{diff: diff}

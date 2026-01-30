@@ -102,12 +102,12 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 // If paths is empty, returns diff for all changed files.
 func GetDiffBetween(base, target string, paths []string) (*ctypes.Diff, error) {
 	// Validate base commit
-	if !validCommitHash.MatchString(base) {
-		base = ResolveRef(base)
-		if !validCommitHash.MatchString(base) {
-			return nil, fmt.Errorf("invalid base commit SHA: %s", base)
-		}
-	}
+	// if !validCommitHash.MatchString(base) {
+	// 	base = ResolveRef(base)
+	// 	if !validCommitHash.MatchString(base) {
+	// 		return nil, fmt.Errorf("invalid base commit SHA: %s", base)
+	// 	}
+	// }
 
 	// Build git diff command
 	var args []string
@@ -169,12 +169,12 @@ func HasRef(ref string) bool {
 // This is more efficient than GetDiffBetween when you only need to know which files changed.
 func GetDiffNamesBetween(base, target string) (*ctypes.Diff, error) {
 	// Validate base commit
-	if !validCommitHash.MatchString(base) {
-		base = ResolveRef(base)
-	}
-	if !validCommitHash.MatchString(base) {
-		return nil, fmt.Errorf("invalid base commit SHA: %s", base)
-	}
+	// if !validCommitHash.MatchString(base) {
+	// 	base = ResolveRef(base)
+	// }
+	// if !validCommitHash.MatchString(base) {
+	// 	return nil, fmt.Errorf("invalid base commit SHA: %s", base)
+	// }
 
 	// Build git diff --name-status command
 	var args []string
