@@ -839,7 +839,6 @@ export class Line extends Message<Line> {
 }
 
 /**
-<<<<<<< HEAD
  * GetFileRequest requests the content of a file.
  *
  * @generated from message critic.v1.GetFileRequest
@@ -853,7 +852,83 @@ export class GetFileRequest extends Message<GetFileRequest> {
   path = "";
 
   constructor(data?: PartialMessage<GetFileRequest>) {
-=======
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetFileRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetFileRequest {
+    return new GetFileRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetFileRequest {
+    return new GetFileRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetFileRequest {
+    return new GetFileRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetFileRequest | PlainMessage<GetFileRequest> | undefined, b: GetFileRequest | PlainMessage<GetFileRequest> | undefined): boolean {
+    return proto3.util.equals(GetFileRequest, a, b);
+  }
+}
+
+/**
+ * GetFileResponse contains the file content.
+ *
+ * @generated from message critic.v1.GetFileResponse
+ */
+export class GetFileResponse extends Message<GetFileResponse> {
+  /**
+   * content is the file content.
+   *
+   * @generated from field: string content = 1;
+   */
+  content = "";
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<GetFileResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetFileResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetFileResponse {
+    return new GetFileResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetFileResponse {
+    return new GetFileResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetFileResponse {
+    return new GetFileResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetFileResponse | PlainMessage<GetFileResponse> | undefined, b: GetFileResponse | PlainMessage<GetFileResponse> | undefined): boolean {
+    return proto3.util.equals(GetFileResponse, a, b);
+  }
+}
+
+/**
  * CreateCommentRequest contains the data for creating a new comment.
  *
  * @generated from message critic.v1.CreateCommentRequest
@@ -895,33 +970,11 @@ export class CreateCommentRequest extends Message<CreateCommentRequest> {
   comment = "";
 
   constructor(data?: PartialMessage<CreateCommentRequest>) {
->>>>>>> 0f3a2cb (Implement comment editor in web UI with CreateComment API)
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-<<<<<<< HEAD
-  static readonly typeName = "critic.v1.GetFileRequest";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-  ]);
-
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetFileRequest {
-    return new GetFileRequest().fromBinary(bytes, options);
-  }
-
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetFileRequest {
-    return new GetFileRequest().fromJson(jsonValue, options);
-  }
-
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetFileRequest {
-    return new GetFileRequest().fromJsonString(jsonString, options);
-  }
-
-  static equals(a: GetFileRequest | PlainMessage<GetFileRequest> | undefined, b: GetFileRequest | PlainMessage<GetFileRequest> | undefined): boolean {
-    return proto3.util.equals(GetFileRequest, a, b);
-=======
   static readonly typeName = "critic.v1.CreateCommentRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "old_file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -945,24 +998,10 @@ export class CreateCommentRequest extends Message<CreateCommentRequest> {
 
   static equals(a: CreateCommentRequest | PlainMessage<CreateCommentRequest> | undefined, b: CreateCommentRequest | PlainMessage<CreateCommentRequest> | undefined): boolean {
     return proto3.util.equals(CreateCommentRequest, a, b);
->>>>>>> 0f3a2cb (Implement comment editor in web UI with CreateComment API)
   }
 }
 
 /**
-<<<<<<< HEAD
- * GetFileResponse contains the file content.
- *
- * @generated from message critic.v1.GetFileResponse
- */
-export class GetFileResponse extends Message<GetFileResponse> {
-  /**
-   * content is the file content.
-   *
-   * @generated from field: string content = 1;
-   */
-  content = "";
-=======
  * CreateCommentResponse contains the result of creating a comment.
  *
  * @generated from message critic.v1.CreateCommentResponse
@@ -974,7 +1013,6 @@ export class CreateCommentResponse extends Message<CreateCommentResponse> {
    * @generated from field: bool success = 1;
    */
   success = false;
->>>>>>> 0f3a2cb (Implement comment editor in web UI with CreateComment API)
 
   /**
    * error contains error details if the request failed.
@@ -983,38 +1021,12 @@ export class CreateCommentResponse extends Message<CreateCommentResponse> {
    */
   error?: RpcError;
 
-<<<<<<< HEAD
-  constructor(data?: PartialMessage<GetFileResponse>) {
-=======
   constructor(data?: PartialMessage<CreateCommentResponse>) {
->>>>>>> 0f3a2cb (Implement comment editor in web UI with CreateComment API)
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-<<<<<<< HEAD
-  static readonly typeName = "critic.v1.GetFileResponse";
-  static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 15, name: "error", kind: "message", T: RpcError },
-  ]);
-
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetFileResponse {
-    return new GetFileResponse().fromBinary(bytes, options);
-  }
-
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetFileResponse {
-    return new GetFileResponse().fromJson(jsonValue, options);
-  }
-
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetFileResponse {
-    return new GetFileResponse().fromJsonString(jsonString, options);
-  }
-
-  static equals(a: GetFileResponse | PlainMessage<GetFileResponse> | undefined, b: GetFileResponse | PlainMessage<GetFileResponse> | undefined): boolean {
-    return proto3.util.equals(GetFileResponse, a, b);
-=======
   static readonly typeName = "critic.v1.CreateCommentResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
@@ -1035,7 +1047,6 @@ export class CreateCommentResponse extends Message<CreateCommentResponse> {
 
   static equals(a: CreateCommentResponse | PlainMessage<CreateCommentResponse> | undefined, b: CreateCommentResponse | PlainMessage<CreateCommentResponse> | undefined): boolean {
     return proto3.util.equals(CreateCommentResponse, a, b);
->>>>>>> 0f3a2cb (Implement comment editor in web UI with CreateComment API)
   }
 }
 
