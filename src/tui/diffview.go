@@ -1,0 +1,1618 @@
+package tui
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/radiospiel/critic/src/config"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/src/highlight"
+	"github.com/radiospiel/critic/src/session"
+	"github.com/radiospiel/critic/src/pkg/critic"
+	ctypes "github.com/radiospiel/critic/src/pkg/types"
+	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/observable"
+	"github.com/radiospiel/critic/teapot"
+	"github.com/alecthomas/chroma/v2"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// DiffView represents the diff viewer pane.
+// It is a proper teapot Widget that wraps DiffContentView with additional
+// functionality like syntax highlighting, cursor management, and scrolling.
+type DiffView struct {
+	teapot.BaseView      // Embed BaseWidget to implement the Widget interface
+	session              *session.Session
+	subscriptions        []observable.Subscription
+	file                 *ctypes.FileDiff
+	viewport             viewport.Model
+	ready                bool
+	highlighter          *highlight.Highlighter
+	cachedContent        string
+	cachedFile           *ctypes.FileDiff
+	cursorLine           int   // Current active line (0-based)
+	totalLines           int   // Total number of lines in rendered diff
+	navigableLines       []int // Line numbers that can have cursor (diff lines only)
+	messaging            critic.Messaging
+	commentLines         map[int]int        // Maps rendered line number to source line number for comment lines
+	sourceLines          map[int]int        // Maps rendered line number to source line number for all diff lines
+	preserveCursorLine   int                // Source line to restore cursor to after refresh (0 = don't preserve)
+	lineConversationUUID map[int]string     // Maps rendered line number to conversation UUID
+	gotoBottomOnLoad     bool               // If true, go to bottom after next file load
+	filterMode           session.FilterMode // Current filter mode for hunk filtering
+	// Widget-based rendering
+	diffWidget *DiffContentView // The widget that renders the vertical layout of hunks
+
+	// Cached syntax highlighting (expensive to compute, reused across renders)
+	cachedHighlightFile  *ctypes.FileDiff // File the cached highlights are for
+	cachedOldFileDeleted map[int]string   // Cached highlighted deleted lines
+	cachedNewFileAdded   map[int]string   // Cached highlighted added lines
+	cachedNewFileContext map[int]string   // Cached highlighted context lines
+}
+
+// NewDiffView creates a new diff viewer model
+func NewDiffView(ses *session.Session, messaging critic.Messaging) *DiffView {
+	m := &DiffView{
+		BaseView:    teapot.NewBaseView(),
+		highlighter: highlight.NewHighlighter(),
+		diffWidget:  NewDiffContentView(),
+		session:     ses,
+		messaging:   messaging,
+	}
+	m.SetFocusable(true)
+	m.SetName("DiffView")
+
+	// Subscribe to file selection changes
+	if ses != nil {
+		sub := ses.OnKeyChange(session.Keys.SelectedFilePath, func(key string) {
+			file := ses.GetSelectedFile()
+			if file != nil {
+				m.SetFile(file)
+				m.Repaint()
+			}
+		})
+		m.subscriptions = append(m.subscriptions, sub)
+	}
+
+	return m
+}
+
+// Init initializes the diff view model
+func (m DiffView) Init() tea.Cmd {
+	return nil
+}
+
+// Update updates the diff view model
+func (m *DiffView) Update(msg tea.Msg) tea.Cmd {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if m.ready {
+			switch msg.String() {
+			case "up", "k":
+				if m.moveCursorUp() {
+					m.ensureCursorVisible()
+					return m.refreshContent()
+				} else if m.isAtTop() {
+					// At top of file, go to previous file (starting at bottom)
+					m.SetGotoBottomOnLoad()
+					m.session.SelectPrevFile()
+					return nil
+				}
+			case "down", "j":
+				if m.moveCursorDown() {
+					m.ensureCursorVisible()
+					return m.refreshContent()
+				} else if m.isAtBottom() {
+					// At bottom of file, go to next file
+					m.session.SelectNextFile()
+					return nil
+				}
+			case "shift+up":
+				if m.moveCursorUpN(config.ShiftArrowJumpSize) {
+					m.ensureCursorVisible()
+					return m.refreshContent()
+				} else if m.isAtTop() {
+					m.SetGotoBottomOnLoad()
+					m.session.SelectPrevFile()
+					return nil
+				}
+			case "shift+down":
+				if m.moveCursorDownN(config.ShiftArrowJumpSize) {
+					m.ensureCursorVisible()
+					return m.refreshContent()
+				} else if m.isAtBottom() {
+					m.session.SelectNextFile()
+					return nil
+				}
+			case "g": // Go to top
+				if len(m.navigableLines) > 0 {
+					m.cursorLine = m.navigableLines[0]
+					m.viewport.GotoTop()
+					return m.refreshContent()
+				}
+			case "G": // Go to bottom
+				if len(m.navigableLines) > 0 {
+					m.cursorLine = m.navigableLines[len(m.navigableLines)-1]
+					m.viewport.GotoBottom()
+					return m.refreshContent()
+				}
+			case "r": // Resolve comment
+				return m.resolveCommentAtCursor()
+			default:
+				// Let viewport handle other keys (page up/down, etc)
+				m.viewport, cmd = m.viewport.Update(msg)
+			}
+		}
+
+	case diffRenderedMsg:
+		// Only apply if still viewing the same file
+		if msg.file == m.file {
+			m.cachedContent = msg.content
+			m.totalLines = msg.totalLines
+			m.navigableLines = msg.navigableLines
+			if m.ready {
+				m.viewport.SetContent(m.cachedContent)
+
+				// Restore cursor position if we're preserving it
+				if m.preserveCursorLine > 0 {
+					// Find the rendered line that corresponds to the source line
+					restored := false
+					for renderedLine, sourceLine := range m.sourceLines {
+						if sourceLine == m.preserveCursorLine {
+							m.cursorLine = renderedLine
+							// Ensure cursor is visible
+							m.ensureCursorVisible()
+							restored = true
+							break
+						}
+					}
+					// If we couldn't restore, try to find first comment line for that source
+					if !restored {
+						for renderedLine, sourceLine := range m.commentLines {
+							if sourceLine == m.preserveCursorLine {
+								m.cursorLine = renderedLine
+								m.ensureCursorVisible()
+								restored = true
+								break
+							}
+						}
+					}
+					// Clear the preserve flag
+					m.preserveCursorLine = 0
+
+					// If we couldn't find the line, just go to top
+					if !restored {
+						m.viewport.GotoTop()
+						if len(m.navigableLines) > 0 {
+							m.cursorLine = m.navigableLines[0]
+						}
+					}
+				} else if m.gotoBottomOnLoad {
+					// Go to bottom (when navigating from previous file)
+					m.gotoBottomOnLoad = false
+					m.viewport.GotoBottom()
+					if len(m.navigableLines) > 0 {
+						m.cursorLine = m.navigableLines[len(m.navigableLines)-1]
+					}
+				} else {
+					// Normal behavior: go to top and reset cursor
+					m.viewport.GotoTop()
+					if len(m.navigableLines) > 0 {
+						m.cursorLine = m.navigableLines[0]
+					}
+				}
+
+				// Re-render to show cursor highlighting at the new position
+				m.refreshContent()
+			}
+		}
+	}
+
+	return cmd
+}
+
+// Render renders the diff view to a buffer (widget-based rendering)
+func (m *DiffView) Render(buf *teapot.SubBuffer) {
+	width := buf.Width()
+	height := buf.Height()
+
+	logger.Info("DiffView.Render: buf=%dx%d, file=%v", width, height, m.file != nil)
+
+	// Update widget bounds
+	m.diffWidget.SetBounds(teapot.NewRect(0, 0, width, height))
+
+	if m.file == nil {
+		logger.Info("DiffView.Render: no file, showing message")
+		m.renderMessage(buf, "Select a file to view diff")
+		return
+	}
+
+	// Check if widget is ready (async highlighting may still be in progress)
+	if m.diffWidget.GetFile() == nil {
+		logger.Info("DiffView.Render: waiting for syntax highlighting")
+		m.renderMessage(buf, "Loading...")
+		return
+	}
+
+	if m.file.IsBinary {
+		m.renderMessage(buf, "Binary file - no diff available")
+		return
+	}
+
+	if len(m.file.Hunks) == 0 {
+		msg := "No changes"
+		if m.file.IsNew {
+			msg = "New file (empty)"
+		} else if m.file.IsDeleted {
+			msg = "File deleted"
+		}
+		logger.Info("DiffView.Render: no hunks, showing: %s", msg)
+		m.renderMessage(buf, msg)
+		return
+	}
+
+	// Set the selected row on the widget for hotkey display
+	m.diffWidget.SetSelectedRow(m.cursorLine)
+
+	// Delegate to the diffWidget
+	logger.Info("DiffView.Render: rendering %d hunks via diffWidget", len(m.file.Hunks))
+	m.diffWidget.Render(buf)
+
+	// Apply selection overlay - invert the current line if focused and navigable
+	// Convert from content coordinates to screen coordinates (account for scroll offset)
+	if m.Focused() && m.isNavigableLine(m.cursorLine) {
+		screenRow := m.cursorLine - m.diffWidget.GetYOffset()
+		if screenRow >= 0 && screenRow < height {
+			buf.InvertRow(screenRow)
+		}
+	}
+	logger.Info("DiffView.Render: complete, cursorLine=%d, screenRow=%d, focused=%v", m.cursorLine, m.cursorLine-m.diffWidget.GetYOffset(), m.Focused())
+}
+
+// renderMessage renders a centered message in the buffer
+func (m *DiffView) renderMessage(buf *teapot.SubBuffer, msg string) {
+	style := lipgloss.NewStyle().
+		Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#666"})
+
+	// Render centered
+	width := buf.Width()
+	x := (width - len(msg)) / 2
+	if x < 0 {
+		x = 0
+	}
+	y := 1 // Some padding from top
+	buf.SetStringTruncated(x, y, msg, len(msg), style)
+}
+
+// SetFile sets the current file to display
+func (m *DiffView) SetFile(file *ctypes.FileDiff) tea.Cmd {
+	m.file = file
+
+	// Pre-render and cache the diff content with syntax highlighting
+	if file != nil && (m.cachedFile != file) {
+		m.cachedFile = file
+		return m.renderDiffAsync(file)
+	}
+	return nil
+}
+
+// RefreshFile forces a re-render of the current file (used when comments change)
+func (m *DiffView) RefreshFile() tea.Cmd {
+	if m.file == nil {
+		return nil
+	}
+
+	// Save current cursor position (as source line) to restore after refresh
+	currentSourceLine := m.GetSourceLine(m.cursorLine)
+	if currentSourceLine == 0 {
+		// Try to get from comment lines
+		if sourceLine, ok := m.commentLines[m.cursorLine]; ok {
+			currentSourceLine = sourceLine
+		}
+	}
+	m.preserveCursorLine = currentSourceLine
+
+	// Clear cache to force re-render
+	m.cachedFile = nil
+
+	// Re-render with syntax highlighting
+	return m.renderDiffAsync(m.file)
+}
+
+// diffRenderedMsg is sent when async rendering completes
+type diffRenderedMsg struct {
+	file           *ctypes.FileDiff
+	content        string
+	totalLines     int
+	navigableLines []int
+}
+
+// renderDiffAsync renders the diff in a background goroutine
+func (m *DiffView) renderDiffAsync(file *ctypes.FileDiff) tea.Cmd {
+	return func() tea.Msg {
+		// Render with highlighting in background
+		content, totalLines, navigableLines := m.renderDiff()
+		return diffRenderedMsg{
+			file:           file,
+			content:        content,
+			totalLines:     totalLines,
+			navigableLines: navigableLines,
+		}
+	}
+}
+
+// refreshContent re-renders the diff with current cursor position
+func (m *DiffView) refreshContent() tea.Cmd {
+	if m.file == nil {
+		return nil
+	}
+	content, totalLines, navigableLines := m.renderDiff()
+	m.cachedContent = content
+	m.totalLines = totalLines
+	m.navigableLines = navigableLines
+	if m.ready {
+		m.viewport.SetContent(m.cachedContent)
+	}
+	return nil
+}
+
+// moveCursorUp moves cursor to previous navigable line
+func (m *DiffView) moveCursorUp() bool {
+	if len(m.navigableLines) == 0 {
+		return false
+	}
+	// Find previous navigable line
+	for i := len(m.navigableLines) - 1; i >= 0; i-- {
+		if m.navigableLines[i] < m.cursorLine {
+			m.cursorLine = m.navigableLines[i]
+			return true
+		}
+	}
+	return false
+}
+
+// moveCursorDown moves cursor to next navigable line
+func (m *DiffView) moveCursorDown() bool {
+	if len(m.navigableLines) == 0 {
+		return false
+	}
+	// Find next navigable line
+	for i := 0; i < len(m.navigableLines); i++ {
+		if m.navigableLines[i] > m.cursorLine {
+			m.cursorLine = m.navigableLines[i]
+			return true
+		}
+	}
+	return false
+}
+
+// moveCursorUpN moves cursor up by n navigable lines
+func (m *DiffView) moveCursorUpN(n int) bool {
+	if len(m.navigableLines) == 0 {
+		return false
+	}
+	// Find current position in navigable lines
+	currentIdx := -1
+	for i, line := range m.navigableLines {
+		if line == m.cursorLine {
+			currentIdx = i
+			break
+		}
+	}
+	if currentIdx == -1 {
+		// Current line not found, find nearest
+		for i := len(m.navigableLines) - 1; i >= 0; i-- {
+			if m.navigableLines[i] < m.cursorLine {
+				currentIdx = i
+				break
+			}
+		}
+	}
+	if currentIdx <= 0 {
+		// Already at top or not found
+		if len(m.navigableLines) > 0 && m.cursorLine != m.navigableLines[0] {
+			m.cursorLine = m.navigableLines[0]
+			return true
+		}
+		return false
+	}
+	// Move up by n lines
+	newIdx := currentIdx - n
+	if newIdx < 0 {
+		newIdx = 0
+	}
+	m.cursorLine = m.navigableLines[newIdx]
+	return true
+}
+
+// moveCursorDownN moves cursor down by n navigable lines
+func (m *DiffView) moveCursorDownN(n int) bool {
+	if len(m.navigableLines) == 0 {
+		return false
+	}
+	// Find current position in navigable lines
+	currentIdx := -1
+	for i, line := range m.navigableLines {
+		if line == m.cursorLine {
+			currentIdx = i
+			break
+		}
+	}
+	if currentIdx == -1 {
+		// Current line not found, find nearest
+		for i := 0; i < len(m.navigableLines); i++ {
+			if m.navigableLines[i] > m.cursorLine {
+				currentIdx = i - 1
+				break
+			}
+		}
+		if currentIdx == -1 {
+			currentIdx = len(m.navigableLines) - 1
+		}
+	}
+	if currentIdx >= len(m.navigableLines)-1 {
+		// Already at bottom
+		return false
+	}
+	// Move down by n lines
+	newIdx := currentIdx + n
+	if newIdx >= len(m.navigableLines) {
+		newIdx = len(m.navigableLines) - 1
+	}
+	m.cursorLine = m.navigableLines[newIdx]
+	return true
+}
+
+// isAtTop returns true if the cursor is at the first navigable line
+func (m *DiffView) isAtTop() bool {
+	if len(m.navigableLines) == 0 {
+		return true
+	}
+	return m.cursorLine <= m.navigableLines[0]
+}
+
+// isAtBottom returns true if the cursor is at the last navigable line
+func (m *DiffView) isAtBottom() bool {
+	if len(m.navigableLines) == 0 {
+		return true
+	}
+	return m.cursorLine >= m.navigableLines[len(m.navigableLines)-1]
+}
+
+// GotoBottom moves the cursor to the last navigable line and scrolls to bottom
+func (m *DiffView) GotoBottom() tea.Cmd {
+	if len(m.navigableLines) > 0 {
+		m.cursorLine = m.navigableLines[len(m.navigableLines)-1]
+		if m.ready {
+			m.viewport.GotoBottom()
+		}
+		return m.refreshContent()
+	}
+	return nil
+}
+
+// SetGotoBottomOnLoad sets a flag to go to bottom after the next file load
+func (m *DiffView) SetGotoBottomOnLoad() {
+	m.gotoBottomOnLoad = true
+}
+
+// ensureCursorVisible scrolls the viewport to keep cursor visible
+func (m *DiffView) ensureCursorVisible() {
+	if !m.ready {
+		return
+	}
+	// Get viewport position
+	yOffset := m.viewport.YOffset
+	viewHeight := m.viewport.Height
+
+	// If cursor is above viewport, scroll up
+	if m.cursorLine < yOffset {
+		m.viewport.YOffset = m.cursorLine
+	}
+	// If cursor is below viewport, scroll down
+	if m.cursorLine >= yOffset+viewHeight {
+		m.viewport.YOffset = m.cursorLine - viewHeight + 1
+	}
+}
+
+// ScrollPageDown scrolls down by viewport height minus 3 (but at least 1 row)
+// and positions cursor on the second navigable line in the viewport.
+// If already at the bottom, navigates to the next file.
+func (m *DiffView) ScrollPageDown() tea.Cmd {
+	if !m.ready || len(m.navigableLines) == 0 {
+		return nil
+	}
+
+	// Check if we're already at the bottom
+	maxOffset := m.totalLines - m.viewport.Height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.viewport.YOffset >= maxOffset && m.isAtBottom() {
+		// Already at the bottom, go to next file
+		m.session.SelectNextFile()
+		return nil
+	}
+
+	scrollAmount := m.viewport.Height - 3
+	if scrollAmount < 1 {
+		scrollAmount = 1
+	}
+
+	// Calculate new offset
+	newOffset := m.viewport.YOffset + scrollAmount
+	if newOffset > maxOffset {
+		newOffset = maxOffset
+	}
+
+	m.viewport.YOffset = newOffset
+
+	// Position cursor on the second navigable line visible in viewport
+	m.positionCursorInViewport(1) // 1 means second line (0-indexed)
+
+	// Refresh to show cursor at new position
+	return m.refreshContent()
+}
+
+// positionCursorInViewport moves cursor to the nth navigable line in the current viewport
+func (m *DiffView) positionCursorInViewport(nth int) {
+	if len(m.navigableLines) == 0 {
+		return
+	}
+
+	viewStart := m.viewport.YOffset
+	viewEnd := viewStart + m.viewport.Height
+
+	// Find navigable lines within the current viewport
+	visibleNavigableLines := []int{}
+	for _, lineNum := range m.navigableLines {
+		if lineNum >= viewStart && lineNum < viewEnd {
+			visibleNavigableLines = append(visibleNavigableLines, lineNum)
+		}
+	}
+
+	if len(visibleNavigableLines) == 0 {
+		// No navigable lines in viewport, just use the first one after viewStart
+		for _, lineNum := range m.navigableLines {
+			if lineNum >= viewStart {
+				m.cursorLine = lineNum
+				return
+			}
+		}
+		// Fallback to last navigable line
+		m.cursorLine = m.navigableLines[len(m.navigableLines)-1]
+		return
+	}
+
+	// Position on the nth visible line (or last if not enough lines)
+	if nth >= len(visibleNavigableLines) {
+		nth = len(visibleNavigableLines) - 1
+	}
+	m.cursorLine = visibleNavigableLines[nth]
+}
+
+// ScrollPageUp scrolls up by viewport height minus 3 (but at least 1 row)
+// and positions cursor on the second navigable line in the viewport.
+// If already at the top, navigates to the previous file.
+func (m *DiffView) ScrollPageUp() tea.Cmd {
+	if !m.ready || len(m.navigableLines) == 0 {
+		return nil
+	}
+
+	// Check if we're already at the top
+	if m.viewport.YOffset <= 0 && m.isAtTop() {
+		// Already at the top, go to previous file (starting at bottom)
+		m.SetGotoBottomOnLoad()
+		m.session.SelectPrevFile()
+		return nil
+	}
+
+	scrollAmount := m.viewport.Height - 3
+	if scrollAmount < 1 {
+		scrollAmount = 1
+	}
+
+	// Calculate new offset
+	newOffset := m.viewport.YOffset - scrollAmount
+	if newOffset < 0 {
+		newOffset = 0
+	}
+
+	m.viewport.YOffset = newOffset
+
+	// Position cursor on the second navigable line visible in viewport
+	m.positionCursorInViewport(1) // 1 means second line (0-indexed)
+
+	// Refresh to show cursor at new position
+	return m.refreshContent()
+}
+
+// SetFocused sets whether this pane is focused
+func (m *DiffView) SetFocused(focused bool) {
+	if m.Focused() != focused {
+		m.BaseView.SetFocused(focused)
+		// Re-render to update cursor visibility
+		m.refreshContent()
+		m.Repaint()
+	}
+}
+
+// GetFile returns the currently displayed file
+func (m *DiffView) GetFile() *ctypes.FileDiff {
+	return m.file
+}
+
+// GetCursorLine returns the current cursor line number
+func (m *DiffView) GetCursorLine() int {
+	return m.cursorLine
+}
+
+// SetSize sets the size of the diff view pane
+func (m *DiffView) SetSize(width, height int) {
+	// Initialize viewport if not ready
+	if !m.ready {
+		m.viewport = viewport.New(width, height)
+		m.ready = true
+	} else {
+		m.viewport.Width = width
+		m.viewport.Height = height
+	}
+
+	// Update widget bounds
+	m.diffWidget.SetBounds(teapot.NewRect(0, 0, width, height))
+}
+
+// SetBounds sets the bounds for widget-based rendering
+func (m *DiffView) SetBounds(bounds teapot.Rect) {
+	m.BaseView.SetBounds(bounds)
+	m.SetSize(bounds.Width, bounds.Height)
+}
+
+// Children returns the child widgets.
+// The internal diffWidget is an implementation detail and not exposed as a child.
+func (m *DiffView) Children() []teapot.View {
+	return nil
+}
+
+// AcceptsFocus returns true as the diff view can receive focus.
+func (m *DiffView) AcceptsFocus() bool {
+	return true
+}
+
+// FocusNext returns false as diff view has no focusable children.
+func (m *DiffView) FocusNext() bool {
+	return false
+}
+
+// FocusPrev returns false as diff view has no focusable children.
+func (m *DiffView) FocusPrev() bool {
+	return false
+}
+
+// SetFilterMode sets the filter mode for hunk filtering
+func (m *DiffView) SetFilterMode(mode session.FilterMode) {
+	if m.filterMode != mode {
+		m.filterMode = mode
+		// Clear cache to force re-render with new filter
+		m.cachedFile = nil
+	}
+}
+
+// filterHunks filters hunks based on the current filter mode
+func (m *DiffView) filterHunks(hunks []*ctypes.Hunk, conversationsByLine map[int]*critic.Conversation) []*ctypes.Hunk {
+	// If no filter, return all hunks
+	if m.filterMode == session.FilterModeNone {
+		return hunks
+	}
+
+	var filtered []*ctypes.Hunk
+	for _, hunk := range hunks {
+		if m.hunkMatchesFilter(hunk, conversationsByLine) {
+			filtered = append(filtered, hunk)
+		}
+	}
+
+	logger.Info("filterHunks: mode=%d, hunks=%d->%d, conversations=%d",
+		m.filterMode, len(hunks), len(filtered), len(conversationsByLine))
+
+	return filtered
+}
+
+// hunkMatchesFilter checks if a hunk should be included based on the current filter mode
+func (m *DiffView) hunkMatchesFilter(hunk *ctypes.Hunk, conversationsByLine map[int]*critic.Conversation) bool {
+	for _, line := range hunk.Lines {
+		if line.NewNum > 0 {
+			if conv, exists := conversationsByLine[line.NewNum]; exists {
+				switch m.filterMode {
+				case session.FilterModeWithComments:
+					// Any comment matches
+					return true
+				case session.FilterModeWithUnresolved:
+					// Only unresolved comments match
+					if conv.Status != critic.StatusResolved {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// GetConversationUUIDAtLine returns the conversation UUID for a rendered line
+func (m *DiffView) GetConversationUUIDAtLine(renderedLine int) string {
+	if m.lineConversationUUID == nil {
+		return ""
+	}
+	return m.lineConversationUUID[renderedLine]
+}
+
+// IsCommentLine returns true if the given line number is a comment line
+// and returns the source line number for that comment
+func (m *DiffView) IsCommentLine(lineNum int) (bool, int) {
+	if m.commentLines == nil {
+		return false, 0
+	}
+	sourceLine, ok := m.commentLines[lineNum]
+	return ok, sourceLine
+}
+
+// GetSourceLine returns the source line number for a rendered line number
+// Returns 0 if the line doesn't map to a source line
+func (m *DiffView) GetSourceLine(renderedLine int) int {
+	if m.sourceLines == nil {
+		return 0
+	}
+	return m.sourceLines[renderedLine]
+}
+
+// renderDiff renders the diff content using widget-based vertical layout.
+// Each hunk is a vertical layout containing lines and their associated comments.
+// Returns the rendered content, total line count, and navigable line numbers.
+func (m *DiffView) renderDiff() (string, int, []int) {
+	startTime := time.Now()
+
+	if m.file == nil {
+		return "", 0, nil
+	}
+
+	// Initialize tracking maps
+	m.commentLines = make(map[int]int)
+	m.sourceLines = make(map[int]int)
+	m.lineConversationUUID = make(map[int]string)
+
+	// Load conversations for this file
+	conversationsByLine := m.loadConversationsForFile()
+
+	filename := git.GitPathToDisplayPath(m.file.NewPath)
+	if m.file.IsDeleted {
+		filename = git.GitPathToDisplayPath(m.file.OldPath)
+	}
+
+	// Build highlighted content maps (cached - only recompute when file changes)
+	var oldFileDeleted, newFileAdded, newFileContext map[int]string
+	// Check if we can reuse cached highlights
+	if m.cachedHighlightFile == m.file && m.cachedOldFileDeleted != nil {
+		// Reuse cached highlights
+		oldFileDeleted = m.cachedOldFileDeleted
+		newFileAdded = m.cachedNewFileAdded
+		newFileContext = m.cachedNewFileContext
+	} else {
+		// Compute and cache highlights
+		logger.Runtime("highlight  "+m.file.NewPath, func() bool {
+			oldFileDeleted = m.highlightFullFileWithStyle(m.file, filename, true, highlight.GetDeletedStyle())
+			newFileAdded = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetAddedStyle())
+			newFileContext = m.highlightFullFileWithStyle(m.file, filename, false, highlight.GetContextStyle())
+
+			return true
+		})
+
+		// Cache for reuse
+		m.cachedHighlightFile = m.file
+		m.cachedOldFileDeleted = oldFileDeleted
+		m.cachedNewFileAdded = newFileAdded
+		m.cachedNewFileContext = newFileContext
+	}
+
+	// Configure the widget - set filter mode BEFORE SetFile
+	// since SetFile calls rebuildHunks which uses these values
+	m.diffWidget.SetFilterMode(m.filterMode)
+	m.diffWidget.SetFile(m.file, conversationsByLine, oldFileDeleted, newFileAdded, newFileContext)
+
+	// Calculate content height for the widget
+	contentHeight := m.calculateContentHeight(conversationsByLine)
+
+	// Create buffer with appropriate dimensions
+	bufferWidth := m.Bounds().Width
+	if bufferWidth <= 0 {
+		bufferWidth = 80 // default width
+	}
+	bufferHeight := contentHeight
+	if bufferHeight <= 0 {
+		bufferHeight = 1
+	}
+
+	// Create and render to buffer
+	buffer := teapot.NewBuffer(bufferWidth, bufferHeight)
+	subBuf := teapot.NewSubBuffer(buffer, teapot.NewRect(0, 0, bufferWidth, bufferHeight))
+
+	// Render the widget - this creates the vertical layout of hunks
+	m.diffWidget.Render(subBuf)
+
+	// Build line mappings and navigable lines from the widget structure
+	navigableLines := m.buildLineMappingsFromWidget(conversationsByLine)
+
+	// Update widget selection for hotkey display in comments
+	m.diffWidget.SetSelectedRow(m.cursorLine)
+
+	// Re-render with the updated selection (for hotkey display)
+	buffer.Clear()
+	m.diffWidget.Render(subBuf)
+
+	// Apply selection overlay - invert the current line if focused and navigable
+	if m.Focused() && m.isNavigableLine(m.cursorLine) {
+		buffer.InvertRow(m.cursorLine)
+	}
+
+	// Convert buffer to string
+	result := buffer.RenderToString()
+
+	totalTime := time.Since(startTime)
+	logger.Info("renderDiff (widget): total=%.1fms, lines=%d, navigable=%d",
+		float64(totalTime.Microseconds())/1000.0,
+		m.countLines(), len(navigableLines))
+
+	return result, contentHeight, navigableLines
+}
+
+// loadConversationsForFile loads and returns conversations indexed by line number
+func (m *DiffView) loadConversationsForFile() map[int]*critic.Conversation {
+	conversationsByLine := make(map[int]*critic.Conversation)
+	if m.messaging == nil || m.file == nil {
+		return conversationsByLine
+	}
+
+	gitPath := m.file.NewPath
+	if m.file.IsDeleted {
+		gitPath = m.file.OldPath
+	}
+
+	if convs, err := m.messaging.GetConversationsForFile(gitPath); err == nil {
+		for _, conv := range convs {
+			conversationsByLine[conv.LineNumber] = conv
+		}
+	}
+	return conversationsByLine
+}
+
+// calculateContentHeight calculates the total height needed for the content
+func (m *DiffView) calculateContentHeight(conversationsByLine map[int]*critic.Conversation) int {
+	if m.file == nil {
+		return 0
+	}
+
+	height := 2 // File header
+
+	hunksToRender := m.filterHunks(m.file.Hunks, conversationsByLine)
+	for hunkIdx, hunk := range hunksToRender {
+		height++ // Hunk header
+		for _, line := range hunk.Lines {
+			height++ // Line
+			if line.NewNum > 0 {
+				if conv, exists := conversationsByLine[line.NewNum]; exists {
+					// Comment height: separator + content + separator
+					height += calculateCommentHeight(conv)
+				}
+			}
+		}
+		if hunkIdx < len(hunksToRender)-1 {
+			height++ // Spacing
+		}
+	}
+	return height
+}
+
+// buildLineMappingsFromWidget builds the line mappings from the widget structure
+func (m *DiffView) buildLineMappingsFromWidget(conversationsByLine map[int]*critic.Conversation) []int {
+	var navigableLines []int
+
+	if m.file == nil {
+		return navigableLines
+	}
+
+	lineNum := 2 // Start after file header
+	hunksToRender := m.filterHunks(m.file.Hunks, conversationsByLine)
+
+	for hunkIdx, hunk := range hunksToRender {
+		lineNum++ // Hunk header
+
+		for _, line := range hunk.Lines {
+			// Track this line as navigable
+			navigableLines = append(navigableLines, lineNum)
+			if line.NewNum > 0 {
+				m.sourceLines[lineNum] = line.NewNum
+			}
+			lineNum++
+
+			// Check for comment
+			if line.NewNum > 0 {
+				if conv, exists := conversationsByLine[line.NewNum]; exists {
+					commentHeight := calculateCommentHeight(conv)
+
+					// Track all comment lines
+					for i := 0; i < commentHeight; i++ {
+						m.commentLines[lineNum+i] = line.NewNum
+						m.lineConversationUUID[lineNum+i] = conv.UUID
+						navigableLines = append(navigableLines, lineNum+i)
+					}
+					lineNum += commentHeight
+				}
+			}
+		}
+
+		if hunkIdx < len(hunksToRender)-1 {
+			lineNum++ // Spacing
+		}
+	}
+
+	return navigableLines
+}
+
+// updateWidgetSelection updates the widget's selection based on cursorLine
+func (m *DiffView) updateWidgetSelection() {
+	if m.diffWidget == nil {
+		return
+	}
+
+	// Update the widget's selected row to match cursor position
+	m.diffWidget.SetSelectedRow(m.cursorLine)
+}
+
+// findSelectableItemForLine finds the selectable item index for a given line number
+func (m *DiffView) findSelectableItemForLine(lineNum int) int {
+	if m.file == nil || m.diffWidget == nil {
+		return -1
+	}
+
+	conversationsByLine := m.loadConversationsForFile()
+	currentLine := 2 // Start after file header
+	itemIdx := 0
+	hunksToRender := m.filterHunks(m.file.Hunks, conversationsByLine)
+
+	for hunkIdx, hunk := range hunksToRender {
+		currentLine++ // Hunk header
+
+		for _, line := range hunk.Lines {
+			if currentLine == lineNum {
+				return itemIdx
+			}
+			currentLine++
+			itemIdx++
+
+			if line.NewNum > 0 {
+				if conv, exists := conversationsByLine[line.NewNum]; exists {
+					commentHeight := calculateCommentHeight(conv)
+
+					// Check if lineNum falls within comment
+					if lineNum >= currentLine && lineNum < currentLine+commentHeight {
+						return itemIdx
+					}
+					currentLine += commentHeight
+					itemIdx++
+				}
+			}
+		}
+
+		if hunkIdx < len(hunksToRender)-1 {
+			currentLine++ // Spacing
+		}
+	}
+
+	return -1
+}
+
+// countLines returns the total number of lines in the current file
+func (m *DiffView) countLines() int {
+	if m.file == nil {
+		return 0
+	}
+	count := 0
+	for _, hunk := range m.file.Hunks {
+		count += len(hunk.Lines)
+	}
+	return count
+}
+
+// highlightFullFileWithStyle highlights a file with a specific chroma style
+func (m *DiffView) highlightFullFileWithStyle(file *ctypes.FileDiff, filename string, useOldVersion bool, style *chroma.Style) map[int]string {
+	result := make(map[int]string)
+
+	if file == nil {
+		return result
+	}
+
+	// Get full file content from git
+	var fullContent string
+	var err error
+
+	if useOldVersion {
+		// Get old version (before changes)
+		if file.IsNew {
+			// New file has no old version
+			return result
+		}
+		// For old version, always use hunk-based reconstruction since we don't know
+		// which commit is the "old" version (it depends on diff mode: HEAD for unstaged,
+		// HEAD~1 for last commit, merge-base for merge-base mode)
+		return m.highlightFromHunks(file, filename, useOldVersion)
+	} else {
+		// Get new version (current working directory or HEAD depending on mode)
+		if file.IsDeleted {
+			// Deleted file has no new version
+			return result
+		}
+		// First try working directory, then fall back to HEAD
+		fullContent, err = git.GetFileContent(file.NewPath, "")
+		if err != nil {
+			// Fallback to HEAD for committed changes
+			fullContent, err = git.GetFileContent(file.NewPath, "HEAD")
+		}
+	}
+
+	if err != nil || fullContent == "" {
+		// Fallback to hunk-based reconstruction if git fails
+		return m.highlightFromHunks(file, filename, useOldVersion)
+	}
+
+	// Highlight the complete file with the specified style
+	highlighted, err := m.highlighter.HighlightWithStyle(fullContent, filename, style)
+	if err != nil {
+		return result
+	}
+
+	// Split into lines and map by line number
+	lines := strings.Split(highlighted, "\n")
+	for i, line := range lines {
+		lineNum := i + 1 // Line numbers are 1-based
+		result[lineNum] = line
+	}
+
+	return result
+}
+
+// HighlightFullFileWithStyle highlights a full file with syntax highlighting.
+// Exported for testing purposes.
+func (m *DiffView) HighlightFullFileWithStyle(file *ctypes.FileDiff, filename string, useOldVersion bool, style *chroma.Style) map[int]string {
+	return m.highlightFullFileWithStyle(file, filename, useOldVersion, style)
+}
+
+// highlightFromHunks is a fallback that reconstructs partial file from hunks
+func (m *DiffView) highlightFromHunks(file *ctypes.FileDiff, filename string, useOldVersion bool) map[int]string {
+	result := make(map[int]string)
+
+	if file == nil || len(file.Hunks) == 0 {
+		return result
+	}
+
+	// Reconstruct partial file content from hunks
+	var lines []string
+	var lineNumbers []int
+
+	for _, hunk := range file.Hunks {
+		for _, line := range hunk.Lines {
+			var includeThis bool
+			var lineNum int
+
+			if useOldVersion {
+				includeThis = line.Type == ctypes.LineDeleted || line.Type == ctypes.LineContext
+				lineNum = line.OldNum
+			} else {
+				includeThis = line.Type == ctypes.LineAdded || line.Type == ctypes.LineContext
+				lineNum = line.NewNum
+			}
+
+			if includeThis && lineNum > 0 {
+				lines = append(lines, line.Content)
+				lineNumbers = append(lineNumbers, lineNum)
+			}
+		}
+	}
+
+	if len(lines) == 0 {
+		return result
+	}
+
+	// Highlight all lines at once
+	highlightedLines := m.highlighter.HighlightLines(lines, filename)
+
+	// Map line numbers to highlighted content
+	for i, lineNum := range lineNumbers {
+		if i < len(highlightedLines) {
+			result[lineNum] = highlightedLines[i]
+		}
+	}
+
+	return result
+}
+
+// renderConversationPreview renders a conversation preview with all messages
+func (m *DiffView) renderConversationPreview(conv *critic.Conversation, startLineNum int) []string {
+	// Build the complete text including all messages
+	var allLines []string
+
+	for i, msg := range conv.Messages {
+		prefix := "You" // Human
+		if msg.Author == critic.AuthorAI {
+			prefix = "AI"
+
+			// Mark AI messages as read when they're displayed
+			if msg.IsUnread && m.messaging != nil {
+				if err := m.messaging.MarkAsRead(msg.UUID); err != nil {
+					logger.Warn("Failed to mark AI message as read: %v", err)
+				} else {
+					logger.Debug("Marked AI message %s as read", msg.UUID)
+				}
+			}
+		}
+
+		// First message doesn't need prefix if it's human
+		if i == 0 && msg.Author == critic.AuthorHuman {
+			// Add each line of the root message
+			msgLines := strings.Split(msg.Message, "\n")
+			for _, line := range msgLines {
+				allLines = append(allLines, renderMarkdown(line))
+			}
+		} else {
+			// Add each line of the reply with the prefix
+			replyLines := strings.Split(msg.Message, "\n")
+			for j, line := range replyLines {
+				if j == 0 {
+					allLines = append(allLines, fmt.Sprintf("%s: %s", prefix, renderMarkdown(line)))
+				} else {
+					// Indent continuation lines (align with message text after "You: " or "AI: ")
+					indent := strings.Repeat(" ", len(prefix)+2)
+					allLines = append(allLines, indent+renderMarkdown(line))
+				}
+			}
+		}
+	}
+
+	// Check if the conversation is resolved
+	if conv.Status == critic.StatusResolved {
+		// Prepend "(Resolved)" to the first line
+		if len(allLines) > 0 {
+			allLines[0] = "\x1b[3m(Resolved)\x1b[23m " + allLines[0]
+		}
+	}
+
+	// ANSI color codes - light blue background with black text (like status bar)
+	const lightBlueBg = "\x1b[48;2;107;149;216m" // #6B95D8 - same as status bar
+	const blackFg = "\x1b[38;5;0m"               // Black text
+	const grayFg = "\x1b[38;5;240m"              // Gray text for separator
+	const reset = "\x1b[0m"
+
+	// Available width for content (full width, no animation prefix on content)
+	availableWidth := m.Bounds().Width
+
+	// Wrap long lines instead of truncating
+	var wrappedLines []string
+	for _, line := range allLines {
+		wrapped := wrapLine(line, availableWidth-2) // -2 for padding on sides
+		wrappedLines = append(wrappedLines, wrapped...)
+	}
+	allLines = wrappedLines
+
+	// Calculate the total lines including blank lines before/after
+	// Structure: content lines, separator line with hotkeys (when selected)
+	totalContentLines := len(allLines)
+	maxLines := 6
+
+	// Calculate total block size to determine if cursor is inside
+	linesToRender := totalContentLines
+	hasMore := totalContentLines > maxLines
+
+	// Block size calculation: separator + content + separator
+	blockSize := 1 + linesToRender + 1 // top separator + content + bottom separator
+	if hasMore {
+		blockSize = 1 + maxLines + 1 + 1 // top separator + truncated content + "more" indicator + bottom separator
+	}
+
+	cursorInBlock := m.Focused() && m.cursorLine >= startLineNum && m.cursorLine < startLineNum+blockSize
+
+	// If cursor is in the block, show full content
+	if cursorInBlock {
+		linesToRender = totalContentLines
+		hasMore = false
+		blockSize = 1 + linesToRender + 1 // top separator + full content + bottom separator
+	} else {
+		if linesToRender > maxLines {
+			linesToRender = maxLines
+		}
+	}
+
+	// Build result: content lines, separator with hotkeys
+	var result []string
+
+	// Helper to create a content line (black text on light blue) - no animation prefix
+	createContentLine := func(text string, lineNum int) string {
+		content := " " + text
+		visibleWidth := lipgloss.Width(content)
+
+		var processed string
+		if visibleWidth > availableWidth {
+			processed = truncateANSI(content, availableWidth)
+		} else {
+			padding := strings.Repeat(" ", availableWidth-visibleWidth)
+			processed = content + padding
+		}
+		styled := lightBlueBg + blackFg + processed + reset
+		return m.renderLineWithCursor(styled, lineNum)
+	}
+
+	// Helper to create the top separator line with snake animation
+	createTopSeparatorLine := func(lineNum int) string {
+		// Get snake animation frame (12 chars)
+		animFrame := GetSeparatorFrame()
+
+		// Calculate dashes needed to fill the rest of the line
+		animWidth := 12                                // snake animation is 12 chars
+		dashesNeeded := availableWidth - animWidth - 1 // -1 for space after animation
+		if dashesNeeded < 0 {
+			dashesNeeded = 0
+		}
+		line := animFrame + " " + strings.Repeat("─", dashesNeeded)
+		styled := grayFg + line + reset
+		return m.renderLineWithCursor(styled, lineNum)
+	}
+
+	// Helper to create the bottom separator line with optional hotkeys
+	createBottomSeparatorLine := func(text string, lineNum int) string {
+		// Separator is a line of dashes with optional centered text
+		if text == "" {
+			line := strings.Repeat("─", availableWidth)
+			styled := grayFg + line + reset
+			return m.renderLineWithCursor(styled, lineNum)
+		}
+		// Center the text in the separator
+		textLen := lipgloss.Width(text)
+		leftDashes := (availableWidth - textLen - 2) / 2
+		rightDashes := availableWidth - textLen - 2 - leftDashes
+		if leftDashes < 0 {
+			leftDashes = 0
+		}
+		if rightDashes < 0 {
+			rightDashes = 0
+		}
+		line := strings.Repeat("─", leftDashes) + " " + text + " " + strings.Repeat("─", rightDashes)
+		styled := grayFg + line + reset
+		return m.renderLineWithCursor(styled, lineNum)
+	}
+
+	currentLine := startLineNum
+
+	// Add top separator line with snake animation
+	result = append(result, createTopSeparatorLine(currentLine))
+	currentLine++
+
+	// Add content lines
+	for i := 0; i < linesToRender; i++ {
+		result = append(result, createContentLine(allLines[i], currentLine))
+		currentLine++
+	}
+
+	// Add "more lines" indicator if truncated
+	if hasMore {
+		moreCount := totalContentLines - maxLines
+		indicatorText := fmt.Sprintf("(%d more lines)", moreCount)
+		result = append(result, createContentLine(indicatorText, currentLine))
+		currentLine++
+	}
+
+	// Add separator line - with hotkeys if cursor is in the block
+	var separatorText string
+	if cursorInBlock {
+		separatorText = "[R]esolve • [Enter] reply"
+		if conv.Status == critic.StatusResolved {
+			separatorText = "[R] unresolve • [Enter] reply"
+		}
+	}
+	result = append(result, createBottomSeparatorLine(separatorText, currentLine))
+
+	return result
+}
+
+// renderMarkdown applies simple markdown formatting to text
+// Supports **bold** and _underline_
+func renderMarkdown(text string) string {
+	const bold = "\x1b[1m"
+	const underline = "\x1b[4m"
+	const reset = "\x1b[0m"
+
+	result := text
+
+	// Handle **bold** - replace **text** with bold ANSI
+	boldRegex := regexp.MustCompile(`\*\*([^*]+)\*\*`)
+	result = boldRegex.ReplaceAllString(result, bold+"$1"+reset)
+
+	// Handle _underline_ - replace _text_ with underline ANSI
+	// Use word boundaries to avoid matching variable_names_like_this
+	underlineRegex := regexp.MustCompile(`\b_([^_]+)_\b`)
+	result = underlineRegex.ReplaceAllString(result, underline+"$1"+reset)
+
+	return result
+}
+
+// wrapLine wraps a line of text (possibly with ANSI codes) to fit within maxWidth.
+// Returns a slice of wrapped lines, preserving ANSI codes across line breaks.
+func wrapLine(line string, maxWidth int) []string {
+	if maxWidth <= 0 {
+		return []string{line}
+	}
+
+	// Calculate visible width
+	visibleWidth := lipgloss.Width(line)
+	if visibleWidth <= maxWidth {
+		return []string{line}
+	}
+
+	// Simple word-wrapping: split on spaces and accumulate words
+	words := strings.Fields(line)
+	if len(words) == 0 {
+		return []string{line}
+	}
+
+	var result []string
+	var currentLine strings.Builder
+	currentWidth := 0
+
+	for i, word := range words {
+		wordWidth := lipgloss.Width(word)
+
+		if currentWidth == 0 {
+			// First word on line
+			currentLine.WriteString(word)
+			currentWidth = wordWidth
+		} else if currentWidth+1+wordWidth <= maxWidth {
+			// Word fits on current line
+			currentLine.WriteString(" ")
+			currentLine.WriteString(word)
+			currentWidth += 1 + wordWidth
+		} else {
+			// Word doesn't fit - start new line
+			result = append(result, currentLine.String())
+			currentLine.Reset()
+			// Add indent for continuation (2 spaces)
+			currentLine.WriteString("  ")
+			currentLine.WriteString(word)
+			currentWidth = 2 + wordWidth
+		}
+
+		// Handle very long words that exceed maxWidth by themselves
+		if i == 0 && wordWidth > maxWidth {
+			// Just add it as-is, it will get truncated later
+			result = append(result, currentLine.String())
+			currentLine.Reset()
+			currentWidth = 0
+		}
+	}
+
+	// Add remaining line
+	if currentLine.Len() > 0 {
+		result = append(result, currentLine.String())
+	}
+
+	return result
+}
+
+// renderLine renders a single diff line with pre-highlighted content
+func (m *DiffView) renderLine(line *ctypes.Line, highlightedContent string, currentLineNum int) string {
+	// Build line number prefix: " 123 + "
+	var lineNum int
+	var indicator string
+	switch line.Type {
+	case ctypes.LineAdded:
+		lineNum = line.NewNum
+		indicator = "+"
+	case ctypes.LineDeleted:
+		lineNum = line.OldNum
+		indicator = "-"
+	case ctypes.LineContext:
+		lineNum = line.NewNum
+		indicator = " "
+	}
+
+	prefix := fmt.Sprintf("%4d %s ", lineNum, indicator)
+
+	// Combine prefix with pre-highlighted content
+	fullLine := prefix + highlightedContent
+
+	// Chroma provides backgrounds but may reset between tokens
+	// We need to ensure background spans the full line
+	styled := m.ensureFullLineBackground(fullLine, line.Type)
+
+	// Apply cursor highlighting if this is the active line
+	return m.renderLineWithCursor(styled, currentLineNum)
+}
+
+// renderLineWithCursor applies cursor highlighting if this is the active line
+func (m *DiffView) renderLineWithCursor(content string, currentLineNum int) string {
+	// Only show cursor when pane is focused and line is navigable
+	if m.Focused() && currentLineNum == m.cursorLine && m.isNavigableLine(currentLineNum) {
+		// Apply full reverse highlighting
+		return lipgloss.NewStyle().Reverse(true).Render(content)
+	}
+	return content
+}
+
+// isNavigableLine checks if a line number is navigable (can have cursor)
+func (m *DiffView) isNavigableLine(lineNum int) bool {
+	for _, navLine := range m.navigableLines {
+		if navLine == lineNum {
+			return true
+		}
+	}
+	return false
+}
+
+// truncateToWidth truncates or pads a line to exactly match viewport width
+func (m *DiffView) truncateToWidth(line string) string {
+	visibleWidth := lipgloss.Width(line)
+	if visibleWidth > m.Bounds().Width {
+		return truncateANSI(line, m.Bounds().Width)
+	} else if visibleWidth < m.Bounds().Width {
+		// Pad to full width - need to preserve the last background color for padding
+		// Extract the last background color from the line (if any)
+		lastBg := extractLastBackground(line)
+		padding := strings.Repeat(" ", m.Bounds().Width-visibleWidth)
+		if lastBg != "" {
+			// Apply the background color to padding spaces
+			return line + lastBg + padding + "\x1b[0m"
+		}
+		return line + padding
+	}
+	return line
+}
+
+// ensureFullLineBackground strips chroma's backgrounds and applies our own for full width
+func (m *DiffView) ensureFullLineBackground(line string, lineType ctypes.LineType) string {
+	// Strip all background codes from chroma
+	cleaned := stripAllStyleCodes(line)
+
+	// Get the appropriate background color for this line type
+	var bgCode string
+	switch lineType {
+	case ctypes.LineAdded:
+		bgCode = "\x1b[48;5;22m" // Dark green in 256-color
+	case ctypes.LineDeleted:
+		bgCode = "\x1b[48;5;52m" // Dark red in 256-color
+	default:
+		bgCode = "\x1b[48;5;0m" // Black in 256-color
+	}
+
+	// Calculate width and pad if needed
+	visibleWidth := lipgloss.Width(cleaned)
+	if visibleWidth > m.Bounds().Width {
+		cleaned = truncateANSI(cleaned, m.Bounds().Width)
+		visibleWidth = m.Bounds().Width
+	}
+
+	padding := ""
+	if visibleWidth < m.Bounds().Width {
+		padding = strings.Repeat(" ", m.Bounds().Width-visibleWidth)
+	}
+
+	// Wrap entire line with background: bg + content + padding + reset
+	return bgCode + cleaned + padding + "\x1b[0m"
+}
+
+// extractLastBackground finds the last background color code in a string
+func extractLastBackground(s string) string {
+	// Look for background color codes: \x1b[48;... or \x1b[4X where X is 0-9
+	bgRegex := regexp.MustCompile(`\x1b\[(?:48;[0-9;]+|4[0-9])m`)
+	matches := bgRegex.FindAllString(s, -1)
+	if len(matches) > 0 {
+		return matches[len(matches)-1]
+	}
+	return ""
+}
+
+// applyLineBackgroundWithStyle applies background using lipgloss style (supports adaptive colors)
+func (m *DiffView) applyLineBackgroundWithStyle(line string, style lipgloss.Style) string {
+	// Strip all style codes except foreground colors
+	cleaned := stripAllStyleCodes(line)
+
+	// Calculate visible width
+	visibleWidth := lipgloss.Width(cleaned)
+
+	// Truncate if too long, pad if too short
+	var processed string
+	if visibleWidth > m.Bounds().Width {
+		processed = truncateANSI(cleaned, m.Bounds().Width)
+	} else {
+		paddingWidth := m.Bounds().Width - visibleWidth
+		processed = cleaned + strings.Repeat(" ", paddingWidth)
+	}
+
+	// Use lipgloss style to render with proper background (handles adaptive colors)
+	return style.Width(m.Bounds().Width).Render(processed)
+}
+
+// applyLineBackground wraps a line with background color spanning full width (legacy)
+func (m *DiffView) applyLineBackground(line string, bgColor string) string {
+	// Strip any background ANSI codes and reset codes from syntax highlighting
+	cleaned := stripBackgroundCodes(line)
+	cleaned = stripResetCodes(cleaned)
+
+	// Note: tabs are already expanded in renderLine before this function is called
+
+	// Calculate visible width (accounting for ANSI codes and expanded tabs)
+	visibleWidth := lipgloss.Width(cleaned)
+
+	// Truncate if too long, pad if too short
+	var processed string
+	if visibleWidth > m.Bounds().Width {
+		// Line is too long - truncate it to exact width
+		processed = truncateANSI(cleaned, m.Bounds().Width)
+	} else {
+		// Add padding to reach exact width
+		paddingWidth := m.Bounds().Width - visibleWidth
+		processed = cleaned + strings.Repeat(" ", paddingWidth)
+	}
+
+	// Build final string: bg + content + full reset
+	// Now that we've stripped all resets, the background will span the entire line
+	return bgColor + processed + "\x1b[0m"
+}
+
+// truncateANSI truncates a string with ANSI codes to a specific visible width
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// resolveCommentAtCursor toggles the resolved status of the comment at the current cursor position
+func (m *DiffView) resolveCommentAtCursor() tea.Cmd {
+	// Check if cursor is on a comment line
+	if isComment, _ := m.IsCommentLine(m.cursorLine); isComment {
+		// Get conversation UUID for this line
+		uuid := m.GetConversationUUIDAtLine(m.cursorLine)
+		if uuid != "" && m.messaging != nil {
+			// Get the current conversation to check its status
+			conv, err := m.messaging.GetFullConversation(uuid)
+			if err != nil {
+				logger.Error("Failed to get conversation: %v", err)
+				return nil
+			}
+
+			// Toggle the status
+			if conv.Status == critic.StatusResolved {
+				err = m.messaging.MarkAsUnresolved(uuid)
+				if err != nil {
+					logger.Error("Failed to mark conversation as unresolved: %v", err)
+					return nil
+				}
+				logger.Info("Marked comment %s as unresolved", uuid)
+			} else {
+				err = m.messaging.MarkAsResolved(uuid)
+				if err != nil {
+					logger.Error("Failed to mark conversation as resolved: %v", err)
+					return nil
+				}
+				logger.Info("Marked comment %s as resolved", uuid)
+			}
+
+			// Refresh the view to show the updated status
+			return m.RefreshFile()
+		}
+	}
+
+	return nil
+}
