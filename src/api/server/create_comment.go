@@ -32,6 +32,7 @@ func (s *Server) CreateComment(
 	}
 
 	// Validate required fields
+	// TODO(bot): replace this validation by a validation with a JSON schema.
 	if filePath == "" {
 		return connect.NewResponse(&api.CreateCommentResponse{
 			Success: false,
