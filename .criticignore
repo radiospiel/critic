@@ -1,0 +1,3 @@
+/src/webui/frontend/src/gen/*.ts
+package-lock.json
+src/api/critic.pb.go

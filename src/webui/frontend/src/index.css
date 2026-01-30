@@ -215,6 +215,18 @@ html, body, #root {
   background-color: var(--bg-tertiary);
 }
 
+.hidden-files-toggle {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.hidden-files-toggle:hover {
+  color: var(--diff-hunk-text);
+  text-decoration: underline;
+}
+
 .file-list-message {
   padding: 16px;
   color: var(--text-muted);

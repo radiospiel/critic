@@ -26,17 +26,73 @@ function getStatusLabel(status: FileStatus): string {
   }
 }
 
+// Convert a gitignore-style pattern to a regex
+function patternToRegex(pattern: string): RegExp {
+  // Remove leading slash (makes pattern relative to root)
+  const isRooted = pattern.startsWith('/')
+  if (isRooted) {
+    pattern = pattern.slice(1)
+  }
+
+  // Escape special regex characters except * and ?
+  let regex = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    // Convert ** to match any path
+    .replace(/\*\*/g, '.*')
+    // Convert * to match anything except /
+    .replace(/\*/g, '[^/]*')
+    // Convert ? to match single char except /
+    .replace(/\?/g, '[^/]')
+
+  // If pattern doesn't contain /, it matches anywhere in the path
+  if (!pattern.includes('/')) {
+    regex = '(^|/)' + regex + '$'
+  } else if (isRooted) {
+    regex = '^' + regex + '$'
+  } else {
+    regex = '(^|/)' + regex + '$'
+  }
+
+  return new RegExp(regex)
+}
+
+// Check if a file path matches any of the ignore patterns
+function isIgnored(path: string, patterns: string[]): boolean {
+  for (const pattern of patterns) {
+    // Skip empty lines and comments
+    if (!pattern || pattern.startsWith('#')) continue
+
+    const regex = patternToRegex(pattern)
+    if (regex.test(path)) {
+      return true
+    }
+  }
+  return false
+}
+
 function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
   const [files, setFiles] = useState<FileSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
+  const [showHiddenOnly, setShowHiddenOnly] = useState(false)
   const selectedItemRef = useRef<HTMLLIElement>(null)
 
   useEffect(() => {
-    criticClient
-      .getDiffSummary({})
-      .then((response) => {
-        setFiles(response.diff?.files || [])
+    // Fetch both diff summary and .criticignore in parallel
+    Promise.all([
+      criticClient.getDiffSummary({}),
+      criticClient.getFile({ path: '.criticignore' }).catch(() => null),
+    ])
+      .then(([diffResponse, fileResponse]) => {
+        setFiles(diffResponse.diff?.files || [])
+        if (fileResponse?.content) {
+          const patterns = fileResponse.content
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line && !line.startsWith('#'))
+          setIgnorePatterns(patterns)
+        }
         setLoading(false)
       })
       .catch((err) => {
@@ -52,10 +108,31 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
     }
   }, [selectedFile, isFocused])
 
+  // Compute visible and hidden files based on ignore patterns
+  const { visibleFiles, hiddenFiles } = (() => {
+    if (ignorePatterns.length === 0) {
+      return { visibleFiles: files, hiddenFiles: [] as FileSummary[] }
+    }
+    const visible: FileSummary[] = []
+    const hidden: FileSummary[] = []
+    for (const file of files) {
+      const path = getFilePath(file)
+      if (isIgnored(path, ignorePatterns)) {
+        hidden.push(file)
+      } else {
+        visible.push(file)
+      }
+    }
+    return { visibleFiles: visible, hiddenFiles: hidden }
+  })()
+
+  // Files to display based on showHiddenOnly toggle
+  const displayedFiles = showHiddenOnly ? hiddenFiles : visibleFiles
+
   // Keyboard navigation when focused
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (!isFocused || files.length === 0) return
+      if (!isFocused || displayedFiles.length === 0) return
 
       // Don't handle if in input field
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -63,7 +140,7 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
       }
 
       const currentIndex = selectedFile
-        ? files.findIndex((f) => getFilePath(f) === selectedFile)
+        ? displayedFiles.findIndex((f) => getFilePath(f) === selectedFile)
         : -1
 
       switch (e.key) {
@@ -71,23 +148,23 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
         case 'k':
           e.preventDefault()
           if (currentIndex > 0) {
-            const prevFile = files[currentIndex - 1]
+            const prevFile = displayedFiles[currentIndex - 1]
             onSelectFile(getFilePath(prevFile), prevFile)
-          } else if (currentIndex === -1 && files.length > 0) {
+          } else if (currentIndex === -1 && displayedFiles.length > 0) {
             // No selection, select last file
-            const lastFile = files[files.length - 1]
+            const lastFile = displayedFiles[displayedFiles.length - 1]
             onSelectFile(getFilePath(lastFile), lastFile)
           }
           break
         case 'ArrowDown':
         case 'j':
           e.preventDefault()
-          if (currentIndex < files.length - 1) {
-            const nextFile = files[currentIndex + 1]
+          if (currentIndex < displayedFiles.length - 1) {
+            const nextFile = displayedFiles[currentIndex + 1]
             onSelectFile(getFilePath(nextFile), nextFile)
-          } else if (currentIndex === -1 && files.length > 0) {
+          } else if (currentIndex === -1 && displayedFiles.length > 0) {
             // No selection, select first file
-            const firstFile = files[0]
+            const firstFile = displayedFiles[0]
             onSelectFile(getFilePath(firstFile), firstFile)
           }
           break
@@ -96,7 +173,7 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
           break
       }
     },
-    [isFocused, files, selectedFile, onSelectFile]
+    [isFocused, displayedFiles, selectedFile, onSelectFile]
   )
 
   useEffect(() => {
@@ -122,11 +199,35 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
     )
   }
 
+  const headerText = showHiddenOnly
+    ? `${hiddenFiles.length} Hidden Files`
+    : `${visibleFiles.length} Files`
+
   return (
     <div className={`file-list-container${isFocused ? ' focused' : ''}`}>
-      <div className="file-list-header">{files.length} Files</div>
+      <div className="file-list-header">
+        {headerText}
+        {hiddenFiles.length > 0 && !showHiddenOnly && (
+          <span
+            className="hidden-files-toggle"
+            onClick={() => setShowHiddenOnly(true)}
+            title="Click to show hidden files"
+          >
+            {' '}(+ {hiddenFiles.length} hidden)
+          </span>
+        )}
+        {showHiddenOnly && (
+          <span
+            className="hidden-files-toggle"
+            onClick={() => setShowHiddenOnly(false)}
+            title="Click to show visible files"
+          >
+            {' '}(back to visible)
+          </span>
+        )}
+      </div>
       <ul className="file-list">
-        {files.map((file) => {
+        {displayedFiles.map((file) => {
           const path = getFilePath(file)
           const isSelected = selectedFile === path
           return (
@@ -144,8 +245,10 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
             </li>
           )
         })}
-        {files.length === 0 && (
-          <li className="file-list-message">No files found</li>
+        {displayedFiles.length === 0 && (
+          <li className="file-list-message">
+            {showHiddenOnly ? 'No hidden files' : 'No files found'}
+          </li>
         )}
       </ul>
     </div>
