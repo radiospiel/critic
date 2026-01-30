@@ -13,6 +13,7 @@
     "@bufbuild/protobuf": "^1.10.0",
     "@connectrpc/connect": "^1.7.0",
     "@connectrpc/connect-web": "^1.7.0",
+    "@floating-ui/dom": "^1.7.5",
     "@tiptap/extension-placeholder": "^3.18.0",
     "@tiptap/extension-typography": "^3.18.0",
     "@tiptap/pm": "^3.18.0",
@@ -30,6 +31,6 @@
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.0",
     "typescript": "^5.3.0",
-    "vite": "^5.0.0"
+    "vite": "^6.2.0"
   }
 }
