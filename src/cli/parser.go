@@ -22,7 +22,6 @@ func Execute() error {
 	rootCmd := newRootCmd()
 
 	// Add subcommands
-	rootCmd.AddCommand(newTUICmd())
 	rootCmd.AddCommand(newAPICmd())
 	rootCmd.AddCommand(newMCPCmd())
 	rootCmd.AddCommand(newConvoCmd())
@@ -39,14 +38,11 @@ func newRootCmd() *cobra.Command {
 		Long: `Critic is a git diff viewer and code review tool.
 
 Available commands:
-  tui     Start the terminal user interface
   api     Start the HTTP/connect API server (includes web UI)
   mcp     Start the MCP server
   convo   Manage conversations
 
 Examples:
-  critic tui                    # Start TUI with default bases
-  critic tui main               # Compare against main branch
   critic api                    # Start API server on localhost:65432
   critic api --port=8000        # Start API server on custom port
 `,
@@ -55,12 +51,4 @@ Examples:
 	}
 
 	return cmd
-}
-
-// ensureSlice converts nil to an empty slice
-func ensureSlice(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
 }
