@@ -51,7 +51,6 @@ function AppContent() {
 
   const handleSelectFile = useCallback((file: string, _fileSummary: FileSummary) => {
     loadFileDiff(file)
-    setFocusedPanel('diffView')
   }, [loadFileDiff])
 
   const handleNavigatePrevFile = useCallback(() => {
