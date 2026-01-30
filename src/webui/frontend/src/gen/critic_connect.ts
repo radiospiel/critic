@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse } from "./critic_pb.js";
+import { CreateCommentRequest, CreateCommentResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -56,6 +56,17 @@ export const CriticService = {
       name: "GetFile",
       I: GetFileRequest,
       O: GetFileResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * CreateComment creates a new comment on a diff line.
+     *
+     * @generated from rpc critic.v1.CriticService.CreateComment
+     */
+    createComment: {
+      name: "CreateComment",
+      I: CreateCommentRequest,
+      O: CreateCommentResponse,
       kind: MethodKind.Unary,
     },
   }

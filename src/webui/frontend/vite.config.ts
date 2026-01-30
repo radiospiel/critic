@@ -6,6 +6,24 @@ export default defineConfig({
   build: {
     outDir: '../dist',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1000, // highlight.js is ~970KB
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('highlight.js')) {
+              return 'highlight'
+            }
+            if (id.includes('@tiptap') || id.includes('prosemirror')) {
+              return 'tiptap'
+            }
+            if (id.includes('react-dom') || id.includes('/react/')) {
+              return 'react-vendor'
+            }
+          }
+        },
+      },
+    },
   },
   clearScreen: false,
   server: {

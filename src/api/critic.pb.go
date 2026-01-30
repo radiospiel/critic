@@ -1128,6 +1128,143 @@ func (x *GetFileResponse) GetError() *RpcError {
 	return nil
 }
 
+// CreateCommentRequest contains the data for creating a new comment.
+type CreateCommentRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// old_file is the path to the file in the old version (before the change).
+	OldFile string `protobuf:"bytes,1,opt,name=old_file,json=oldFile,proto3" json:"old_file,omitempty"`
+	// old_line is the line number in the old file.
+	OldLine int32 `protobuf:"varint,2,opt,name=old_line,json=oldLine,proto3" json:"old_line,omitempty"`
+	// new_file is the path to the file in the new version (after the change).
+	NewFile string `protobuf:"bytes,3,opt,name=new_file,json=newFile,proto3" json:"new_file,omitempty"`
+	// new_line is the line number in the new file.
+	NewLine int32 `protobuf:"varint,4,opt,name=new_line,json=newLine,proto3" json:"new_line,omitempty"`
+	// comment is the markdown content of the comment.
+	Comment       string `protobuf:"bytes,5,opt,name=comment,proto3" json:"comment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCommentRequest) Reset() {
+	*x = CreateCommentRequest{}
+	mi := &file_critic_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCommentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCommentRequest) ProtoMessage() {}
+
+func (x *CreateCommentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_critic_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCommentRequest.ProtoReflect.Descriptor instead.
+func (*CreateCommentRequest) Descriptor() ([]byte, []int) {
+	return file_critic_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *CreateCommentRequest) GetOldFile() string {
+	if x != nil {
+		return x.OldFile
+	}
+	return ""
+}
+
+func (x *CreateCommentRequest) GetOldLine() int32 {
+	if x != nil {
+		return x.OldLine
+	}
+	return 0
+}
+
+func (x *CreateCommentRequest) GetNewFile() string {
+	if x != nil {
+		return x.NewFile
+	}
+	return ""
+}
+
+func (x *CreateCommentRequest) GetNewLine() int32 {
+	if x != nil {
+		return x.NewLine
+	}
+	return 0
+}
+
+func (x *CreateCommentRequest) GetComment() string {
+	if x != nil {
+		return x.Comment
+	}
+	return ""
+}
+
+// CreateCommentResponse contains the result of creating a comment.
+type CreateCommentResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// success indicates whether the comment was created successfully.
+	Success bool `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	// error contains error details if the request failed.
+	Error         *RpcError `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateCommentResponse) Reset() {
+	*x = CreateCommentResponse{}
+	mi := &file_critic_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateCommentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateCommentResponse) ProtoMessage() {}
+
+func (x *CreateCommentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_critic_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateCommentResponse.ProtoReflect.Descriptor instead.
+func (*CreateCommentResponse) Descriptor() ([]byte, []int) {
+	return file_critic_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *CreateCommentResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *CreateCommentResponse) GetError() *RpcError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
 var File_critic_proto protoreflect.FileDescriptor
 
 const file_critic_proto_rawDesc = "" +
@@ -1191,6 +1328,15 @@ const file_critic_proto_rawDesc = "" +
 	"\x04path\x18\x01 \x01(\tR\x04path\"V\n" +
 	"\x0fGetFileResponse\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12)\n" +
+	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error\"\x9c\x01\n" +
+	"\x14CreateCommentRequest\x12\x19\n" +
+	"\bold_file\x18\x01 \x01(\tR\aoldFile\x12\x19\n" +
+	"\bold_line\x18\x02 \x01(\x05R\aoldLine\x12\x19\n" +
+	"\bnew_file\x18\x03 \x01(\tR\anewFile\x12\x19\n" +
+	"\bnew_line\x18\x04 \x01(\x05R\anewLine\x12\x18\n" +
+	"\acomment\x18\x05 \x01(\tR\acomment\"\\\n" +
+	"\x15CreateCommentResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12)\n" +
 	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error*\x97\x01\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x1f\n" +
@@ -1209,12 +1355,13 @@ const file_critic_proto_rawDesc = "" +
 	"\x15LINE_TYPE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11LINE_TYPE_CONTEXT\x10\x01\x12\x13\n" +
 	"\x0fLINE_TYPE_ADDED\x10\x02\x12\x15\n" +
-	"\x11LINE_TYPE_DELETED\x10\x032\xbe\x02\n" +
+	"\x11LINE_TYPE_DELETED\x10\x032\x92\x03\n" +
 	"\rCriticService\x12R\n" +
 	"\rGetLastChange\x12\x1f.critic.v1.GetLastChangeRequest\x1a .critic.v1.GetLastChangeResponse\x12U\n" +
 	"\x0eGetDiffSummary\x12 .critic.v1.GetDiffSummaryRequest\x1a!.critic.v1.GetDiffSummaryResponse\x12@\n" +
 	"\aGetDiff\x12\x19.critic.v1.GetDiffRequest\x1a\x1a.critic.v1.GetDiffResponse\x12@\n" +
-	"\aGetFile\x12\x19.critic.v1.GetFileRequest\x1a\x1a.critic.v1.GetFileResponseB*Z(github.com/radiospiel/critic/src/api;apib\x06proto3"
+	"\aGetFile\x12\x19.critic.v1.GetFileRequest\x1a\x1a.critic.v1.GetFileResponse\x12R\n" +
+	"\rCreateComment\x12\x1f.critic.v1.CreateCommentRequest\x1a .critic.v1.CreateCommentResponseB*Z(github.com/radiospiel/critic/src/api;apib\x06proto3"
 
 var (
 	file_critic_proto_rawDescOnce sync.Once
@@ -1229,7 +1376,7 @@ func file_critic_proto_rawDescGZIP() []byte {
 }
 
 var file_critic_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_critic_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_critic_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_critic_proto_goTypes = []any{
 	(ErrorCode)(0),                 // 0: critic.v1.ErrorCode
 	(FileStatus)(0),                // 1: critic.v1.FileStatus
@@ -1250,6 +1397,8 @@ var file_critic_proto_goTypes = []any{
 	(*Line)(nil),                   // 16: critic.v1.Line
 	(*GetFileRequest)(nil),         // 17: critic.v1.GetFileRequest
 	(*GetFileResponse)(nil),        // 18: critic.v1.GetFileResponse
+	(*CreateCommentRequest)(nil),   // 19: critic.v1.CreateCommentRequest
+	(*CreateCommentResponse)(nil),  // 20: critic.v1.CreateCommentResponse
 }
 var file_critic_proto_depIdxs = []int32{
 	0,  // 0: critic.v1.RpcError.code:type_name -> critic.v1.ErrorCode
@@ -1267,19 +1416,22 @@ var file_critic_proto_depIdxs = []int32{
 	15, // 12: critic.v1.Hunk.stats:type_name -> critic.v1.HunkStats
 	2,  // 13: critic.v1.Line.type:type_name -> critic.v1.LineType
 	3,  // 14: critic.v1.GetFileResponse.error:type_name -> critic.v1.RpcError
-	4,  // 15: critic.v1.CriticService.GetLastChange:input_type -> critic.v1.GetLastChangeRequest
-	6,  // 16: critic.v1.CriticService.GetDiffSummary:input_type -> critic.v1.GetDiffSummaryRequest
-	8,  // 17: critic.v1.CriticService.GetDiff:input_type -> critic.v1.GetDiffRequest
-	17, // 18: critic.v1.CriticService.GetFile:input_type -> critic.v1.GetFileRequest
-	5,  // 19: critic.v1.CriticService.GetLastChange:output_type -> critic.v1.GetLastChangeResponse
-	7,  // 20: critic.v1.CriticService.GetDiffSummary:output_type -> critic.v1.GetDiffSummaryResponse
-	9,  // 21: critic.v1.CriticService.GetDiff:output_type -> critic.v1.GetDiffResponse
-	18, // 22: critic.v1.CriticService.GetFile:output_type -> critic.v1.GetFileResponse
-	19, // [19:23] is the sub-list for method output_type
-	15, // [15:19] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	3,  // 15: critic.v1.CreateCommentResponse.error:type_name -> critic.v1.RpcError
+	4,  // 16: critic.v1.CriticService.GetLastChange:input_type -> critic.v1.GetLastChangeRequest
+	6,  // 17: critic.v1.CriticService.GetDiffSummary:input_type -> critic.v1.GetDiffSummaryRequest
+	8,  // 18: critic.v1.CriticService.GetDiff:input_type -> critic.v1.GetDiffRequest
+	17, // 19: critic.v1.CriticService.GetFile:input_type -> critic.v1.GetFileRequest
+	19, // 20: critic.v1.CriticService.CreateComment:input_type -> critic.v1.CreateCommentRequest
+	5,  // 21: critic.v1.CriticService.GetLastChange:output_type -> critic.v1.GetLastChangeResponse
+	7,  // 22: critic.v1.CriticService.GetDiffSummary:output_type -> critic.v1.GetDiffSummaryResponse
+	9,  // 23: critic.v1.CriticService.GetDiff:output_type -> critic.v1.GetDiffResponse
+	18, // 24: critic.v1.CriticService.GetFile:output_type -> critic.v1.GetFileResponse
+	20, // 25: critic.v1.CriticService.CreateComment:output_type -> critic.v1.CreateCommentResponse
+	21, // [21:26] is the sub-list for method output_type
+	16, // [16:21] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_critic_proto_init() }
@@ -1293,7 +1445,7 @@ func file_critic_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_critic_proto_rawDesc), len(file_critic_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

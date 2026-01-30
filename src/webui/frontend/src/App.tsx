@@ -51,7 +51,6 @@ function AppContent() {
 
   const handleSelectFile = useCallback((file: string, _fileSummary: FileSummary) => {
     loadFileDiff(file)
-    setFocusedPanel('diffView')
   }, [loadFileDiff])
 
   const handleNavigatePrevFile = useCallback(() => {
@@ -77,6 +76,10 @@ function AppContent() {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle if in input field
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+      // Don't handle if in tiptap editor
+      if ((e.target as HTMLElement)?.closest?.('.tiptap')) {
         return
       }
 

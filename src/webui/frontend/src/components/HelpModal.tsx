@@ -30,7 +30,7 @@ function HelpModal({ onClose }: HelpModalProps) {
               </div>
               <div className="shortcut-item">
                 <kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
-                <span>Jump 10 lines up/down</span>
+                <span>Jump 25 lines up/down</span>
               </div>
               <div className="shortcut-item">
                 <kbd>g</kbd>
@@ -53,6 +53,24 @@ function HelpModal({ onClose }: HelpModalProps) {
               <div className="shortcut-item">
                 <kbd>Shift</kbd> + <kbd>↓</kbd>
                 <span>Expand selection downward</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="shortcut-section">
+            <h3>Comments</h3>
+            <div className="shortcut-list">
+              <div className="shortcut-item">
+                <kbd>Enter</kbd>
+                <span>Open comment editor on selected line</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>Ctrl</kbd> + <kbd>S</kbd>
+                <span>Save comment</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>Esc</kbd>
+                <span>Close comment editor</span>
               </div>
             </div>
           </section>
