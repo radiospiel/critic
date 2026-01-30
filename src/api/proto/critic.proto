@@ -14,6 +14,8 @@ service CriticService {
   rpc GetDiff(GetDiffRequest) returns (GetDiffResponse);
   // GetFile returns the content of a file at a specific path.
   rpc GetFile(GetFileRequest) returns (GetFileResponse);
+  // CreateComment creates a new comment on a diff line.
+  rpc CreateComment(CreateCommentRequest) returns (CreateCommentResponse);
 }
 
 // ErrorCode represents the type of RPC error.
@@ -156,6 +158,28 @@ message GetFileRequest {
 message GetFileResponse {
   // content is the file content.
   string content = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// CreateCommentRequest contains the data for creating a new comment.
+message CreateCommentRequest {
+  // old_file is the path to the file in the old version (before the change).
+  string old_file = 1;
+  // old_line is the line number in the old file.
+  int32 old_line = 2;
+  // new_file is the path to the file in the new version (after the change).
+  string new_file = 3;
+  // new_line is the line number in the new file.
+  int32 new_line = 4;
+  // comment is the markdown content of the comment.
+  string comment = 5;
+}
+
+// CreateCommentResponse contains the result of creating a comment.
+message CreateCommentResponse {
+  // success indicates whether the comment was created successfully.
+  bool success = 1;
   // error contains error details if the request failed.
   RpcError error = 15;
 }
