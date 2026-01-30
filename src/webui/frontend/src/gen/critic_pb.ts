@@ -839,6 +839,7 @@ export class Line extends Message<Line> {
 }
 
 /**
+<<<<<<< HEAD
  * GetFileRequest requests the content of a file.
  *
  * @generated from message critic.v1.GetFileRequest
@@ -852,11 +853,55 @@ export class GetFileRequest extends Message<GetFileRequest> {
   path = "";
 
   constructor(data?: PartialMessage<GetFileRequest>) {
+=======
+ * CreateCommentRequest contains the data for creating a new comment.
+ *
+ * @generated from message critic.v1.CreateCommentRequest
+ */
+export class CreateCommentRequest extends Message<CreateCommentRequest> {
+  /**
+   * old_file is the path to the file in the old version (before the change).
+   *
+   * @generated from field: string old_file = 1;
+   */
+  oldFile = "";
+
+  /**
+   * old_line is the line number in the old file.
+   *
+   * @generated from field: int32 old_line = 2;
+   */
+  oldLine = 0;
+
+  /**
+   * new_file is the path to the file in the new version (after the change).
+   *
+   * @generated from field: string new_file = 3;
+   */
+  newFile = "";
+
+  /**
+   * new_line is the line number in the new file.
+   *
+   * @generated from field: int32 new_line = 4;
+   */
+  newLine = 0;
+
+  /**
+   * comment is the markdown content of the comment.
+   *
+   * @generated from field: string comment = 5;
+   */
+  comment = "";
+
+  constructor(data?: PartialMessage<CreateCommentRequest>) {
+>>>>>>> 0f3a2cb (Implement comment editor in web UI with CreateComment API)
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
+<<<<<<< HEAD
   static readonly typeName = "critic.v1.GetFileRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -876,10 +921,36 @@ export class GetFileRequest extends Message<GetFileRequest> {
 
   static equals(a: GetFileRequest | PlainMessage<GetFileRequest> | undefined, b: GetFileRequest | PlainMessage<GetFileRequest> | undefined): boolean {
     return proto3.util.equals(GetFileRequest, a, b);
+=======
+  static readonly typeName = "critic.v1.CreateCommentRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "old_file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "old_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "new_file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "new_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "comment", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateCommentRequest {
+    return new CreateCommentRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateCommentRequest {
+    return new CreateCommentRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateCommentRequest {
+    return new CreateCommentRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: CreateCommentRequest | PlainMessage<CreateCommentRequest> | undefined, b: CreateCommentRequest | PlainMessage<CreateCommentRequest> | undefined): boolean {
+    return proto3.util.equals(CreateCommentRequest, a, b);
+>>>>>>> 0f3a2cb (Implement comment editor in web UI with CreateComment API)
   }
 }
 
 /**
+<<<<<<< HEAD
  * GetFileResponse contains the file content.
  *
  * @generated from message critic.v1.GetFileResponse
@@ -891,6 +962,19 @@ export class GetFileResponse extends Message<GetFileResponse> {
    * @generated from field: string content = 1;
    */
   content = "";
+=======
+ * CreateCommentResponse contains the result of creating a comment.
+ *
+ * @generated from message critic.v1.CreateCommentResponse
+ */
+export class CreateCommentResponse extends Message<CreateCommentResponse> {
+  /**
+   * success indicates whether the comment was created successfully.
+   *
+   * @generated from field: bool success = 1;
+   */
+  success = false;
+>>>>>>> 0f3a2cb (Implement comment editor in web UI with CreateComment API)
 
   /**
    * error contains error details if the request failed.
@@ -899,12 +983,17 @@ export class GetFileResponse extends Message<GetFileResponse> {
    */
   error?: RpcError;
 
+<<<<<<< HEAD
   constructor(data?: PartialMessage<GetFileResponse>) {
+=======
+  constructor(data?: PartialMessage<CreateCommentResponse>) {
+>>>>>>> 0f3a2cb (Implement comment editor in web UI with CreateComment API)
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
+<<<<<<< HEAD
   static readonly typeName = "critic.v1.GetFileResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -925,6 +1014,28 @@ export class GetFileResponse extends Message<GetFileResponse> {
 
   static equals(a: GetFileResponse | PlainMessage<GetFileResponse> | undefined, b: GetFileResponse | PlainMessage<GetFileResponse> | undefined): boolean {
     return proto3.util.equals(GetFileResponse, a, b);
+=======
+  static readonly typeName = "critic.v1.CreateCommentResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateCommentResponse {
+    return new CreateCommentResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateCommentResponse {
+    return new CreateCommentResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateCommentResponse {
+    return new CreateCommentResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: CreateCommentResponse | PlainMessage<CreateCommentResponse> | undefined, b: CreateCommentResponse | PlainMessage<CreateCommentResponse> | undefined): boolean {
+    return proto3.util.equals(CreateCommentResponse, a, b);
+>>>>>>> 0f3a2cb (Implement comment editor in web UI with CreateComment API)
   }
 }
 

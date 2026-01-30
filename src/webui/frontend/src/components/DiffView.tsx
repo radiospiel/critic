@@ -1,6 +1,7 @@
 import { useState, useMemo, Fragment, useEffect, useCallback, useRef } from 'react'
 import hljs from 'highlight.js'
 import { FileDiff, FileStatus, Hunk, Line, LineType } from '../gen/critic_pb'
+import { CommentLineInfo } from './CommentEditor'
 
 type ViewMode = 'unified' | 'split'
 
@@ -11,6 +12,7 @@ interface DiffViewProps {
   onNavigatePrevFile?: () => void
   onNavigateNextFile?: () => void
   isFocused?: boolean
+  onLineClick?: (lineInfo: CommentLineInfo) => void
 }
 
 function getFileExtension(path: string): string {
@@ -280,9 +282,12 @@ interface UnifiedLineProps {
   isFirstSelected?: boolean
   isLastSelected?: boolean
   lineRef?: React.RefObject<HTMLTableRowElement>
+  oldFile: string
+  newFile: string
+  onLineClick?: (lineInfo: CommentLineInfo) => void
 }
 
-function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef }: UnifiedLineProps) {
+function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef, oldFile, newFile, onLineClick }: UnifiedLineProps) {
   const lineClass =
     line.type === LineType.ADDED
       ? 'diff-line-added'
@@ -304,8 +309,24 @@ function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelect
     isLastSelected ? 'diff-line-selected-last' : '',
   ].filter(Boolean).join(' ')
 
+  const handleClick = () => {
+    if (onLineClick) {
+      onLineClick({
+        oldFile,
+        newFile,
+        oldLine: line.lineNoOld,
+        newLine: line.lineNoNew,
+      })
+    }
+  }
+
   return (
-    <tr className={`${lineClass}${selectionClasses ? ' ' + selectionClasses : ''}`} ref={lineRef}>
+    <tr
+      className={`${lineClass}${selectionClasses ? ' ' + selectionClasses : ''}`}
+      ref={lineRef}
+      onClick={handleClick}
+      style={{ cursor: onLineClick ? 'pointer' : 'default' }}
+    >
       <td className="diff-line-number diff-line-number-old">
         {line.type !== LineType.ADDED && line.lineNoOld > 0 ? line.lineNoOld : ''}
       </td>
@@ -494,7 +515,7 @@ interface SelectionRange {
   end: number
 }
 
-function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true }: DiffViewProps) {
+function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onLineClick }: DiffViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('unified')
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
   const selectedLineRef = useRef<HTMLTableRowElement>(null)
@@ -502,6 +523,8 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
 
   const path = fileDiff.status === FileStatus.DELETED ? fileDiff.oldPath : fileDiff.newPath
   const language = getLanguage(path)
+  const oldFile = fileDiff.oldPath
+  const newFile = fileDiff.newPath
 
   // Count total navigable lines (all diff lines, excluding hunk headers)
   const totalLines = useMemo(() => {
@@ -691,6 +714,9 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                           isFirstSelected={isFirstSelected}
                           isLastSelected={isLastSelected}
                           lineRef={shouldAttachRef ? selectedLineRef : undefined}
+                          oldFile={oldFile}
+                          newFile={newFile}
+                          onLineClick={onLineClick}
                         />
                       )
                     })}
