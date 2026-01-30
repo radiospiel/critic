@@ -2,6 +2,8 @@ import { useState, useMemo, Fragment, useEffect, useCallback, useRef } from 'rea
 import hljs from 'highlight.js'
 import { FileDiff, FileStatus, Hunk, Line, LineType } from '../gen/critic_pb'
 import InlineCommentEditor, { CommentLineInfo } from './CommentEditor'
+import CommentDisplay from './CommentDisplay'
+import { getComments, CommentConversation } from '../api/client'
 
 type ViewMode = 'unified' | 'split'
 
@@ -499,6 +501,7 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
   const [viewMode, setViewMode] = useState<ViewMode>('unified')
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
   const [editorOpen, setEditorOpen] = useState(false)
+  const [comments, setComments] = useState<CommentConversation[]>([])
   const selectedLineRef = useRef<HTMLTableRowElement>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -506,6 +509,23 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
   const language = getLanguage(path)
   const oldFile = fileDiff.oldPath
   const newFile = fileDiff.newPath
+
+  // Fetch comments when file changes
+  const fetchComments = useCallback(async () => {
+    if (!path) return
+    try {
+      const response = await getComments(path)
+      if (response.conversations) {
+        setComments(response.conversations)
+      }
+    } catch (err) {
+      console.error('Failed to fetch comments:', err)
+    }
+  }, [path])
+
+  useEffect(() => {
+    fetchComments()
+  }, [fetchComments])
 
   // Count total navigable lines (all diff lines, excluding hunk headers)
   const totalLines = useMemo(() => {
@@ -576,7 +596,15 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
   const handleCommentSaved = useCallback(() => {
     console.log('Comment saved successfully')
     setEditorOpen(false)
-  }, [])
+    // Refresh comments after saving
+    fetchComments()
+  }, [fetchComments])
+
+  // Get comments for a specific line number
+  const getCommentsForLine = useCallback(
+    (lineNo: number) => comments.filter((c) => c.lineNumber === lineNo),
+    [comments]
+  )
 
   // Keyboard navigation
   const handleKeyDown = useCallback(
@@ -744,6 +772,10 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                       const shouldAttachRef = isLastSelected
                       // Show editor after the last selected line
                       const showEditorAfterLine = isLastSelected && editorOpen && selectionLineInfo
+                      // Get comments for this line (use new line number for added/context, old for deleted)
+                      const lineNo = line.type === LineType.DELETED ? line.lineNoOld : line.lineNoNew
+                      const lineComments = getCommentsForLine(lineNo)
+                      const hasComments = lineComments.length > 0
 
                       return (
                         <Fragment key={`${hunkIdx}-${lineIdx}`}>
@@ -755,6 +787,13 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                             isLastSelected={isLastSelected}
                             lineRef={shouldAttachRef ? selectedLineRef : undefined}
                           />
+                          {hasComments && (
+                            <tr className="diff-comment-row">
+                              <td colSpan={4}>
+                                <CommentDisplay conversations={lineComments} lineNumber={lineNo} />
+                              </td>
+                            </tr>
+                          )}
                           {showEditorAfterLine && (
                             <tr className="diff-inline-editor-row">
                               <td colSpan={4}>

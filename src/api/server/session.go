@@ -120,6 +120,11 @@ func (s *Session) GetArgs() DiffArgs {
 	return s.args
 }
 
+// HeadCommit returns the current HEAD commit SHA
+func (s *Session) HeadCommit() string {
+	return git.ResolveRef("HEAD")
+}
+
 // SetRefs sets the base ref and starts loading the diff in the background.
 // It uses tasks.RunExclusively to ensure only one diff loading operation
 // runs at a time. If a diff load is already in progress, it will be aborted.
