@@ -16,6 +16,8 @@ service CriticService {
   rpc GetFile(GetFileRequest) returns (GetFileResponse);
   // CreateComment creates a new comment on a diff line.
   rpc CreateComment(CreateCommentRequest) returns (CreateCommentResponse);
+  // GetComments returns all comments/conversations for a specific file.
+  rpc GetComments(GetCommentsRequest) returns (GetCommentsResponse);
 }
 
 // ErrorCode represents the type of RPC error.
@@ -182,4 +184,56 @@ message CreateCommentResponse {
   bool success = 1;
   // error contains error details if the request failed.
   RpcError error = 15;
+}
+
+// GetCommentsRequest requests all comments for a specific file.
+message GetCommentsRequest {
+  // path is the file path to get comments for.
+  string path = 1;
+}
+
+// GetCommentsResponse contains all conversations/comments for a file.
+message GetCommentsResponse {
+  // conversations is the list of comment threads for the file.
+  repeated Conversation conversations = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// Conversation represents a comment thread at a specific line.
+message Conversation {
+  // id is the unique identifier for this conversation.
+  string id = 1;
+  // status is the conversation status ("unresolved" or "resolved").
+  string status = 2;
+  // file_path is the git-relative path to the file.
+  string file_path = 3;
+  // line_number is the line number in the file.
+  int32 line_number = 4;
+  // code_version is the git commit SHA when the comment was created.
+  string code_version = 5;
+  // context is the code context around the commented line.
+  string context = 6;
+  // messages is the list of messages in this conversation.
+  repeated Message messages = 7;
+  // created_at is the timestamp when the conversation was created.
+  string created_at = 8;
+  // updated_at is the timestamp when the conversation was last updated.
+  string updated_at = 9;
+}
+
+// Message represents a single message in a conversation.
+message Message {
+  // id is the unique identifier for this message.
+  string id = 1;
+  // author is who authored the message ("human" or "ai").
+  string author = 2;
+  // content is the message content.
+  string content = 3;
+  // created_at is the timestamp when the message was created.
+  string created_at = 4;
+  // updated_at is the timestamp when the message was last updated.
+  string updated_at = 5;
+  // is_unread indicates whether the message is unread (for AI messages).
+  bool is_unread = 6;
 }

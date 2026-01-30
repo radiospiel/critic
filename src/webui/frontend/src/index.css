@@ -878,3 +878,127 @@ html, body, #root {
 .inline-comment-button-save:hover:not(:disabled) {
   opacity: 0.9;
 }
+
+/* Comment Display */
+.comment-display {
+  padding: 8px 16px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-primary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.comment-conversation {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.comment-conversation:last-child {
+  margin-bottom: 0;
+}
+
+.comment-conversation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-secondary);
+  font-size: 12px;
+}
+
+.comment-conversation-line {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.comment-conversation-status {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.comment-status-unresolved {
+  background-color: var(--status-modified-bg);
+  color: var(--status-modified-text);
+}
+
+.comment-status-resolved {
+  background-color: var(--status-added-bg);
+  color: var(--status-added-text);
+}
+
+.comment-conversation-messages {
+  padding: 8px;
+}
+
+.comment-message {
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.comment-message:last-child {
+  margin-bottom: 0;
+}
+
+.comment-message-human {
+  background-color: var(--bg-tertiary);
+}
+
+.comment-message-ai {
+  background-color: var(--diff-hunk-bg);
+  border-left: 3px solid var(--diff-hunk-text);
+}
+
+.comment-message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.comment-message-author {
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.comment-message-time {
+  color: var(--text-muted);
+}
+
+.comment-message-unread {
+  background-color: var(--diff-hunk-text);
+  color: white;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.comment-message-content {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Comment display in diff table */
+.diff-comment-row td {
+  padding: 0;
+}
+
+.diff-comment-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: var(--diff-hunk-text);
+  border-radius: 50%;
+  margin-left: 4px;
+}

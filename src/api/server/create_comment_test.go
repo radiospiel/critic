@@ -6,10 +6,18 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/src/api"
+	"github.com/radiospiel/critic/src/pkg/critic"
 )
 
 func TestCreateComment(t *testing.T) {
-	s := &Server{}
+	// Create a server with a dummy messaging implementation
+	messaging := critic.NewDummyMessaging()
+	s := &Server{
+		config: Config{
+			Messaging: messaging,
+		},
+		session: &Session{}, // Empty session - HeadCommit will return ""
+	}
 
 	req := connect.NewRequest(&api.CreateCommentRequest{
 		OldFile: "test.go",
