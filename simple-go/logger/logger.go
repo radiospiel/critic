@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -56,7 +55,7 @@ func (sl *SimpleLogger) deepCopy(fun func(copy *SimpleLogger)) *SimpleLogger {
 }
 
 // stores the path to the current log file
-var logFilePath = buildLogFilePath()
+var logFilePath = "/dev/stderr"
 var fileLogger = newFileLogger(logFilePath)
 
 // logMessage holds the data for a log entry
@@ -115,19 +114,6 @@ func Runtime[T any](msg string, fun func() T) T {
 	durationMs := float64(time.Since(start).Microseconds()) / 1000.0
 	Info("%s: %.1f msecs", msg, durationMs)
 	return r
-}
-
-// buildLogFilePath determines the log file path from the process name
-func buildLogFilePath() string {
-	tmpDir := os.Getenv("TMPDIR")
-	if tmpDir == "" {
-		tmpDir = "/tmp"
-	}
-
-	// Get the process name from os.Args[0]
-	processName := filepath.Base(os.Args[0])
-
-	return filepath.Join(tmpDir, processName+".log")
 }
 
 // LogFilePath returns the full path to the current log file

@@ -8,11 +8,7 @@ make build
 
 # Execute with CPU profiling enabled
 # Use go tool pprof critic.prof to check profile
-if [[ "${1:-}" == "tui" ]]; then
-    # Strip 'tui' from args since we add it with cpuprofile
-    shift
-    exec ./critic tui --cpuprofile=critic.prof "$@"
-elif [[ "${1:-}" =~ ^(webui|mcp|convo|api|log)$ ]]; then
+if [[ "${1:-}" =~ ^(webui|mcp|convo|api|log)$ ]]; then
     # Other subcommands: pass through as-is
     exec ./critic "$@"
 else

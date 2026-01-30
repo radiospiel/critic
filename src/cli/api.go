@@ -39,8 +39,9 @@ Examples:
 			logger.SetLogFile("/dev/stderr")
 
 			config := server.Config{
-				Port: port,
-				Dev:  dev,
+				Port:     port,
+				Dev:      dev,
+				BaseRefs: []string{"ex1"},
 			}
 
 			srv := server.NewServer(config)

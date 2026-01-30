@@ -2,6 +2,7 @@ package api
 
 import "fmt"
 
+// TODO (bot): generically use the canonical JSON or text representation
 // InspectForLog implements logger.Inspect for GetLastChangeRequest
 func (x *GetLastChangeRequest) InspectForLog() string {
 	return "GetLastChangeRequest{}"
