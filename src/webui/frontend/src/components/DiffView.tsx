@@ -5,7 +5,7 @@ import InlineCommentEditor, { CommentLineInfo } from './CommentEditor'
 
 type ViewMode = 'unified' | 'split'
 
-const ALT_JUMP_SIZE = 10
+const ALT_JUMP_SIZE = 25
 
 interface DiffViewProps {
   fileDiff: FileDiff

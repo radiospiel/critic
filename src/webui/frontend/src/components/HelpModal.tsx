@@ -30,7 +30,7 @@ function HelpModal({ onClose }: HelpModalProps) {
               </div>
               <div className="shortcut-item">
                 <kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>
-                <span>Jump 10 lines up/down</span>
+                <span>Jump 25 lines up/down</span>
               </div>
               <div className="shortcut-item">
                 <kbd>g</kbd>
