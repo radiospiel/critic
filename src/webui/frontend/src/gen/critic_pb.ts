@@ -7,6 +7,46 @@ import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialM
 import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
 
 /**
+ * ErrorCode represents the type of RPC error.
+ *
+ * @generated from enum critic.v1.ErrorCode
+ */
+export enum ErrorCode {
+  /**
+   * @generated from enum value: ERROR_CODE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: ERROR_CODE_INVALID_ARGUMENT = 1;
+   */
+  INVALID_ARGUMENT = 1,
+
+  /**
+   * @generated from enum value: ERROR_CODE_NOT_FOUND = 2;
+   */
+  NOT_FOUND = 2,
+
+  /**
+   * @generated from enum value: ERROR_CODE_INTERNAL = 3;
+   */
+  INTERNAL = 3,
+
+  /**
+   * @generated from enum value: ERROR_CODE_UNAVAILABLE = 4;
+   */
+  UNAVAILABLE = 4,
+}
+// Retrieve enum metadata with: proto3.getEnumType(ErrorCode)
+proto3.util.setEnumType(ErrorCode, "critic.v1.ErrorCode", [
+  { no: 0, name: "ERROR_CODE_UNSPECIFIED" },
+  { no: 1, name: "ERROR_CODE_INVALID_ARGUMENT" },
+  { no: 2, name: "ERROR_CODE_NOT_FOUND" },
+  { no: 3, name: "ERROR_CODE_INTERNAL" },
+  { no: 4, name: "ERROR_CODE_UNAVAILABLE" },
+]);
+
+/**
  * FileStatus represents the status of a file in a diff.
  *
  * @generated from enum critic.v1.FileStatus
@@ -81,6 +121,63 @@ proto3.util.setEnumType(LineType, "critic.v1.LineType", [
 ]);
 
 /**
+ * RpcError represents a structured error response.
+ *
+ * @generated from message critic.v1.RpcError
+ */
+export class RpcError extends Message<RpcError> {
+  /**
+   * code is the error type.
+   *
+   * @generated from field: critic.v1.ErrorCode code = 1;
+   */
+  code = ErrorCode.UNSPECIFIED;
+
+  /**
+   * message is the error message for logs.
+   *
+   * @generated from field: string message = 2;
+   */
+  message = "";
+
+  /**
+   * details is an optional human-readable description.
+   *
+   * @generated from field: string details = 3;
+   */
+  details = "";
+
+  constructor(data?: PartialMessage<RpcError>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.RpcError";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "code", kind: "enum", T: proto3.getEnumType(ErrorCode) },
+    { no: 2, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "details", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): RpcError {
+    return new RpcError().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): RpcError {
+    return new RpcError().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): RpcError {
+    return new RpcError().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: RpcError | PlainMessage<RpcError> | undefined, b: RpcError | PlainMessage<RpcError> | undefined): boolean {
+    return proto3.util.equals(RpcError, a, b);
+  }
+}
+
+/**
  * GetLastChangeRequest is an empty request for GetLastChange.
  *
  * @generated from message critic.v1.GetLastChangeRequest
@@ -126,6 +223,13 @@ export class GetLastChangeResponse extends Message<GetLastChangeResponse> {
    */
   mtimeMsecs = protoInt64.zero;
 
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
   constructor(data?: PartialMessage<GetLastChangeResponse>) {
     super();
     proto3.util.initPartial(data, this);
@@ -135,6 +239,7 @@ export class GetLastChangeResponse extends Message<GetLastChangeResponse> {
   static readonly typeName = "critic.v1.GetLastChangeResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "mtime_msecs", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 15, name: "error", kind: "message", T: RpcError },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetLastChangeResponse {
@@ -201,11 +306,18 @@ export class GetDiffSummaryResponse extends Message<GetDiffSummaryResponse> {
   state = "";
 
   /**
-   * diff contains the file summaries (may be null if state is INITIALISING).
+   * diff contains the file summaries without hunks (may be null if state is INITIALISING).
    *
    * @generated from field: critic.v1.DiffSummary diff = 2;
    */
   diff?: DiffSummary;
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
 
   constructor(data?: PartialMessage<GetDiffSummaryResponse>) {
     super();
@@ -217,6 +329,7 @@ export class GetDiffSummaryResponse extends Message<GetDiffSummaryResponse> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "state", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "diff", kind: "message", T: DiffSummary },
+    { no: 15, name: "error", kind: "message", T: RpcError },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffSummaryResponse {
@@ -278,7 +391,7 @@ export class GetDiffRequest extends Message<GetDiffRequest> {
 }
 
 /**
- * GetDiffResponse contains the full diff for a specific file.
+ * GetDiffResponse contains the full diff for a single file.
  *
  * @generated from message critic.v1.GetDiffResponse
  */
@@ -290,6 +403,13 @@ export class GetDiffResponse extends Message<GetDiffResponse> {
    */
   file?: FileDiff;
 
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
   constructor(data?: PartialMessage<GetDiffResponse>) {
     super();
     proto3.util.initPartial(data, this);
@@ -299,6 +419,7 @@ export class GetDiffResponse extends Message<GetDiffResponse> {
   static readonly typeName = "critic.v1.GetDiffResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "file", kind: "message", T: FileDiff },
+    { no: 15, name: "error", kind: "message", T: RpcError },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffResponse {
@@ -319,7 +440,7 @@ export class GetDiffResponse extends Message<GetDiffResponse> {
 }
 
 /**
- * DiffSummary represents a summary of git diff with multiple file changes (without hunks).
+ * DiffSummary represents a git diff summary with file metadata but no hunks.
  *
  * @generated from message critic.v1.DiffSummary
  */
@@ -358,7 +479,7 @@ export class DiffSummary extends Message<DiffSummary> {
 }
 
 /**
- * FileSummary represents summary info for a single file (without hunks).
+ * FileSummary represents metadata about a changed file (without hunks).
  *
  * @generated from message critic.v1.FileSummary
  */
@@ -714,6 +835,96 @@ export class Line extends Message<Line> {
 
   static equals(a: Line | PlainMessage<Line> | undefined, b: Line | PlainMessage<Line> | undefined): boolean {
     return proto3.util.equals(Line, a, b);
+  }
+}
+
+/**
+ * GetFileRequest requests the content of a file.
+ *
+ * @generated from message critic.v1.GetFileRequest
+ */
+export class GetFileRequest extends Message<GetFileRequest> {
+  /**
+   * path is the file path to read.
+   *
+   * @generated from field: string path = 1;
+   */
+  path = "";
+
+  constructor(data?: PartialMessage<GetFileRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetFileRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetFileRequest {
+    return new GetFileRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetFileRequest {
+    return new GetFileRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetFileRequest {
+    return new GetFileRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetFileRequest | PlainMessage<GetFileRequest> | undefined, b: GetFileRequest | PlainMessage<GetFileRequest> | undefined): boolean {
+    return proto3.util.equals(GetFileRequest, a, b);
+  }
+}
+
+/**
+ * GetFileResponse contains the file content.
+ *
+ * @generated from message critic.v1.GetFileResponse
+ */
+export class GetFileResponse extends Message<GetFileResponse> {
+  /**
+   * content is the file content.
+   *
+   * @generated from field: string content = 1;
+   */
+  content = "";
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<GetFileResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetFileResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetFileResponse {
+    return new GetFileResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetFileResponse {
+    return new GetFileResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetFileResponse {
+    return new GetFileResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetFileResponse | PlainMessage<GetFileResponse> | undefined, b: GetFileResponse | PlainMessage<GetFileResponse> | undefined): boolean {
+    return proto3.util.equals(GetFileResponse, a, b);
   }
 }
 

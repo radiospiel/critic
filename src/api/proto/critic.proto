@@ -12,6 +12,8 @@ service CriticService {
   rpc GetDiffSummary(GetDiffSummaryRequest) returns (GetDiffSummaryResponse);
   // GetDiff returns the full diff for a specific file path.
   rpc GetDiff(GetDiffRequest) returns (GetDiffResponse);
+  // GetFile returns the content of a file at a specific path.
+  rpc GetFile(GetFileRequest) returns (GetFileResponse);
 }
 
 // ErrorCode represents the type of RPC error.
@@ -142,4 +144,18 @@ message Line {
   string content = 2;
   int32 line_no_old = 3;
   int32 line_no_new = 4;
+}
+
+// GetFileRequest requests the content of a file.
+message GetFileRequest {
+  // path is the file path to read.
+  string path = 1;
+}
+
+// GetFileResponse contains the file content.
+message GetFileResponse {
+  // content is the file content.
+  string content = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
 }

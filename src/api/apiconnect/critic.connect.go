@@ -41,6 +41,8 @@ const (
 	CriticServiceGetDiffSummaryProcedure = "/critic.v1.CriticService/GetDiffSummary"
 	// CriticServiceGetDiffProcedure is the fully-qualified name of the CriticService's GetDiff RPC.
 	CriticServiceGetDiffProcedure = "/critic.v1.CriticService/GetDiff"
+	// CriticServiceGetFileProcedure is the fully-qualified name of the CriticService's GetFile RPC.
+	CriticServiceGetFileProcedure = "/critic.v1.CriticService/GetFile"
 )
 
 // CriticServiceClient is a client for the critic.v1.CriticService service.
@@ -51,6 +53,8 @@ type CriticServiceClient interface {
 	GetDiffSummary(context.Context, *connect.Request[api.GetDiffSummaryRequest]) (*connect.Response[api.GetDiffSummaryResponse], error)
 	// GetDiff returns the full diff for a specific file path.
 	GetDiff(context.Context, *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error)
+	// GetFile returns the content of a file at a specific path.
+	GetFile(context.Context, *connect.Request[api.GetFileRequest]) (*connect.Response[api.GetFileResponse], error)
 }
 
 // NewCriticServiceClient constructs a client for the critic.v1.CriticService service. By default,
@@ -82,6 +86,12 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(criticServiceMethods.ByName("GetDiff")),
 			connect.WithClientOptions(opts...),
 		),
+		getFile: connect.NewClient[api.GetFileRequest, api.GetFileResponse](
+			httpClient,
+			baseURL+CriticServiceGetFileProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("GetFile")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -90,6 +100,7 @@ type criticServiceClient struct {
 	getLastChange  *connect.Client[api.GetLastChangeRequest, api.GetLastChangeResponse]
 	getDiffSummary *connect.Client[api.GetDiffSummaryRequest, api.GetDiffSummaryResponse]
 	getDiff        *connect.Client[api.GetDiffRequest, api.GetDiffResponse]
+	getFile        *connect.Client[api.GetFileRequest, api.GetFileResponse]
 }
 
 // GetLastChange calls critic.v1.CriticService.GetLastChange.
@@ -107,6 +118,11 @@ func (c *criticServiceClient) GetDiff(ctx context.Context, req *connect.Request[
 	return c.getDiff.CallUnary(ctx, req)
 }
 
+// GetFile calls critic.v1.CriticService.GetFile.
+func (c *criticServiceClient) GetFile(ctx context.Context, req *connect.Request[api.GetFileRequest]) (*connect.Response[api.GetFileResponse], error) {
+	return c.getFile.CallUnary(ctx, req)
+}
+
 // CriticServiceHandler is an implementation of the critic.v1.CriticService service.
 type CriticServiceHandler interface {
 	// GetLastChange returns the timestamp of the last change.
@@ -115,6 +131,8 @@ type CriticServiceHandler interface {
 	GetDiffSummary(context.Context, *connect.Request[api.GetDiffSummaryRequest]) (*connect.Response[api.GetDiffSummaryResponse], error)
 	// GetDiff returns the full diff for a specific file path.
 	GetDiff(context.Context, *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error)
+	// GetFile returns the content of a file at a specific path.
+	GetFile(context.Context, *connect.Request[api.GetFileRequest]) (*connect.Response[api.GetFileResponse], error)
 }
 
 // NewCriticServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -142,6 +160,12 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(criticServiceMethods.ByName("GetDiff")),
 		connect.WithHandlerOptions(opts...),
 	)
+	criticServiceGetFileHandler := connect.NewUnaryHandler(
+		CriticServiceGetFileProcedure,
+		svc.GetFile,
+		connect.WithSchema(criticServiceMethods.ByName("GetFile")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/critic.v1.CriticService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CriticServiceGetLastChangeProcedure:
@@ -150,6 +174,8 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 			criticServiceGetDiffSummaryHandler.ServeHTTP(w, r)
 		case CriticServiceGetDiffProcedure:
 			criticServiceGetDiffHandler.ServeHTTP(w, r)
+		case CriticServiceGetFileProcedure:
+			criticServiceGetFileHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -169,4 +195,8 @@ func (UnimplementedCriticServiceHandler) GetDiffSummary(context.Context, *connec
 
 func (UnimplementedCriticServiceHandler) GetDiff(context.Context, *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetDiff is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) GetFile(context.Context, *connect.Request[api.GetFileRequest]) (*connect.Response[api.GetFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetFile is not implemented"))
 }

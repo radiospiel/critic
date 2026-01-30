@@ -25,6 +25,13 @@ var requestSchemaStrings = map[string]string{
 		},
 		"required": ["path"]
 	}`,
+	"/critic.v1.CriticService/GetFile": `{
+		"type": "object",
+		"properties": {
+			"path": {"type": "string", "minLength": 1}
+		},
+		"required": ["path"]
+	}`,
 }
 
 // RequestSchemas maps procedure names to their compiled JSON schemas.
