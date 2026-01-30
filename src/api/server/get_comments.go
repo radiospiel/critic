@@ -38,6 +38,7 @@ type GetCommentsResponse struct {
 
 // GetCommentsHandler returns an HTTP handler for getting comments for a file.
 // This is a temporary HTTP/JSON endpoint until protobuf code can be regenerated.
+// TODO(bot): implement these as a proper protobuf message
 func (s *Server) GetCommentsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
