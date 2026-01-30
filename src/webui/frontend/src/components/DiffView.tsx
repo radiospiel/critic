@@ -1,11 +1,16 @@
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo, Fragment, useEffect, useCallback, useRef } from 'react'
 import hljs from 'highlight.js'
 import { FileDiff, FileStatus, Hunk, Line, LineType } from '../gen/critic_pb'
 
 type ViewMode = 'unified' | 'split'
 
+const ALT_JUMP_SIZE = 10
+
 interface DiffViewProps {
   fileDiff: FileDiff
+  onNavigatePrevFile?: () => void
+  onNavigateNextFile?: () => void
+  isFocused?: boolean
 }
 
 function getFileExtension(path: string): string {
@@ -271,9 +276,13 @@ function getStatusDescription(status: FileStatus): string {
 interface UnifiedLineProps {
   line: Line
   language: string | undefined
+  isSelected?: boolean
+  isFirstSelected?: boolean
+  isLastSelected?: boolean
+  lineRef?: React.RefObject<HTMLTableRowElement>
 }
 
-function UnifiedLine({ line, language }: UnifiedLineProps) {
+function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef }: UnifiedLineProps) {
   const lineClass =
     line.type === LineType.ADDED
       ? 'diff-line-added'
@@ -289,8 +298,14 @@ function UnifiedLine({ line, language }: UnifiedLineProps) {
     [line.content, language]
   )
 
+  const selectionClasses = [
+    isSelected ? 'diff-line-selected' : '',
+    isFirstSelected ? 'diff-line-selected-first' : '',
+    isLastSelected ? 'diff-line-selected-last' : '',
+  ].filter(Boolean).join(' ')
+
   return (
-    <tr className={lineClass}>
+    <tr className={`${lineClass}${selectionClasses ? ' ' + selectionClasses : ''}`} ref={lineRef}>
       <td className="diff-line-number diff-line-number-old">
         {line.type !== LineType.ADDED && line.lineNoOld > 0 ? line.lineNoOld : ''}
       </td>
@@ -309,6 +324,8 @@ function UnifiedLine({ line, language }: UnifiedLineProps) {
 interface SplitViewProps {
   hunks: Hunk[]
   language: string | undefined
+  selection?: { start: number; end: number }
+  selectedLineRef?: React.RefObject<HTMLTableRowElement>
 }
 
 interface SplitLine {
@@ -367,8 +384,26 @@ function computeSplitLines(hunks: Hunk[]): SplitLine[] {
   return result
 }
 
-function SplitView({ hunks, language }: SplitViewProps) {
+function SplitView({ hunks, language, selection, selectedLineRef }: SplitViewProps) {
   const splitLines = useMemo(() => computeSplitLines(hunks), [hunks])
+
+  // Build mapping from split line index to navigable line index (excluding hunk headers)
+  const navigableIndices = useMemo(() => {
+    const indices: number[] = []
+    splitLines.forEach((pair, idx) => {
+      if (pair.oldLine !== null || pair.newLine !== null) {
+        indices.push(idx)
+      }
+    })
+    return indices
+  }, [splitLines])
+
+  // Check if a navigable index is within the selection range
+  const isLineSelected = useCallback(
+    (navIndex: number) =>
+      selection !== undefined && navIndex >= selection.start && navIndex <= selection.end,
+    [selection]
+  )
 
   return (
     <table className="diff-table diff-table-split">
@@ -394,6 +429,13 @@ function SplitView({ hunks, language }: SplitViewProps) {
             )
           }
 
+          const navigableIndex = navigableIndices.indexOf(idx)
+          const isSelected = isLineSelected(navigableIndex)
+          const isFirstSelected = selection !== undefined && navigableIndex === selection.start
+          const isLastSelected = selection !== undefined && navigableIndex === selection.end
+          // Attach ref to the last selected line for scroll-into-view
+          const shouldAttachRef = isLastSelected
+
           const oldClass = pair.oldLine
             ? pair.oldLine.type === LineType.DELETED
               ? 'diff-line-deleted'
@@ -412,8 +454,18 @@ function SplitView({ hunks, language }: SplitViewProps) {
             ? highlightLine(pair.newLine.content, language)
             : ''
 
+          const selectionClasses = [
+            isSelected ? 'diff-line-selected' : '',
+            isFirstSelected ? 'diff-line-selected-first' : '',
+            isLastSelected ? 'diff-line-selected-last' : '',
+          ].filter(Boolean).join(' ')
+
           return (
-            <tr key={idx} className="diff-split-row">
+            <tr
+              key={idx}
+              className={`diff-split-row${selectionClasses ? ' ' + selectionClasses : ''}`}
+              ref={shouldAttachRef ? selectedLineRef : undefined}
+            >
               <td className={`diff-line-number ${oldClass}`}>
                 {pair.oldLine?.lineNoOld || ''}
               </td>
@@ -436,11 +488,29 @@ function SplitView({ hunks, language }: SplitViewProps) {
   )
 }
 
-function DiffView({ fileDiff }: DiffViewProps) {
+// Selection range type
+interface SelectionRange {
+  start: number
+  end: number
+}
+
+function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true }: DiffViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('unified')
+  const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
+  const selectedLineRef = useRef<HTMLTableRowElement>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
   const path = fileDiff.status === FileStatus.DELETED ? fileDiff.oldPath : fileDiff.newPath
   const language = getLanguage(path)
+
+  // Count total navigable lines (all diff lines, excluding hunk headers)
+  const totalLines = useMemo(() => {
+    let count = 0
+    for (const hunk of fileDiff.hunks) {
+      count += hunk.lines.length
+    }
+    return count
+  }, [fileDiff.hunks])
 
   const stats = useMemo(() => {
     let added = 0
@@ -451,6 +521,98 @@ function DiffView({ fileDiff }: DiffViewProps) {
     }
     return { added, deleted }
   }, [fileDiff.hunks])
+
+  // Reset selection when file changes
+  useEffect(() => {
+    setSelection({ start: 0, end: 0 })
+  }, [fileDiff])
+
+  // Scroll selected line into view
+  useEffect(() => {
+    if (selectedLineRef.current) {
+      selectedLineRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [selection])
+
+  // Check if a line index is within the selection range
+  const isLineSelected = useCallback(
+    (lineIndex: number) => lineIndex >= selection.start && lineIndex <= selection.end,
+    [selection]
+  )
+
+  // Keyboard navigation
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      // Don't handle if not focused or in an input field
+      if (!isFocused) return
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+
+      const jumpSize = e.altKey ? ALT_JUMP_SIZE : 1
+
+      switch (e.key) {
+        case 'ArrowUp':
+        case 'k':
+          e.preventDefault()
+          if (e.shiftKey) {
+            // Expand selection upward
+            if (selection.start > 0) {
+              setSelection((prev) => ({
+                ...prev,
+                start: Math.max(0, prev.start - 1),
+              }))
+            }
+          } else {
+            // Collapse to top of selection and move up
+            const newIndex = Math.max(0, selection.start - jumpSize)
+            if (selection.start === 0 && onNavigatePrevFile) {
+              onNavigatePrevFile()
+            } else {
+              setSelection({ start: newIndex, end: newIndex })
+            }
+          }
+          break
+        case 'ArrowDown':
+        case 'j':
+          e.preventDefault()
+          if (e.shiftKey) {
+            // Expand selection downward
+            if (selection.end < totalLines - 1) {
+              setSelection((prev) => ({
+                ...prev,
+                end: Math.min(totalLines - 1, prev.end + 1),
+              }))
+            }
+          } else {
+            // Collapse to bottom of selection and move down
+            const newIndex = Math.min(totalLines - 1, selection.end + jumpSize)
+            if (selection.end >= totalLines - 1 && onNavigateNextFile) {
+              onNavigateNextFile()
+            } else {
+              setSelection({ start: newIndex, end: newIndex })
+            }
+          }
+          break
+        case 'g':
+          if (!e.shiftKey) {
+            e.preventDefault()
+            setSelection({ start: 0, end: 0 })
+          }
+          break
+        case 'G':
+          e.preventDefault()
+          setSelection({ start: totalLines - 1, end: totalLines - 1 })
+          break
+      }
+    },
+    [isFocused, selection, totalLines, onNavigatePrevFile, onNavigateNextFile]
+  )
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
 
   if (fileDiff.isBinary) {
     return (
@@ -498,32 +660,52 @@ function DiffView({ fileDiff }: DiffViewProps) {
         </div>
       </div>
 
-      <div className="diff-content">
+      <div className="diff-content" ref={containerRef}>
         {fileDiff.hunks.length === 0 ? (
           <div className="diff-empty-notice">No changes in this file</div>
         ) : viewMode === 'unified' ? (
           <table className="diff-table diff-table-unified">
             <tbody>
-              {fileDiff.hunks.map((hunk, hunkIdx) => (
-                <Fragment key={hunkIdx}>
-                  <tr className="diff-hunk-header-row">
-                    <td colSpan={4} className="diff-hunk-header">
-                      <HunkHeader header={hunk.header} />
-                    </td>
-                  </tr>
-                  {hunk.lines.map((line, lineIdx) => (
-                    <UnifiedLine
-                      key={`${hunkIdx}-${lineIdx}`}
-                      line={line}
-                      language={language}
-                    />
-                  ))}
-                </Fragment>
-              ))}
+              {(() => {
+                let globalLineIndex = 0
+                return fileDiff.hunks.map((hunk, hunkIdx) => (
+                  <Fragment key={hunkIdx}>
+                    <tr className="diff-hunk-header-row">
+                      <td colSpan={4} className="diff-hunk-header">
+                        <HunkHeader header={hunk.header} />
+                      </td>
+                    </tr>
+                    {hunk.lines.map((line, lineIdx) => {
+                      const currentIndex = globalLineIndex++
+                      const isSelected = isLineSelected(currentIndex)
+                      const isFirstSelected = currentIndex === selection.start
+                      const isLastSelected = currentIndex === selection.end
+                      // Attach ref to the last selected line for scroll-into-view
+                      const shouldAttachRef = isLastSelected
+                      return (
+                        <UnifiedLine
+                          key={`${hunkIdx}-${lineIdx}`}
+                          line={line}
+                          language={language}
+                          isSelected={isSelected}
+                          isFirstSelected={isFirstSelected}
+                          isLastSelected={isLastSelected}
+                          lineRef={shouldAttachRef ? selectedLineRef : undefined}
+                        />
+                      )
+                    })}
+                  </Fragment>
+                ))
+              })()}
             </tbody>
           </table>
         ) : (
-          <SplitView hunks={fileDiff.hunks} language={language} />
+          <SplitView
+            hunks={fileDiff.hunks}
+            language={language}
+            selection={selection}
+            selectedLineRef={selectedLineRef}
+          />
         )}
       </div>
     </div>
