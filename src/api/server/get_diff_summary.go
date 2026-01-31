@@ -13,15 +13,21 @@ func (s *Server) GetDiffSummary(
 	ctx context.Context,
 	req *connect.Request[api.GetDiffSummaryRequest],
 ) (*connect.Response[api.GetDiffSummaryResponse], error) {
-	session := s.GetSession()
+	return depanic(func() *connect.Response[api.GetDiffSummaryResponse] {
+		response := getDiffSummaryImpl(s, req.Msg)
+		return connect.NewResponse(response)
+	})
+}
+
+func getDiffSummaryImpl(server *Server, req *api.GetDiffSummaryRequest) *api.GetDiffSummaryResponse {
+	session := server.GetSession()
 	state := session.GetState()
 	diff := session.GetDiffSummary()
 
-	res := connect.NewResponse(&api.GetDiffSummaryResponse{
+	return &api.GetDiffSummaryResponse{
 		State: string(state),
 		Diff:  convertDiffSummary(diff),
-	})
-	return res, nil
+	}
 }
 
 // convertDiffSummary converts a types.Diff to an api.DiffSummary (without hunks)

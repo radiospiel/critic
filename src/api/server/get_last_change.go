@@ -13,9 +13,15 @@ func (s *Server) GetLastChange(
 	ctx context.Context,
 	req *connect.Request[api.GetLastChangeRequest],
 ) (*connect.Response[api.GetLastChangeResponse], error) {
-	now := time.Now().UnixMilli()
-	res := connect.NewResponse(&api.GetLastChangeResponse{
-		MtimeMsecs: uint64(now),
+	return depanic(func() *connect.Response[api.GetLastChangeResponse] {
+		response := getLastChangeImpl(s, req.Msg)
+		return connect.NewResponse(response)
 	})
-	return res, nil
+}
+
+func getLastChangeImpl(server *Server, req *api.GetLastChangeRequest) *api.GetLastChangeResponse {
+	now := time.Now().UnixMilli()
+	return &api.GetLastChangeResponse{
+		MtimeMsecs: uint64(now),
+	}
 }
