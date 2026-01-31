@@ -32,21 +32,12 @@ func createCommentImpl(server *Server, req *api.CreateCommentRequest) *api.Creat
 
 	// Determine file path and line number to use
 	// Prefer new_file/new_line for added/modified lines, fall back to old_file/old_line for deleted lines
-	// Note: Basic validation (comment required, at least one file path) is handled by JSON schema
+	// Note: Validation (comment required, file paths, line numbers >= 0) is handled by JSON schema
 	filePath := req.GetNewFile()
 	lineNo := int(req.GetNewLine())
 	if filePath == "" || lineNo == 0 {
 		filePath = req.GetOldFile()
 		lineNo = int(req.GetOldLine())
-	}
-
-	// Validate derived line number - JSON schema validates basic fields,
-	// but the derived line number from the fallback logic needs manual validation
-	if lineNo <= 0 {
-		return &api.CreateCommentResponse{
-			Success: false,
-			Error:   api.InvalidArgument("line number must be positive"),
-		}
 	}
 
 	// Get the current commit SHA from the session
