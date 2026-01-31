@@ -2,18 +2,14 @@ package logger
 
 import (
 	"fmt"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"log"
 	"os"
 	"runtime"
 	"strings"
 	"time"
 )
-
-// Inspect is an interface for custom log formatting.
-// Types implementing this interface will use InspectForLog() for %v formatting in log messages.
-type Inspect interface {
-	InspectForLog() string
-}
 
 // Level represents a log minLogLevel
 type Level int
@@ -86,13 +82,28 @@ var wd = (func() string { dir, _ := os.Getwd(); return dir })()
 func transformArgs(args []any) []any {
 	result := make([]any, len(args))
 	for i, arg := range args {
-		if inspector, ok := arg.(Inspect); ok {
-			result[i] = inspector.InspectForLog()
-		} else {
-			result[i] = arg
+		if protoMsg, ok := arg.(proto.Message); ok {
+			// Use canonical protojson for protobuf messages
+			arg = protojson.Format(protoMsg)
 		}
+		if argStr, ok := arg.(string); ok {
+			// Truncate string arguments
+			arg = truncate(argStr, maxLogLength)
+		}
+
+		result[i] = arg
 	}
 	return result
+}
+
+const maxLogLength = 200
+
+// truncate cuts the string to maxLen characters, appending "..." if truncated.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 func init() {

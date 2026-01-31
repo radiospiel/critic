@@ -11,17 +11,7 @@ import (
 	"github.com/radiospiel/critic/src/api"
 )
 
-// toJSON converts a value to its JSON representation for logging.
-func toJSON(v any) string {
-	if v == nil {
-		return "null"
-	}
-	data, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Sprintf("<error: %v>", err)
-	}
-	return string(data)
-}
+const maxLogLength = 200
 
 // loggingInterceptor logs gRPC requests and responses using JSON format
 func loggingInterceptor() connect.UnaryInterceptorFunc {
@@ -31,7 +21,7 @@ func loggingInterceptor() connect.UnaryInterceptorFunc {
 			procedure := req.Spec().Procedure
 
 			// Log request as JSON
-			logger.Info("RPC request: %s req=%s", procedure, toJSON(req.Any()))
+			logger.Info("RPC request: %s req=%s", procedure, req.Any())
 
 			// Call the handler
 			resp, err := next(ctx, req)
@@ -41,7 +31,7 @@ func loggingInterceptor() connect.UnaryInterceptorFunc {
 			if err != nil {
 				logger.Info("RPC response: %s err=%q duration=%s", procedure, err.Error(), duration)
 			} else {
-				logger.Info("RPC response: %s resp=%s duration=%s", procedure, toJSON(resp.Any()), duration)
+				logger.Info("RPC response: %s resp=%s duration=%s", procedure, resp.Any(), duration)
 			}
 
 			return resp, err
