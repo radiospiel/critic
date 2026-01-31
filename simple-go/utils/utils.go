@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"slices"
 
+	"errors"
 	"github.com/radiospiel/critic/simple-go/preconditions"
+	"sync"
 )
 
 // Reverse reverses a slice in place
@@ -75,10 +77,18 @@ func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
 // LRUCache is a simple LRU cache using a map and slice.
 // It includes a creator function that is called when a key is not found.
 type LRUCache[K comparable, V any] struct {
+	mu         sync.Mutex
 	data       map[K]V
 	usageOrder []K
 	limit      int
 	creator    func(K) (V, error)
+}
+
+func withMutex2[V any](mu *sync.Mutex, fun func() (V, error)) (V, error) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	return fun()
 }
 
 // NewLRUCache creates a new LRU cache with the specified limit and creator function.
@@ -94,17 +104,28 @@ func NewLRUCache[K comparable, V any](limit int, creator func(K) (V, error)) *LR
 	}
 }
 
+var _keyDisappeared = errors.New("key disappeared")
+
 // Get retrieves a value from the cache, creating it if it doesn't exist.
 // If the key exists, it is moved to most recently used position.
 // If the key doesn't exist, the creator function is called and the result is cached.
 // If the creator returns an error, the result is not cached and the error is returned.
 func (c *LRUCache[K, V]) Get(key K) (V, error) {
-	// TODO: get mutex
-	if value, ok := c.data[key]; ok {
-		// Move to end (most recently used) only if not already there
-		// Search from end since recently used entries are more likely to be accessed
-		c.moveUsedKeyToEnd(key, value)
-		return value, nil
+	// TODO(bot): use a mutex to safeguard accesses to c. Make sure to
+	if _, ok := c.data[key]; ok {
+		value, err := withMutex2(&c.mu, func() (V, error) {
+			if value, ok := c.data[key]; ok {
+				// Move to end (most recently used) only if not already there
+				// Search from end since recently used entries are more likely to be accessed
+				c.moveUsedKeyToEnd(key, value)
+				return value, nil
+			} else {
+				return value, _keyDisappeared
+			}
+		})
+		if err == nil {
+			return value, nil
+		}
 	}
 
 	// Create new value
@@ -114,17 +135,18 @@ func (c *LRUCache[K, V]) Get(key K) (V, error) {
 		return zero, err
 	}
 
-	// TODO: get mutex
-	// Add to data, evict oldest entry if at capacity
-	if len(c.usageOrder) >= c.limit {
-		oldest := c.usageOrder[0]
-		c.usageOrder = c.usageOrder[1:]
-		delete(c.data, oldest)
-	}
+	return withMutex2(&c.mu, func() (V, error) {
+		// Add to data, evict oldest entry if at capacity
+		if len(c.usageOrder) >= c.limit {
+			oldest := c.usageOrder[0]
+			c.usageOrder = c.usageOrder[1:]
+			delete(c.data, oldest)
+		}
 
-	c.data[key] = value
-	c.usageOrder = append(c.usageOrder, key)
-	return value, nil
+		c.data[key] = value
+		c.usageOrder = append(c.usageOrder, key)
+		return value, nil
+	})
 }
 
 func (c *LRUCache[K, V]) moveUsedKeyToEnd(key K, value V) {
