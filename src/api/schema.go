@@ -32,6 +32,21 @@ var requestSchemaStrings = map[string]string{
 		},
 		"required": ["path"]
 	}`,
+	"/critic.v1.CriticService/CreateComment": `{
+		"type": "object",
+		"properties": {
+			"comment": {"type": "string", "minLength": 1},
+			"old_file": {"type": "string"},
+			"old_line": {"type": "integer", "minimum": 0},
+			"new_file": {"type": "string"},
+			"new_line": {"type": "integer", "minimum": 0}
+		},
+		"required": ["comment"],
+		"anyOf": [
+			{"required": ["new_file"]},
+			{"required": ["old_file"]}
+		]
+	}`,
 }
 
 // RequestSchemas maps procedure names to their compiled JSON schemas.

@@ -77,14 +77,14 @@ func Clamp[T cmp.Ordered](value, minVal, maxVal T) T {
 // LRUCache is a simple LRU cache using a map and slice.
 // It includes a creator function that is called when a key is not found.
 type LRUCache[K comparable, V any] struct {
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	data       map[K]V
 	usageOrder []K
 	limit      int
 	creator    func(K) (V, error)
 }
 
-func withMutex2[V any](mu *sync.Mutex, fun func() (V, error)) (V, error) {
+func withMutex2[V any](mu *sync.RWMutex, fun func() (V, error)) (V, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -111,8 +111,12 @@ var _keyDisappeared = errors.New("key disappeared")
 // If the key doesn't exist, the creator function is called and the result is cached.
 // If the creator returns an error, the result is not cached and the error is returned.
 func (c *LRUCache[K, V]) Get(key K) (V, error) {
-	// TODO(bot): use a mutex to safeguard accesses to c. Make sure to
-	if _, ok := c.data[key]; ok {
+	// Use RLock for the initial existence check to avoid race conditions
+	c.mu.RLock()
+	_, exists := c.data[key]
+	c.mu.RUnlock()
+
+	if exists {
 		value, err := withMutex2(&c.mu, func() (V, error) {
 			if value, ok := c.data[key]; ok {
 				// Move to end (most recently used) only if not already there

@@ -55,14 +55,21 @@ type diffResult struct {
 	err  error
 }
 
-// NewSession creates a new API session.
-func NewSession(gitRoot string, messaging critic.Messaging, paths []string) *Session {
-	return &Session{
+// NewSession creates a new API session with the given diff bases.
+// The first diff base is used as the current base.
+func NewSession(gitRoot string, messaging critic.Messaging, paths []string, diffBases []string) *Session {
+	s := &Session{
 		gitRoot:   gitRoot,
 		messaging: messaging,
 		paths:     paths,
 		state:     StateReady,
 	}
+	if len(diffBases) > 0 {
+		// SetDiffBases sets all valid diff bases and initializes the current base
+		// to be the first of the passed in bases.
+		_ = s.SetDiffBases(diffBases)
+	}
+	return s
 }
 
 // GetState returns the current session state

@@ -12,7 +12,6 @@ import (
 	"connectrpc.com/connect"
 	"errors"
 	"github.com/radiospiel/critic/simple-go/logger"
-	"github.com/radiospiel/critic/simple-go/must"
 	"github.com/radiospiel/critic/src/api/apiconnect"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/webui"
@@ -61,9 +60,7 @@ type Server struct {
 // NewServer creates a new API server with the given configuration.
 // It initializes a default session with the provided configuration values.
 func NewServer(config Config) *Server {
-	session := NewSession(config.GitRoot, config.Messaging, config.Paths)
-	// TODO(bot): pass in config.DiffBases into NewSession.
-	must.Must(session.SetDiffBases(config.DiffBases))
+	session := NewSession(config.GitRoot, config.Messaging, config.Paths, config.DiffBases)
 	return &Server{
 		config:  config,
 		session: session,
