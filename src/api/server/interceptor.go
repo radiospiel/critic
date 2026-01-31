@@ -9,42 +9,9 @@ import (
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 const maxLogLength = 200
-
-// toJSON converts a value to its JSON representation for logging.
-// Uses protojson for protobuf messages (canonical conversion).
-// Truncates output to maxLogLength characters.
-func toJSON(v any) string {
-	if v == nil {
-		return "null"
-	}
-
-	var s string
-	if msg, ok := v.(proto.Message); ok {
-		// Use canonical protojson for protobuf messages
-		s = protojson.Format(msg)
-	} else {
-		data, err := json.Marshal(v)
-		if err != nil {
-			return fmt.Sprintf("<error: %v>", err)
-		}
-		s = string(data)
-	}
-
-	return truncate(s, maxLogLength)
-}
-
-// truncate cuts the string to maxLen characters, appending "..." if truncated.
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
 
 // loggingInterceptor logs gRPC requests and responses using JSON format
 func loggingInterceptor() connect.UnaryInterceptorFunc {
@@ -54,7 +21,7 @@ func loggingInterceptor() connect.UnaryInterceptorFunc {
 			procedure := req.Spec().Procedure
 
 			// Log request as JSON
-			logger.Info("RPC request: %s req=%s", procedure, toJSON(req.Any()))
+			logger.Info("RPC request: %s req=%s", procedure, req.Any())
 
 			// Call the handler
 			resp, err := next(ctx, req)
@@ -64,7 +31,7 @@ func loggingInterceptor() connect.UnaryInterceptorFunc {
 			if err != nil {
 				logger.Info("RPC response: %s err=%q duration=%s", procedure, err.Error(), duration)
 			} else {
-				logger.Info("RPC response: %s resp=%s duration=%s", procedure, toJSON(resp.Any()), duration)
+				logger.Info("RPC response: %s resp=%s duration=%s", procedure, resp.Any(), duration)
 			}
 
 			return resp, err
