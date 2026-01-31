@@ -29,9 +29,7 @@ func getFileImpl(server *Server, req *api.GetFileRequest) (*api.GetFileResponse,
 	// Read file content from working directory
 	content, err := git.GetFileContent(fullPath, "")
 	if err != nil {
-		return &api.GetFileResponse{
-			Error: api.NotFound("file not found: " + path),
-		}, nil
+		return nil, api.NotFoundError("file not found: " + path)
 	}
 
 	return &api.GetFileResponse{

@@ -105,34 +105,6 @@ func collectErrors(err *jsonschema.ValidationError, messages *[]string) {
 	}
 }
 
-// NewRpcError creates a new RpcError with the given code and message.
-func NewRpcError(code ErrorCode, message string) *RpcError {
-	return &RpcError{
-		Code:    code,
-		Message: message,
-	}
-}
-
-// InvalidArgument creates an INVALID_ARGUMENT error.
-func InvalidArgument(message string) *RpcError {
-	return NewRpcError(ErrorCode_ERROR_CODE_INVALID_ARGUMENT, message)
-}
-
-// NotFound creates a NOT_FOUND error.
-func NotFound(message string) *RpcError {
-	return NewRpcError(ErrorCode_ERROR_CODE_NOT_FOUND, message)
-}
-
-// InternalError creates an INTERNAL error.
-func InternalError(message string) *RpcError {
-	return NewRpcError(ErrorCode_ERROR_CODE_INTERNAL, message)
-}
-
-// Unavailable creates an UNAVAILABLE error.
-func Unavailable(message string) *RpcError {
-	return NewRpcError(ErrorCode_ERROR_CODE_UNAVAILABLE, message)
-}
-
 // RpcErrorMessage returns a formatted error message for the RpcError.
 func RpcErrorMessage(e *RpcError) string {
 	if e.Details != "" {
