@@ -12,7 +12,7 @@ func (s *Server) GetDiffBases(
 	ctx context.Context,
 	req *connect.Request[api.GetDiffBasesRequest],
 ) (*connect.Response[api.GetDiffBasesResponse], error) {
-	response := depanic2(func() (*api.GetDiffBasesResponse, error) {
+	response := depanic(func() (*api.GetDiffBasesResponse, error) {
 		return getDiffBasesImpl(s, req.Msg)
 	})
 	return connect.NewResponse(response), nil
@@ -30,7 +30,7 @@ func (s *Server) SetDiffBase(
 	ctx context.Context,
 	req *connect.Request[api.SetDiffBaseRequest],
 ) (*connect.Response[api.SetDiffBaseResponse], error) {
-	response := depanic2(func() (*api.SetDiffBaseResponse, error) {
+	response := depanic(func() (*api.SetDiffBaseResponse, error) {
 		return setDiffBaseImpl(s, req.Msg)
 	})
 	return connect.NewResponse(response), nil

@@ -11,8 +11,6 @@ import (
 	"github.com/radiospiel/critic/src/api"
 )
 
-const maxLogLength = 200
-
 // loggingInterceptor logs gRPC requests and responses using JSON format
 func loggingInterceptor() connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {

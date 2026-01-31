@@ -14,7 +14,7 @@ func (s *Server) GetConversationsSummary(
 	ctx context.Context,
 	req *connect.Request[api.GetConversationsSummaryRequest],
 ) (*connect.Response[api.GetConversationsSummaryResponse], error) {
-	response := depanic2(func() (*api.GetConversationsSummaryResponse, error) {
+	response := depanic(func() (*api.GetConversationsSummaryResponse, error) {
 		return getConversationsSummaryImpl(s, req.Msg)
 	})
 	return connect.NewResponse(response), nil
@@ -35,10 +35,10 @@ func getConversationsSummaryImpl(server *Server, req *api.GetConversationsSummar
 
 func criticToApiFileConversationSummary(summary *critic.FileConversationSummary, index int) *api.FileConversationSummary {
 	return &api.FileConversationSummary{
-		FilePath:             summary.FilePath,
-		TotalCount:           int32(summary.TotalCount),
-		UnresolvedCount:      int32(summary.UnresolvedCount),
-		ResolvedCount:        int32(summary.ResolvedCount),
-		HasUnreadAiMessages:  summary.HasUnreadAIMessages,
+		FilePath:            summary.FilePath,
+		TotalCount:          int32(summary.TotalCount),
+		UnresolvedCount:     int32(summary.UnresolvedCount),
+		ResolvedCount:       int32(summary.ResolvedCount),
+		HasUnreadAiMessages: summary.HasUnreadAIMessages,
 	}
 }

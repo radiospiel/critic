@@ -14,7 +14,7 @@ func (s *Server) CreateConversation(
 	ctx context.Context,
 	req *connect.Request[api.CreateConversationRequest],
 ) (*connect.Response[api.CreateConversationResponse], error) {
-	response := depanic2(func() (*api.CreateConversationResponse, error) {
+	response := depanic(func() (*api.CreateConversationResponse, error) {
 		return createConversationImpl(s, req.Msg)
 	})
 	return connect.NewResponse(response), nil

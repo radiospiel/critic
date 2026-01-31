@@ -13,7 +13,7 @@ func (s *Server) GetDiff(
 	ctx context.Context,
 	req *connect.Request[api.GetDiffRequest],
 ) (*connect.Response[api.GetDiffResponse], error) {
-	response := depanic2(func() (*api.GetDiffResponse, error) {
+	response := depanic(func() (*api.GetDiffResponse, error) {
 		return getDiffImpl(s, req.Msg)
 	})
 	return connect.NewResponse(response), nil

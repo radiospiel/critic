@@ -14,7 +14,7 @@ func (s *Server) GetFile(
 	ctx context.Context,
 	req *connect.Request[api.GetFileRequest],
 ) (*connect.Response[api.GetFileResponse], error) {
-	response := depanic2(func() (*api.GetFileResponse, error) {
+	response := depanic(func() (*api.GetFileResponse, error) {
 		return getFileImpl(s, req.Msg)
 	})
 	return connect.NewResponse(response), nil

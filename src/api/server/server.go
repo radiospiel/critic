@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -157,11 +158,25 @@ func rpcErrorFromGoError(reason any) *api.RpcError {
 	if reason == nil {
 		return nil
 	}
+
+	// Check if it's already an RpcErr (typed error from api package)
+	if rpcErr, ok := reason.(*api.RpcErr); ok {
+		return rpcErr.RpcError()
+	}
+
+	// Convert to error if not already
 	err, ok := reason.(error)
 	if !ok {
 		err = fmt.Errorf("panic: %v", reason)
 	}
 
+	// Check if the error wraps an RpcErr
+	var rpcErr *api.RpcErr
+	if errors.As(err, &rpcErr) {
+		return rpcErr.RpcError()
+	}
+
+	// Default: internal server error
 	return &api.RpcError{
 		Code:    api.ErrorCode_ERROR_CODE_INTERNAL,
 		Message: "internal server error",
@@ -181,7 +196,7 @@ func setResponseError(msg proto.Message, rpcErr *api.RpcError) {
 	}
 }
 
-// depanic2 wraps a function that returns a proto response and error,
+// depanic wraps a function that returns a proto response and error,
 // catching panics and errors and setting them on the response's Error field.
 //
 // The trick is the two-type-parameter constraint:
@@ -190,7 +205,7 @@ func setResponseError(msg proto.Message, rpcErr *api.RpcError) {
 //
 // This lets us use PT(new(T)) to create a new pointer instance without needing
 // a constructor function. Go infers both type parameters from the function signature.
-func depanic2[T any, PT interface {
+func depanic[T any, PT interface {
 	*T
 	proto.Message
 }](fun func() (PT, error)) PT {

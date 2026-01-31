@@ -13,7 +13,7 @@ func (s *Server) GetLastChange(
 	ctx context.Context,
 	req *connect.Request[api.GetLastChangeRequest],
 ) (*connect.Response[api.GetLastChangeResponse], error) {
-	response := depanic2(func() (*api.GetLastChangeResponse, error) {
+	response := depanic(func() (*api.GetLastChangeResponse, error) {
 		return getLastChangeImpl(s, req.Msg)
 	})
 	return connect.NewResponse(response), nil
