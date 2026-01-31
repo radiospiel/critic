@@ -1,7 +1,7 @@
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { createPromiseClient } from '@connectrpc/connect'
 import { CriticService } from '../gen/critic_connect'
-import { Conversation, Message } from '../gen/critic_pb'
+import { Conversation, Message, FileConversationSummary } from '../gen/critic_pb'
 
 // Create a transport for the Connect protocol
 const transport = createConnectTransport({
@@ -65,10 +65,10 @@ function convertConversation(conv: Conversation): CommentConversation {
   }
 }
 
-// Fetch comments for a file using the GRPC endpoint
-export async function getComments(filePath: string): Promise<GetCommentsResult> {
+// Fetch conversations for a file using the GRPC endpoint
+export async function getConversations(filePath: string): Promise<GetCommentsResult> {
   try {
-    const response = await criticClient.getComments({ path: filePath })
+    const response = await criticClient.getConversations({ path: filePath })
     if (response.error) {
       return {
         conversations: [],
@@ -81,6 +81,52 @@ export async function getComments(filePath: string): Promise<GetCommentsResult> 
   } catch (err) {
     return {
       conversations: [],
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
+// Types for conversation summaries
+export interface ConversationSummary {
+  filePath: string
+  totalCount: number
+  unresolvedCount: number
+  resolvedCount: number
+  hasUnreadAiMessages: boolean
+}
+
+export interface GetConversationsSummaryResult {
+  summaries: ConversationSummary[]
+  error?: string
+}
+
+// Convert generated protobuf FileConversationSummary to ConversationSummary interface
+function convertSummary(summary: FileConversationSummary): ConversationSummary {
+  return {
+    filePath: summary.filePath,
+    totalCount: summary.totalCount,
+    unresolvedCount: summary.unresolvedCount,
+    resolvedCount: summary.resolvedCount,
+    hasUnreadAiMessages: summary.hasUnreadAiMessages,
+  }
+}
+
+// Fetch conversation summaries for all files
+export async function getConversationsSummary(): Promise<GetConversationsSummaryResult> {
+  try {
+    const response = await criticClient.getConversationsSummary({})
+    if (response.error) {
+      return {
+        summaries: [],
+        error: response.error.message,
+      }
+    }
+    return {
+      summaries: response.summaries.map(convertSummary),
+    }
+  } catch (err) {
+    return {
+      summaries: [],
       error: err instanceof Error ? err.message : 'Unknown error',
     }
   }
@@ -126,6 +172,33 @@ export async function getDiffBases(): Promise<DiffBasesResult> {
 export async function setDiffBase(base: string): Promise<SetDiffBaseResult> {
   try {
     const response = await criticClient.setDiffBase({ base })
+    if (response.error) {
+      return {
+        success: false,
+        error: response.error.message,
+      }
+    }
+    return {
+      success: response.success,
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
+// Types for reply to conversation
+export interface ReplyToConversationResult {
+  success: boolean
+  error?: string
+}
+
+// Reply to an existing conversation
+export async function replyToConversation(conversationId: string, message: string): Promise<ReplyToConversationResult> {
+  try {
+    const response = await criticClient.replyToConversation({ conversationId, message })
     if (response.error) {
       return {
         success: false,

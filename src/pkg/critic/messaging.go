@@ -47,6 +47,9 @@ type Conversation struct {
 // FileConversationSummary contains information about Conversations for a specific file
 type FileConversationSummary struct {
 	FilePath              string
+	TotalCount            int
+	UnresolvedCount       int
+	ResolvedCount         int
 	HasUnresolvedComments bool
 	HasResolvedComments   bool
 	HasUnreadAIMessages   bool
@@ -70,6 +73,10 @@ type Messaging interface {
 	// GetFileConversationSummary returns a summary of Conversations for a file
 	// This is used for efficient file list rendering
 	GetFileConversationSummary(filePath string) (*FileConversationSummary, error)
+
+	// GetAllFileConversationSummaries returns summaries for all files that have conversations
+	// Only includes files with at least one conversation
+	GetAllFileConversationSummaries() ([]*FileConversationSummary, error)
 
 	// ReplyToConversation adds a reply to an existing conversation
 	ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error)
@@ -133,6 +140,14 @@ func (m *DummyMessaging) GetConversationsForFile(filePath string) ([]*Conversati
 
 func (m *DummyMessaging) GetFileConversationSummary(filePath string) (*FileConversationSummary, error) {
 	return m.Summaries[filePath], nil
+}
+
+func (m *DummyMessaging) GetAllFileConversationSummaries() ([]*FileConversationSummary, error) {
+	var summaries []*FileConversationSummary
+	for _, s := range m.Summaries {
+		summaries = append(summaries, s)
+	}
+	return summaries, nil
 }
 
 func (m *DummyMessaging) ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error) {

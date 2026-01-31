@@ -3,7 +3,7 @@ import hljs from 'highlight.js'
 import { FileDiff, FileStatus, Hunk, Line, LineType } from '../gen/critic_pb'
 import InlineCommentEditor, { CommentLineInfo } from './CommentEditor'
 import CommentDisplay from './CommentDisplay'
-import { getComments, CommentConversation } from '../api/client'
+import { getConversations, CommentConversation } from '../api/client'
 
 type ViewMode = 'unified' | 'split'
 
@@ -283,9 +283,10 @@ interface UnifiedLineProps {
   isFirstSelected?: boolean
   isLastSelected?: boolean
   lineRef?: React.RefObject<HTMLTableRowElement>
+  onClick?: () => void
 }
 
-function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef }: UnifiedLineProps) {
+function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef, onClick }: UnifiedLineProps) {
   const lineClass =
     line.type === LineType.ADDED
       ? 'diff-line-added'
@@ -308,7 +309,7 @@ function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelect
   ].filter(Boolean).join(' ')
 
   return (
-    <tr className={`${lineClass}${selectionClasses ? ' ' + selectionClasses : ''}`} ref={lineRef}>
+    <tr className={`${lineClass}${selectionClasses ? ' ' + selectionClasses : ''}`} ref={lineRef} onClick={onClick}>
       <td className="diff-line-number diff-line-number-old">
         {line.type !== LineType.ADDED && line.lineNoOld > 0 ? line.lineNoOld : ''}
       </td>
@@ -510,16 +511,16 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
   const oldFile = fileDiff.oldPath
   const newFile = fileDiff.newPath
 
-  // Fetch comments when file changes
+  // Fetch conversations when file changes
   const fetchComments = useCallback(async () => {
     if (!path) return
     try {
-      const response = await getComments(path)
+      const response = await getConversations(path)
       if (response.conversations) {
         setComments(response.conversations)
       }
     } catch (err) {
-      console.error('Failed to fetch comments:', err)
+      console.error('Failed to fetch conversations:', err)
     }
   }, [path])
 
@@ -772,9 +773,14 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                       const shouldAttachRef = isLastSelected
                       // Show editor after the last selected line
                       const showEditorAfterLine = isLastSelected && editorOpen && selectionLineInfo
-                      // Get comments for this line (use new line number for added/context, old for deleted)
+                      // Get comments for this line
+                      // For deleted lines: use lineNoOld, but skip if next line is ADDED (modified line - show on added instead)
+                      // For added/context lines: use lineNoNew
+                      const isDeletedFollowedByAdded = line.type === LineType.DELETED &&
+                        lineIdx + 1 < hunk.lines.length &&
+                        hunk.lines[lineIdx + 1].type === LineType.ADDED
                       const lineNo = line.type === LineType.DELETED ? line.lineNoOld : line.lineNoNew
-                      const lineComments = getCommentsForLine(lineNo)
+                      const lineComments = isDeletedFollowedByAdded ? [] : getCommentsForLine(lineNo)
                       const hasComments = lineComments.length > 0
 
                       return (
@@ -786,22 +792,27 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                             isFirstSelected={isFirstSelected}
                             isLastSelected={isLastSelected}
                             lineRef={shouldAttachRef ? selectedLineRef : undefined}
+                            onClick={() => setSelection({ start: currentIndex, end: currentIndex })}
                           />
                           {hasComments && (
                             <tr className="diff-comment-row">
                               <td colSpan={4}>
-                                <CommentDisplay conversations={lineComments} lineNumber={lineNo} />
+                                <div className="diff-comment-wrapper">
+                                  <CommentDisplay conversations={lineComments} lineNumber={lineNo} onReplyAdded={fetchComments} />
+                                </div>
                               </td>
                             </tr>
                           )}
                           {showEditorAfterLine && (
                             <tr className="diff-inline-editor-row">
                               <td colSpan={4}>
-                                <InlineCommentEditor
-                                  lineInfo={selectionLineInfo}
-                                  onClose={handleEditorClose}
-                                  onSaved={handleCommentSaved}
-                                />
+                                <div className="diff-comment-wrapper">
+                                  <InlineCommentEditor
+                                    lineInfo={selectionLineInfo}
+                                    onClose={handleEditorClose}
+                                    onSaved={handleCommentSaved}
+                                  />
+                                </div>
                               </td>
                             </tr>
                           )}

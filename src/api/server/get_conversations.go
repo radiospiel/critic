@@ -10,25 +10,25 @@ import (
 	"github.com/samber/lo"
 )
 
-// GetComments returns comments on a file at a specific path.
-func (s *Server) GetComments(
+// GetConversations returns all conversations for a file at a specific path.
+func (s *Server) GetConversations(
 	ctx context.Context,
-	req *connect.Request[api.GetCommentsRequest],
-) (*connect.Response[api.GetCommentsResponse], error) {
-	return depanic(func() *connect.Response[api.GetCommentsResponse] {
-		response := getCommentsImpl(s, req.Msg)
+	req *connect.Request[api.GetConversationsRequest],
+) (*connect.Response[api.GetConversationsResponse], error) {
+	return depanic(func() *connect.Response[api.GetConversationsResponse] {
+		response := getConversationsImpl(s, req.Msg)
 		return connect.NewResponse(response)
 	})
 }
 
-func getCommentsImpl(server *Server, req *api.GetCommentsRequest) *api.GetCommentsResponse {
+func getConversationsImpl(server *Server, req *api.GetConversationsRequest) *api.GetConversationsResponse {
 	path := req.GetPath()
 
 	m := server.config.Messaging
 	criticConversations := must.Must2(m.GetConversationsForFile(path))
 	apiConversations := lo.Map(criticConversations, criticToApiConversation)
 
-	return &api.GetCommentsResponse{
+	return &api.GetConversationsResponse{
 		Conversations: apiConversations,
 	}
 }

@@ -65,7 +65,7 @@ function HelpModal({ onClose }: HelpModalProps) {
                 <span>Open comment editor on selected line</span>
               </div>
               <div className="shortcut-item">
-                <kbd>Ctrl</kbd> + <kbd>S</kbd>
+                <kbd>⌥</kbd> + <kbd>↵</kbd>
                 <span>Save comment</span>
               </div>
               <div className="shortcut-item">

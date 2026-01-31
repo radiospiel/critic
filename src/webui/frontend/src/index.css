@@ -110,6 +110,7 @@
 
 html, body, #root {
   height: 100%;
+  overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-secondary);
@@ -135,8 +136,10 @@ html, body, #root {
 /* Main content */
 .main-content {
   flex: 1;
+  width: 0; /* Force flex item to not expand beyond available space */
   background-color: var(--bg-primary);
-  overflow-y: auto;
+  overflow: hidden;
+  min-width: 0;
 }
 
 /* Header with theme toggle */
@@ -307,6 +310,37 @@ html, body, #root {
   background-color: var(--bg-tertiary);
 }
 
+.file-list-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  background-color: var(--bg-tertiary);
+}
+
+.file-list-filter-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.file-list-filter-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.file-list-filter-btn.active {
+  background-color: var(--diff-hunk-text);
+  color: white;
+  border-color: var(--diff-hunk-text);
+}
+
 .hidden-files-toggle {
   font-weight: 400;
   font-size: 13px;
@@ -317,6 +351,29 @@ html, body, #root {
 .hidden-files-toggle:hover {
   color: var(--diff-hunk-text);
   text-decoration: underline;
+}
+
+.file-list-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.file-list-filter:hover {
+  background-color: var(--bg-hover);
+}
+
+.file-list-filter input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--diff-hunk-text);
 }
 
 .file-list-message {
@@ -398,6 +455,8 @@ html, body, #root {
   height: 100%;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .diff-header {
@@ -491,6 +550,9 @@ html, body, #root {
 .diff-content {
   flex: 1;
   overflow: auto;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .diff-binary-notice,
@@ -509,6 +571,10 @@ html, body, #root {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.diff-table tr:not(.diff-hunk-header-row):not(.diff-comment-row):not(.diff-inline-editor-row) {
+  cursor: pointer;
 }
 
 /* Unified view table */
@@ -977,6 +1043,7 @@ html, body, #root {
   background-color: var(--bg-secondary);
   border-top: 1px solid var(--border-primary);
   border-bottom: 1px solid var(--border-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 }
 
 .comment-conversation {
@@ -1027,6 +1094,84 @@ html, body, #root {
   padding: 8px;
 }
 
+/* Reply Editor */
+.reply-editor {
+  padding: 8px;
+  border-top: 1px solid var(--border-secondary);
+  background-color: var(--bg-tertiary);
+}
+
+.reply-editor .ProseMirror {
+  min-height: 60px;
+  padding: 8px 12px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+}
+
+.reply-editor .ProseMirror:focus {
+  border-color: var(--diff-hunk-text);
+}
+
+.reply-editor .ProseMirror p {
+  margin: 0;
+}
+
+.reply-editor-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.reply-editor-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.reply-editor-button {
+  padding: 6px 16px;
+  background-color: var(--diff-hunk-text);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.reply-editor-button:hover {
+  opacity: 0.9;
+}
+
+.reply-editor-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Reply Button (shown when editor is hidden) */
+.reply-button-container {
+  padding: 8px;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.reply-button {
+  padding: 4px 12px;
+  background: none;
+  color: var(--text-muted);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.reply-button:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .comment-message {
   padding: 8px 12px;
   border-radius: 4px;
@@ -1075,15 +1220,113 @@ html, body, #root {
 
 .comment-message-content {
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--text-secondary);
-  white-space: pre-wrap;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.comment-message-content p {
+  margin: 0 0 8px 0;
+}
+
+.comment-message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.comment-message-content h1,
+.comment-message-content h2,
+.comment-message-content h3,
+.comment-message-content h4 {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.comment-message-content h1:first-child,
+.comment-message-content h2:first-child,
+.comment-message-content h3:first-child,
+.comment-message-content h4:first-child {
+  margin-top: 0;
+}
+
+.comment-message-content h1 { font-size: 1.4em; }
+.comment-message-content h2 { font-size: 1.2em; }
+.comment-message-content h3 { font-size: 1.1em; }
+.comment-message-content h4 { font-size: 1em; }
+
+.comment-message-content code {
+  background-color: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+  font-size: 0.9em;
+}
+
+.comment-message-content pre {
+  background-color: var(--bg-tertiary);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.comment-message-content pre code {
+  background: none;
+  padding: 0;
+  font-size: 13px;
+}
+
+.comment-message-content blockquote {
+  border-left: 3px solid var(--border-primary);
+  margin: 8px 0;
+  padding-left: 12px;
+  color: var(--text-muted);
+}
+
+.comment-message-content ul,
+.comment-message-content ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.comment-message-content li {
+  margin: 4px 0;
+}
+
+.comment-message-content a {
+  color: var(--diff-hunk-text);
+  text-decoration: none;
+}
+
+.comment-message-content a:hover {
+  text-decoration: underline;
+}
+
+.comment-message-content strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.comment-message-content em {
+  font-style: italic;
+}
+
+.comment-message-content hr {
+  border: none;
+  border-top: 1px solid var(--border-primary);
+  margin: 12px 0;
 }
 
 /* Comment display in diff table */
 .diff-comment-row td {
   padding: 0;
+}
+
+.diff-comment-wrapper {
+  width: calc(100vw - 510px); /* Viewport width minus sidebar (400px) + margin (80px) + scrollbar (30px) */
+  max-width: 100%;
+  margin-left: 80px; /* Align with content column: 2×32px line numbers + 16px prefix */
 }
 
 .diff-comment-indicator {
@@ -1093,4 +1336,38 @@ html, body, #root {
   background-color: var(--diff-hunk-text);
   border-radius: 50%;
   margin-left: 4px;
+}
+
+/* Conversation icon in file list */
+.conversation-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.conversation-icon.unresolved {
+  background-color: var(--status-modified-bg);
+  color: var(--status-modified-text);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
 }

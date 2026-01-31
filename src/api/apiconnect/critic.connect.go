@@ -43,12 +43,18 @@ const (
 	CriticServiceGetDiffProcedure = "/critic.v1.CriticService/GetDiff"
 	// CriticServiceGetFileProcedure is the fully-qualified name of the CriticService's GetFile RPC.
 	CriticServiceGetFileProcedure = "/critic.v1.CriticService/GetFile"
-	// CriticServiceCreateCommentProcedure is the fully-qualified name of the CriticService's
-	// CreateComment RPC.
-	CriticServiceCreateCommentProcedure = "/critic.v1.CriticService/CreateComment"
-	// CriticServiceGetCommentsProcedure is the fully-qualified name of the CriticService's GetComments
-	// RPC.
-	CriticServiceGetCommentsProcedure = "/critic.v1.CriticService/GetComments"
+	// CriticServiceCreateConversationProcedure is the fully-qualified name of the CriticService's
+	// CreateConversation RPC.
+	CriticServiceCreateConversationProcedure = "/critic.v1.CriticService/CreateConversation"
+	// CriticServiceGetConversationsProcedure is the fully-qualified name of the CriticService's
+	// GetConversations RPC.
+	CriticServiceGetConversationsProcedure = "/critic.v1.CriticService/GetConversations"
+	// CriticServiceGetConversationsSummaryProcedure is the fully-qualified name of the CriticService's
+	// GetConversationsSummary RPC.
+	CriticServiceGetConversationsSummaryProcedure = "/critic.v1.CriticService/GetConversationsSummary"
+	// CriticServiceReplyToConversationProcedure is the fully-qualified name of the CriticService's
+	// ReplyToConversation RPC.
+	CriticServiceReplyToConversationProcedure = "/critic.v1.CriticService/ReplyToConversation"
 	// CriticServiceGetDiffBasesProcedure is the fully-qualified name of the CriticService's
 	// GetDiffBases RPC.
 	CriticServiceGetDiffBasesProcedure = "/critic.v1.CriticService/GetDiffBases"
@@ -67,10 +73,14 @@ type CriticServiceClient interface {
 	GetDiff(context.Context, *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error)
 	// GetFile returns the content of a file at a specific path.
 	GetFile(context.Context, *connect.Request[api.GetFileRequest]) (*connect.Response[api.GetFileResponse], error)
-	// CreateComment creates a new comment on a diff line.
-	CreateComment(context.Context, *connect.Request[api.CreateCommentRequest]) (*connect.Response[api.CreateCommentResponse], error)
-	// GetComments returns all comments/conversations for a specific file.
-	GetComments(context.Context, *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error)
+	// CreateConversation creates a new conversation (comment thread) on a diff line.
+	CreateConversation(context.Context, *connect.Request[api.CreateConversationRequest]) (*connect.Response[api.CreateConversationResponse], error)
+	// GetConversations returns all conversations for a specific file.
+	GetConversations(context.Context, *connect.Request[api.GetConversationsRequest]) (*connect.Response[api.GetConversationsResponse], error)
+	// GetConversationsSummary returns conversation counts and status per file path.
+	GetConversationsSummary(context.Context, *connect.Request[api.GetConversationsSummaryRequest]) (*connect.Response[api.GetConversationsSummaryResponse], error)
+	// ReplyToConversation adds a reply message to an existing conversation.
+	ReplyToConversation(context.Context, *connect.Request[api.ReplyToConversationRequest]) (*connect.Response[api.ReplyToConversationResponse], error)
 	// GetDiffBases returns available diff bases and the current one.
 	GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error)
 	// SetDiffBase sets the current diff base.
@@ -112,16 +122,28 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(criticServiceMethods.ByName("GetFile")),
 			connect.WithClientOptions(opts...),
 		),
-		createComment: connect.NewClient[api.CreateCommentRequest, api.CreateCommentResponse](
+		createConversation: connect.NewClient[api.CreateConversationRequest, api.CreateConversationResponse](
 			httpClient,
-			baseURL+CriticServiceCreateCommentProcedure,
-			connect.WithSchema(criticServiceMethods.ByName("CreateComment")),
+			baseURL+CriticServiceCreateConversationProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("CreateConversation")),
 			connect.WithClientOptions(opts...),
 		),
-		getComments: connect.NewClient[api.GetCommentsRequest, api.GetCommentsResponse](
+		getConversations: connect.NewClient[api.GetConversationsRequest, api.GetConversationsResponse](
 			httpClient,
-			baseURL+CriticServiceGetCommentsProcedure,
-			connect.WithSchema(criticServiceMethods.ByName("GetComments")),
+			baseURL+CriticServiceGetConversationsProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("GetConversations")),
+			connect.WithClientOptions(opts...),
+		),
+		getConversationsSummary: connect.NewClient[api.GetConversationsSummaryRequest, api.GetConversationsSummaryResponse](
+			httpClient,
+			baseURL+CriticServiceGetConversationsSummaryProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("GetConversationsSummary")),
+			connect.WithClientOptions(opts...),
+		),
+		replyToConversation: connect.NewClient[api.ReplyToConversationRequest, api.ReplyToConversationResponse](
+			httpClient,
+			baseURL+CriticServiceReplyToConversationProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("ReplyToConversation")),
 			connect.WithClientOptions(opts...),
 		),
 		getDiffBases: connect.NewClient[api.GetDiffBasesRequest, api.GetDiffBasesResponse](
@@ -141,14 +163,16 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 
 // criticServiceClient implements CriticServiceClient.
 type criticServiceClient struct {
-	getLastChange  *connect.Client[api.GetLastChangeRequest, api.GetLastChangeResponse]
-	getDiffSummary *connect.Client[api.GetDiffSummaryRequest, api.GetDiffSummaryResponse]
-	getDiff        *connect.Client[api.GetDiffRequest, api.GetDiffResponse]
-	getFile        *connect.Client[api.GetFileRequest, api.GetFileResponse]
-	createComment  *connect.Client[api.CreateCommentRequest, api.CreateCommentResponse]
-	getComments    *connect.Client[api.GetCommentsRequest, api.GetCommentsResponse]
-	getDiffBases   *connect.Client[api.GetDiffBasesRequest, api.GetDiffBasesResponse]
-	setDiffBase    *connect.Client[api.SetDiffBaseRequest, api.SetDiffBaseResponse]
+	getLastChange           *connect.Client[api.GetLastChangeRequest, api.GetLastChangeResponse]
+	getDiffSummary          *connect.Client[api.GetDiffSummaryRequest, api.GetDiffSummaryResponse]
+	getDiff                 *connect.Client[api.GetDiffRequest, api.GetDiffResponse]
+	getFile                 *connect.Client[api.GetFileRequest, api.GetFileResponse]
+	createConversation      *connect.Client[api.CreateConversationRequest, api.CreateConversationResponse]
+	getConversations        *connect.Client[api.GetConversationsRequest, api.GetConversationsResponse]
+	getConversationsSummary *connect.Client[api.GetConversationsSummaryRequest, api.GetConversationsSummaryResponse]
+	replyToConversation     *connect.Client[api.ReplyToConversationRequest, api.ReplyToConversationResponse]
+	getDiffBases            *connect.Client[api.GetDiffBasesRequest, api.GetDiffBasesResponse]
+	setDiffBase             *connect.Client[api.SetDiffBaseRequest, api.SetDiffBaseResponse]
 }
 
 // GetLastChange calls critic.v1.CriticService.GetLastChange.
@@ -171,14 +195,24 @@ func (c *criticServiceClient) GetFile(ctx context.Context, req *connect.Request[
 	return c.getFile.CallUnary(ctx, req)
 }
 
-// CreateComment calls critic.v1.CriticService.CreateComment.
-func (c *criticServiceClient) CreateComment(ctx context.Context, req *connect.Request[api.CreateCommentRequest]) (*connect.Response[api.CreateCommentResponse], error) {
-	return c.createComment.CallUnary(ctx, req)
+// CreateConversation calls critic.v1.CriticService.CreateConversation.
+func (c *criticServiceClient) CreateConversation(ctx context.Context, req *connect.Request[api.CreateConversationRequest]) (*connect.Response[api.CreateConversationResponse], error) {
+	return c.createConversation.CallUnary(ctx, req)
 }
 
-// GetComments calls critic.v1.CriticService.GetComments.
-func (c *criticServiceClient) GetComments(ctx context.Context, req *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error) {
-	return c.getComments.CallUnary(ctx, req)
+// GetConversations calls critic.v1.CriticService.GetConversations.
+func (c *criticServiceClient) GetConversations(ctx context.Context, req *connect.Request[api.GetConversationsRequest]) (*connect.Response[api.GetConversationsResponse], error) {
+	return c.getConversations.CallUnary(ctx, req)
+}
+
+// GetConversationsSummary calls critic.v1.CriticService.GetConversationsSummary.
+func (c *criticServiceClient) GetConversationsSummary(ctx context.Context, req *connect.Request[api.GetConversationsSummaryRequest]) (*connect.Response[api.GetConversationsSummaryResponse], error) {
+	return c.getConversationsSummary.CallUnary(ctx, req)
+}
+
+// ReplyToConversation calls critic.v1.CriticService.ReplyToConversation.
+func (c *criticServiceClient) ReplyToConversation(ctx context.Context, req *connect.Request[api.ReplyToConversationRequest]) (*connect.Response[api.ReplyToConversationResponse], error) {
+	return c.replyToConversation.CallUnary(ctx, req)
 }
 
 // GetDiffBases calls critic.v1.CriticService.GetDiffBases.
@@ -201,10 +235,14 @@ type CriticServiceHandler interface {
 	GetDiff(context.Context, *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error)
 	// GetFile returns the content of a file at a specific path.
 	GetFile(context.Context, *connect.Request[api.GetFileRequest]) (*connect.Response[api.GetFileResponse], error)
-	// CreateComment creates a new comment on a diff line.
-	CreateComment(context.Context, *connect.Request[api.CreateCommentRequest]) (*connect.Response[api.CreateCommentResponse], error)
-	// GetComments returns all comments/conversations for a specific file.
-	GetComments(context.Context, *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error)
+	// CreateConversation creates a new conversation (comment thread) on a diff line.
+	CreateConversation(context.Context, *connect.Request[api.CreateConversationRequest]) (*connect.Response[api.CreateConversationResponse], error)
+	// GetConversations returns all conversations for a specific file.
+	GetConversations(context.Context, *connect.Request[api.GetConversationsRequest]) (*connect.Response[api.GetConversationsResponse], error)
+	// GetConversationsSummary returns conversation counts and status per file path.
+	GetConversationsSummary(context.Context, *connect.Request[api.GetConversationsSummaryRequest]) (*connect.Response[api.GetConversationsSummaryResponse], error)
+	// ReplyToConversation adds a reply message to an existing conversation.
+	ReplyToConversation(context.Context, *connect.Request[api.ReplyToConversationRequest]) (*connect.Response[api.ReplyToConversationResponse], error)
 	// GetDiffBases returns available diff bases and the current one.
 	GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error)
 	// SetDiffBase sets the current diff base.
@@ -242,16 +280,28 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(criticServiceMethods.ByName("GetFile")),
 		connect.WithHandlerOptions(opts...),
 	)
-	criticServiceCreateCommentHandler := connect.NewUnaryHandler(
-		CriticServiceCreateCommentProcedure,
-		svc.CreateComment,
-		connect.WithSchema(criticServiceMethods.ByName("CreateComment")),
+	criticServiceCreateConversationHandler := connect.NewUnaryHandler(
+		CriticServiceCreateConversationProcedure,
+		svc.CreateConversation,
+		connect.WithSchema(criticServiceMethods.ByName("CreateConversation")),
 		connect.WithHandlerOptions(opts...),
 	)
-	criticServiceGetCommentsHandler := connect.NewUnaryHandler(
-		CriticServiceGetCommentsProcedure,
-		svc.GetComments,
-		connect.WithSchema(criticServiceMethods.ByName("GetComments")),
+	criticServiceGetConversationsHandler := connect.NewUnaryHandler(
+		CriticServiceGetConversationsProcedure,
+		svc.GetConversations,
+		connect.WithSchema(criticServiceMethods.ByName("GetConversations")),
+		connect.WithHandlerOptions(opts...),
+	)
+	criticServiceGetConversationsSummaryHandler := connect.NewUnaryHandler(
+		CriticServiceGetConversationsSummaryProcedure,
+		svc.GetConversationsSummary,
+		connect.WithSchema(criticServiceMethods.ByName("GetConversationsSummary")),
+		connect.WithHandlerOptions(opts...),
+	)
+	criticServiceReplyToConversationHandler := connect.NewUnaryHandler(
+		CriticServiceReplyToConversationProcedure,
+		svc.ReplyToConversation,
+		connect.WithSchema(criticServiceMethods.ByName("ReplyToConversation")),
 		connect.WithHandlerOptions(opts...),
 	)
 	criticServiceGetDiffBasesHandler := connect.NewUnaryHandler(
@@ -276,10 +326,14 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 			criticServiceGetDiffHandler.ServeHTTP(w, r)
 		case CriticServiceGetFileProcedure:
 			criticServiceGetFileHandler.ServeHTTP(w, r)
-		case CriticServiceCreateCommentProcedure:
-			criticServiceCreateCommentHandler.ServeHTTP(w, r)
-		case CriticServiceGetCommentsProcedure:
-			criticServiceGetCommentsHandler.ServeHTTP(w, r)
+		case CriticServiceCreateConversationProcedure:
+			criticServiceCreateConversationHandler.ServeHTTP(w, r)
+		case CriticServiceGetConversationsProcedure:
+			criticServiceGetConversationsHandler.ServeHTTP(w, r)
+		case CriticServiceGetConversationsSummaryProcedure:
+			criticServiceGetConversationsSummaryHandler.ServeHTTP(w, r)
+		case CriticServiceReplyToConversationProcedure:
+			criticServiceReplyToConversationHandler.ServeHTTP(w, r)
 		case CriticServiceGetDiffBasesProcedure:
 			criticServiceGetDiffBasesHandler.ServeHTTP(w, r)
 		case CriticServiceSetDiffBaseProcedure:
@@ -309,12 +363,20 @@ func (UnimplementedCriticServiceHandler) GetFile(context.Context, *connect.Reque
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetFile is not implemented"))
 }
 
-func (UnimplementedCriticServiceHandler) CreateComment(context.Context, *connect.Request[api.CreateCommentRequest]) (*connect.Response[api.CreateCommentResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.CreateComment is not implemented"))
+func (UnimplementedCriticServiceHandler) CreateConversation(context.Context, *connect.Request[api.CreateConversationRequest]) (*connect.Response[api.CreateConversationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.CreateConversation is not implemented"))
 }
 
-func (UnimplementedCriticServiceHandler) GetComments(context.Context, *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetComments is not implemented"))
+func (UnimplementedCriticServiceHandler) GetConversations(context.Context, *connect.Request[api.GetConversationsRequest]) (*connect.Response[api.GetConversationsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetConversations is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) GetConversationsSummary(context.Context, *connect.Request[api.GetConversationsSummaryRequest]) (*connect.Response[api.GetConversationsSummaryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetConversationsSummary is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) ReplyToConversation(context.Context, *connect.Request[api.ReplyToConversationRequest]) (*connect.Response[api.ReplyToConversationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.ReplyToConversation is not implemented"))
 }
 
 func (UnimplementedCriticServiceHandler) GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error) {

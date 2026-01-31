@@ -169,10 +169,13 @@ func (db *DB) GetFileConversationSummary(filePath string) (*critic.FileConversat
 		if err := rows.Scan(&isUnresolved, &isResolved, &hasUnreadAI); err != nil {
 			return nil, fmt.Errorf("failed to scan file summary: %w", err)
 		}
+		summary.TotalCount++
 		if isUnresolved == 1 {
+			summary.UnresolvedCount++
 			summary.HasUnresolvedComments = true
 		}
 		if isResolved == 1 {
+			summary.ResolvedCount++
 			summary.HasResolvedComments = true
 		}
 		if hasUnreadAI == 1 {
@@ -193,6 +196,78 @@ func (db *DB) GetFileConversationSummary(filePath string) (*critic.FileConversat
 	}
 
 	return summary, nil
+}
+
+// GetAllFileConversationSummaries returns summaries for all files that have conversations
+func (db *DB) GetAllFileConversationSummaries() ([]*critic.FileConversationSummary, error) {
+	// Query to get summaries for all files that have conversations
+	query := `
+		SELECT
+			file_path,
+			SUM(CASE WHEN status != 'resolved' THEN 1 ELSE 0 END) as unresolved_count,
+			SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved_count,
+			COUNT(*) as total_count
+		FROM messages
+		WHERE id = conversation_id
+		GROUP BY file_path
+		ORDER BY file_path
+	`
+
+	rows, err := db.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query file summaries: %w", err)
+	}
+	defer rows.Close()
+
+	summaryMap := make(map[string]*critic.FileConversationSummary)
+	for rows.Next() {
+		var filePath string
+		var unresolvedCount, resolvedCount, totalCount int
+		if err := rows.Scan(&filePath, &unresolvedCount, &resolvedCount, &totalCount); err != nil {
+			return nil, fmt.Errorf("failed to scan file summary: %w", err)
+		}
+		summaryMap[filePath] = &critic.FileConversationSummary{
+			FilePath:              filePath,
+			TotalCount:            totalCount,
+			UnresolvedCount:       unresolvedCount,
+			ResolvedCount:         resolvedCount,
+			HasUnresolvedComments: unresolvedCount > 0,
+			HasResolvedComments:   resolvedCount > 0,
+		}
+	}
+
+	// Check for unread AI messages per file
+	unreadQuery := `
+		SELECT file_path, COUNT(*) as unread_count
+		FROM messages
+		WHERE author = 'ai' AND read_status = 'unread'
+		GROUP BY file_path
+	`
+	unreadRows, err := db.db.Query(unreadQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query unread AI messages: %w", err)
+	}
+	defer unreadRows.Close()
+
+	for unreadRows.Next() {
+		var filePath string
+		var unreadCount int
+		if err := unreadRows.Scan(&filePath, &unreadCount); err != nil {
+			return nil, fmt.Errorf("failed to scan unread count: %w", err)
+		}
+		if summary, ok := summaryMap[filePath]; ok && unreadCount > 0 {
+			summary.HasUnreadAIMessages = true
+		}
+	}
+
+	// Convert map to slice
+	summaries := make([]*critic.FileConversationSummary, 0, len(summaryMap))
+	for _, summary := range summaryMap {
+		summaries = append(summaries, summary)
+	}
+
+	logger.Debug("Found conversation summaries for %d files", len(summaries))
+	return summaries, nil
 }
 
 // ReplyToConversation adds a reply to an existing conversation

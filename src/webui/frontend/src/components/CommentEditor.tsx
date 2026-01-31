@@ -54,7 +54,7 @@ function InlineCommentEditor({ lineInfo, onClose, onSaved }: InlineCommentEditor
     }
 
     try {
-      const response = await criticClient.createComment({
+      const response = await criticClient.createConversation({
         oldFile: lineInfo.oldFile,
         oldLine: lineInfo.oldLine,
         newFile: lineInfo.newFile,
@@ -77,7 +77,7 @@ function InlineCommentEditor({ lineInfo, onClose, onSaved }: InlineCommentEditor
     if (e.key === 'Escape') {
       e.preventDefault()
       onClose()
-    } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+    } else if (e.key === 'Enter' && e.altKey) {
       e.preventDefault()
       handleSave()
     }
@@ -87,7 +87,7 @@ function InlineCommentEditor({ lineInfo, onClose, onSaved }: InlineCommentEditor
     <div className="inline-comment-editor" onKeyDown={handleKeyDown}>
       <EditorContent editor={editor} />
       <div className="inline-comment-editor-actions">
-        <span className="inline-comment-editor-hint">Ctrl+S to save, Esc to cancel</span>
+        <span className="inline-comment-editor-hint">⌥ + ↵ to save, Esc to cancel</span>
         <button
           className="inline-comment-button inline-comment-button-cancel"
           onClick={onClose}

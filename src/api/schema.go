@@ -32,7 +32,7 @@ var requestSchemaStrings = map[string]string{
 		},
 		"required": ["path"]
 	}`,
-	"/critic.v1.CriticService/CreateComment": `{
+	"/critic.v1.CriticService/CreateConversation": `{
 		"type": "object",
 		"properties": {
 			"comment": {"type": "string", "minLength": 1},

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { criticClient } from '../api/client'
+import { criticClient, getConversationsSummary, ConversationSummary } from '../api/client'
 import { FileSummary, FileStatus } from '../gen/critic_pb'
 
 interface FileListProps {
@@ -7,6 +7,8 @@ interface FileListProps {
   onSelectFile: (file: string, fileSummary: FileSummary) => void
   isFocused?: boolean
 }
+
+type FilterType = 'conversations' | 'files' | 'hidden'
 
 function getFilePath(file: FileSummary): string {
   return file.status === FileStatus.DELETED ? file.oldPath : file.newPath
@@ -75,16 +77,18 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
-  const [showHiddenOnly, setShowHiddenOnly] = useState(false)
+  const [filter, setFilter] = useState<FilterType>('files')
+  const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
   const selectedItemRef = useRef<HTMLLIElement>(null)
 
   useEffect(() => {
-    // Fetch both diff summary and .criticignore in parallel
+    // Fetch diff summary, .criticignore, and conversation summaries in parallel
     Promise.all([
       criticClient.getDiffSummary({}),
       criticClient.getFile({ path: '.criticignore' }).catch(() => null),
+      getConversationsSummary(),
     ])
-      .then(([diffResponse, fileResponse]) => {
+      .then(([diffResponse, fileResponse, summaryResponse]) => {
         setFiles(diffResponse.diff?.files || [])
         if (fileResponse?.content) {
           const patterns = fileResponse.content
@@ -93,6 +97,12 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
             .filter((line) => line && !line.startsWith('#'))
           setIgnorePatterns(patterns)
         }
+        // Build a map of file path to conversation summary for quick lookup
+        const summaryMap = new Map<string, ConversationSummary>()
+        for (const summary of summaryResponse.summaries) {
+          summaryMap.set(summary.filePath, summary)
+        }
+        setConversationSummaries(summaryMap)
         setLoading(false)
       })
       .catch((err) => {
@@ -126,8 +136,32 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
     return { visibleFiles: visible, hiddenFiles: hidden }
   })()
 
-  // Files to display based on showHiddenOnly toggle
-  const displayedFiles = showHiddenOnly ? hiddenFiles : visibleFiles
+  // Files with conversations (from visible files only)
+  const filesWithConversations = visibleFiles.filter((file) => {
+    const path = getFilePath(file)
+    const summary = conversationSummaries.get(path)
+    return summary && summary.totalCount > 0
+  })
+
+  // Total conversation count (from visible files only)
+  const totalConversations = filesWithConversations.reduce((sum, file) => {
+    const path = getFilePath(file)
+    const summary = conversationSummaries.get(path)
+    return sum + (summary?.totalCount || 0)
+  }, 0)
+
+  // Determine displayed files based on filter
+  const displayedFiles = (() => {
+    switch (filter) {
+      case 'conversations':
+        return filesWithConversations
+      case 'hidden':
+        return hiddenFiles
+      case 'files':
+      default:
+        return visibleFiles
+    }
+  })()
 
   // Keyboard navigation when focused
   const handleKeyDown = useCallback(
@@ -199,37 +233,39 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
     )
   }
 
-  const headerText = showHiddenOnly
-    ? `${hiddenFiles.length} Hidden Files`
-    : `${visibleFiles.length} Files`
-
   return (
     <div className={`file-list-container${isFocused ? ' focused' : ''}`}>
-      <div className="file-list-header">
-        {headerText}
-        {hiddenFiles.length > 0 && !showHiddenOnly && (
-          <span
-            className="hidden-files-toggle"
-            onClick={() => setShowHiddenOnly(true)}
-            title="Click to show hidden files"
+      <div className="file-list-filters">
+        {totalConversations > 0 && (
+          <button
+            className={`file-list-filter-btn${filter === 'conversations' ? ' active' : ''}`}
+            onClick={() => setFilter(filter === 'conversations' ? 'files' : 'conversations')}
           >
-            {' '}(+ {hiddenFiles.length} hidden)
-          </span>
+            {totalConversations} Conversations
+          </button>
         )}
-        {showHiddenOnly && (
-          <span
-            className="hidden-files-toggle"
-            onClick={() => setShowHiddenOnly(false)}
-            title="Click to show visible files"
+        <button
+          className={`file-list-filter-btn${filter === 'files' ? ' active' : ''}`}
+          onClick={() => setFilter('files')}
+        >
+          {visibleFiles.length} Files
+        </button>
+        {hiddenFiles.length > 0 && (
+          <button
+            className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
+            onClick={() => setFilter(filter === 'hidden' ? 'files' : 'hidden')}
           >
-            {' '}(back to visible)
-          </span>
+            {hiddenFiles.length} hidden
+          </button>
         )}
       </div>
       <ul className="file-list">
         {displayedFiles.map((file) => {
           const path = getFilePath(file)
           const isSelected = selectedFile === path
+          const summary = conversationSummaries.get(path)
+          const hasConversations = summary && summary.totalCount > 0
+          const hasUnresolved = summary && summary.unresolvedCount > 0
           return (
             <li
               key={path}
@@ -242,12 +278,24 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
                 {getStatusLabel(file.status)}
               </span>
               <span className="file-path">{path}</span>
+              {hasConversations && (
+                <span
+                  className={`conversation-icon${hasUnresolved ? ' unresolved' : ''}`}
+                  title={`${summary.totalCount} conversation${summary.totalCount > 1 ? 's' : ''} (${summary.unresolvedCount} unresolved)`}
+                >
+                  {summary.totalCount}
+                </span>
+              )}
             </li>
           )
         })}
         {displayedFiles.length === 0 && (
           <li className="file-list-message">
-            {showHiddenOnly ? 'No hidden files' : 'No files found'}
+            {filter === 'conversations'
+              ? 'No files with conversations'
+              : filter === 'hidden'
+                ? 'No hidden files'
+                : 'No files found'}
           </li>
         )}
       </ul>

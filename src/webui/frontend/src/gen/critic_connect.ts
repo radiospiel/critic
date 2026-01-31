@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CreateCommentRequest, CreateCommentResponse, GetCommentsRequest, GetCommentsResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, SetDiffBaseRequest, SetDiffBaseResponse } from "./critic_pb.js";
+import { CreateConversationRequest, CreateConversationResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, ReplyToConversationRequest, ReplyToConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -59,25 +59,47 @@ export const CriticService = {
       kind: MethodKind.Unary,
     },
     /**
-     * CreateComment creates a new comment on a diff line.
+     * CreateConversation creates a new conversation (comment thread) on a diff line.
      *
-     * @generated from rpc critic.v1.CriticService.CreateComment
+     * @generated from rpc critic.v1.CriticService.CreateConversation
      */
-    createComment: {
-      name: "CreateComment",
-      I: CreateCommentRequest,
-      O: CreateCommentResponse,
+    createConversation: {
+      name: "CreateConversation",
+      I: CreateConversationRequest,
+      O: CreateConversationResponse,
       kind: MethodKind.Unary,
     },
     /**
-     * GetComments returns all comments/conversations for a specific file.
+     * GetConversations returns all conversations for a specific file.
      *
-     * @generated from rpc critic.v1.CriticService.GetComments
+     * @generated from rpc critic.v1.CriticService.GetConversations
      */
-    getComments: {
-      name: "GetComments",
-      I: GetCommentsRequest,
-      O: GetCommentsResponse,
+    getConversations: {
+      name: "GetConversations",
+      I: GetConversationsRequest,
+      O: GetConversationsResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * GetConversationsSummary returns conversation counts and status per file path.
+     *
+     * @generated from rpc critic.v1.CriticService.GetConversationsSummary
+     */
+    getConversationsSummary: {
+      name: "GetConversationsSummary",
+      I: GetConversationsSummaryRequest,
+      O: GetConversationsSummaryResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * ReplyToConversation adds a reply message to an existing conversation.
+     *
+     * @generated from rpc critic.v1.CriticService.ReplyToConversation
+     */
+    replyToConversation: {
+      name: "ReplyToConversation",
+      I: ReplyToConversationRequest,
+      O: ReplyToConversationResponse,
       kind: MethodKind.Unary,
     },
     /**

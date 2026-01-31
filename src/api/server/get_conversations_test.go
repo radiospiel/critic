@@ -11,7 +11,7 @@ import (
 	"github.com/radiospiel/critic/src/pkg/critic"
 )
 
-func TestGetComments_ReturnsConversationsForFile(t *testing.T) {
+func TestGetConversations_ReturnsConversationsForFile(t *testing.T) {
 	now := time.Now()
 	messaging := critic.NewDummyMessaging()
 	messaging.Conversations["src/main.go"] = []*critic.Conversation{
@@ -43,10 +43,10 @@ func TestGetComments_ReturnsConversationsForFile(t *testing.T) {
 		},
 	}
 
-	req := connect.NewRequest(&api.GetCommentsRequest{Path: "src/main.go"})
-	resp, err := s.GetComments(context.Background(), req)
+	req := connect.NewRequest(&api.GetConversationsRequest{Path: "src/main.go"})
+	resp, err := s.GetConversations(context.Background(), req)
 
-	assert.NoError(t, err, "GetComments should not return error")
+	assert.NoError(t, err, "GetConversations should not return error")
 	assert.Equals(t, len(resp.Msg.GetConversations()), 1, "should return one conversation")
 
 	conv := resp.Msg.GetConversations()[0]
@@ -65,7 +65,7 @@ func TestGetComments_ReturnsConversationsForFile(t *testing.T) {
 	assert.Equals(t, msg.GetIsUnread(), false, "message should not be unread")
 }
 
-func TestGetComments_ReturnsEmptyForNoConversations(t *testing.T) {
+func TestGetConversations_ReturnsEmptyForNoConversations(t *testing.T) {
 	messaging := critic.NewDummyMessaging()
 
 	s := &Server{
@@ -74,14 +74,14 @@ func TestGetComments_ReturnsEmptyForNoConversations(t *testing.T) {
 		},
 	}
 
-	req := connect.NewRequest(&api.GetCommentsRequest{Path: "nonexistent.go"})
-	resp, err := s.GetComments(context.Background(), req)
+	req := connect.NewRequest(&api.GetConversationsRequest{Path: "nonexistent.go"})
+	resp, err := s.GetConversations(context.Background(), req)
 
-	assert.NoError(t, err, "GetComments should not return error")
+	assert.NoError(t, err, "GetConversations should not return error")
 	assert.Equals(t, len(resp.Msg.GetConversations()), 0, "should return empty conversations")
 }
 
-func TestGetComments_ReturnsMultipleConversations(t *testing.T) {
+func TestGetConversations_ReturnsMultipleConversations(t *testing.T) {
 	now := time.Now()
 	messaging := critic.NewDummyMessaging()
 	messaging.Conversations["src/utils.go"] = []*critic.Conversation{
@@ -111,10 +111,10 @@ func TestGetComments_ReturnsMultipleConversations(t *testing.T) {
 		},
 	}
 
-	req := connect.NewRequest(&api.GetCommentsRequest{Path: "src/utils.go"})
-	resp, err := s.GetComments(context.Background(), req)
+	req := connect.NewRequest(&api.GetConversationsRequest{Path: "src/utils.go"})
+	resp, err := s.GetConversations(context.Background(), req)
 
-	assert.NoError(t, err, "GetComments should not return error")
+	assert.NoError(t, err, "GetConversations should not return error")
 	assert.Equals(t, len(resp.Msg.GetConversations()), 2, "should return two conversations")
 
 	conv1 := resp.Msg.GetConversations()[0]
@@ -127,7 +127,7 @@ func TestGetComments_ReturnsMultipleConversations(t *testing.T) {
 	assert.True(t, conv2.GetMessages()[0].GetIsUnread(), "AI message should be unread")
 }
 
-func TestGetComments_HandlesMultipleMessages(t *testing.T) {
+func TestGetConversations_HandlesMultipleMessages(t *testing.T) {
 	now := time.Now()
 	later := now.Add(time.Hour)
 
@@ -154,10 +154,10 @@ func TestGetComments_HandlesMultipleMessages(t *testing.T) {
 		},
 	}
 
-	req := connect.NewRequest(&api.GetCommentsRequest{Path: "src/handler.go"})
-	resp, err := s.GetComments(context.Background(), req)
+	req := connect.NewRequest(&api.GetConversationsRequest{Path: "src/handler.go"})
+	resp, err := s.GetConversations(context.Background(), req)
 
-	assert.NoError(t, err, "GetComments should not return error")
+	assert.NoError(t, err, "GetConversations should not return error")
 	assert.Equals(t, len(resp.Msg.GetConversations()), 1, "should return one conversation")
 
 	conv := resp.Msg.GetConversations()[0]

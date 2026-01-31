@@ -153,7 +153,7 @@ func (s *Server) Start() error {
 
 func depanic[T any](fun func() T) (r T, err error) {
 	defer func() {
-		if recovered := recover(); err != nil {
+		if recovered := recover(); recovered != nil {
 			var ok bool
 			if err, ok = recovered.(error); ok {
 				return

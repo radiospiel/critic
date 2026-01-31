@@ -7,6 +7,8 @@ import (
 
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api/server"
+	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/spf13/cobra"
 )
 
@@ -59,10 +61,22 @@ Examples:
 			// Log to stderr for the API server
 			logger.SetLogFile("/dev/stderr")
 
+			// Get git root directory
+			gitRoot := git.GetGitRoot()
+
+			// Initialize the message database
+			mdb, err := messagedb.New(gitRoot)
+			if err != nil {
+				return fmt.Errorf("failed to initialize message database: %w", err)
+			}
+			defer mdb.Close()
+
 			config := server.Config{
 				Port:      port,
 				Dev:       dev,
 				DiffBases: diffBases,
+				GitRoot:   gitRoot,
+				Messaging: mdb,
 			}
 
 			srv := server.NewServer(config)

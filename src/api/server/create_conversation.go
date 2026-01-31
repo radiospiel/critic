@@ -10,19 +10,19 @@ import (
 	"github.com/radiospiel/critic/src/pkg/critic"
 )
 
-// CreateComment creates a new comment on a diff line.
-func (s *Server) CreateComment(
+// CreateConversation creates a new conversation (comment thread) on a diff line.
+func (s *Server) CreateConversation(
 	ctx context.Context,
-	req *connect.Request[api.CreateCommentRequest],
-) (*connect.Response[api.CreateCommentResponse], error) {
-	return depanic(func() *connect.Response[api.CreateCommentResponse] {
-		response := createCommentImpl(s, req.Msg)
+	req *connect.Request[api.CreateConversationRequest],
+) (*connect.Response[api.CreateConversationResponse], error) {
+	return depanic(func() *connect.Response[api.CreateConversationResponse] {
+		response := createConversationImpl(s, req.Msg)
 		return connect.NewResponse(response)
 	})
 }
 
-func createCommentImpl(server *Server, req *api.CreateCommentRequest) *api.CreateCommentResponse {
-	logger.Info("CreateComment: old_file=%s, old_line=%d, new_file=%s, new_line=%d, comment=%q",
+func createConversationImpl(server *Server, req *api.CreateConversationRequest) *api.CreateConversationResponse {
+	logger.Info("CreateConversation: old_file=%s, old_line=%d, new_file=%s, new_line=%d, comment=%q",
 		req.GetOldFile(),
 		req.GetOldLine(),
 		req.GetNewFile(),
@@ -53,8 +53,8 @@ func createCommentImpl(server *Server, req *api.CreateCommentRequest) *api.Creat
 		"", // context - could be enhanced to include surrounding code
 	))
 
-	logger.Info("Created comment %s at %s:%d", conversation.UUID, filePath, lineNo)
-	return &api.CreateCommentResponse{
+	logger.Info("Created conversation %s at %s:%d", conversation.UUID, filePath, lineNo)
+	return &api.CreateConversationResponse{
 		Success: true,
 	}
 }

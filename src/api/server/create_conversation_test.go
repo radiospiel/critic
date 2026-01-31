@@ -9,7 +9,7 @@ import (
 	"github.com/radiospiel/critic/src/pkg/critic"
 )
 
-func TestCreateComment(t *testing.T) {
+func TestCreateConversation(t *testing.T) {
 	// Create a server with a dummy messaging implementation
 	messaging := critic.NewDummyMessaging()
 	s := &Server{
@@ -19,7 +19,7 @@ func TestCreateComment(t *testing.T) {
 		session: &Session{}, // Empty session - HeadCommit will return ""
 	}
 
-	req := connect.NewRequest(&api.CreateCommentRequest{
+	req := connect.NewRequest(&api.CreateConversationRequest{
 		OldFile: "test.go",
 		OldLine: 10,
 		NewFile: "test.go",
@@ -27,9 +27,9 @@ func TestCreateComment(t *testing.T) {
 		Comment: "This is a test comment with **markdown**",
 	})
 
-	resp, err := s.CreateComment(context.Background(), req)
+	resp, err := s.CreateConversation(context.Background(), req)
 	if err != nil {
-		t.Fatalf("CreateComment failed: %v", err)
+		t.Fatalf("CreateConversation failed: %v", err)
 	}
 
 	if !resp.Msg.GetSuccess() {

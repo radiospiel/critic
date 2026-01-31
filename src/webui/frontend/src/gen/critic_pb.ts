@@ -929,11 +929,11 @@ export class GetFileResponse extends Message$1<GetFileResponse> {
 }
 
 /**
- * CreateCommentRequest contains the data for creating a new comment.
+ * CreateConversationRequest contains the data for creating a new conversation.
  *
- * @generated from message critic.v1.CreateCommentRequest
+ * @generated from message critic.v1.CreateConversationRequest
  */
-export class CreateCommentRequest extends Message$1<CreateCommentRequest> {
+export class CreateConversationRequest extends Message$1<CreateConversationRequest> {
   /**
    * old_file is the path to the file in the old version (before the change).
    *
@@ -969,13 +969,13 @@ export class CreateCommentRequest extends Message$1<CreateCommentRequest> {
    */
   comment = "";
 
-  constructor(data?: PartialMessage<CreateCommentRequest>) {
+  constructor(data?: PartialMessage<CreateConversationRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "critic.v1.CreateCommentRequest";
+  static readonly typeName = "critic.v1.CreateConversationRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "old_file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "old_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
@@ -984,31 +984,31 @@ export class CreateCommentRequest extends Message$1<CreateCommentRequest> {
     { no: 5, name: "comment", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateCommentRequest {
-    return new CreateCommentRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateConversationRequest {
+    return new CreateConversationRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateCommentRequest {
-    return new CreateCommentRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateConversationRequest {
+    return new CreateConversationRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateCommentRequest {
-    return new CreateCommentRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateConversationRequest {
+    return new CreateConversationRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CreateCommentRequest | PlainMessage<CreateCommentRequest> | undefined, b: CreateCommentRequest | PlainMessage<CreateCommentRequest> | undefined): boolean {
-    return proto3.util.equals(CreateCommentRequest, a, b);
+  static equals(a: CreateConversationRequest | PlainMessage<CreateConversationRequest> | undefined, b: CreateConversationRequest | PlainMessage<CreateConversationRequest> | undefined): boolean {
+    return proto3.util.equals(CreateConversationRequest, a, b);
   }
 }
 
 /**
- * CreateCommentResponse contains the result of creating a comment.
+ * CreateConversationResponse contains the result of creating a conversation.
  *
- * @generated from message critic.v1.CreateCommentResponse
+ * @generated from message critic.v1.CreateConversationResponse
  */
-export class CreateCommentResponse extends Message$1<CreateCommentResponse> {
+export class CreateConversationResponse extends Message$1<CreateConversationResponse> {
   /**
-   * success indicates whether the comment was created successfully.
+   * success indicates whether the conversation was created successfully.
    *
    * @generated from field: bool success = 1;
    */
@@ -1021,84 +1021,84 @@ export class CreateCommentResponse extends Message$1<CreateCommentResponse> {
    */
   error?: RpcError;
 
-  constructor(data?: PartialMessage<CreateCommentResponse>) {
+  constructor(data?: PartialMessage<CreateConversationResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "critic.v1.CreateCommentResponse";
+  static readonly typeName = "critic.v1.CreateConversationResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 15, name: "error", kind: "message", T: RpcError },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateCommentResponse {
-    return new CreateCommentResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateConversationResponse {
+    return new CreateConversationResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateCommentResponse {
-    return new CreateCommentResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateConversationResponse {
+    return new CreateConversationResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateCommentResponse {
-    return new CreateCommentResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateConversationResponse {
+    return new CreateConversationResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: CreateCommentResponse | PlainMessage<CreateCommentResponse> | undefined, b: CreateCommentResponse | PlainMessage<CreateCommentResponse> | undefined): boolean {
-    return proto3.util.equals(CreateCommentResponse, a, b);
+  static equals(a: CreateConversationResponse | PlainMessage<CreateConversationResponse> | undefined, b: CreateConversationResponse | PlainMessage<CreateConversationResponse> | undefined): boolean {
+    return proto3.util.equals(CreateConversationResponse, a, b);
   }
 }
 
 /**
- * GetCommentsRequest requests all comments for a specific file.
+ * GetConversationsRequest requests all conversations for a specific file.
  *
- * @generated from message critic.v1.GetCommentsRequest
+ * @generated from message critic.v1.GetConversationsRequest
  */
-export class GetCommentsRequest extends Message$1<GetCommentsRequest> {
+export class GetConversationsRequest extends Message$1<GetConversationsRequest> {
   /**
-   * path is the file path to get comments for.
+   * path is the file path to get conversations for.
    *
    * @generated from field: string path = 1;
    */
   path = "";
 
-  constructor(data?: PartialMessage<GetCommentsRequest>) {
+  constructor(data?: PartialMessage<GetConversationsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "critic.v1.GetCommentsRequest";
+  static readonly typeName = "critic.v1.GetConversationsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCommentsRequest {
-    return new GetCommentsRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetConversationsRequest {
+    return new GetConversationsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetCommentsRequest {
-    return new GetCommentsRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetConversationsRequest {
+    return new GetConversationsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetCommentsRequest {
-    return new GetCommentsRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetConversationsRequest {
+    return new GetConversationsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetCommentsRequest | PlainMessage<GetCommentsRequest> | undefined, b: GetCommentsRequest | PlainMessage<GetCommentsRequest> | undefined): boolean {
-    return proto3.util.equals(GetCommentsRequest, a, b);
+  static equals(a: GetConversationsRequest | PlainMessage<GetConversationsRequest> | undefined, b: GetConversationsRequest | PlainMessage<GetConversationsRequest> | undefined): boolean {
+    return proto3.util.equals(GetConversationsRequest, a, b);
   }
 }
 
 /**
- * GetCommentsResponse contains all conversations/comments for a file.
+ * GetConversationsResponse contains all conversations for a file.
  *
- * @generated from message critic.v1.GetCommentsResponse
+ * @generated from message critic.v1.GetConversationsResponse
  */
-export class GetCommentsResponse extends Message$1<GetCommentsResponse> {
+export class GetConversationsResponse extends Message$1<GetConversationsResponse> {
   /**
-   * conversations is the list of comment threads for the file.
+   * conversations is the list of conversation threads for the file.
    *
    * @generated from field: repeated critic.v1.Conversation conversations = 1;
    */
@@ -1111,32 +1111,187 @@ export class GetCommentsResponse extends Message$1<GetCommentsResponse> {
    */
   error?: RpcError;
 
-  constructor(data?: PartialMessage<GetCommentsResponse>) {
+  constructor(data?: PartialMessage<GetConversationsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "critic.v1.GetCommentsResponse";
+  static readonly typeName = "critic.v1.GetConversationsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "conversations", kind: "message", T: Conversation, repeated: true },
     { no: 15, name: "error", kind: "message", T: RpcError },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCommentsResponse {
-    return new GetCommentsResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetConversationsResponse {
+    return new GetConversationsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetCommentsResponse {
-    return new GetCommentsResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetConversationsResponse {
+    return new GetConversationsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetCommentsResponse {
-    return new GetCommentsResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetConversationsResponse {
+    return new GetConversationsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: GetCommentsResponse | PlainMessage<GetCommentsResponse> | undefined, b: GetCommentsResponse | PlainMessage<GetCommentsResponse> | undefined): boolean {
-    return proto3.util.equals(GetCommentsResponse, a, b);
+  static equals(a: GetConversationsResponse | PlainMessage<GetConversationsResponse> | undefined, b: GetConversationsResponse | PlainMessage<GetConversationsResponse> | undefined): boolean {
+    return proto3.util.equals(GetConversationsResponse, a, b);
+  }
+}
+
+/**
+ * GetConversationsSummaryRequest requests the summary of conversations across all files.
+ *
+ * @generated from message critic.v1.GetConversationsSummaryRequest
+ */
+export class GetConversationsSummaryRequest extends Message$1<GetConversationsSummaryRequest> {
+  constructor(data?: PartialMessage<GetConversationsSummaryRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetConversationsSummaryRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetConversationsSummaryRequest {
+    return new GetConversationsSummaryRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetConversationsSummaryRequest {
+    return new GetConversationsSummaryRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetConversationsSummaryRequest {
+    return new GetConversationsSummaryRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetConversationsSummaryRequest | PlainMessage<GetConversationsSummaryRequest> | undefined, b: GetConversationsSummaryRequest | PlainMessage<GetConversationsSummaryRequest> | undefined): boolean {
+    return proto3.util.equals(GetConversationsSummaryRequest, a, b);
+  }
+}
+
+/**
+ * GetConversationsSummaryResponse contains conversation counts per file path.
+ *
+ * @generated from message critic.v1.GetConversationsSummaryResponse
+ */
+export class GetConversationsSummaryResponse extends Message$1<GetConversationsSummaryResponse> {
+  /**
+   * summaries is the list of file conversation summaries (only files with conversations).
+   *
+   * @generated from field: repeated critic.v1.FileConversationSummary summaries = 1;
+   */
+  summaries: FileConversationSummary[] = [];
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<GetConversationsSummaryResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetConversationsSummaryResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "summaries", kind: "message", T: FileConversationSummary, repeated: true },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetConversationsSummaryResponse {
+    return new GetConversationsSummaryResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetConversationsSummaryResponse {
+    return new GetConversationsSummaryResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetConversationsSummaryResponse {
+    return new GetConversationsSummaryResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetConversationsSummaryResponse | PlainMessage<GetConversationsSummaryResponse> | undefined, b: GetConversationsSummaryResponse | PlainMessage<GetConversationsSummaryResponse> | undefined): boolean {
+    return proto3.util.equals(GetConversationsSummaryResponse, a, b);
+  }
+}
+
+/**
+ * FileConversationSummary contains conversation statistics for a single file.
+ *
+ * @generated from message critic.v1.FileConversationSummary
+ */
+export class FileConversationSummary extends Message$1<FileConversationSummary> {
+  /**
+   * file_path is the git-relative path to the file.
+   *
+   * @generated from field: string file_path = 1;
+   */
+  filePath = "";
+
+  /**
+   * total_count is the total number of conversations for this file.
+   *
+   * @generated from field: int32 total_count = 2;
+   */
+  totalCount = 0;
+
+  /**
+   * unresolved_count is the number of unresolved conversations.
+   *
+   * @generated from field: int32 unresolved_count = 3;
+   */
+  unresolvedCount = 0;
+
+  /**
+   * resolved_count is the number of resolved conversations.
+   *
+   * @generated from field: int32 resolved_count = 4;
+   */
+  resolvedCount = 0;
+
+  /**
+   * has_unread_ai_messages indicates if there are unread AI messages.
+   *
+   * @generated from field: bool has_unread_ai_messages = 5;
+   */
+  hasUnreadAiMessages = false;
+
+  constructor(data?: PartialMessage<FileConversationSummary>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.FileConversationSummary";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "total_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "unresolved_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 4, name: "resolved_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "has_unread_ai_messages", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileConversationSummary {
+    return new FileConversationSummary().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): FileConversationSummary {
+    return new FileConversationSummary().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): FileConversationSummary {
+    return new FileConversationSummary().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: FileConversationSummary | PlainMessage<FileConversationSummary> | undefined, b: FileConversationSummary | PlainMessage<FileConversationSummary> | undefined): boolean {
+    return proto3.util.equals(FileConversationSummary, a, b);
   }
 }
 
@@ -1503,6 +1658,104 @@ export class SetDiffBaseResponse extends Message$1<SetDiffBaseResponse> {
 
   static equals(a: SetDiffBaseResponse | PlainMessage<SetDiffBaseResponse> | undefined, b: SetDiffBaseResponse | PlainMessage<SetDiffBaseResponse> | undefined): boolean {
     return proto3.util.equals(SetDiffBaseResponse, a, b);
+  }
+}
+
+/**
+ * ReplyToConversationRequest contains the data for replying to an existing conversation.
+ *
+ * @generated from message critic.v1.ReplyToConversationRequest
+ */
+export class ReplyToConversationRequest extends Message$1<ReplyToConversationRequest> {
+  /**
+   * conversation_id is the unique identifier of the conversation to reply to.
+   *
+   * @generated from field: string conversation_id = 1;
+   */
+  conversationId = "";
+
+  /**
+   * message is the markdown content of the reply.
+   *
+   * @generated from field: string message = 2;
+   */
+  message = "";
+
+  constructor(data?: PartialMessage<ReplyToConversationRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.ReplyToConversationRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReplyToConversationRequest {
+    return new ReplyToConversationRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ReplyToConversationRequest {
+    return new ReplyToConversationRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ReplyToConversationRequest {
+    return new ReplyToConversationRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: ReplyToConversationRequest | PlainMessage<ReplyToConversationRequest> | undefined, b: ReplyToConversationRequest | PlainMessage<ReplyToConversationRequest> | undefined): boolean {
+    return proto3.util.equals(ReplyToConversationRequest, a, b);
+  }
+}
+
+/**
+ * ReplyToConversationResponse contains the result of replying to a conversation.
+ *
+ * @generated from message critic.v1.ReplyToConversationResponse
+ */
+export class ReplyToConversationResponse extends Message$1<ReplyToConversationResponse> {
+  /**
+   * success indicates whether the reply was added successfully.
+   *
+   * @generated from field: bool success = 1;
+   */
+  success = false;
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<ReplyToConversationResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.ReplyToConversationResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ReplyToConversationResponse {
+    return new ReplyToConversationResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ReplyToConversationResponse {
+    return new ReplyToConversationResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ReplyToConversationResponse {
+    return new ReplyToConversationResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: ReplyToConversationResponse | PlainMessage<ReplyToConversationResponse> | undefined, b: ReplyToConversationResponse | PlainMessage<ReplyToConversationResponse> | undefined): boolean {
+    return proto3.util.equals(ReplyToConversationResponse, a, b);
   }
 }
 
