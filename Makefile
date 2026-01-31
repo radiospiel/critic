@@ -26,13 +26,13 @@ $(FRONTEND_DIST)/index.html: $(FRONTEND_DIR)/package.json $(shell find $(FRONTEN
 	cd $(FRONTEND_DIR) && npm install && npm run build
 
 test:
-	go test ./...
+	LOG_FILE=/tmp/critic.test go test ./...
 
 unit-tests:
-	go test $$(go list ./... | grep -v '/tests/')
+	LOG_FILE=/tmp/critic.test go test $$(go list ./... | grep -v '/tests/')
 
 integration:
-	make -C tests/integration/
+	LOG_FILE=/tmp/critic.test make -C tests/integration/
 
 install: build
 	install -d $(BINDIR)
@@ -55,19 +55,11 @@ install-deps: .install-deps.mtime
 # Generate .pb.go and .connect.go from .proto files
 # Supports both protoc and buf (buf is preferred when available)
 src/api/%.pb.go src/api/apiconnect/%.connect.go: $(PROTO_DIR)/%.proto
-	@if command -v buf >/dev/null 2>&1; then \
-		echo "Using buf to generate protobuf code..."; \
-		buf generate; \
-	elif command -v protoc >/dev/null 2>&1; then \
-		echo "Using protoc to generate protobuf code..."; \
-		protoc -I $(PROTO_DIR) \
-			--go_out=src/api --go_opt=paths=source_relative \
-			--connect-go_out=src/api --connect-go_opt=paths=source_relative \
-			$<; \
-	else \
-		echo "Error: neither buf nor protoc found. Run 'make install-deps' first."; \
-		exit 1; \
-	fi
+	echo "Using protoc to generate protobuf code..."; \
+	protoc -I $(PROTO_DIR) \
+		--go_out=src/api --go_opt=paths=source_relative \
+		--connect-go_out=src/api --connect-go_opt=paths=source_relative \
+		$<; \
 
 # Convenience target to regenerate all proto files
 proto: $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT)

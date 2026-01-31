@@ -55,7 +55,16 @@ func (sl *SimpleLogger) deepCopy(fun func(copy *SimpleLogger)) *SimpleLogger {
 }
 
 // stores the path to the current log file
-var logFilePath = "/dev/stderr"
+var logFilePath = findLogFileName()
+
+func findLogFileName() string {
+	logFile := os.Getenv("LOG_FILE")
+	if logFile != "" {
+		return logFile
+	}
+	return "/dev/stderr"
+}
+
 var fileLogger = newFileLogger(logFilePath)
 
 // logMessage holds the data for a log entry
