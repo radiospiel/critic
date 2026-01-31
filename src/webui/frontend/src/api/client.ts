@@ -1,6 +1,7 @@
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { createPromiseClient } from '@connectrpc/connect'
 import { CriticService } from '../gen/critic_connect'
+import { Conversation, Message } from '../gen/critic_pb'
 
 // Create a transport for the Connect protocol
 const transport = createConnectTransport({
@@ -10,7 +11,7 @@ const transport = createConnectTransport({
 // Create the client
 export const criticClient = createPromiseClient(CriticService, transport)
 
-// Types for comments (matching the backend JSON response)
+// Types for comments (for component compatibility)
 export interface CommentMessage {
   id: string
   author: string
@@ -32,13 +33,112 @@ export interface CommentConversation {
   updatedAt: string
 }
 
-export interface GetCommentsResponse {
+export interface GetCommentsResult {
   conversations: CommentConversation[]
   error?: string
 }
 
-// Fetch comments for a file using the REST endpoint
-export async function getComments(filePath: string): Promise<GetCommentsResponse> {
-  const response = await fetch(`/api/comments?path=${encodeURIComponent(filePath)}`)
-  return response.json()
+// Convert generated protobuf Message to CommentMessage interface
+function convertMessage(msg: Message): CommentMessage {
+  return {
+    id: msg.id,
+    author: msg.author,
+    content: msg.content,
+    createdAt: msg.createdAt,
+    updatedAt: msg.updatedAt,
+    isUnread: msg.isUnread,
+  }
+}
+
+// Convert generated protobuf Conversation to CommentConversation interface
+function convertConversation(conv: Conversation): CommentConversation {
+  return {
+    id: conv.id,
+    status: conv.status,
+    filePath: conv.filePath,
+    lineNumber: conv.lineNumber,
+    codeVersion: conv.codeVersion,
+    context: conv.context,
+    messages: conv.messages.map(convertMessage),
+    createdAt: conv.createdAt,
+    updatedAt: conv.updatedAt,
+  }
+}
+
+// Fetch comments for a file using the GRPC endpoint
+export async function getComments(filePath: string): Promise<GetCommentsResult> {
+  try {
+    const response = await criticClient.getComments({ path: filePath })
+    if (response.error) {
+      return {
+        conversations: [],
+        error: response.error.message,
+      }
+    }
+    return {
+      conversations: response.conversations.map(convertConversation),
+    }
+  } catch (err) {
+    return {
+      conversations: [],
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
+// Types for diff bases
+export interface DiffBasesResult {
+  bases: string[]
+  currentBase: string
+  error?: string
+}
+
+export interface SetDiffBaseResult {
+  success: boolean
+  error?: string
+}
+
+// Fetch available diff bases and current selection
+export async function getDiffBases(): Promise<DiffBasesResult> {
+  try {
+    const response = await criticClient.getDiffBases({})
+    if (response.error) {
+      return {
+        bases: [],
+        currentBase: '',
+        error: response.error.message,
+      }
+    }
+    return {
+      bases: response.bases,
+      currentBase: response.currentBase,
+    }
+  } catch (err) {
+    return {
+      bases: [],
+      currentBase: '',
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
+// Set the current diff base
+export async function setDiffBase(base: string): Promise<SetDiffBaseResult> {
+  try {
+    const response = await criticClient.setDiffBase({ base })
+    if (response.error) {
+      return {
+        success: false,
+        error: response.error.message,
+      }
+    }
+    return {
+      success: response.success,
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
 }

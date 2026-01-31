@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CreateCommentRequest, CreateCommentResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse } from "./critic_pb.js";
+import { CreateCommentRequest, CreateCommentResponse, GetCommentsRequest, GetCommentsResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, SetDiffBaseRequest, SetDiffBaseResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -67,6 +67,39 @@ export const CriticService = {
       name: "CreateComment",
       I: CreateCommentRequest,
       O: CreateCommentResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * GetComments returns all comments/conversations for a specific file.
+     *
+     * @generated from rpc critic.v1.CriticService.GetComments
+     */
+    getComments: {
+      name: "GetComments",
+      I: GetCommentsRequest,
+      O: GetCommentsResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * GetDiffBases returns available diff bases and the current one.
+     *
+     * @generated from rpc critic.v1.CriticService.GetDiffBases
+     */
+    getDiffBases: {
+      name: "GetDiffBases",
+      I: GetDiffBasesRequest,
+      O: GetDiffBasesResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * SetDiffBase sets the current diff base.
+     *
+     * @generated from rpc critic.v1.CriticService.SetDiffBase
+     */
+    setDiffBase: {
+      name: "SetDiffBase",
+      I: SetDiffBaseRequest,
+      O: SetDiffBaseResponse,
       kind: MethodKind.Unary,
     },
   }

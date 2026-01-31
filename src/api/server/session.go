@@ -36,8 +36,6 @@ type Session struct {
 	gitRoot   string
 	messaging critic.Messaging
 	paths     []string
-	// TODO(bot): allow users to switch diffBases from the UI, using the B hotkey.
-	// Also show all valid diffBases in the UI in a dropdown menu.
 	diffBases []string
 
 	// State
@@ -55,14 +53,21 @@ type diffResult struct {
 	err  error
 }
 
-// NewSession creates a new API session.
-func NewSession(gitRoot string, messaging critic.Messaging, paths []string) *Session {
-	return &Session{
+// NewSession creates a new API session with the given diff bases.
+// The first diff base is used as the current base.
+func NewSession(gitRoot string, messaging critic.Messaging, paths []string, diffBases []string) *Session {
+	s := &Session{
 		gitRoot:   gitRoot,
 		messaging: messaging,
 		paths:     paths,
 		state:     StateReady,
 	}
+	if len(diffBases) > 0 {
+		// SetDiffBases sets all valid diff bases and initializes the current base
+		// to be the first of the passed in bases.
+		_ = s.SetDiffBases(diffBases)
+	}
+	return s
 }
 
 // GetState returns the current session state
@@ -77,6 +82,13 @@ func (s *Session) GetCurrentBase() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.currentBase
+}
+
+// GetDiffBases returns the available diff bases
+func (s *Session) GetDiffBases() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]string{}, s.diffBases...)
 }
 
 // GetDiffSummary returns the current diff summary (file list without hunks)

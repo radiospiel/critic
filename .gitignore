@@ -1,5 +1,6 @@
 # critic files
 /critic
+/cmd
 critic.bin
 *.prof
 .critic.db*

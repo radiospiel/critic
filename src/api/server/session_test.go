@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewSession(t *testing.T) {
-	session := NewSession("/test/root", &critic.DummyMessaging{}, []string{"src/"})
+	session := NewSession("/test/root", &critic.DummyMessaging{}, []string{"src/"}, nil)
 
 	assert.NotNil(t, session, "session should not be nil")
 	assert.Equals(t, session.GetState(), StateReady, "initial state should be READY")
@@ -18,7 +18,7 @@ func TestNewSession(t *testing.T) {
 }
 
 func TestSessionState(t *testing.T) {
-	session := NewSession("/test/root", &critic.DummyMessaging{}, []string{})
+	session := NewSession("/test/root", &critic.DummyMessaging{}, []string{}, nil)
 
 	// Initial state
 	assert.Equals(t, session.GetState(), StateReady, "initial state should be READY")

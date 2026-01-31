@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import FileList from './components/FileList'
 import DiffView from './components/DiffView'
+import DiffBaseSelector from './components/DiffBaseSelector'
 import HelpModal from './components/HelpModal'
 import { criticClient } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
@@ -22,7 +23,7 @@ function AppContent() {
   const { theme, toggleTheme } = useTheme()
 
   // Load file list for navigation
-  useEffect(() => {
+  const loadFileList = useCallback(() => {
     criticClient
       .getDiffSummary({})
       .then((response) => {
@@ -32,6 +33,10 @@ function AppContent() {
         console.error('Failed to load file list:', err)
       })
   }, [])
+
+  useEffect(() => {
+    loadFileList()
+  }, [loadFileList])
 
   const loadFileDiff = useCallback((file: string) => {
     setSelectedFile(file)
@@ -48,6 +53,41 @@ function AppContent() {
         setLoading(false)
       })
   }, [])
+
+  // Handle base change - reload file list and preserve current file if still present
+  const handleBaseChange = useCallback(() => {
+    const previousFile = selectedFile
+    setSelectedFileDiff(null)
+    // Wait a moment for the backend to update the diff
+    setTimeout(() => {
+      criticClient
+        .getDiffSummary({})
+        .then((response) => {
+          const newFiles = response.diff?.files || []
+          setFiles(newFiles)
+
+          if (newFiles.length === 0) {
+            setSelectedFile(null)
+            return
+          }
+
+          // Check if the previously selected file still exists
+          const previousFileExists = previousFile && newFiles.some((f) => getFilePath(f) === previousFile)
+
+          if (previousFileExists) {
+            // Reload the same file with new diff base
+            loadFileDiff(previousFile)
+          } else {
+            // Select the first file
+            const firstFile = getFilePath(newFiles[0])
+            loadFileDiff(firstFile)
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load file list:', err)
+        })
+    }, 100)
+  }, [selectedFile, loadFileDiff])
 
   const handleSelectFile = useCallback((file: string, _fileSummary: FileSummary) => {
     loadFileDiff(file)
@@ -105,6 +145,7 @@ function AppContent() {
         <div className="app-header">
           <span>Critic</span>
           <div className="header-buttons">
+            <DiffBaseSelector onBaseChange={handleBaseChange} />
             <button className="help-button" onClick={() => setShowHelp(true)} title="Keyboard shortcuts">
               ?
             </button>

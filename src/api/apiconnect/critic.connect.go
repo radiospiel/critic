@@ -49,6 +49,12 @@ const (
 	// CriticServiceGetCommentsProcedure is the fully-qualified name of the CriticService's GetComments
 	// RPC.
 	CriticServiceGetCommentsProcedure = "/critic.v1.CriticService/GetComments"
+	// CriticServiceGetDiffBasesProcedure is the fully-qualified name of the CriticService's
+	// GetDiffBases RPC.
+	CriticServiceGetDiffBasesProcedure = "/critic.v1.CriticService/GetDiffBases"
+	// CriticServiceSetDiffBaseProcedure is the fully-qualified name of the CriticService's SetDiffBase
+	// RPC.
+	CriticServiceSetDiffBaseProcedure = "/critic.v1.CriticService/SetDiffBase"
 )
 
 // CriticServiceClient is a client for the critic.v1.CriticService service.
@@ -65,6 +71,10 @@ type CriticServiceClient interface {
 	CreateComment(context.Context, *connect.Request[api.CreateCommentRequest]) (*connect.Response[api.CreateCommentResponse], error)
 	// GetComments returns all comments/conversations for a specific file.
 	GetComments(context.Context, *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error)
+	// GetDiffBases returns available diff bases and the current one.
+	GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error)
+	// SetDiffBase sets the current diff base.
+	SetDiffBase(context.Context, *connect.Request[api.SetDiffBaseRequest]) (*connect.Response[api.SetDiffBaseResponse], error)
 }
 
 // NewCriticServiceClient constructs a client for the critic.v1.CriticService service. By default,
@@ -114,6 +124,18 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(criticServiceMethods.ByName("GetComments")),
 			connect.WithClientOptions(opts...),
 		),
+		getDiffBases: connect.NewClient[api.GetDiffBasesRequest, api.GetDiffBasesResponse](
+			httpClient,
+			baseURL+CriticServiceGetDiffBasesProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("GetDiffBases")),
+			connect.WithClientOptions(opts...),
+		),
+		setDiffBase: connect.NewClient[api.SetDiffBaseRequest, api.SetDiffBaseResponse](
+			httpClient,
+			baseURL+CriticServiceSetDiffBaseProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("SetDiffBase")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -125,6 +147,8 @@ type criticServiceClient struct {
 	getFile        *connect.Client[api.GetFileRequest, api.GetFileResponse]
 	createComment  *connect.Client[api.CreateCommentRequest, api.CreateCommentResponse]
 	getComments    *connect.Client[api.GetCommentsRequest, api.GetCommentsResponse]
+	getDiffBases   *connect.Client[api.GetDiffBasesRequest, api.GetDiffBasesResponse]
+	setDiffBase    *connect.Client[api.SetDiffBaseRequest, api.SetDiffBaseResponse]
 }
 
 // GetLastChange calls critic.v1.CriticService.GetLastChange.
@@ -157,6 +181,16 @@ func (c *criticServiceClient) GetComments(ctx context.Context, req *connect.Requ
 	return c.getComments.CallUnary(ctx, req)
 }
 
+// GetDiffBases calls critic.v1.CriticService.GetDiffBases.
+func (c *criticServiceClient) GetDiffBases(ctx context.Context, req *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error) {
+	return c.getDiffBases.CallUnary(ctx, req)
+}
+
+// SetDiffBase calls critic.v1.CriticService.SetDiffBase.
+func (c *criticServiceClient) SetDiffBase(ctx context.Context, req *connect.Request[api.SetDiffBaseRequest]) (*connect.Response[api.SetDiffBaseResponse], error) {
+	return c.setDiffBase.CallUnary(ctx, req)
+}
+
 // CriticServiceHandler is an implementation of the critic.v1.CriticService service.
 type CriticServiceHandler interface {
 	// GetLastChange returns the timestamp of the last change.
@@ -171,6 +205,10 @@ type CriticServiceHandler interface {
 	CreateComment(context.Context, *connect.Request[api.CreateCommentRequest]) (*connect.Response[api.CreateCommentResponse], error)
 	// GetComments returns all comments/conversations for a specific file.
 	GetComments(context.Context, *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error)
+	// GetDiffBases returns available diff bases and the current one.
+	GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error)
+	// SetDiffBase sets the current diff base.
+	SetDiffBase(context.Context, *connect.Request[api.SetDiffBaseRequest]) (*connect.Response[api.SetDiffBaseResponse], error)
 }
 
 // NewCriticServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -216,6 +254,18 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(criticServiceMethods.ByName("GetComments")),
 		connect.WithHandlerOptions(opts...),
 	)
+	criticServiceGetDiffBasesHandler := connect.NewUnaryHandler(
+		CriticServiceGetDiffBasesProcedure,
+		svc.GetDiffBases,
+		connect.WithSchema(criticServiceMethods.ByName("GetDiffBases")),
+		connect.WithHandlerOptions(opts...),
+	)
+	criticServiceSetDiffBaseHandler := connect.NewUnaryHandler(
+		CriticServiceSetDiffBaseProcedure,
+		svc.SetDiffBase,
+		connect.WithSchema(criticServiceMethods.ByName("SetDiffBase")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/critic.v1.CriticService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CriticServiceGetLastChangeProcedure:
@@ -230,6 +280,10 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 			criticServiceCreateCommentHandler.ServeHTTP(w, r)
 		case CriticServiceGetCommentsProcedure:
 			criticServiceGetCommentsHandler.ServeHTTP(w, r)
+		case CriticServiceGetDiffBasesProcedure:
+			criticServiceGetDiffBasesHandler.ServeHTTP(w, r)
+		case CriticServiceSetDiffBaseProcedure:
+			criticServiceSetDiffBaseHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -261,4 +315,12 @@ func (UnimplementedCriticServiceHandler) CreateComment(context.Context, *connect
 
 func (UnimplementedCriticServiceHandler) GetComments(context.Context, *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetComments is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetDiffBases is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) SetDiffBase(context.Context, *connect.Request[api.SetDiffBaseRequest]) (*connect.Response[api.SetDiffBaseResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.SetDiffBase is not implemented"))
 }

@@ -83,6 +83,10 @@ function HelpModal({ onClose }: HelpModalProps) {
                 <span>Show/hide this help</span>
               </div>
               <div className="shortcut-item">
+                <kbd>b</kbd>
+                <span>Toggle diff base selector</span>
+              </div>
+              <div className="shortcut-item">
                 <kbd>Esc</kbd>
                 <span>Close modal</span>
               </div>

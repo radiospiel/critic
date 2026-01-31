@@ -5,6 +5,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/must"
 	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/pkg/critic"
 )
@@ -14,67 +15,46 @@ func (s *Server) CreateComment(
 	ctx context.Context,
 	req *connect.Request[api.CreateCommentRequest],
 ) (*connect.Response[api.CreateCommentResponse], error) {
+	return depanic(func() *connect.Response[api.CreateCommentResponse] {
+		response := createCommentImpl(s, req.Msg)
+		return connect.NewResponse(response)
+	})
+}
+
+func createCommentImpl(server *Server, req *api.CreateCommentRequest) *api.CreateCommentResponse {
 	logger.Info("CreateComment: old_file=%s, old_line=%d, new_file=%s, new_line=%d, comment=%q",
-		req.Msg.GetOldFile(),
-		req.Msg.GetOldLine(),
-		req.Msg.GetNewFile(),
-		req.Msg.GetNewLine(),
-		req.Msg.GetComment(),
+		req.GetOldFile(),
+		req.GetOldLine(),
+		req.GetNewFile(),
+		req.GetNewLine(),
+		req.GetComment(),
 	)
 
 	// Determine file path and line number to use
 	// Prefer new_file/new_line for added/modified lines, fall back to old_file/old_line for deleted lines
-	filePath := req.Msg.GetNewFile()
-	lineNo := int(req.Msg.GetNewLine())
+	// Note: Validation (comment required, file paths, line numbers >= 0) is handled by JSON schema
+	filePath := req.GetNewFile()
+	lineNo := int(req.GetNewLine())
 	if filePath == "" || lineNo == 0 {
-		filePath = req.Msg.GetOldFile()
-		lineNo = int(req.Msg.GetOldLine())
-	}
-
-	// Validate required fields
-	// TODO(bot): replace this validation by a validation with a JSON schema.
-	if filePath == "" {
-		return connect.NewResponse(&api.CreateCommentResponse{
-			Success: false,
-			Error:   api.InvalidArgument("file path is required"),
-		}), nil
-	}
-	if lineNo <= 0 {
-		return connect.NewResponse(&api.CreateCommentResponse{
-			Success: false,
-			Error:   api.InvalidArgument("line number must be positive"),
-		}), nil
-	}
-	if req.Msg.GetComment() == "" {
-		return connect.NewResponse(&api.CreateCommentResponse{
-			Success: false,
-			Error:   api.InvalidArgument("comment is required"),
-		}), nil
+		filePath = req.GetOldFile()
+		lineNo = int(req.GetOldLine())
 	}
 
 	// Get the current commit SHA from the session
-	codeVersion := s.session.HeadCommit()
+	codeVersion := server.session.HeadCommit()
 
 	// Create the conversation using the messaging interface
-	conversation, err := s.config.Messaging.CreateConversation(
+	conversation := must.Must2(server.config.Messaging.CreateConversation(
 		critic.AuthorHuman,
-		req.Msg.GetComment(),
+		req.GetComment(),
 		filePath,
 		lineNo,
 		codeVersion,
 		"", // context - could be enhanced to include surrounding code
-	)
-	if err != nil {
-		logger.Error("Failed to create comment: %v", err)
-		return connect.NewResponse(&api.CreateCommentResponse{
-			Success: false,
-			Error:   api.InternalError("failed to create comment: " + err.Error()),
-		}), nil
-	}
+	))
 
 	logger.Info("Created comment %s at %s:%d", conversation.UUID, filePath, lineNo)
-	res := connect.NewResponse(&api.CreateCommentResponse{
+	return &api.CreateCommentResponse{
 		Success: true,
-	})
-	return res, nil
+	}
 }

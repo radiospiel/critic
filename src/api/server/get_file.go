@@ -14,22 +14,27 @@ func (s *Server) GetFile(
 	ctx context.Context,
 	req *connect.Request[api.GetFileRequest],
 ) (*connect.Response[api.GetFileResponse], error) {
-	path := req.Msg.GetPath()
+	return depanic(func() *connect.Response[api.GetFileResponse] {
+		response := getFileImpl(s, req.Msg)
+		return connect.NewResponse(response)
+	})
+}
+
+func getFileImpl(server *Server, req *api.GetFileRequest) *api.GetFileResponse {
+	path := req.GetPath()
 
 	// Resolve path relative to git root
-	fullPath := filepath.Join(s.config.GitRoot, path)
+	fullPath := filepath.Join(server.config.GitRoot, path)
 
 	// Read file content from working directory
 	content, err := git.GetFileContent(fullPath, "")
 	if err != nil {
-		res := connect.NewResponse(&api.GetFileResponse{
+		return &api.GetFileResponse{
 			Error: api.NotFound("file not found: " + path),
-		})
-		return res, nil
+		}
 	}
 
-	res := connect.NewResponse(&api.GetFileResponse{
+	return &api.GetFileResponse{
 		Content: content,
-	})
-	return res, nil
+	}
 }

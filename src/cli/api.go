@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"runtime/pprof"
 
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api/server"
@@ -13,6 +15,7 @@ func newAPICmd() *cobra.Command {
 	var port int
 	var dev bool
 	var diffBases []string
+	var cpuProfile string
 
 	cmd := &cobra.Command{
 		Use:   "api [flags]",
@@ -28,6 +31,7 @@ Examples:
   critic api                    # Start on default port 65432
   critic api --port=8000        # Start on custom port
   critic api --dev              # Development mode with Vite hot reload
+  critic api --cpuprofile=cpu.prof  # Enable CPU profiling
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -37,6 +41,20 @@ Examples:
 					fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 				}
 			}()
+
+			// Start CPU profiling if requested
+			if cpuProfile != "" {
+				f, err := os.Create(cpuProfile)
+				if err != nil {
+					return fmt.Errorf("could not create CPU profile: %w", err)
+				}
+				defer f.Close()
+				if err := pprof.StartCPUProfile(f); err != nil {
+					return fmt.Errorf("could not start CPU profile: %w", err)
+				}
+				defer pprof.StopCPUProfile()
+				fmt.Fprintf(cmd.ErrOrStderr(), "CPU profiling enabled, writing to %s\n", cpuProfile)
+			}
 
 			// Log to stderr for the API server
 			logger.SetLogFile("/dev/stderr")
@@ -55,6 +73,7 @@ Examples:
 	cmd.Flags().IntVar(&port, "port", 65432, "Port to run the API server on")
 	cmd.Flags().BoolVar(&dev, "dev", false, "Development mode: proxy to Vite dev server for hot reload")
 	cmd.Flags().StringSliceVar(&diffBases, "b", getDefaultBases(), "Diff base commits")
+	cmd.Flags().StringVar(&cpuProfile, "cpuprofile", "", "Write CPU profile to file (use 'go tool pprof' to analyze)")
 
 	return cmd
 }

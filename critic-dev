@@ -6,10 +6,9 @@ echo "Running critic in development mode" >&2
 # Build the critic binary
 make build
 
-# TODO(bot): support a --cpuprofile=critic.prof flag, which execute
-# relevant code portions (the execution of requests) with CPU profiling 
-# enabled. This allows to use the "go tool pprof critic.prof" command to
-# show CPU profile information.
+# CPU profiling is now supported via the --cpuprofile flag:
+#   critic api --cpuprofile=critic.prof
+# Use "go tool pprof critic.prof" to analyze the results.
 
 if [[ "${1:-}" =~ ^(mcp|convo|api)$ ]]; then
     # Other subcommands: pass through as-is
