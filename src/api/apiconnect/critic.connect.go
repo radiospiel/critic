@@ -46,6 +46,9 @@ const (
 	// CriticServiceCreateCommentProcedure is the fully-qualified name of the CriticService's
 	// CreateComment RPC.
 	CriticServiceCreateCommentProcedure = "/critic.v1.CriticService/CreateComment"
+	// CriticServiceGetCommentsProcedure is the fully-qualified name of the CriticService's GetComments
+	// RPC.
+	CriticServiceGetCommentsProcedure = "/critic.v1.CriticService/GetComments"
 )
 
 // CriticServiceClient is a client for the critic.v1.CriticService service.
@@ -60,6 +63,8 @@ type CriticServiceClient interface {
 	GetFile(context.Context, *connect.Request[api.GetFileRequest]) (*connect.Response[api.GetFileResponse], error)
 	// CreateComment creates a new comment on a diff line.
 	CreateComment(context.Context, *connect.Request[api.CreateCommentRequest]) (*connect.Response[api.CreateCommentResponse], error)
+	// GetComments returns all comments/conversations for a specific file.
+	GetComments(context.Context, *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error)
 }
 
 // NewCriticServiceClient constructs a client for the critic.v1.CriticService service. By default,
@@ -103,6 +108,12 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(criticServiceMethods.ByName("CreateComment")),
 			connect.WithClientOptions(opts...),
 		),
+		getComments: connect.NewClient[api.GetCommentsRequest, api.GetCommentsResponse](
+			httpClient,
+			baseURL+CriticServiceGetCommentsProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("GetComments")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -113,6 +124,7 @@ type criticServiceClient struct {
 	getDiff        *connect.Client[api.GetDiffRequest, api.GetDiffResponse]
 	getFile        *connect.Client[api.GetFileRequest, api.GetFileResponse]
 	createComment  *connect.Client[api.CreateCommentRequest, api.CreateCommentResponse]
+	getComments    *connect.Client[api.GetCommentsRequest, api.GetCommentsResponse]
 }
 
 // GetLastChange calls critic.v1.CriticService.GetLastChange.
@@ -140,6 +152,11 @@ func (c *criticServiceClient) CreateComment(ctx context.Context, req *connect.Re
 	return c.createComment.CallUnary(ctx, req)
 }
 
+// GetComments calls critic.v1.CriticService.GetComments.
+func (c *criticServiceClient) GetComments(ctx context.Context, req *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error) {
+	return c.getComments.CallUnary(ctx, req)
+}
+
 // CriticServiceHandler is an implementation of the critic.v1.CriticService service.
 type CriticServiceHandler interface {
 	// GetLastChange returns the timestamp of the last change.
@@ -152,6 +169,8 @@ type CriticServiceHandler interface {
 	GetFile(context.Context, *connect.Request[api.GetFileRequest]) (*connect.Response[api.GetFileResponse], error)
 	// CreateComment creates a new comment on a diff line.
 	CreateComment(context.Context, *connect.Request[api.CreateCommentRequest]) (*connect.Response[api.CreateCommentResponse], error)
+	// GetComments returns all comments/conversations for a specific file.
+	GetComments(context.Context, *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error)
 }
 
 // NewCriticServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -191,6 +210,12 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(criticServiceMethods.ByName("CreateComment")),
 		connect.WithHandlerOptions(opts...),
 	)
+	criticServiceGetCommentsHandler := connect.NewUnaryHandler(
+		CriticServiceGetCommentsProcedure,
+		svc.GetComments,
+		connect.WithSchema(criticServiceMethods.ByName("GetComments")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/critic.v1.CriticService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CriticServiceGetLastChangeProcedure:
@@ -203,6 +228,8 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 			criticServiceGetFileHandler.ServeHTTP(w, r)
 		case CriticServiceCreateCommentProcedure:
 			criticServiceCreateCommentHandler.ServeHTTP(w, r)
+		case CriticServiceGetCommentsProcedure:
+			criticServiceGetCommentsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -230,4 +257,8 @@ func (UnimplementedCriticServiceHandler) GetFile(context.Context, *connect.Reque
 
 func (UnimplementedCriticServiceHandler) CreateComment(context.Context, *connect.Request[api.CreateCommentRequest]) (*connect.Response[api.CreateCommentResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.CreateComment is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) GetComments(context.Context, *connect.Request[api.GetCommentsRequest]) (*connect.Response[api.GetCommentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetComments is not implemented"))
 }

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"errors"
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/samber/lo"
 	"runtime"
@@ -25,6 +26,22 @@ func Must2[T any](val T, err error) T {
 		panic(fmt.Sprintf("Must2() failed: %v", err))
 	}
 	return val
+}
+
+func Depanic[T any](fun func() T) (r T, err error) {
+	defer func() {
+		if recovered := recover(); err != nil {
+			var ok bool
+			if err, ok = recovered.(error); ok {
+				return
+			}
+			err = errors.New("Received panic")
+		}
+	}()
+
+	err = nil
+	r = fun()
+	return
 }
 
 // WriteFile writes content to a file, panicking on error.

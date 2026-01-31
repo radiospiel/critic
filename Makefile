@@ -25,7 +25,9 @@ frontend: $(FRONTEND_DIST)/index.html
 $(FRONTEND_DIST)/index.html: $(FRONTEND_DIR)/package.json $(shell find $(FRONTEND_DIR)/src -type f 2>/dev/null)
 	cd $(FRONTEND_DIR) && npm install && npm run build
 
-test:
+test: 
+	# making the frontend is required because the server embeds the frontend
+	make frontend
 	LOG_FILE=/tmp/critic.test go test ./...
 
 unit-tests:

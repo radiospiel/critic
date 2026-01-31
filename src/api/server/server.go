@@ -90,9 +90,6 @@ func (s *Server) Start() error {
 	// WebSocket
 	mux.HandleFunc("GET /ws", webui.WebSocketHandler(s.wsHub))
 
-	// REST API endpoints (temporary, until proto is regenerated)
-	mux.HandleFunc("GET /api/comments", s.GetCommentsHandler())
-
 	// Serve React app
 	if s.config.Dev {
 		// Try to start Vite dev server
