@@ -38,6 +38,23 @@ export interface GetCommentsResult {
   error?: string
 }
 
+// Alias for new naming convention
+export type GetConversationsResult = GetCommentsResult
+
+// Types for conversation summary
+export interface FileConversationSummary {
+  filePath: string
+  totalCount: number
+  unresolvedCount: number
+  resolvedCount: number
+  hasUnreadAiMessages: boolean
+}
+
+export interface GetConversationsSummaryResult {
+  summaries: FileConversationSummary[]
+  error?: string
+}
+
 // Convert generated protobuf Message to CommentMessage interface
 function convertMessage(msg: Message): CommentMessage {
   return {
@@ -138,6 +155,52 @@ export async function setDiffBase(base: string): Promise<SetDiffBaseResult> {
   } catch (err) {
     return {
       success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
+// Alias for new naming convention (GetConversations = GetComments)
+export const getConversations = getComments
+
+// Fetch conversation summaries for all files
+export async function getConversationsSummary(): Promise<GetConversationsSummaryResult> {
+  try {
+    // Use the REST endpoint since proto isn't regenerated yet
+    const response = await fetch('/api/conversations/summary')
+    if (!response.ok) {
+      return {
+        summaries: [],
+        error: `HTTP error: ${response.status}`,
+      }
+    }
+    const data = await response.json()
+    if (data.error) {
+      return {
+        summaries: [],
+        error: data.error.message,
+      }
+    }
+    // Convert snake_case from JSON to camelCase
+    const summaries: FileConversationSummary[] = (data.summaries || []).map(
+      (s: {
+        file_path: string
+        total_count: number
+        unresolved_count: number
+        resolved_count: number
+        has_unread_ai_messages: boolean
+      }) => ({
+        filePath: s.file_path,
+        totalCount: s.total_count,
+        unresolvedCount: s.unresolved_count,
+        resolvedCount: s.resolved_count,
+        hasUnreadAiMessages: s.has_unread_ai_messages,
+      })
+    )
+    return { summaries }
+  } catch (err) {
+    return {
+      summaries: [],
       error: err instanceof Error ? err.message : 'Unknown error',
     }
   }

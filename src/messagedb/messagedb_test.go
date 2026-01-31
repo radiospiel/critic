@@ -372,3 +372,110 @@ func TestReadByAIFieldDefaultsFalse(t *testing.T) {
 	retrieved, _ := db.GetMessage(msg.ID)
 	assert.False(t, retrieved.ReadByAI, "expected ReadByAI to default to false")
 }
+
+func TestGetAllConversationsSummary(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create conversations in different files
+	conv1, _ := db.CreateMessage(AuthorHuman, "Unresolved 1", "src/main.go", 10, "abc123", "content")
+	_, _ = db.CreateMessage(AuthorHuman, "Unresolved 2", "src/main.go", 20, "abc123", "content")
+	conv3, _ := db.CreateMessage(AuthorHuman, "Resolved", "src/util.go", 5, "abc123", "content")
+	_, _ = db.CreateMessage(AuthorHuman, "Another unresolved", "src/util.go", 15, "abc123", "content")
+
+	// Add replies (should not affect conversation count)
+	db.CreateReply(AuthorAI, "Reply to conv1", conv1.ID)
+	db.CreateReply(AuthorAI, "Reply to conv3", conv3.ID)
+
+	// Mark conv3 as resolved
+	db.MarkAsResolved(conv3.ID)
+
+	// Get all conversation summaries
+	summaries, err := db.GetAllConversationsSummary()
+	assert.NoError(t, err, "failed to get conversation summaries")
+	assert.Equals(t, len(summaries), 2, "expected 2 files with conversations")
+
+	// Find summaries by file path
+	var mainGoSummary, utilGoSummary *struct {
+		FilePath            string
+		TotalCount          int
+		UnresolvedCount     int
+		ResolvedCount       int
+		HasUnreadAIMessages bool
+	}
+	for _, s := range summaries {
+		if s.FilePath == "src/main.go" {
+			mainGoSummary = &struct {
+				FilePath            string
+				TotalCount          int
+				UnresolvedCount     int
+				ResolvedCount       int
+				HasUnreadAIMessages bool
+			}{s.FilePath, s.TotalCount, s.UnresolvedCount, s.ResolvedCount, s.HasUnreadAIMessages}
+		} else if s.FilePath == "src/util.go" {
+			utilGoSummary = &struct {
+				FilePath            string
+				TotalCount          int
+				UnresolvedCount     int
+				ResolvedCount       int
+				HasUnreadAIMessages bool
+			}{s.FilePath, s.TotalCount, s.UnresolvedCount, s.ResolvedCount, s.HasUnreadAIMessages}
+		}
+	}
+
+	// Verify main.go summary
+	assert.NotNil(t, mainGoSummary, "expected summary for src/main.go")
+	assert.Equals(t, mainGoSummary.TotalCount, 2, "expected 2 conversations in src/main.go")
+	assert.Equals(t, mainGoSummary.UnresolvedCount, 2, "expected 2 unresolved conversations in src/main.go")
+	assert.Equals(t, mainGoSummary.ResolvedCount, 0, "expected 0 resolved conversations in src/main.go")
+
+	// Verify util.go summary
+	assert.NotNil(t, utilGoSummary, "expected summary for src/util.go")
+	assert.Equals(t, utilGoSummary.TotalCount, 2, "expected 2 conversations in src/util.go")
+	assert.Equals(t, utilGoSummary.UnresolvedCount, 1, "expected 1 unresolved conversation in src/util.go")
+	assert.Equals(t, utilGoSummary.ResolvedCount, 1, "expected 1 resolved conversation in src/util.go")
+}
+
+func TestGetAllConversationsSummaryEmpty(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Get summaries with no conversations
+	summaries, err := db.GetAllConversationsSummary()
+	assert.NoError(t, err, "failed to get empty conversation summaries")
+	assert.Equals(t, len(summaries), 0, "expected 0 summaries with no conversations")
+}
+
+func TestGetAllConversationsSummaryWithUnreadAI(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create conversation with unread AI reply
+	conv1, _ := db.CreateMessage(AuthorHuman, "Human comment", "src/main.go", 10, "abc123", "content")
+	db.CreateReply(AuthorAI, "AI reply (unread)", conv1.ID)
+
+	// Create conversation without AI reply
+	db.CreateMessage(AuthorHuman, "Human only", "src/util.go", 5, "abc123", "content")
+
+	// Create conversation with read AI reply
+	conv3, _ := db.CreateMessage(AuthorHuman, "Human comment", "src/test.go", 15, "abc123", "content")
+	aiReply, _ := db.CreateReply(AuthorAI, "AI reply", conv3.ID)
+	db.MarkAsRead(aiReply.ID)
+
+	// Get summaries
+	summaries, err := db.GetAllConversationsSummary()
+	assert.NoError(t, err, "failed to get conversation summaries")
+	assert.Equals(t, len(summaries), 3, "expected 3 files with conversations")
+
+	// Find and verify unread AI status
+	for _, s := range summaries {
+		switch s.FilePath {
+		case "src/main.go":
+			assert.True(t, s.HasUnreadAIMessages, "expected src/main.go to have unread AI messages")
+		case "src/util.go":
+			assert.False(t, s.HasUnreadAIMessages, "expected src/util.go to have no unread AI messages")
+		case "src/test.go":
+			assert.False(t, s.HasUnreadAIMessages, "expected src/test.go to have no unread AI messages (all read)")
+		}
+	}
+}

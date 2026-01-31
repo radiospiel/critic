@@ -14,10 +14,12 @@ service CriticService {
   rpc GetDiff(GetDiffRequest) returns (GetDiffResponse);
   // GetFile returns the content of a file at a specific path.
   rpc GetFile(GetFileRequest) returns (GetFileResponse);
-  // CreateComment creates a new comment on a diff line.
-  rpc CreateComment(CreateCommentRequest) returns (CreateCommentResponse);
-  // GetComments returns all comments/conversations for a specific file.
-  rpc GetComments(GetCommentsRequest) returns (GetCommentsResponse);
+  // CreateConversation creates a new conversation on a diff line.
+  rpc CreateConversation(CreateConversationRequest) returns (CreateConversationResponse);
+  // GetConversations returns all conversations for a specific file.
+  rpc GetConversations(GetConversationsRequest) returns (GetConversationsResponse);
+  // GetConversationsSummary returns conversation counts and status per file path.
+  rpc GetConversationsSummary(GetConversationsSummaryRequest) returns (GetConversationsSummaryResponse);
   // GetDiffBases returns available diff bases and the current one.
   rpc GetDiffBases(GetDiffBasesRequest) returns (GetDiffBasesResponse);
   // SetDiffBase sets the current diff base.
@@ -168,8 +170,8 @@ message GetFileResponse {
   RpcError error = 15;
 }
 
-// CreateCommentRequest contains the data for creating a new comment.
-message CreateCommentRequest {
+// CreateConversationRequest contains the data for creating a new conversation.
+message CreateConversationRequest {
   // old_file is the path to the file in the old version (before the change).
   string old_file = 1;
   // old_line is the line number in the old file.
@@ -182,26 +184,52 @@ message CreateCommentRequest {
   string comment = 5;
 }
 
-// CreateCommentResponse contains the result of creating a comment.
-message CreateCommentResponse {
-  // success indicates whether the comment was created successfully.
+// CreateConversationResponse contains the result of creating a conversation.
+message CreateConversationResponse {
+  // success indicates whether the conversation was created successfully.
   bool success = 1;
   // error contains error details if the request failed.
   RpcError error = 15;
 }
 
-// GetCommentsRequest requests all comments for a specific file.
-message GetCommentsRequest {
-  // path is the file path to get comments for.
+// GetConversationsRequest requests all conversations for a specific file.
+message GetConversationsRequest {
+  // path is the file path to get conversations for.
   string path = 1;
 }
 
-// GetCommentsResponse contains all conversations/comments for a file.
-message GetCommentsResponse {
-  // conversations is the list of comment threads for the file.
+// GetConversationsResponse contains all conversations for a file.
+message GetConversationsResponse {
+  // conversations is the list of conversation threads for the file.
   repeated Conversation conversations = 1;
   // error contains error details if the request failed.
   RpcError error = 15;
+}
+
+// GetConversationsSummaryRequest requests conversation summaries for all files.
+message GetConversationsSummaryRequest {}
+
+// GetConversationsSummaryResponse contains conversation summaries by file path.
+message GetConversationsSummaryResponse {
+  // summaries is a map of file paths to their conversation summaries.
+  // Only includes files that have conversations.
+  repeated FileConversationSummary summaries = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// FileConversationSummary contains conversation summary for a single file.
+message FileConversationSummary {
+  // file_path is the git-relative path to the file.
+  string file_path = 1;
+  // total_count is the total number of conversations for this file.
+  int32 total_count = 2;
+  // unresolved_count is the number of unresolved conversations.
+  int32 unresolved_count = 3;
+  // resolved_count is the number of resolved conversations.
+  int32 resolved_count = 4;
+  // has_unread_ai_messages indicates if there are unread AI messages.
+  bool has_unread_ai_messages = 5;
 }
 
 // Conversation represents a comment thread at a specific line.

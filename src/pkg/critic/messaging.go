@@ -52,6 +52,15 @@ type FileConversationSummary struct {
 	HasUnreadAIMessages   bool
 }
 
+// FileConversationSummaryWithCounts contains conversation counts for a specific file
+type FileConversationSummaryWithCounts struct {
+	FilePath            string
+	TotalCount          int
+	UnresolvedCount     int
+	ResolvedCount       int
+	HasUnreadAIMessages bool
+}
+
 // Messaging defines the interface for managing critic Conversations
 type Messaging interface {
 	// GetConversations returns a list of root-level Conversations
@@ -70,6 +79,10 @@ type Messaging interface {
 	// GetFileConversationSummary returns a summary of Conversations for a file
 	// This is used for efficient file list rendering
 	GetFileConversationSummary(filePath string) (*FileConversationSummary, error)
+
+	// GetAllConversationsSummary returns a summary of conversations grouped by file path.
+	// Only returns files that have conversations.
+	GetAllConversationsSummary() ([]*FileConversationSummaryWithCounts, error)
 
 	// ReplyToConversation adds a reply to an existing conversation
 	ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error)
@@ -133,6 +146,27 @@ func (m *DummyMessaging) GetConversationsForFile(filePath string) ([]*Conversati
 
 func (m *DummyMessaging) GetFileConversationSummary(filePath string) (*FileConversationSummary, error) {
 	return m.Summaries[filePath], nil
+}
+
+func (m *DummyMessaging) GetAllConversationsSummary() ([]*FileConversationSummaryWithCounts, error) {
+	var result []*FileConversationSummaryWithCounts
+	for filePath, convs := range m.Conversations {
+		if len(convs) > 0 {
+			summary := &FileConversationSummaryWithCounts{
+				FilePath:   filePath,
+				TotalCount: len(convs),
+			}
+			for _, c := range convs {
+				if c.Status == StatusUnresolved {
+					summary.UnresolvedCount++
+				} else {
+					summary.ResolvedCount++
+				}
+			}
+			result = append(result, summary)
+		}
+	}
+	return result, nil
 }
 
 func (m *DummyMessaging) ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error) {

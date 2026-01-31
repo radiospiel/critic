@@ -259,6 +259,57 @@ func (db *DB) CreateConversation(author critic.Author, message, filePath string,
 	return conversation, nil
 }
 
+// GetAllConversationsSummary returns a summary of conversations grouped by file path.
+// Only returns files that have conversations.
+func (db *DB) GetAllConversationsSummary() ([]*critic.FileConversationSummaryWithCounts, error) {
+	query := `
+		SELECT
+			file_path,
+			COUNT(*) as total_count,
+			SUM(CASE WHEN status != 'resolved' THEN 1 ELSE 0 END) as unresolved_count,
+			SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved_count,
+			MAX(CASE WHEN author = 'ai' AND read_status = 'unread' THEN 1 ELSE 0 END) as has_unread_ai
+		FROM messages
+		WHERE id = conversation_id
+		GROUP BY file_path
+		ORDER BY file_path
+	`
+
+	rows, err := db.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query conversation summaries: %w", err)
+	}
+	defer rows.Close()
+
+	var summaries []*critic.FileConversationSummaryWithCounts
+	for rows.Next() {
+		var summary critic.FileConversationSummaryWithCounts
+		var hasUnreadAI int
+		if err := rows.Scan(&summary.FilePath, &summary.TotalCount, &summary.UnresolvedCount, &summary.ResolvedCount, &hasUnreadAI); err != nil {
+			return nil, fmt.Errorf("failed to scan conversation summary: %w", err)
+		}
+		summary.HasUnreadAIMessages = hasUnreadAI == 1
+		summaries = append(summaries, &summary)
+	}
+
+	// Also check for unread AI messages in replies (not just root messages)
+	for _, summary := range summaries {
+		if !summary.HasUnreadAIMessages {
+			unreadQuery := `
+				SELECT COUNT(*) FROM messages
+				WHERE file_path = ? AND author = 'ai' AND read_status = 'unread'
+			`
+			var count int
+			if err := db.db.QueryRow(unreadQuery, summary.FilePath).Scan(&count); err == nil && count > 0 {
+				summary.HasUnreadAIMessages = true
+			}
+		}
+	}
+
+	logger.Debug("Found conversation summaries for %d files", len(summaries))
+	return summaries, nil
+}
+
 // convertToCriticStatus converts messagedb.Status to critic.ConversationStatus
 func convertToCriticStatus(status Status) critic.ConversationStatus {
 	if status == StatusResolved {

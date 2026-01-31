@@ -85,6 +85,11 @@ func (s *Server) Start() error {
 	path, handler := apiconnect.NewCriticServiceHandler(s, interceptors)
 	mux.Handle(path, handler)
 
+	// Custom endpoints not yet in the generated Connect-RPC code
+	// GetConversationsSummary - returns conversation counts per file
+	mux.HandleFunc("POST /critic.v1.CriticService/GetConversationsSummary", s.GetConversationsSummaryHTTPHandler())
+	mux.HandleFunc("GET /api/conversations/summary", s.GetConversationsSummaryHTTPHandler())
+
 	// WebSocket
 	mux.HandleFunc("GET /ws", webui.WebSocketHandler(s.wsHub))
 
