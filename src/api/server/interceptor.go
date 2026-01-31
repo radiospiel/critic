@@ -9,18 +9,41 @@ import (
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
+const maxLogLength = 200
+
 // toJSON converts a value to its JSON representation for logging.
+// Uses protojson for protobuf messages (canonical conversion).
+// Truncates output to maxLogLength characters.
 func toJSON(v any) string {
 	if v == nil {
 		return "null"
 	}
-	data, err := json.Marshal(v)
-	if err != nil {
-		return fmt.Sprintf("<error: %v>", err)
+
+	var s string
+	if msg, ok := v.(proto.Message); ok {
+		// Use canonical protojson for protobuf messages
+		s = protojson.Format(msg)
+	} else {
+		data, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprintf("<error: %v>", err)
+		}
+		s = string(data)
 	}
-	return string(data)
+
+	return truncate(s, maxLogLength)
+}
+
+// truncate cuts the string to maxLen characters, appending "..." if truncated.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 // loggingInterceptor logs gRPC requests and responses using JSON format

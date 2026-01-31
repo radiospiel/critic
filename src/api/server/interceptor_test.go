@@ -23,6 +23,48 @@ func TestToJSON(t *testing.T) {
 	m := map[string]any{"key": "value"}
 	result = toJSON(m)
 	assert.Contains(t, result, `"key":"value"`, "should contain JSON field")
+
+	// Test with protobuf message (uses protojson)
+	req := &api.GetDiffRequest{Path: "src/main.go"}
+	result = toJSON(req)
+	assert.Contains(t, result, `"path":`, "protobuf message should contain path field")
+	assert.Contains(t, result, `src/main.go`, "protobuf message should contain path value")
+}
+
+func TestToJSON_Truncation(t *testing.T) {
+	// Create a large protobuf response that exceeds maxLogLength (200)
+	files := make([]*api.FileSummary, 20)
+	for i := range files {
+		files[i] = &api.FileSummary{
+			OldPath: "very/long/path/to/file/number" + string(rune('A'+i)) + ".go",
+			NewPath: "very/long/path/to/file/number" + string(rune('A'+i)) + ".go",
+			Status:  api.FileStatus_FILE_STATUS_MODIFIED,
+		}
+	}
+	resp := &api.GetDiffSummaryResponse{
+		State: "clean",
+		Diff:  &api.DiffSummary{Files: files},
+	}
+
+	result := toJSON(resp)
+	assert.True(t, len(result) <= maxLogLength+3, "should truncate to maxLogLength+3 (for '...')")
+	assert.Contains(t, result, "...", "truncated output should end with ...")
+}
+
+func TestTruncate(t *testing.T) {
+	// Short string - no truncation
+	short := "hello"
+	assert.Equals(t, truncate(short, 10), "hello", "short strings should not be truncated")
+
+	// Exact length - no truncation
+	exact := "1234567890"
+	assert.Equals(t, truncate(exact, 10), "1234567890", "exact length should not be truncated")
+
+	// Long string - truncated
+	long := "12345678901234567890"
+	result := truncate(long, 10)
+	assert.Equals(t, result, "1234567890...", "long strings should be truncated with ...")
+	assert.Equals(t, len(result), 13, "truncated length should be maxLen + 3")
 }
 
 func TestValidateRequest_GetDiff_MissingPath(t *testing.T) {
