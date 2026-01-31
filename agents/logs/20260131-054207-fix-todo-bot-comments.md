@@ -1,9 +1,9 @@
 # Task: Address TODO(bot) comments in codebase
 
 **Started:** 2026-01-31 05:42:07
-**Ended:** 2026-01-31 05:53:12
+**Ended:** 2026-01-31 08:56:33
 **Strategy:** Mixed (Feature, Refactoring, Bug Fix)
-**Status:** Completed (partial - remaining items require frontend work or more design)
+**Status:** Completed (7 of 9 items - remaining 2 require TUI/CLI design work)
 **Complexity:** Medium
 **Used Models:** Opus
 
@@ -29,28 +29,31 @@ Find and address all TODO(bot) comments in the codebase.
 - [x] Refactor CreateComment to follow GetComments pattern (create_comment.go) - Uses depanic wrapper
 - [x] Add JSON schema validation (create_comment.go) - Added schema in schema.go
 - [x] Add --cpuprofile flag (api.go) - Added to api command
+- [x] Refactor all GRPC handlers to use depanic pattern (get_diff.go, get_diff_summary.go, get_file.go, get_last_change.go)
+- [x] Adjust webui to fetch comments from grpc - Updated client.ts, regenerated TypeScript types
 - [ ] Add type filtering (session.go) - Requires CLI changes and more design
-- [ ] Add UI diff base switching (session.go) - Requires frontend work
-- [ ] Adjust webui to fetch comments from grpc (get_comments.go) - Requires frontend work
+- [ ] Add UI diff base switching (session.go) - Requires TUI work
 
 ## Obstacles
-None significant. The remaining items require frontend work or more design decisions.
+None significant. The remaining items require TUI work or CLI design decisions.
 
 ## Outcome
-Completed 6 out of 9 TODO(bot) items:
+Completed 7 out of 9 TODO(bot) items:
 - Fixed LRU cache race condition
 - Added comprehensive GetComments tests
 - Refactored NewSession to accept DiffBases
 - Refactored CreateComment to follow GetComments pattern
 - Added JSON schema validation for CreateComment
 - Added --cpuprofile flag for CPU profiling
+- Refactored all GRPC handlers to use depanic wrapper pattern
+- Updated webui to fetch comments via GRPC instead of REST
 
-Remaining 3 items need additional work:
+Remaining 2 items need additional work:
 - Type filtering requires CLI design and implementation
-- UI diff base switching requires frontend React work
-- Webui comments from grpc requires frontend React work
+- UI diff base switching requires TUI work
 
 ## Insights
 - The codebase has a well-established pattern for GRPC handlers using `depanic` wrappers
 - JSON schema validation is centralized in schema.go
-- Frontend TODO items should be addressed separately from backend items
+- Frontend uses Connect-RPC with generated TypeScript types from proto files
+- Proto regeneration: `cd src/webui/frontend && npx buf generate ../../api/proto`
