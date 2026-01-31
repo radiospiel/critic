@@ -4,7 +4,7 @@
 // @ts-nocheck
 
 import type { BinaryReadOptions, FieldList, JsonReadOptions, JsonValue, PartialMessage, PlainMessage } from "@bufbuild/protobuf";
-import { Message, proto3, protoInt64 } from "@bufbuild/protobuf";
+import { Message as Message$1, proto3, protoInt64 } from "@bufbuild/protobuf";
 
 /**
  * ErrorCode represents the type of RPC error.
@@ -125,7 +125,7 @@ proto3.util.setEnumType(LineType, "critic.v1.LineType", [
  *
  * @generated from message critic.v1.RpcError
  */
-export class RpcError extends Message<RpcError> {
+export class RpcError extends Message$1<RpcError> {
   /**
    * code is the error type.
    *
@@ -182,7 +182,7 @@ export class RpcError extends Message<RpcError> {
  *
  * @generated from message critic.v1.GetLastChangeRequest
  */
-export class GetLastChangeRequest extends Message<GetLastChangeRequest> {
+export class GetLastChangeRequest extends Message$1<GetLastChangeRequest> {
   constructor(data?: PartialMessage<GetLastChangeRequest>) {
     super();
     proto3.util.initPartial(data, this);
@@ -215,7 +215,7 @@ export class GetLastChangeRequest extends Message<GetLastChangeRequest> {
  *
  * @generated from message critic.v1.GetLastChangeResponse
  */
-export class GetLastChangeResponse extends Message<GetLastChangeResponse> {
+export class GetLastChangeResponse extends Message$1<GetLastChangeResponse> {
   /**
    * mtime_msecs is the timestamp in milliseconds since Unix epoch.
    *
@@ -264,7 +264,7 @@ export class GetLastChangeResponse extends Message<GetLastChangeResponse> {
  *
  * @generated from message critic.v1.GetDiffSummaryRequest
  */
-export class GetDiffSummaryRequest extends Message<GetDiffSummaryRequest> {
+export class GetDiffSummaryRequest extends Message$1<GetDiffSummaryRequest> {
   constructor(data?: PartialMessage<GetDiffSummaryRequest>) {
     super();
     proto3.util.initPartial(data, this);
@@ -297,7 +297,7 @@ export class GetDiffSummaryRequest extends Message<GetDiffSummaryRequest> {
  *
  * @generated from message critic.v1.GetDiffSummaryResponse
  */
-export class GetDiffSummaryResponse extends Message<GetDiffSummaryResponse> {
+export class GetDiffSummaryResponse extends Message$1<GetDiffSummaryResponse> {
   /**
    * state is the current session state ("INITIALISING" or "READY").
    *
@@ -354,7 +354,7 @@ export class GetDiffSummaryResponse extends Message<GetDiffSummaryResponse> {
  *
  * @generated from message critic.v1.GetDiffRequest
  */
-export class GetDiffRequest extends Message<GetDiffRequest> {
+export class GetDiffRequest extends Message$1<GetDiffRequest> {
   /**
    * path is the file path to get the diff for.
    *
@@ -395,7 +395,7 @@ export class GetDiffRequest extends Message<GetDiffRequest> {
  *
  * @generated from message critic.v1.GetDiffResponse
  */
-export class GetDiffResponse extends Message<GetDiffResponse> {
+export class GetDiffResponse extends Message$1<GetDiffResponse> {
   /**
    * file contains the full file diff with hunks.
    *
@@ -444,7 +444,7 @@ export class GetDiffResponse extends Message<GetDiffResponse> {
  *
  * @generated from message critic.v1.DiffSummary
  */
-export class DiffSummary extends Message<DiffSummary> {
+export class DiffSummary extends Message$1<DiffSummary> {
   /**
    * @generated from field: repeated critic.v1.FileSummary files = 1;
    */
@@ -483,7 +483,7 @@ export class DiffSummary extends Message<DiffSummary> {
  *
  * @generated from message critic.v1.FileSummary
  */
-export class FileSummary extends Message<FileSummary> {
+export class FileSummary extends Message$1<FileSummary> {
   /**
    * @generated from field: string old_path = 1;
    */
@@ -552,7 +552,7 @@ export class FileSummary extends Message<FileSummary> {
  *
  * @generated from message critic.v1.Diff
  */
-export class Diff extends Message<Diff> {
+export class Diff extends Message$1<Diff> {
   /**
    * @generated from field: repeated critic.v1.FileDiff files = 1;
    */
@@ -591,7 +591,7 @@ export class Diff extends Message<Diff> {
  *
  * @generated from message critic.v1.FileDiff
  */
-export class FileDiff extends Message<FileDiff> {
+export class FileDiff extends Message$1<FileDiff> {
   /**
    * @generated from field: string old_path = 1;
    */
@@ -666,7 +666,7 @@ export class FileDiff extends Message<FileDiff> {
  *
  * @generated from message critic.v1.Hunk
  */
-export class Hunk extends Message<Hunk> {
+export class Hunk extends Message$1<Hunk> {
   /**
    * @generated from field: int32 old_start = 1;
    */
@@ -741,7 +741,7 @@ export class Hunk extends Message<Hunk> {
  *
  * @generated from message critic.v1.HunkStats
  */
-export class HunkStats extends Message<HunkStats> {
+export class HunkStats extends Message$1<HunkStats> {
   /**
    * @generated from field: int32 added = 1;
    */
@@ -786,7 +786,7 @@ export class HunkStats extends Message<HunkStats> {
  *
  * @generated from message critic.v1.Line
  */
-export class Line extends Message<Line> {
+export class Line extends Message$1<Line> {
   /**
    * @generated from field: critic.v1.LineType type = 1;
    */
@@ -843,7 +843,7 @@ export class Line extends Message<Line> {
  *
  * @generated from message critic.v1.GetFileRequest
  */
-export class GetFileRequest extends Message<GetFileRequest> {
+export class GetFileRequest extends Message$1<GetFileRequest> {
   /**
    * path is the file path to read.
    *
@@ -884,7 +884,7 @@ export class GetFileRequest extends Message<GetFileRequest> {
  *
  * @generated from message critic.v1.GetFileResponse
  */
-export class GetFileResponse extends Message<GetFileResponse> {
+export class GetFileResponse extends Message$1<GetFileResponse> {
   /**
    * content is the file content.
    *
@@ -933,7 +933,7 @@ export class GetFileResponse extends Message<GetFileResponse> {
  *
  * @generated from message critic.v1.CreateCommentRequest
  */
-export class CreateCommentRequest extends Message<CreateCommentRequest> {
+export class CreateCommentRequest extends Message$1<CreateCommentRequest> {
   /**
    * old_file is the path to the file in the old version (before the change).
    *
@@ -1006,7 +1006,7 @@ export class CreateCommentRequest extends Message<CreateCommentRequest> {
  *
  * @generated from message critic.v1.CreateCommentResponse
  */
-export class CreateCommentResponse extends Message<CreateCommentResponse> {
+export class CreateCommentResponse extends Message$1<CreateCommentResponse> {
   /**
    * success indicates whether the comment was created successfully.
    *
@@ -1047,6 +1047,282 @@ export class CreateCommentResponse extends Message<CreateCommentResponse> {
 
   static equals(a: CreateCommentResponse | PlainMessage<CreateCommentResponse> | undefined, b: CreateCommentResponse | PlainMessage<CreateCommentResponse> | undefined): boolean {
     return proto3.util.equals(CreateCommentResponse, a, b);
+  }
+}
+
+/**
+ * GetCommentsRequest requests all comments for a specific file.
+ *
+ * @generated from message critic.v1.GetCommentsRequest
+ */
+export class GetCommentsRequest extends Message$1<GetCommentsRequest> {
+  /**
+   * path is the file path to get comments for.
+   *
+   * @generated from field: string path = 1;
+   */
+  path = "";
+
+  constructor(data?: PartialMessage<GetCommentsRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetCommentsRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCommentsRequest {
+    return new GetCommentsRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetCommentsRequest {
+    return new GetCommentsRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetCommentsRequest {
+    return new GetCommentsRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetCommentsRequest | PlainMessage<GetCommentsRequest> | undefined, b: GetCommentsRequest | PlainMessage<GetCommentsRequest> | undefined): boolean {
+    return proto3.util.equals(GetCommentsRequest, a, b);
+  }
+}
+
+/**
+ * GetCommentsResponse contains all conversations/comments for a file.
+ *
+ * @generated from message critic.v1.GetCommentsResponse
+ */
+export class GetCommentsResponse extends Message$1<GetCommentsResponse> {
+  /**
+   * conversations is the list of comment threads for the file.
+   *
+   * @generated from field: repeated critic.v1.Conversation conversations = 1;
+   */
+  conversations: Conversation[] = [];
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<GetCommentsResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetCommentsResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "conversations", kind: "message", T: Conversation, repeated: true },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetCommentsResponse {
+    return new GetCommentsResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetCommentsResponse {
+    return new GetCommentsResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetCommentsResponse {
+    return new GetCommentsResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetCommentsResponse | PlainMessage<GetCommentsResponse> | undefined, b: GetCommentsResponse | PlainMessage<GetCommentsResponse> | undefined): boolean {
+    return proto3.util.equals(GetCommentsResponse, a, b);
+  }
+}
+
+/**
+ * Conversation represents a comment thread at a specific line.
+ *
+ * @generated from message critic.v1.Conversation
+ */
+export class Conversation extends Message$1<Conversation> {
+  /**
+   * id is the unique identifier for this conversation.
+   *
+   * @generated from field: string id = 1;
+   */
+  id = "";
+
+  /**
+   * status is the conversation status ("unresolved" or "resolved").
+   *
+   * @generated from field: string status = 2;
+   */
+  status = "";
+
+  /**
+   * file_path is the git-relative path to the file.
+   *
+   * @generated from field: string file_path = 3;
+   */
+  filePath = "";
+
+  /**
+   * line_number is the line number in the file.
+   *
+   * @generated from field: int32 line_number = 4;
+   */
+  lineNumber = 0;
+
+  /**
+   * code_version is the git commit SHA when the comment was created.
+   *
+   * @generated from field: string code_version = 5;
+   */
+  codeVersion = "";
+
+  /**
+   * context is the code context around the commented line.
+   *
+   * @generated from field: string context = 6;
+   */
+  context = "";
+
+  /**
+   * messages is the list of messages in this conversation.
+   *
+   * @generated from field: repeated critic.v1.Message messages = 7;
+   */
+  messages: Message[] = [];
+
+  /**
+   * created_at is the timestamp when the conversation was created.
+   *
+   * @generated from field: string created_at = 8;
+   */
+  createdAt = "";
+
+  /**
+   * updated_at is the timestamp when the conversation was last updated.
+   *
+   * @generated from field: string updated_at = 9;
+   */
+  updatedAt = "";
+
+  constructor(data?: PartialMessage<Conversation>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.Conversation";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 5, name: "code_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "context", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 7, name: "messages", kind: "message", T: Message, repeated: true },
+    { no: 8, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 9, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Conversation {
+    return new Conversation().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Conversation {
+    return new Conversation().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Conversation {
+    return new Conversation().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: Conversation | PlainMessage<Conversation> | undefined, b: Conversation | PlainMessage<Conversation> | undefined): boolean {
+    return proto3.util.equals(Conversation, a, b);
+  }
+}
+
+/**
+ * Message represents a single message in a conversation.
+ *
+ * @generated from message critic.v1.Message
+ */
+export class Message extends Message$1<Message> {
+  /**
+   * id is the unique identifier for this message.
+   *
+   * @generated from field: string id = 1;
+   */
+  id = "";
+
+  /**
+   * author is who authored the message ("human" or "ai").
+   *
+   * @generated from field: string author = 2;
+   */
+  author = "";
+
+  /**
+   * content is the message content.
+   *
+   * @generated from field: string content = 3;
+   */
+  content = "";
+
+  /**
+   * created_at is the timestamp when the message was created.
+   *
+   * @generated from field: string created_at = 4;
+   */
+  createdAt = "";
+
+  /**
+   * updated_at is the timestamp when the message was last updated.
+   *
+   * @generated from field: string updated_at = 5;
+   */
+  updatedAt = "";
+
+  /**
+   * is_unread indicates whether the message is unread (for AI messages).
+   *
+   * @generated from field: bool is_unread = 6;
+   */
+  isUnread = false;
+
+  constructor(data?: PartialMessage<Message>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.Message";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "author", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "content", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 5, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "is_unread", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Message {
+    return new Message().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Message {
+    return new Message().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Message {
+    return new Message().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: Message | PlainMessage<Message> | undefined, b: Message | PlainMessage<Message> | undefined): boolean {
+    return proto3.util.equals(Message, a, b);
   }
 }
 

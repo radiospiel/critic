@@ -10,8 +10,6 @@ import (
 	"github.com/samber/lo"
 )
 
-// TODO(bot) adjust the webui to fetch comments from the grpc call.
-
 // GetComments returns comments on a file at a specific path.
 func (s *Server) GetComments(
 	ctx context.Context,
