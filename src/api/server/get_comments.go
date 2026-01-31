@@ -10,18 +10,25 @@ import (
 	"github.com/samber/lo"
 )
 
+// TODO(bot) reimplement GRPC implementations following the pattern of GetComments:
+// - set up a xxxImpl function which accepts the server and the request, and that
+//   returns the response, and that panics on error.
+// - have a generic wrapper that depanics the call to the impl.
+
+// TODO(bot) adjust the webui to fetch comments from the grpc call.
+
 // GetComments returns comments on a file at a specific path.
 func (s *Server) GetComments(
 	ctx context.Context,
 	req *connect.Request[api.GetCommentsRequest],
 ) (*connect.Response[api.GetCommentsResponse], error) {
-	return must.Depanic(func() *connect.Response[api.GetCommentsResponse] {
-		response := doGetComments(s, req.Msg)
+	return depanic(func() *connect.Response[api.GetCommentsResponse] {
+		response := getCommentsImpl(s, req.Msg)
 		return connect.NewResponse(response)
 	})
 }
 
-func doGetComments(server *Server, req *api.GetCommentsRequest) *api.GetCommentsResponse {
+func getCommentsImpl(server *Server, req *api.GetCommentsRequest) *api.GetCommentsResponse {
 	path := req.GetPath()
 
 	m := server.config.Messaging

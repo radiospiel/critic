@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"errors"
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/simple-go/must"
 	"github.com/radiospiel/critic/src/api/apiconnect"
@@ -151,4 +152,20 @@ func (s *Server) Start() error {
 	}
 
 	return nil
+}
+
+func depanic[T any](fun func() T) (r T, err error) {
+	defer func() {
+		if recovered := recover(); err != nil {
+			var ok bool
+			if err, ok = recovered.(error); ok {
+				return
+			}
+			err = errors.New("Received panic")
+		}
+	}()
+
+	err = nil
+	r = fun()
+	return
 }
