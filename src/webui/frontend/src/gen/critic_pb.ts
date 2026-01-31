@@ -1326,3 +1326,183 @@ export class Message extends Message$1<Message> {
   }
 }
 
+/**
+ * GetDiffBasesRequest is an empty request for GetDiffBases.
+ *
+ * @generated from message critic.v1.GetDiffBasesRequest
+ */
+export class GetDiffBasesRequest extends Message$1<GetDiffBasesRequest> {
+  constructor(data?: PartialMessage<GetDiffBasesRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetDiffBasesRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffBasesRequest {
+    return new GetDiffBasesRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetDiffBasesRequest {
+    return new GetDiffBasesRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetDiffBasesRequest {
+    return new GetDiffBasesRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetDiffBasesRequest | PlainMessage<GetDiffBasesRequest> | undefined, b: GetDiffBasesRequest | PlainMessage<GetDiffBasesRequest> | undefined): boolean {
+    return proto3.util.equals(GetDiffBasesRequest, a, b);
+  }
+}
+
+/**
+ * GetDiffBasesResponse contains the available diff bases and current selection.
+ *
+ * @generated from message critic.v1.GetDiffBasesResponse
+ */
+export class GetDiffBasesResponse extends Message$1<GetDiffBasesResponse> {
+  /**
+   * bases is the list of available diff base refs.
+   *
+   * @generated from field: repeated string bases = 1;
+   */
+  bases: string[] = [];
+
+  /**
+   * current_base is the currently selected diff base.
+   *
+   * @generated from field: string current_base = 2;
+   */
+  currentBase = "";
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<GetDiffBasesResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetDiffBasesResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "bases", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
+    { no: 2, name: "current_base", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffBasesResponse {
+    return new GetDiffBasesResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetDiffBasesResponse {
+    return new GetDiffBasesResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetDiffBasesResponse {
+    return new GetDiffBasesResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetDiffBasesResponse | PlainMessage<GetDiffBasesResponse> | undefined, b: GetDiffBasesResponse | PlainMessage<GetDiffBasesResponse> | undefined): boolean {
+    return proto3.util.equals(GetDiffBasesResponse, a, b);
+  }
+}
+
+/**
+ * SetDiffBaseRequest requests to change the current diff base.
+ *
+ * @generated from message critic.v1.SetDiffBaseRequest
+ */
+export class SetDiffBaseRequest extends Message$1<SetDiffBaseRequest> {
+  /**
+   * base is the diff base ref to switch to.
+   *
+   * @generated from field: string base = 1;
+   */
+  base = "";
+
+  constructor(data?: PartialMessage<SetDiffBaseRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.SetDiffBaseRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "base", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetDiffBaseRequest {
+    return new SetDiffBaseRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SetDiffBaseRequest {
+    return new SetDiffBaseRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SetDiffBaseRequest {
+    return new SetDiffBaseRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: SetDiffBaseRequest | PlainMessage<SetDiffBaseRequest> | undefined, b: SetDiffBaseRequest | PlainMessage<SetDiffBaseRequest> | undefined): boolean {
+    return proto3.util.equals(SetDiffBaseRequest, a, b);
+  }
+}
+
+/**
+ * SetDiffBaseResponse contains the result of setting the diff base.
+ *
+ * @generated from message critic.v1.SetDiffBaseResponse
+ */
+export class SetDiffBaseResponse extends Message$1<SetDiffBaseResponse> {
+  /**
+   * success indicates whether the diff base was changed successfully.
+   *
+   * @generated from field: bool success = 1;
+   */
+  success = false;
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<SetDiffBaseResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.SetDiffBaseResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetDiffBaseResponse {
+    return new SetDiffBaseResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): SetDiffBaseResponse {
+    return new SetDiffBaseResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): SetDiffBaseResponse {
+    return new SetDiffBaseResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: SetDiffBaseResponse | PlainMessage<SetDiffBaseResponse> | undefined, b: SetDiffBaseResponse | PlainMessage<SetDiffBaseResponse> | undefined): boolean {
+    return proto3.util.equals(SetDiffBaseResponse, a, b);
+  }
+}
+

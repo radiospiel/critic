@@ -18,6 +18,10 @@ service CriticService {
   rpc CreateComment(CreateCommentRequest) returns (CreateCommentResponse);
   // GetComments returns all comments/conversations for a specific file.
   rpc GetComments(GetCommentsRequest) returns (GetCommentsResponse);
+  // GetDiffBases returns available diff bases and the current one.
+  rpc GetDiffBases(GetDiffBasesRequest) returns (GetDiffBasesResponse);
+  // SetDiffBase sets the current diff base.
+  rpc SetDiffBase(SetDiffBaseRequest) returns (SetDiffBaseResponse);
 }
 
 // ErrorCode represents the type of RPC error.
@@ -236,4 +240,31 @@ message Message {
   string updated_at = 5;
   // is_unread indicates whether the message is unread (for AI messages).
   bool is_unread = 6;
+}
+
+// GetDiffBasesRequest is an empty request for GetDiffBases.
+message GetDiffBasesRequest {}
+
+// GetDiffBasesResponse contains the available diff bases and current selection.
+message GetDiffBasesResponse {
+  // bases is the list of available diff base refs.
+  repeated string bases = 1;
+  // current_base is the currently selected diff base.
+  string current_base = 2;
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// SetDiffBaseRequest requests to change the current diff base.
+message SetDiffBaseRequest {
+  // base is the diff base ref to switch to.
+  string base = 1;
+}
+
+// SetDiffBaseResponse contains the result of setting the diff base.
+message SetDiffBaseResponse {
+  // success indicates whether the diff base was changed successfully.
+  bool success = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
 }

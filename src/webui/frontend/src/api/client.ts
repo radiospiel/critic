@@ -85,3 +85,60 @@ export async function getComments(filePath: string): Promise<GetCommentsResult> 
     }
   }
 }
+
+// Types for diff bases
+export interface DiffBasesResult {
+  bases: string[]
+  currentBase: string
+  error?: string
+}
+
+export interface SetDiffBaseResult {
+  success: boolean
+  error?: string
+}
+
+// Fetch available diff bases and current selection
+export async function getDiffBases(): Promise<DiffBasesResult> {
+  try {
+    const response = await criticClient.getDiffBases({})
+    if (response.error) {
+      return {
+        bases: [],
+        currentBase: '',
+        error: response.error.message,
+      }
+    }
+    return {
+      bases: response.bases,
+      currentBase: response.currentBase,
+    }
+  } catch (err) {
+    return {
+      bases: [],
+      currentBase: '',
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
+// Set the current diff base
+export async function setDiffBase(base: string): Promise<SetDiffBaseResult> {
+  try {
+    const response = await criticClient.setDiffBase({ base })
+    if (response.error) {
+      return {
+        success: false,
+        error: response.error.message,
+      }
+    }
+    return {
+      success: response.success,
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}

@@ -36,8 +36,6 @@ type Session struct {
 	gitRoot   string
 	messaging critic.Messaging
 	paths     []string
-	// TODO(bot): allow users to switch diffBases from the UI, using the B hotkey.
-	// Also show all valid diffBases in the UI in a dropdown menu.
 	diffBases []string
 
 	// State
@@ -84,6 +82,13 @@ func (s *Session) GetCurrentBase() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.currentBase
+}
+
+// GetDiffBases returns the available diff bases
+func (s *Session) GetDiffBases() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]string{}, s.diffBases...)
 }
 
 // GetDiffSummary returns the current diff summary (file list without hunks)

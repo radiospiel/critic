@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import FileList from './components/FileList'
 import DiffView from './components/DiffView'
+import DiffBaseSelector from './components/DiffBaseSelector'
 import HelpModal from './components/HelpModal'
 import { criticClient } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
@@ -22,7 +23,7 @@ function AppContent() {
   const { theme, toggleTheme } = useTheme()
 
   // Load file list for navigation
-  useEffect(() => {
+  const loadFileList = useCallback(() => {
     criticClient
       .getDiffSummary({})
       .then((response) => {
@@ -32,6 +33,20 @@ function AppContent() {
         console.error('Failed to load file list:', err)
       })
   }, [])
+
+  useEffect(() => {
+    loadFileList()
+  }, [loadFileList])
+
+  // Handle base change - reload file list and clear selection
+  const handleBaseChange = useCallback(() => {
+    setSelectedFile(null)
+    setSelectedFileDiff(null)
+    // Wait a moment for the backend to update the diff
+    setTimeout(() => {
+      loadFileList()
+    }, 100)
+  }, [loadFileList])
 
   const loadFileDiff = useCallback((file: string) => {
     setSelectedFile(file)
@@ -105,6 +120,7 @@ function AppContent() {
         <div className="app-header">
           <span>Critic</span>
           <div className="header-buttons">
+            <DiffBaseSelector onBaseChange={handleBaseChange} />
             <button className="help-button" onClick={() => setShowHelp(true)} title="Keyboard shortcuts">
               ?
             </button>
