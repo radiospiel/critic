@@ -38,16 +38,6 @@ function AppContent() {
     loadFileList()
   }, [loadFileList])
 
-  // Handle base change - reload file list and clear selection
-  const handleBaseChange = useCallback(() => {
-    setSelectedFile(null)
-    setSelectedFileDiff(null)
-    // Wait a moment for the backend to update the diff
-    setTimeout(() => {
-      loadFileList()
-    }, 100)
-  }, [loadFileList])
-
   const loadFileDiff = useCallback((file: string) => {
     setSelectedFile(file)
     setLoading(true)
@@ -63,6 +53,41 @@ function AppContent() {
         setLoading(false)
       })
   }, [])
+
+  // Handle base change - reload file list and preserve current file if still present
+  const handleBaseChange = useCallback(() => {
+    const previousFile = selectedFile
+    setSelectedFileDiff(null)
+    // Wait a moment for the backend to update the diff
+    setTimeout(() => {
+      criticClient
+        .getDiffSummary({})
+        .then((response) => {
+          const newFiles = response.diff?.files || []
+          setFiles(newFiles)
+
+          if (newFiles.length === 0) {
+            setSelectedFile(null)
+            return
+          }
+
+          // Check if the previously selected file still exists
+          const previousFileExists = previousFile && newFiles.some((f) => getFilePath(f) === previousFile)
+
+          if (previousFileExists) {
+            // Reload the same file with new diff base
+            loadFileDiff(previousFile)
+          } else {
+            // Select the first file
+            const firstFile = getFilePath(newFiles[0])
+            loadFileDiff(firstFile)
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load file list:', err)
+        })
+    }, 100)
+  }, [selectedFile, loadFileDiff])
 
   const handleSelectFile = useCallback((file: string, _fileSummary: FileSummary) => {
     loadFileDiff(file)
