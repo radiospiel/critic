@@ -28,3 +28,4 @@ docs/plans
 # Frontend (webui)
 node_modules/
 src/webui/dist/
+src/webui/frontend/.vite/
