@@ -12,17 +12,17 @@ func (s *Server) GetDiffBases(
 	ctx context.Context,
 	req *connect.Request[api.GetDiffBasesRequest],
 ) (*connect.Response[api.GetDiffBasesResponse], error) {
-	return depanic(func() *connect.Response[api.GetDiffBasesResponse] {
-		response := getDiffBasesImpl(s, req.Msg)
-		return connect.NewResponse(response)
+	response := depanic2(func() (*api.GetDiffBasesResponse, error) {
+		return getDiffBasesImpl(s, req.Msg)
 	})
+	return connect.NewResponse(response), nil
 }
 
-func getDiffBasesImpl(server *Server, req *api.GetDiffBasesRequest) *api.GetDiffBasesResponse {
+func getDiffBasesImpl(server *Server, req *api.GetDiffBasesRequest) (*api.GetDiffBasesResponse, error) {
 	return &api.GetDiffBasesResponse{
 		Bases:       server.session.GetDiffBases(),
 		CurrentBase: server.session.GetCurrentBase(),
-	}
+	}, nil
 }
 
 // SetDiffBase sets the current diff base.
@@ -30,19 +30,19 @@ func (s *Server) SetDiffBase(
 	ctx context.Context,
 	req *connect.Request[api.SetDiffBaseRequest],
 ) (*connect.Response[api.SetDiffBaseResponse], error) {
-	return depanic(func() *connect.Response[api.SetDiffBaseResponse] {
-		response := setDiffBaseImpl(s, req.Msg)
-		return connect.NewResponse(response)
+	response := depanic2(func() (*api.SetDiffBaseResponse, error) {
+		return setDiffBaseImpl(s, req.Msg)
 	})
+	return connect.NewResponse(response), nil
 }
 
-func setDiffBaseImpl(server *Server, req *api.SetDiffBaseRequest) *api.SetDiffBaseResponse {
+func setDiffBaseImpl(server *Server, req *api.SetDiffBaseRequest) (*api.SetDiffBaseResponse, error) {
 	base := req.GetBase()
 	if base == "" {
 		return &api.SetDiffBaseResponse{
 			Success: false,
 			Error:   api.InvalidArgument("base is required"),
-		}
+		}, nil
 	}
 
 	// Check if the base is in the list of available bases
@@ -58,7 +58,7 @@ func setDiffBaseImpl(server *Server, req *api.SetDiffBaseRequest) *api.SetDiffBa
 		return &api.SetDiffBaseResponse{
 			Success: false,
 			Error:   api.InvalidArgument("invalid diff base: " + base),
-		}
+		}, nil
 	}
 
 	err := server.session.SetCurrentDiffBase(base)
@@ -66,10 +66,10 @@ func setDiffBaseImpl(server *Server, req *api.SetDiffBaseRequest) *api.SetDiffBa
 		return &api.SetDiffBaseResponse{
 			Success: false,
 			Error:   api.InternalError(err.Error()),
-		}
+		}, nil
 	}
 
 	return &api.SetDiffBaseResponse{
 		Success: true,
-	}
+	}, nil
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"connectrpc.com/connect"
-	"github.com/radiospiel/critic/simple-go/must"
 	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/samber/lo"
@@ -15,22 +14,25 @@ func (s *Server) GetConversations(
 	ctx context.Context,
 	req *connect.Request[api.GetConversationsRequest],
 ) (*connect.Response[api.GetConversationsResponse], error) {
-	return depanic(func() *connect.Response[api.GetConversationsResponse] {
-		response := getConversationsImpl(s, req.Msg)
-		return connect.NewResponse(response)
+	response := depanic2(func() (*api.GetConversationsResponse, error) {
+		return getConversationsImpl(s, req.Msg)
 	})
+	return connect.NewResponse(response), nil
 }
 
-func getConversationsImpl(server *Server, req *api.GetConversationsRequest) *api.GetConversationsResponse {
+func getConversationsImpl(server *Server, req *api.GetConversationsRequest) (*api.GetConversationsResponse, error) {
 	path := req.GetPath()
 
 	m := server.config.Messaging
-	criticConversations := must.Must2(m.GetConversationsForFile(path))
+	criticConversations, err := m.GetConversationsForFile(path)
+	if err != nil {
+		return nil, err
+	}
 	apiConversations := lo.Map(criticConversations, criticToApiConversation)
 
 	return &api.GetConversationsResponse{
 		Conversations: apiConversations,
-	}
+	}, nil
 }
 
 func criticToApiMessage(msg critic.Message, index int) *api.Message {

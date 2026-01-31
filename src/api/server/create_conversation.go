@@ -5,7 +5,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/simple-go/logger"
-	"github.com/radiospiel/critic/simple-go/must"
 	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/pkg/critic"
 )
@@ -15,13 +14,13 @@ func (s *Server) CreateConversation(
 	ctx context.Context,
 	req *connect.Request[api.CreateConversationRequest],
 ) (*connect.Response[api.CreateConversationResponse], error) {
-	return depanic(func() *connect.Response[api.CreateConversationResponse] {
-		response := createConversationImpl(s, req.Msg)
-		return connect.NewResponse(response)
+	response := depanic2(func() (*api.CreateConversationResponse, error) {
+		return createConversationImpl(s, req.Msg)
 	})
+	return connect.NewResponse(response), nil
 }
 
-func createConversationImpl(server *Server, req *api.CreateConversationRequest) *api.CreateConversationResponse {
+func createConversationImpl(server *Server, req *api.CreateConversationRequest) (*api.CreateConversationResponse, error) {
 	logger.Info("CreateConversation: old_file=%s, old_line=%d, new_file=%s, new_line=%d, comment=%q",
 		req.GetOldFile(),
 		req.GetOldLine(),
@@ -44,17 +43,20 @@ func createConversationImpl(server *Server, req *api.CreateConversationRequest) 
 	codeVersion := server.session.HeadCommit()
 
 	// Create the conversation using the messaging interface
-	conversation := must.Must2(server.config.Messaging.CreateConversation(
+	conversation, err := server.config.Messaging.CreateConversation(
 		critic.AuthorHuman,
 		req.GetComment(),
 		filePath,
 		lineNo,
 		codeVersion,
 		"", // context - could be enhanced to include surrounding code
-	))
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	logger.Info("Created conversation %s at %s:%d", conversation.UUID, filePath, lineNo)
 	return &api.CreateConversationResponse{
 		Success: true,
-	}
+	}, nil
 }

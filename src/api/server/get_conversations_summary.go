@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"connectrpc.com/connect"
-	"github.com/radiospiel/critic/simple-go/must"
 	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/samber/lo"
@@ -15,20 +14,23 @@ func (s *Server) GetConversationsSummary(
 	ctx context.Context,
 	req *connect.Request[api.GetConversationsSummaryRequest],
 ) (*connect.Response[api.GetConversationsSummaryResponse], error) {
-	return depanic(func() *connect.Response[api.GetConversationsSummaryResponse] {
-		response := getConversationsSummaryImpl(s, req.Msg)
-		return connect.NewResponse(response)
+	response := depanic2(func() (*api.GetConversationsSummaryResponse, error) {
+		return getConversationsSummaryImpl(s, req.Msg)
 	})
+	return connect.NewResponse(response), nil
 }
 
-func getConversationsSummaryImpl(server *Server, req *api.GetConversationsSummaryRequest) *api.GetConversationsSummaryResponse {
+func getConversationsSummaryImpl(server *Server, req *api.GetConversationsSummaryRequest) (*api.GetConversationsSummaryResponse, error) {
 	m := server.config.Messaging
-	criticSummaries := must.Must2(m.GetAllFileConversationSummaries())
+	criticSummaries, err := m.GetAllFileConversationSummaries()
+	if err != nil {
+		return nil, err
+	}
 	apiSummaries := lo.Map(criticSummaries, criticToApiFileConversationSummary)
 
 	return &api.GetConversationsSummaryResponse{
 		Summaries: apiSummaries,
-	}
+	}, nil
 }
 
 func criticToApiFileConversationSummary(summary *critic.FileConversationSummary, index int) *api.FileConversationSummary {

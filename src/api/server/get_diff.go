@@ -13,13 +13,13 @@ func (s *Server) GetDiff(
 	ctx context.Context,
 	req *connect.Request[api.GetDiffRequest],
 ) (*connect.Response[api.GetDiffResponse], error) {
-	return depanic(func() *connect.Response[api.GetDiffResponse] {
-		response := getDiffImpl(s, req.Msg)
-		return connect.NewResponse(response)
+	response := depanic2(func() (*api.GetDiffResponse, error) {
+		return getDiffImpl(s, req.Msg)
 	})
+	return connect.NewResponse(response), nil
 }
 
-func getDiffImpl(server *Server, req *api.GetDiffRequest) *api.GetDiffResponse {
+func getDiffImpl(server *Server, req *api.GetDiffRequest) (*api.GetDiffResponse, error) {
 	session := server.GetSession()
 	path := req.GetPath()
 
@@ -27,7 +27,7 @@ func getDiffImpl(server *Server, req *api.GetDiffRequest) *api.GetDiffResponse {
 
 	return &api.GetDiffResponse{
 		File: convertFileDiff(fileDiff),
-	}
+	}, nil
 }
 
 // convertFileDiff converts a types.FileDiff to an api.FileDiff (with hunks)

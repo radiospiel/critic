@@ -14,13 +14,13 @@ func (s *Server) GetFile(
 	ctx context.Context,
 	req *connect.Request[api.GetFileRequest],
 ) (*connect.Response[api.GetFileResponse], error) {
-	return depanic(func() *connect.Response[api.GetFileResponse] {
-		response := getFileImpl(s, req.Msg)
-		return connect.NewResponse(response)
+	response := depanic2(func() (*api.GetFileResponse, error) {
+		return getFileImpl(s, req.Msg)
 	})
+	return connect.NewResponse(response), nil
 }
 
-func getFileImpl(server *Server, req *api.GetFileRequest) *api.GetFileResponse {
+func getFileImpl(server *Server, req *api.GetFileRequest) (*api.GetFileResponse, error) {
 	path := req.GetPath()
 
 	// Resolve path relative to git root
@@ -31,10 +31,10 @@ func getFileImpl(server *Server, req *api.GetFileRequest) *api.GetFileResponse {
 	if err != nil {
 		return &api.GetFileResponse{
 			Error: api.NotFound("file not found: " + path),
-		}
+		}, nil
 	}
 
 	return &api.GetFileResponse{
 		Content: content,
-	}
+	}, nil
 }

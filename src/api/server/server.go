@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"errors"
 	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/api/apiconnect"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/webui"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code
@@ -151,18 +153,60 @@ func (s *Server) Start() error {
 	return nil
 }
 
-func depanic[T any](fun func() T) (r T, err error) {
+func rpcErrorFromGoError(reason any) *api.RpcError {
+	if reason == nil {
+		return nil
+	}
+	err, ok := reason.(error)
+	if !ok {
+		err = fmt.Errorf("panic: %v", reason)
+	}
+
+	return &api.RpcError{
+		Code:    api.ErrorCode_ERROR_CODE_INTERNAL,
+		Message: "internal server error",
+		Details: err.Error(),
+	}
+}
+
+// setResponseError sets the "error" field on a proto message using reflection.
+func setResponseError(msg proto.Message, rpcErr *api.RpcError) {
+	if rpcErr == nil {
+		return
+	}
+	reflect := msg.ProtoReflect()
+	errorField := reflect.Descriptor().Fields().ByName("error")
+	if errorField != nil {
+		reflect.Set(errorField, protoreflect.ValueOfMessage(rpcErr.ProtoReflect()))
+	}
+}
+
+// depanic2 wraps a function that returns a proto response and error,
+// catching panics and errors and setting them on the response's Error field.
+//
+// The trick is the two-type-parameter constraint:
+//   - T is the underlying struct type (e.g., api.CreateConversationResponse)
+//   - PT is constrained to be both *T and proto.Message
+//
+// This lets us use PT(new(T)) to create a new pointer instance without needing
+// a constructor function. Go infers both type parameters from the function signature.
+func depanic2[T any, PT interface {
+	*T
+	proto.Message
+}](fun func() (PT, error)) PT {
+	var result PT
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			var ok bool
-			if err, ok = recovered.(error); ok {
-				return
-			}
-			err = errors.New("Received panic")
+			result = PT(new(T))
+			setResponseError(result, rpcErrorFromGoError(recovered))
 		}
 	}()
 
-	err = nil
-	r = fun()
-	return
+	var err error
+	result, err = fun()
+	if err != nil {
+		result = PT(new(T))
+		setResponseError(result, rpcErrorFromGoError(err))
+	}
+	return result
 }
