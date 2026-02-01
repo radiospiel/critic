@@ -110,10 +110,16 @@ func (s *Server) handleGitChanges() {
 	for range s.gitWatcher.Changes() {
 		// Update last change time
 		s.SetLastChangeTime(s.gitWatcher.LastChangeTime())
-		logger.Info("Git change detected, broadcasting reload")
+		logger.Info("Git change detected, triggering diff reload")
 
-		// Broadcast reload message to all connected clients
-		s.wsHub.Broadcast([]byte(`{"type":"reload"}`))
+		// Re-run the git diff to pick up any new/changed files
+		// When done, broadcast reload message to all connected clients
+		done := s.session.TriggerDiff()
+		go func() {
+			<-done
+			logger.Info("Diff reload complete, broadcasting reload")
+			s.wsHub.Broadcast([]byte(`{"type":"reload"}`))
+		}()
 	}
 }
 

@@ -151,6 +151,25 @@ func (s *Session) SetDiffBases(bases []string) error {
 // starts loading the diff in the background.
 func (s *Session) SetCurrentDiffBase(base string) error {
 	s.mu.Lock()
+	s.currentBase = base
+	s.mu.Unlock()
+
+	<-s.TriggerDiff()
+	return nil
+}
+
+// TriggerDiff reloads the diff with the current base.
+// Returns a channel that closes when the diff is ready.
+func (s *Session) TriggerDiff() <-chan struct{} {
+	done := make(chan struct{})
+
+	currentBase := s.GetCurrentBase()
+	if currentBase == "" {
+		close(done)
+		return done
+	}
+
+	s.mu.Lock()
 
 	// Abort any existing task
 	if s.currentTask != nil {
@@ -162,23 +181,12 @@ func (s *Session) SetCurrentDiffBase(base string) error {
 	s.state = StateInitialising
 	s.mu.Unlock()
 
-	// Start background task to load diff summary. Only up to one diff loading
-	// operation runs at a time: if a diff load is already in progress, it will
-	// be aborted.
+	// Start background task to load diff summary
 	task, err := tasks.RunExclusively("api-session-diff", func() diffResult {
-		// Resolve the base ref to a commit SHA
-		// base := git.ResolveRef(base)
-
-		// Run git diff --name-status for file summary (no hunks)
-		diff, err := git.GetDiffNamesBetween(base, "current")
+		diff, err := git.GetDiffNamesBetween(currentBase, "current")
 		if err != nil {
 			return diffResult{err: err}
 		}
-
-		// TODO(bot): add support for filtering by type:
-		// - Use "rg --type-list" to collect a filelist and their extensions
-		// - add a -t/--type argument to include one or more types
-		// - add a -T/--skip-type argument to exclude one or more types
 
 		// Filter by paths if specified
 		if len(s.paths) > 0 {
@@ -189,36 +197,36 @@ func (s *Session) SetCurrentDiffBase(base string) error {
 	})
 
 	if err != nil {
-		// Task with same ID already running - this shouldn't happen since we abort above
 		s.mu.Lock()
 		s.state = StateReady
 		s.mu.Unlock()
-		return err
+		close(done)
+		return done
 	}
 
 	s.mu.Lock()
 	s.currentTask = task
 	s.mu.Unlock()
 
-	// Wait for result in background and update state
+	// Wait for result in background, update state, and signal done
 	go func() {
 		result := <-task.Done()
 
 		s.mu.Lock()
-		defer s.mu.Unlock()
-
 		// Only update if this task is still current
 		if s.currentTask == task {
 			s.currentTask = nil
 			if result.err == nil {
-				s.currentBase = base
 				s.diff = result.diff
 			}
 			s.state = StateReady
 		}
+		s.mu.Unlock()
+
+		close(done)
 	}()
 
-	return nil
+	return done
 }
 
 // SetFileWatcher sets the file watcher for the currently viewed file.

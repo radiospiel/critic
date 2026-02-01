@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
-import FileList from './components/FileList'
+import FileList, { FilterType } from './components/FileList'
 import DiffView from './components/DiffView'
 import DiffBaseSelector from './components/DiffBaseSelector'
 import HelpModal from './components/HelpModal'
@@ -25,6 +25,7 @@ function AppContent() {
   const [currentLineNo, setCurrentLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [restoreLineNo, setRestoreLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [secondsSinceLoad, setSecondsSinceLoad] = useState(0)
+  const [fileListFilter, setFileListFilter] = useState<FilterType>('files')
   const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
 
@@ -255,6 +256,7 @@ function AppContent() {
           onSelectFile={handleSelectFile}
           isFocused={focusedPanel === 'fileList'}
           onFocus={() => setFocusedPanel('fileList')}
+          onFilterChange={setFileListFilter}
         />
       </aside>
       <main className="main-content">
@@ -275,10 +277,17 @@ function AppContent() {
             onResetContext={handleResetContext}
             onSelectionChange={handleSelectionChange}
             restoreLineNo={restoreLineNo}
+            showOnlyConversations={fileListFilter === 'conversations'}
           />
         ) : (
           <div className="empty-state">
-            <span>Select a file to view changes</span>
+            <span>
+              {fileListFilter === 'conversations'
+                ? 'To start a conversation in a changed source file, press Return on a source line and start writing your review message.'
+                : fileListFilter === 'hidden'
+                  ? 'Files can be hidden per .criticignore'
+                  : 'Select a file to view changes'}
+            </span>
           </div>
         )}
       </main>

@@ -19,6 +19,7 @@ interface DiffViewProps {
   onResetContext?: () => void
   onSelectionChange?: (lineNoNew: number, lineNoOld: number) => void
   restoreLineNo?: { lineNoNew: number; lineNoOld: number } | null
+  showOnlyConversations?: boolean
 }
 
 function getFileExtension(path: string): string {
@@ -336,7 +337,7 @@ interface SelectionRange {
   end: number
 }
 
-function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo }: DiffViewProps) {
+function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo, showOnlyConversations = false }: DiffViewProps) {
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
   const [editorOpen, setEditorOpen] = useState(false)
   const [comments, setComments] = useState<CommentConversation[]>([])
@@ -365,25 +366,43 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
     fetchComments()
   }, [fetchComments])
 
+  // Filter hunks to only show those with conversations when in conversations mode
+  const filteredHunks = useMemo(() => {
+    if (!showOnlyConversations || comments.length === 0) {
+      return fileDiff.hunks
+    }
+
+    // Build a set of line numbers that have conversations
+    const conversationLineNumbers = new Set(comments.map(c => c.lineNumber))
+
+    // Filter hunks to only include those with at least one line that has a conversation
+    return fileDiff.hunks.filter(hunk => {
+      return hunk.lines.some(line => {
+        // Check both old and new line numbers
+        return conversationLineNumbers.has(line.lineNoNew) || conversationLineNumbers.has(line.lineNoOld)
+      })
+    })
+  }, [fileDiff.hunks, showOnlyConversations, comments])
+
   // Count total navigable lines (all diff lines, excluding hunk headers)
   const totalLines = useMemo(() => {
     let count = 0
-    for (const hunk of fileDiff.hunks) {
+    for (const hunk of filteredHunks) {
       count += hunk.lines.length
     }
     return count
-  }, [fileDiff.hunks])
+  }, [filteredHunks])
 
   // Build a flat array of all lines for easy indexing
   const allLines = useMemo(() => {
     const lines: { line: Line; hunkIdx: number; lineIdx: number }[] = []
-    fileDiff.hunks.forEach((hunk, hunkIdx) => {
+    filteredHunks.forEach((hunk, hunkIdx) => {
       hunk.lines.forEach((line, lineIdx) => {
         lines.push({ line, hunkIdx, lineIdx })
       })
     })
     return lines
-  }, [fileDiff.hunks])
+  }, [filteredHunks])
 
   // Get line info for the current selection (use the last selected line for positioning)
   const getSelectionLineInfo = useCallback((): CommentLineInfo | null => {
@@ -657,14 +676,14 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
       </div>
 
       <div className="diff-content" ref={containerRef}>
-        {fileDiff.hunks.length === 0 ? (
-          <div className="diff-empty-notice">No changes in this file</div>
+        {filteredHunks.length === 0 ? (
+          <div className="diff-empty-notice">{showOnlyConversations ? 'No conversations in this file (you probably have outdated conversation data, this will be fixed automatically.)' : 'No changes in this file'}</div>
         ) : (
           <table className="diff-table diff-table-unified">
             <tbody>
               {(() => {
                 let globalLineIndex = 0
-                return fileDiff.hunks.map((hunk, hunkIdx) => (
+                return filteredHunks.map((hunk, hunkIdx) => (
                   <Fragment key={hunkIdx}>
                     <tr className="diff-hunk-header-row">
                       <td colSpan={4} className="diff-hunk-header">
