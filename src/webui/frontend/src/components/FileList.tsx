@@ -2,14 +2,15 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { criticClient, getConversationsSummary, ConversationSummary } from '../api/client'
 import { FileSummary, FileStatus } from '../gen/critic_pb'
 
+export type FilterType = 'conversations' | 'files' | 'hidden'
+
 interface FileListProps {
   selectedFile: string | null
   onSelectFile: (file: string, fileSummary: FileSummary) => void
   isFocused?: boolean
   onFocus?: () => void
+  onFilterChange?: (filter: FilterType) => void
 }
-
-type FilterType = 'conversations' | 'files' | 'hidden'
 
 function getFilePath(file: FileSummary): string {
   return file.status === FileStatus.DELETED ? file.oldPath : file.newPath
@@ -73,14 +74,20 @@ function isIgnored(path: string, patterns: string[]): boolean {
   return false
 }
 
-function FileList({ selectedFile, onSelectFile, isFocused, onFocus }: FileListProps) {
+function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChange }: FileListProps) {
   const [files, setFiles] = useState<FileSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
-  const [filter, setFilter] = useState<FilterType>('files')
+  const [filter, setFilter] = useState<FilterType>('conversations')
   const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
   const selectedItemRef = useRef<HTMLLIElement>(null)
+
+  // Notify parent when filter changes
+  const handleFilterChange = (newFilter: FilterType) => {
+    setFilter(newFilter)
+    onFilterChange?.(newFilter)
+  }
 
   useEffect(() => {
     // Fetch diff summary, .criticignore, and conversation summaries in parallel
@@ -237,28 +244,24 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus }: FileListPr
   return (
     <div className={`file-list-container${isFocused ? ' focused' : ''}`}>
       <div className="file-list-filters">
-        {totalConversations > 0 && (
-          <button
-            className={`file-list-filter-btn${filter === 'conversations' ? ' active' : ''}`}
-            onClick={() => setFilter(filter === 'conversations' ? 'files' : 'conversations')}
-          >
-            {totalConversations} Conversations
-          </button>
-        )}
+        <button
+          className={`file-list-filter-btn${filter === 'conversations' ? ' active' : ''}`}
+          onClick={() => handleFilterChange(filter === 'conversations' ? 'files' : 'conversations')}
+        >
+          {totalConversations} Conversations
+        </button>
         <button
           className={`file-list-filter-btn${filter === 'files' ? ' active' : ''}`}
-          onClick={() => setFilter('files')}
+          onClick={() => handleFilterChange('files')}
         >
           {visibleFiles.length} Files
         </button>
-        {hiddenFiles.length > 0 && (
-          <button
-            className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
-            onClick={() => setFilter(filter === 'hidden' ? 'files' : 'hidden')}
-          >
-            {hiddenFiles.length} Hidden
-          </button>
-        )}
+        <button
+          className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
+          onClick={() => handleFilterChange(filter === 'hidden' ? 'files' : 'hidden')}
+        >
+          {hiddenFiles.length} Hidden
+        </button>
       </div>
       <ul className="file-list">
         {displayedFiles.map((file) => {
@@ -298,7 +301,7 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus }: FileListPr
             {filter === 'conversations'
               ? 'No files with conversations'
               : filter === 'hidden'
-                ? 'No hidden files'
+                ? 'Files can be hidden per .criticignore'
                 : 'No files found'}
           </li>
         )}

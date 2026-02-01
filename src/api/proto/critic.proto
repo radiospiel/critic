@@ -28,6 +28,8 @@ service CriticService {
   rpc GetDiffBases(GetDiffBasesRequest) returns (GetDiffBasesResponse);
   // SetDiffBase sets the current diff base.
   rpc SetDiffBase(SetDiffBaseRequest) returns (SetDiffBaseResponse);
+  // WatchFile tells the server to watch a specific file for changes.
+  rpc WatchFile(WatchFileRequest) returns (WatchFileResponse);
 }
 
 // ErrorCode represents the type of RPC error.
@@ -336,6 +338,19 @@ message ResolveConversationRequest {
 
 // ResolveConversationResponse contains the result of resolving a conversation.
 message ResolveConversationResponse {
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// WatchFileRequest tells the server to watch a specific file for changes.
+message WatchFileRequest {
+  // path is the file path to watch (relative to git root).
+  // Empty string to stop watching.
+  string path = 1;
+}
+
+// WatchFileResponse confirms the file watch was set up.
+message WatchFileResponse {
   // error contains error details if the request failed.
   RpcError error = 15;
 }

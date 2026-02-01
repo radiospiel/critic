@@ -64,6 +64,8 @@ const (
 	// CriticServiceSetDiffBaseProcedure is the fully-qualified name of the CriticService's SetDiffBase
 	// RPC.
 	CriticServiceSetDiffBaseProcedure = "/critic.v1.CriticService/SetDiffBase"
+	// CriticServiceWatchFileProcedure is the fully-qualified name of the CriticService's WatchFile RPC.
+	CriticServiceWatchFileProcedure = "/critic.v1.CriticService/WatchFile"
 )
 
 // CriticServiceClient is a client for the critic.v1.CriticService service.
@@ -90,6 +92,8 @@ type CriticServiceClient interface {
 	GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error)
 	// SetDiffBase sets the current diff base.
 	SetDiffBase(context.Context, *connect.Request[api.SetDiffBaseRequest]) (*connect.Response[api.SetDiffBaseResponse], error)
+	// WatchFile tells the server to watch a specific file for changes.
+	WatchFile(context.Context, *connect.Request[api.WatchFileRequest]) (*connect.Response[api.WatchFileResponse], error)
 }
 
 // NewCriticServiceClient constructs a client for the critic.v1.CriticService service. By default,
@@ -169,6 +173,12 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(criticServiceMethods.ByName("SetDiffBase")),
 			connect.WithClientOptions(opts...),
 		),
+		watchFile: connect.NewClient[api.WatchFileRequest, api.WatchFileResponse](
+			httpClient,
+			baseURL+CriticServiceWatchFileProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("WatchFile")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -185,6 +195,7 @@ type criticServiceClient struct {
 	resolveConversation     *connect.Client[api.ResolveConversationRequest, api.ResolveConversationResponse]
 	getDiffBases            *connect.Client[api.GetDiffBasesRequest, api.GetDiffBasesResponse]
 	setDiffBase             *connect.Client[api.SetDiffBaseRequest, api.SetDiffBaseResponse]
+	watchFile               *connect.Client[api.WatchFileRequest, api.WatchFileResponse]
 }
 
 // GetLastChange calls critic.v1.CriticService.GetLastChange.
@@ -242,6 +253,11 @@ func (c *criticServiceClient) SetDiffBase(ctx context.Context, req *connect.Requ
 	return c.setDiffBase.CallUnary(ctx, req)
 }
 
+// WatchFile calls critic.v1.CriticService.WatchFile.
+func (c *criticServiceClient) WatchFile(ctx context.Context, req *connect.Request[api.WatchFileRequest]) (*connect.Response[api.WatchFileResponse], error) {
+	return c.watchFile.CallUnary(ctx, req)
+}
+
 // CriticServiceHandler is an implementation of the critic.v1.CriticService service.
 type CriticServiceHandler interface {
 	// GetLastChange returns the timestamp of the last change.
@@ -266,6 +282,8 @@ type CriticServiceHandler interface {
 	GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error)
 	// SetDiffBase sets the current diff base.
 	SetDiffBase(context.Context, *connect.Request[api.SetDiffBaseRequest]) (*connect.Response[api.SetDiffBaseResponse], error)
+	// WatchFile tells the server to watch a specific file for changes.
+	WatchFile(context.Context, *connect.Request[api.WatchFileRequest]) (*connect.Response[api.WatchFileResponse], error)
 }
 
 // NewCriticServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -341,6 +359,12 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(criticServiceMethods.ByName("SetDiffBase")),
 		connect.WithHandlerOptions(opts...),
 	)
+	criticServiceWatchFileHandler := connect.NewUnaryHandler(
+		CriticServiceWatchFileProcedure,
+		svc.WatchFile,
+		connect.WithSchema(criticServiceMethods.ByName("WatchFile")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/critic.v1.CriticService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CriticServiceGetLastChangeProcedure:
@@ -365,6 +389,8 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 			criticServiceGetDiffBasesHandler.ServeHTTP(w, r)
 		case CriticServiceSetDiffBaseProcedure:
 			criticServiceSetDiffBaseHandler.ServeHTTP(w, r)
+		case CriticServiceWatchFileProcedure:
+			criticServiceWatchFileHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -416,4 +442,8 @@ func (UnimplementedCriticServiceHandler) GetDiffBases(context.Context, *connect.
 
 func (UnimplementedCriticServiceHandler) SetDiffBase(context.Context, *connect.Request[api.SetDiffBaseRequest]) (*connect.Response[api.SetDiffBaseResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.SetDiffBase is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) WatchFile(context.Context, *connect.Request[api.WatchFileRequest]) (*connect.Response[api.WatchFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.WatchFile is not implemented"))
 }

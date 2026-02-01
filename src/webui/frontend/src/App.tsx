@@ -1,11 +1,12 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
-import FileList from './components/FileList'
+import FileList, { FilterType } from './components/FileList'
 import DiffView from './components/DiffView'
 import DiffBaseSelector from './components/DiffBaseSelector'
 import HelpModal from './components/HelpModal'
 import { criticClient } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
+import { useWebSocket } from './hooks/useWebSocket'
 
 type FocusedPanel = 'fileList' | 'diffView'
 
@@ -23,7 +24,18 @@ function AppContent() {
   const [contextLines, setContextLines] = useState(3)
   const [currentLineNo, setCurrentLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [restoreLineNo, setRestoreLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
+  const [secondsSinceLoad, setSecondsSinceLoad] = useState(0)
+  const [fileListFilter, setFileListFilter] = useState<FilterType>('conversations')
+  const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
+
+  // Timer to update seconds since last reload
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsSinceLoad(Math.floor((Date.now() - loadTimeRef.current) / 1000))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   // Load file list for navigation
   const loadFileList = useCallback(() => {
@@ -47,6 +59,10 @@ function AppContent() {
     if (!preserveSelection) {
       setLoading(true)
       setRestoreLineNo(null)
+      // Tell server to watch this file for changes
+      criticClient.watchFile({ path: file }).catch((err) => {
+        console.error('Failed to set watch file:', err)
+      })
     }
     const lines = ctxLines ?? contextLines
     criticClient
@@ -61,6 +77,33 @@ function AppContent() {
         setLoading(false)
       })
   }, [contextLines])
+
+  // Handle WebSocket messages for live reload
+  const handleWebSocketMessage = useCallback((message: { type: string; path?: string }) => {
+    if (message.type === 'reload') {
+      console.log('Reload triggered by git change')
+      // Reset the timer
+      loadTimeRef.current = Date.now()
+      setSecondsSinceLoad(0)
+      // Reload the file list
+      loadFileList()
+      // Reload the current file diff if one is selected
+      if (selectedFile) {
+        loadFileDiff(selectedFile, contextLines, true)
+      }
+    } else if (message.type === 'file-changed' && message.path) {
+      console.log('File changed:', message.path)
+      // Reset the timer
+      loadTimeRef.current = Date.now()
+      setSecondsSinceLoad(0)
+      // Reload the diff if it's the currently selected file
+      if (selectedFile === message.path) {
+        loadFileDiff(selectedFile, contextLines, true)
+      }
+    }
+  }, [loadFileList, loadFileDiff, selectedFile, contextLines])
+
+  useWebSocket(handleWebSocketMessage)
 
   // Handle base change - reload file list and preserve current file if still present
   const handleBaseChange = useCallback(() => {
@@ -148,7 +191,7 @@ function AppContent() {
     setCurrentLineNo({ lineNoNew, lineNoOld })
   }, [])
 
-  // Global keyboard handler for Tab and ? keys
+  // Global keyboard handler for Tab, ?, and context line keys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle if in input field
@@ -169,18 +212,25 @@ function AppContent() {
       } else if (e.key === 'Escape' && showHelp) {
         e.preventDefault()
         setShowHelp(false)
+      } else if (e.key === 'c') {
+        e.preventDefault()
+        handleIncreaseContext()
+      } else if (e.key === 'C') {
+        e.preventDefault()
+        handleDecreaseContext()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showHelp])
+  }, [showHelp, handleIncreaseContext, handleDecreaseContext])
 
   return (
     <div className="app">
       <aside className="sidebar">
         <div className="app-header">
           <span>Critic</span>
+          <span className="render-timestamp">{secondsSinceLoad}s</span>
           <div className="header-buttons">
             <DiffBaseSelector onBaseChange={handleBaseChange} />
             <button className="help-button" onClick={() => setShowHelp(true)} title="Keyboard shortcuts">
@@ -212,6 +262,7 @@ function AppContent() {
           onSelectFile={handleSelectFile}
           isFocused={focusedPanel === 'fileList'}
           onFocus={() => setFocusedPanel('fileList')}
+          onFilterChange={setFileListFilter}
         />
       </aside>
       <main className="main-content">
@@ -232,10 +283,17 @@ function AppContent() {
             onResetContext={handleResetContext}
             onSelectionChange={handleSelectionChange}
             restoreLineNo={restoreLineNo}
+            showOnlyConversations={fileListFilter === 'conversations'}
           />
         ) : (
           <div className="empty-state">
-            <span>Select a file to view changes</span>
+            <span>
+              {fileListFilter === 'conversations'
+                ? 'To start a conversation in a changed source file, press Return on a source line and start writing your review message.'
+                : fileListFilter === 'hidden'
+                  ? 'Files can be hidden per .criticignore'
+                  : 'Select a file to view changes'}
+            </span>
           </div>
         )}
       </main>
