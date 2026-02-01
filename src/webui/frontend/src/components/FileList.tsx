@@ -79,7 +79,7 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
-  const [filter, setFilter] = useState<FilterType>('files')
+  const [filter, setFilter] = useState<FilterType>('conversations')
   const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
   const selectedItemRef = useRef<HTMLLIElement>(null)
 

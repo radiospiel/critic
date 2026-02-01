@@ -594,21 +594,9 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
             setSelection({ start: totalLines - 1, end: totalLines - 1 })
           }
           break
-        case 'c':
-          if (!editorOpen && onIncreaseContext) {
-            e.preventDefault()
-            onIncreaseContext()
-          }
-          break
-        case 'C':
-          if (!editorOpen && onDecreaseContext) {
-            e.preventDefault()
-            onDecreaseContext()
-          }
-          break
       }
     },
-    [isFocused, selection, totalLines, onNavigatePrevFile, onNavigateNextFile, editorOpen, onIncreaseContext, onDecreaseContext]
+    [isFocused, selection, totalLines, onNavigatePrevFile, onNavigateNextFile, editorOpen]
   )
 
   useEffect(() => {

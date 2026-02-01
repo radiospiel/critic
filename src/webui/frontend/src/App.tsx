@@ -25,7 +25,7 @@ function AppContent() {
   const [currentLineNo, setCurrentLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [restoreLineNo, setRestoreLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [secondsSinceLoad, setSecondsSinceLoad] = useState(0)
-  const [fileListFilter, setFileListFilter] = useState<FilterType>('files')
+  const [fileListFilter, setFileListFilter] = useState<FilterType>('conversations')
   const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
 
@@ -191,7 +191,7 @@ function AppContent() {
     setCurrentLineNo({ lineNoNew, lineNoOld })
   }, [])
 
-  // Global keyboard handler for Tab and ? keys
+  // Global keyboard handler for Tab, ?, and context line keys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle if in input field
@@ -212,12 +212,18 @@ function AppContent() {
       } else if (e.key === 'Escape' && showHelp) {
         e.preventDefault()
         setShowHelp(false)
+      } else if (e.key === 'c') {
+        e.preventDefault()
+        handleIncreaseContext()
+      } else if (e.key === 'C') {
+        e.preventDefault()
+        handleDecreaseContext()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showHelp])
+  }, [showHelp, handleIncreaseContext, handleDecreaseContext])
 
   return (
     <div className="app">
