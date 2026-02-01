@@ -224,7 +224,6 @@ html, body, #root {
 }
 
 .diff-base-value {
-  font-family: monospace;
   font-weight: 500;
 }
 
@@ -259,7 +258,6 @@ html, body, #root {
   text-align: left;
   cursor: pointer;
   font-size: 12px;
-  font-family: monospace;
   color: var(--text-primary);
 }
 
@@ -505,7 +503,7 @@ html, body, #root {
 
 .diff-stats {
   font-size: 13px;
-  font-family: monospace;
+  font-family: 'PT Mono', monospace;
 }
 
 .diff-stats-added {
@@ -568,7 +566,7 @@ html, body, #root {
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  font-family: 'PT Mono', monospace;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -623,7 +621,7 @@ html, body, #root {
 }
 
 .diff-hunk-context {
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  font-family: 'PT Mono', monospace;
   font-size: 12px;
   color: var(--text-secondary);
 }
@@ -872,7 +870,7 @@ html, body, #root {
 .shortcut-item kbd {
   display: inline-block;
   padding: 3px 8px;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+  font-family: 'PT Mono', monospace;
   font-size: 12px;
   background-color: var(--bg-tertiary);
   border: 1px solid var(--border-primary);
@@ -945,7 +943,7 @@ html, body, #root {
   background-color: var(--bg-tertiary);
   padding: 2px 4px;
   border-radius: 3px;
-  font-family: monospace;
+  font-family: 'PT Mono', monospace;
   font-size: 0.9em;
 }
 
@@ -1259,7 +1257,7 @@ html, body, #root {
   background-color: var(--bg-tertiary);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+  font-family: 'PT Mono', monospace;
   font-size: 0.9em;
 }
 
