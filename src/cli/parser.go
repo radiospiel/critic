@@ -22,7 +22,7 @@ func Execute() error {
 	rootCmd := newRootCmd()
 
 	// Add subcommands
-	rootCmd.AddCommand(newAPICmd())
+	rootCmd.AddCommand(newHTTPDCmd())
 	rootCmd.AddCommand(newMCPCmd())
 	rootCmd.AddCommand(newConvoCmd())
 
@@ -37,13 +37,13 @@ func newRootCmd() *cobra.Command {
 		Long: `Critic is a git diff viewer and code review tool.
 
 Available commands:
-  api     Start the HTTP/connect API server (includes web UI)
+  httpd   Start the HTTP/connect API server (includes web UI)
   mcp     Start the MCP server
   convo   Manage conversations
 
 Examples:
-  critic api                    # Start API server on localhost:65432
-  critic api --port=8000        # Start API server on custom port
+  critic httpd                    # Start API server on localhost:65432
+  critic httpd --port=8000        # Start API server on custom port
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
