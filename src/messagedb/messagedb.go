@@ -3,6 +3,7 @@ package messagedb
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -65,7 +66,13 @@ type DB struct {
 func New(gitRoot string) (*DB, error) {
 	preconditions.Check(gitRoot != "", "gitRoot must not be empty")
 
-	dbPath := filepath.Join(gitRoot, ".critic.db")
+	// Create .critic directory if it doesn't exist
+	criticDir := filepath.Join(gitRoot, ".critic")
+	if err := os.MkdirAll(criticDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create .critic directory: %w", err)
+	}
+
+	dbPath := filepath.Join(criticDir, "critic.db")
 	logger.Info("Opening message database at: %s", dbPath)
 
 	db, err := sql.Open("sqlite3", dbPath)

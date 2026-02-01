@@ -1,4 +1,4 @@
-package git
+package utils
 
 import (
 	"path/filepath"
@@ -11,9 +11,9 @@ import (
 
 // FileWatcher watches a single file for changes.
 type FileWatcher struct {
-	watcher   *fsnotify.Watcher
-	filePath  string
-	debounceMs int
+	watcher     *fsnotify.Watcher
+	filePath    string
+	debounceMs  int
 	changesChan chan struct{}
 
 	// Debouncing state

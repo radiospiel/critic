@@ -7,6 +7,7 @@ import (
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/simple-go/preconditions"
 	"github.com/radiospiel/critic/simple-go/tasks"
+	"github.com/radiospiel/critic/simple-go/utils"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/pkg/types"
@@ -47,7 +48,7 @@ type Session struct {
 	currentTask *tasks.Task[diffResult]
 
 	// File watcher for the currently viewed file
-	fileWatcher *git.FileWatcher
+	fileWatcher *utils.FileWatcher
 }
 
 // diffResult holds the result of a diff loading operation
@@ -102,7 +103,7 @@ func (s *Session) GetDiffSummary() *types.Diff {
 }
 
 // GetFileDiff returns the full diff for a specific file path.
-// It loads the diff on-demand using git.GetDiffBetween.
+// It loads the diff on-demand using git.GetDiff.
 // contextLines specifies the number of context lines (minimum 3, default 3).
 func (s *Session) GetFileDiff(path string, contextLines int) *types.FileDiff {
 	s.mu.RLock()
@@ -117,13 +118,13 @@ func (s *Session) GetFileDiff(path string, contextLines int) *types.FileDiff {
 	preconditions.Check(path != "", "path required")
 
 	// Load the full diff for the specific file
-	diff, err := git.GetDiffBetween(currentBase, "current", []string{path}, contextLines)
+	diff, err := git.GetDiff(currentBase, []string{path}, contextLines)
 	if err != nil {
-		logger.Error("git.GetDiffBetween returns error %v", err)
+		logger.Error("git.GetDiff returns error %v", err)
 		return nil
 	}
 	if diff == nil || len(diff.Files) == 0 {
-		logger.Error("git.GetDiffBetween returns empty diff")
+		logger.Error("git.GetDiff returns empty diff")
 		return nil
 	}
 
@@ -183,7 +184,7 @@ func (s *Session) TriggerDiff() <-chan struct{} {
 
 	// Start background task to load diff summary
 	task, err := tasks.RunExclusively("api-session-diff", func() diffResult {
-		diff, err := git.GetDiffNamesBetween(currentBase, "current")
+		diff, err := git.GetDiffNames(currentBase, []string{})
 		if err != nil {
 			return diffResult{err: err}
 		}
@@ -231,7 +232,7 @@ func (s *Session) TriggerDiff() <-chan struct{} {
 
 // SetFileWatcher sets the file watcher for the currently viewed file.
 // It stops any existing watcher first.
-func (s *Session) SetFileWatcher(watcher *git.FileWatcher) {
+func (s *Session) SetFileWatcher(watcher *utils.FileWatcher) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -243,7 +244,7 @@ func (s *Session) SetFileWatcher(watcher *git.FileWatcher) {
 }
 
 // GetFileWatcher returns the current file watcher.
-func (s *Session) GetFileWatcher() *git.FileWatcher {
+func (s *Session) GetFileWatcher() *utils.FileWatcher {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.fileWatcher

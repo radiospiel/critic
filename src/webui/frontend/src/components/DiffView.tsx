@@ -384,6 +384,20 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
     })
   }, [fileDiff.hunks, showOnlyConversations, comments])
 
+  // Build a set of line numbers that exist in the new file (added or context lines)
+  // Used to avoid showing comments twice on both deleted and non-deleted lines
+  const newFileLineNumbers = useMemo(() => {
+    const lineNos = new Set<number>()
+    for (const hunk of filteredHunks) {
+      for (const line of hunk.lines) {
+        if (line.type !== LineType.DELETED && line.lineNoNew > 0) {
+          lineNos.add(line.lineNoNew)
+        }
+      }
+    }
+    return lineNos
+  }, [filteredHunks])
+
   // Count total navigable lines (all diff lines, excluding hunk headers)
   const totalLines = useMemo(() => {
     let count = 0
@@ -688,13 +702,14 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                       // Show editor after the last selected line
                       const showEditorAfterLine = isLastSelected && editorOpen && selectionLineInfo
                       // Get comments for this line
-                      // For deleted lines: use lineNoOld, but skip if next line is ADDED (modified line - show on added instead)
+                      // For deleted lines: use lineNoOld, but skip comments that will be shown on an added line
                       // For added/context lines: use lineNoNew
-                      const isDeletedFollowedByAdded = line.type === LineType.DELETED &&
-                        lineIdx + 1 < hunk.lines.length &&
-                        hunk.lines[lineIdx + 1].type === LineType.ADDED
                       const lineNo = line.type === LineType.DELETED ? line.lineNoOld : line.lineNoNew
-                      const lineComments = isDeletedFollowedByAdded ? [] : getCommentsForLine(lineNo)
+                      let lineComments = getCommentsForLine(lineNo)
+                      // For deleted lines, filter out comments that will be shown on a non-deleted line (to avoid duplicates)
+                      if (line.type === LineType.DELETED) {
+                        lineComments = lineComments.filter(c => !newFileLineNumbers.has(c.lineNumber))
+                      }
                       const hasComments = lineComments.length > 0
 
                       return (

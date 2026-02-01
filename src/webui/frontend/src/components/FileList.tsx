@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { criticClient, getConversationsSummary, ConversationSummary } from '../api/client'
 import { FileSummary, FileStatus } from '../gen/critic_pb'
 
-export type FilterType = 'conversations' | 'files' | 'hidden'
+export type FilterType = 'conversations' | 'files' | 'tests' | 'hidden'
 
 interface FileListProps {
   selectedFile: string | null
@@ -60,8 +60,8 @@ function patternToRegex(pattern: string): RegExp {
   return new RegExp(regex)
 }
 
-// Check if a file path matches any of the ignore patterns
-function isIgnored(path: string, patterns: string[]): boolean {
+// Check if a file path matches any of the given patterns
+function matchesPattern(path: string, patterns: string[]): boolean {
   for (const pattern of patterns) {
     // Skip empty lines and comments
     if (!pattern || pattern.startsWith('#')) continue
@@ -74,11 +74,22 @@ function isIgnored(path: string, patterns: string[]): boolean {
   return false
 }
 
+// Check if a file path matches any of the ignore patterns
+function isIgnored(path: string, patterns: string[]): boolean {
+  return matchesPattern(path, patterns)
+}
+
+// Check if a file path matches any of the test patterns
+function isTestFile(path: string, patterns: string[]): boolean {
+  return matchesPattern(path, patterns)
+}
+
 function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChange }: FileListProps) {
   const [files, setFiles] = useState<FileSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
+  const [testPatterns, setTestPatterns] = useState<string[]>([])
   const [filter, setFilter] = useState<FilterType>('conversations')
   const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
   const selectedItemRef = useRef<HTMLLIElement>(null)
@@ -90,20 +101,28 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
   }
 
   useEffect(() => {
-    // Fetch diff summary, .criticignore, and conversation summaries in parallel
+    // Fetch diff summary, .criticignore, .critictest, and conversation summaries in parallel
     Promise.all([
       criticClient.getDiffSummary({}),
       criticClient.getFile({ path: '.criticignore' }).catch(() => null),
+      criticClient.getFile({ path: '.critictest' }).catch(() => null),
       getConversationsSummary(),
     ])
-      .then(([diffResponse, fileResponse, summaryResponse]) => {
+      .then(([diffResponse, ignoreFileResponse, testFileResponse, summaryResponse]) => {
         setFiles(diffResponse.diff?.files || [])
-        if (fileResponse?.content) {
-          const patterns = fileResponse.content
+        if (ignoreFileResponse?.content) {
+          const patterns = ignoreFileResponse.content
             .split('\n')
             .map((line) => line.trim())
             .filter((line) => line && !line.startsWith('#'))
           setIgnorePatterns(patterns)
+        }
+        if (testFileResponse?.content) {
+          const patterns = testFileResponse.content
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line && !line.startsWith('#'))
+          setTestPatterns(patterns)
         }
         // Build a map of file path to conversation summary for quick lookup
         const summaryMap = new Map<string, ConversationSummary>()
@@ -126,23 +145,26 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
     }
   }, [selectedFile, isFocused])
 
-  // Compute visible and hidden files based on ignore patterns
-  const { visibleFiles, hiddenFiles } = (() => {
-    if (ignorePatterns.length === 0) {
-      return { visibleFiles: files, hiddenFiles: [] as FileSummary[] }
-    }
-    const visible: FileSummary[] = []
+  // Compute visible, test, and hidden files based on patterns
+  const { regularFiles, testFiles, hiddenFiles } = (() => {
+    const regular: FileSummary[] = []
+    const tests: FileSummary[] = []
     const hidden: FileSummary[] = []
     for (const file of files) {
       const path = getFilePath(file)
       if (isIgnored(path, ignorePatterns)) {
         hidden.push(file)
+      } else if (isTestFile(path, testPatterns)) {
+        tests.push(file)
       } else {
-        visible.push(file)
+        regular.push(file)
       }
     }
-    return { visibleFiles: visible, hiddenFiles: hidden }
+    return { regularFiles: regular, testFiles: tests, hiddenFiles: hidden }
   })()
+
+  // All visible files (regular + tests) for conversations filter
+  const visibleFiles = [...regularFiles, ...testFiles]
 
   // Files with conversations (from visible files only)
   const filesWithConversations = visibleFiles.filter((file) => {
@@ -163,11 +185,13 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
     switch (filter) {
       case 'conversations':
         return filesWithConversations
+      case 'tests':
+        return testFiles
       case 'hidden':
         return hiddenFiles
       case 'files':
       default:
-        return visibleFiles
+        return regularFiles
     }
   })()
 
@@ -254,7 +278,13 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
           className={`file-list-filter-btn${filter === 'files' ? ' active' : ''}`}
           onClick={() => handleFilterChange('files')}
         >
-          {visibleFiles.length} Files
+          {regularFiles.length} Files
+        </button>
+        <button
+          className={`file-list-filter-btn${filter === 'tests' ? ' active' : ''}`}
+          onClick={() => handleFilterChange(filter === 'tests' ? 'files' : 'tests')}
+        >
+          {testFiles.length} Tests
         </button>
         <button
           className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
@@ -300,9 +330,11 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
           <li className="file-list-message">
             {filter === 'conversations'
               ? 'No files with conversations'
-              : filter === 'hidden'
-                ? 'Files can be hidden per .criticignore'
-                : 'No files found'}
+              : filter === 'tests'
+                ? 'No test files (configure via .critictest)'
+                : filter === 'hidden'
+                  ? 'Files can be hidden per .criticignore'
+                  : 'No files found'}
           </li>
         )}
       </ul>

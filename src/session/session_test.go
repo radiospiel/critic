@@ -364,7 +364,7 @@ func TestDBWatcher(t *testing.T) {
 func TestDBWatcherWithTriggers(t *testing.T) {
 	// Create a temp dir for testing
 	tempDir := t.TempDir()
-	dbPath := tempDir + "/.critic.db"
+	dbPath := tempDir + "/.critic/critic.db"
 
 	// Initialize the database schema (creates _db_version table and triggers)
 	msgDB, err := messagedb.New(tempDir)
@@ -381,8 +381,8 @@ func TestDBWatcherWithTriggers(t *testing.T) {
 	})
 	assert.NoError(t, err, "should create watcher")
 
-	// Set fast poll interval for testing
-	watcher.SetPollInterval(50 * time.Millisecond)
+	// Set fast debounce interval for testing
+	watcher.SetDebounceMs(50)
 
 	// Start watcher (schema with _db_version table and triggers already exists from messagedb)
 	err = watcher.Start()

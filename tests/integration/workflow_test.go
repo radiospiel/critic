@@ -12,10 +12,6 @@ import (
 	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
-// commitFile creates a file and commits it
-
-// modifyFile modifies an existing file
-
 func TestGitWorkflow_UnstagedChanges(t *testing.T) {
 	SetupGitRepo(t)
 
@@ -26,8 +22,9 @@ func TestGitWorkflow_UnstagedChanges(t *testing.T) {
 	// Modify the file (unstaged)
 	must.WriteFile("test.go", "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n")
 
-	// Get unstaged diff
-	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
+	// Get diff from HEAD to working directory
+	headSHA := git.ResolveRef("HEAD")
+	diff, err := git.GetDiff(headSHA, []string{}, 3)
 	assert.NoError(t, err)
 	assert.NotNil(t, diff)
 	assert.Equals(t, len(diff.Files), 1)
@@ -47,31 +44,6 @@ func TestGitWorkflow_UnstagedChanges(t *testing.T) {
 	assert.True(t, hasAddedLines, "Expected to find added lines in diff")
 }
 
-func TestGitWorkflow_LastCommit(t *testing.T) {
-	SetupGitRepo(t)
-
-	// Create initial commit
-	must.WriteFile("initial.go", "package main\n")
-	CommitFile(t, "initial.go")
-
-	// Create second commit with changes
-	must.WriteFile("test.go", "package main\n\nfunc main() {\n\tfmt.Println(\"test\")\n}\n")
-	CommitFile(t, "test.go")
-
-	// Get last commit diff
-	diff, err := git.GetDiff([]string{}, git.DiffToLastCommit)
-	assert.NoError(t, err)
-	assert.NotNil(t, diff)
-	assert.True(t, len(diff.Files) > 0, "Expected files in last commit diff")
-
-	// Find test.go in the diff
-	_, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
-		return f.NewPath == "test.go"
-	})
-
-	assert.True(t, found, "Expected test.go in last commit diff")
-}
-
 func TestGitWorkflow_EmptyDiff(t *testing.T) {
 	SetupGitRepo(t)
 
@@ -79,8 +51,9 @@ func TestGitWorkflow_EmptyDiff(t *testing.T) {
 	must.WriteFile("test.go", "package main\n")
 	CommitFile(t, "test.go")
 
-	// Get unstaged diff (should be empty)
-	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
+	// Get diff (should be empty since no changes)
+	headSHA := git.ResolveRef("HEAD")
+	diff, err := git.GetDiff(headSHA, []string{}, 3)
 	assert.NoError(t, err)
 	assert.Equals(t, len(diff.Files), 0)
 }
@@ -96,16 +69,18 @@ func TestGitWorkflow_NewFile(t *testing.T) {
 	must.WriteFile("new.go", "package main\n\nfunc new() {}\n")
 	must.Exec("git", "add", "new.go")
 
-	// Get diff (should show staged changes when comparing to HEAD)
-	// Note: This tests the merge base mode which includes staged changes
-	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
+	// Get diff from HEAD to working directory (includes staged changes)
+	headSHA := git.ResolveRef("HEAD")
+	diff, err := git.GetDiff(headSHA, []string{}, 3)
 	assert.NoError(t, err)
 
-	// Unstaged mode won't show staged files, so this is expected to be empty
-	// This validates that DiffUnstaged works correctly
-	if len(diff.Files) != 0 {
-		t.Logf("Note: DiffUnstaged correctly excludes staged files")
-	}
+	// Should show the staged new file
+	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
+		return f.NewPath == "new.go"
+	})
+
+	assert.True(t, found, "Expected new.go in diff")
+	assert.True(t, file.IsNew, "Expected new.go to be marked as new file")
 }
 
 func TestGitWorkflow_MultipleFiles(t *testing.T) {
@@ -121,8 +96,9 @@ func TestGitWorkflow_MultipleFiles(t *testing.T) {
 	must.WriteFile("file1.go", "package main\n\nimport \"fmt\"\n")
 	must.WriteFile("file2.go", "package test\n\nimport \"testing\"\n")
 
-	// Get unstaged diff
-	diff, err := git.GetDiff([]string{}, git.DiffUnstaged)
+	// Get diff
+	headSHA := git.ResolveRef("HEAD")
+	diff, err := git.GetDiff(headSHA, []string{}, 3)
 	assert.NoError(t, err)
 	assert.Equals(t, len(diff.Files), 2, "Expected 2 files in diff")
 
@@ -182,13 +158,14 @@ func TestGitWorkflow_PathFiltering(t *testing.T) {
 	must.WriteFile("file3.go", "package other\n\nimport \"os\"\n")
 
 	// Get diff for only file1.go
-	diff, err := git.GetDiff([]string{"file1.go"}, git.DiffUnstaged)
+	headSHA := git.ResolveRef("HEAD")
+	diff, err := git.GetDiff(headSHA, []string{"file1.go"}, 3)
 	assert.NoError(t, err)
 	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
 	assert.Equals(t, diff.Files[0].NewPath, "file1.go")
 }
 
-func TestGitWorkflow_MergeBaseWithMainBranch(t *testing.T) {
+func TestGitWorkflow_FeatureBranch(t *testing.T) {
 	SetupGitRepo(t)
 
 	// Create initial commit on default branch (usually "main" or "master")
@@ -205,43 +182,16 @@ func TestGitWorkflow_MergeBaseWithMainBranch(t *testing.T) {
 	must.WriteFile("feature.go", "package feature\n")
 	CommitFile(t, "feature.go")
 
-	// GetMergeBase should find the merge base with "main" branch
-	mergeBase := git.GetMergeBase()
-
-	assert.NotEquals(t, mergeBase, "", "GetMergeBase() should not return empty string")
-	assert.True(t, len(mergeBase) >= 7, "GetMergeBase() should return valid commit hash")
-
-	// Verify the merge base is a valid commit
-	output := must.Exec("git", "cat-file", "-t", mergeBase)
-	assert.Equals(t, output, "commit\n")
-}
-
-func TestGitWorkflow_MergeBaseFallbackToMaster(t *testing.T) {
-	SetupGitRepo(t)
-
-	// Create initial commit on default branch
-	must.WriteFile("initial.go", "package main\n")
-	CommitFile(t, "initial.go")
-
-	// Rename branch to "master" to test fallback behavior
-	// (modern git uses "main" by default, but we want to test "master" fallback)
-	must.Exec("git", "branch", "-m", "master")
-
-	// Create a feature branch
-	must.Exec("git", "checkout", "-b", "feature")
-
-	// Make a commit on feature branch
-	must.WriteFile("feature.go", "package feature\n")
-	CommitFile(t, "feature.go")
-
-	// GetMergeBase should work even though there's no "main" branch
-	// It should fallback to "master"
-	mergeBase := git.GetMergeBase()
-
-	// Verify it found a valid commit hash
-	assert.True(t, len(mergeBase) >= 7, "GetMergeBase() should return valid commit hash")
-
 	// Verify current branch is "feature"
 	currentBranch := git.GetCurrentBranch()
 	assert.Equals(t, currentBranch, "feature")
+
+	// Make uncommitted changes
+	must.WriteFile("feature.go", "package feature\n\n// modified\n")
+
+	// Get diff from HEAD to working directory
+	headSHA := git.ResolveRef("HEAD")
+	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	assert.NoError(t, err)
+	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
 }

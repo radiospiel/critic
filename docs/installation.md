@@ -32,7 +32,7 @@ This enables Claude to read and respond to code review comments.
 
 ## Database
 
-Comments are stored in `.critic.db` (SQLite) at the git repository root. This file can be committed to share comments with collaborators or added to `.gitignore` for local-only comments.
+Comments are stored in `.critic/critic.db` (SQLite) at the git repository root. This directory must not be shared and should be added to `.gitignore`.
 
 ## Logging
 
