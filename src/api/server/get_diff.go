@@ -22,8 +22,9 @@ func (s *Server) GetDiff(
 func getDiffImpl(server *Server, req *api.GetDiffRequest) (*api.GetDiffResponse, error) {
 	session := server.GetSession()
 	path := req.GetPath()
+	contextLines := int(req.GetContextLines())
 
-	fileDiff := session.GetFileDiff(path)
+	fileDiff := session.GetFileDiff(path, contextLines)
 
 	return &api.GetDiffResponse{
 		File: convertFileDiff(fileDiff),

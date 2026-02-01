@@ -1,11 +1,9 @@
 import { useState, useMemo, Fragment, useEffect, useCallback, useRef } from 'react'
 import hljs from 'highlight.js'
-import { FileDiff, FileStatus, Hunk, Line, LineType } from '../gen/critic_pb'
+import { FileDiff, FileStatus, Line, LineType } from '../gen/critic_pb'
 import InlineCommentEditor, { CommentLineInfo } from './CommentEditor'
 import CommentDisplay from './CommentDisplay'
 import { getConversations, CommentConversation } from '../api/client'
-
-type ViewMode = 'unified' | 'split'
 
 const ALT_JUMP_SIZE = 25
 
@@ -14,6 +12,13 @@ interface DiffViewProps {
   onNavigatePrevFile?: () => void
   onNavigateNextFile?: () => void
   isFocused?: boolean
+  onFocus?: () => void
+  contextLines?: number
+  onIncreaseContext?: () => void
+  onDecreaseContext?: () => void
+  onResetContext?: () => void
+  onSelectionChange?: (lineNoNew: number, lineNoOld: number) => void
+  restoreLineNo?: { lineNoNew: number; lineNoOld: number } | null
 }
 
 function getFileExtension(path: string): string {
@@ -325,181 +330,13 @@ function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelect
   )
 }
 
-interface SplitViewProps {
-  hunks: Hunk[]
-  language: string | undefined
-  selection?: { start: number; end: number }
-  selectedLineRef?: React.RefObject<HTMLTableRowElement>
-}
-
-interface SplitLine {
-  oldLine: Line | null
-  newLine: Line | null
-}
-
-function computeSplitLines(hunks: Hunk[]): SplitLine[] {
-  const result: SplitLine[] = []
-
-  for (const hunk of hunks) {
-    // Add hunk header as a separator
-    result.push({
-      oldLine: null,
-      newLine: null,
-    })
-
-    let i = 0
-    while (i < hunk.lines.length) {
-      const line = hunk.lines[i]
-
-      if (line.type === LineType.CONTEXT) {
-        result.push({ oldLine: line, newLine: line })
-        i++
-      } else if (line.type === LineType.DELETED) {
-        // Collect consecutive deleted lines
-        const deletedLines: Line[] = []
-        while (i < hunk.lines.length && hunk.lines[i].type === LineType.DELETED) {
-          deletedLines.push(hunk.lines[i])
-          i++
-        }
-        // Collect consecutive added lines
-        const addedLines: Line[] = []
-        while (i < hunk.lines.length && hunk.lines[i].type === LineType.ADDED) {
-          addedLines.push(hunk.lines[i])
-          i++
-        }
-        // Pair up deleted and added lines
-        const maxLen = Math.max(deletedLines.length, addedLines.length)
-        for (let j = 0; j < maxLen; j++) {
-          result.push({
-            oldLine: j < deletedLines.length ? deletedLines[j] : null,
-            newLine: j < addedLines.length ? addedLines[j] : null,
-          })
-        }
-      } else if (line.type === LineType.ADDED) {
-        // Added line without preceding deleted line
-        result.push({ oldLine: null, newLine: line })
-        i++
-      } else {
-        i++
-      }
-    }
-  }
-
-  return result
-}
-
-function SplitView({ hunks, language, selection, selectedLineRef }: SplitViewProps) {
-  const splitLines = useMemo(() => computeSplitLines(hunks), [hunks])
-
-  // Build mapping from split line index to navigable line index (excluding hunk headers)
-  const navigableIndices = useMemo(() => {
-    const indices: number[] = []
-    splitLines.forEach((pair, idx) => {
-      if (pair.oldLine !== null || pair.newLine !== null) {
-        indices.push(idx)
-      }
-    })
-    return indices
-  }, [splitLines])
-
-  // Check if a navigable index is within the selection range
-  const isLineSelected = useCallback(
-    (navIndex: number) =>
-      selection !== undefined && navIndex >= selection.start && navIndex <= selection.end,
-    [selection]
-  )
-
-  return (
-    <table className="diff-table diff-table-split">
-      <tbody>
-        {splitLines.map((pair, idx) => {
-          // Hunk separator
-          if (pair.oldLine === null && pair.newLine === null) {
-            const hunkIndex = hunks.findIndex((_, hi) => {
-              let count = 0
-              for (let j = 0; j <= hi; j++) {
-                count++ // for hunk separator
-                count += hunks[j].lines.length
-              }
-              return idx < count
-            })
-            const hunk = hunks[hunkIndex] || hunks[0]
-            return (
-              <tr key={idx} className="diff-hunk-header-row">
-                <td colSpan={4} className="diff-hunk-header">
-                  <HunkHeader header={hunk?.header || '@@'} />
-                </td>
-              </tr>
-            )
-          }
-
-          const navigableIndex = navigableIndices.indexOf(idx)
-          const isSelected = isLineSelected(navigableIndex)
-          const isFirstSelected = selection !== undefined && navigableIndex === selection.start
-          const isLastSelected = selection !== undefined && navigableIndex === selection.end
-          // Attach ref to the last selected line for scroll-into-view
-          const shouldAttachRef = isLastSelected
-
-          const oldClass = pair.oldLine
-            ? pair.oldLine.type === LineType.DELETED
-              ? 'diff-line-deleted'
-              : 'diff-line-context'
-            : 'diff-line-empty'
-          const newClass = pair.newLine
-            ? pair.newLine.type === LineType.ADDED
-              ? 'diff-line-added'
-              : 'diff-line-context'
-            : 'diff-line-empty'
-
-          const oldContent = pair.oldLine
-            ? highlightLine(pair.oldLine.content, language)
-            : ''
-          const newContent = pair.newLine
-            ? highlightLine(pair.newLine.content, language)
-            : ''
-
-          const selectionClasses = [
-            isSelected ? 'diff-line-selected' : '',
-            isFirstSelected ? 'diff-line-selected-first' : '',
-            isLastSelected ? 'diff-line-selected-last' : '',
-          ].filter(Boolean).join(' ')
-
-          return (
-            <tr
-              key={idx}
-              className={`diff-split-row${selectionClasses ? ' ' + selectionClasses : ''}`}
-              ref={shouldAttachRef ? selectedLineRef : undefined}
-            >
-              <td className={`diff-line-number ${oldClass}`}>
-                {pair.oldLine?.lineNoOld || ''}
-              </td>
-              <td
-                className={`diff-split-content ${oldClass}`}
-                dangerouslySetInnerHTML={{ __html: oldContent || '&nbsp;' }}
-              />
-              <td className={`diff-line-number ${newClass}`}>
-                {pair.newLine?.lineNoNew || ''}
-              </td>
-              <td
-                className={`diff-split-content ${newClass}`}
-                dangerouslySetInnerHTML={{ __html: newContent || '&nbsp;' }}
-              />
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
-  )
-}
-
 // Selection range type
 interface SelectionRange {
   start: number
   end: number
 }
 
-function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true }: DiffViewProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('unified')
+function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo }: DiffViewProps) {
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
   const [editorOpen, setEditorOpen] = useState(false)
   const [comments, setComments] = useState<CommentConversation[]>([])
@@ -571,18 +408,65 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
     return { added, deleted }
   }, [fileDiff.hunks])
 
-  // Reset selection when file changes
+  // Reset selection when file changes, trying to restore to the target line if provided
   useEffect(() => {
-    setSelection({ start: 0, end: 0 })
     setEditorOpen(false)
-  }, [fileDiff])
 
-  // Scroll selected line into view
+    if (restoreLineNo && allLines.length > 0) {
+      // Try to find the exact line by lineNoNew first, then lineNoOld
+      let bestIndex = -1
+      let bestDistance = Infinity
+
+      for (let i = 0; i < allLines.length; i++) {
+        const { line } = allLines[i]
+        // Exact match on new line number
+        if (line.lineNoNew === restoreLineNo.lineNoNew && restoreLineNo.lineNoNew > 0) {
+          bestIndex = i
+          break
+        }
+        // Exact match on old line number
+        if (line.lineNoOld === restoreLineNo.lineNoOld && restoreLineNo.lineNoOld > 0) {
+          bestIndex = i
+          break
+        }
+        // Track closest line by new line number
+        if (line.lineNoNew > 0 && restoreLineNo.lineNoNew > 0) {
+          const distance = Math.abs(line.lineNoNew - restoreLineNo.lineNoNew)
+          if (distance < bestDistance) {
+            bestDistance = distance
+            bestIndex = i
+          }
+        }
+        // Track closest line by old line number
+        if (line.lineNoOld > 0 && restoreLineNo.lineNoOld > 0) {
+          const distance = Math.abs(line.lineNoOld - restoreLineNo.lineNoOld)
+          if (distance < bestDistance) {
+            bestDistance = distance
+            bestIndex = i
+          }
+        }
+      }
+
+      if (bestIndex >= 0) {
+        setSelection({ start: bestIndex, end: bestIndex })
+        return
+      }
+    }
+
+    setSelection({ start: 0, end: 0 })
+  }, [fileDiff, restoreLineNo, allLines])
+
+  // Scroll selected line into view and notify parent of selection change
   useEffect(() => {
     if (selectedLineRef.current) {
       selectedLineRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }
-  }, [selection])
+    // Notify parent of the current selection's line numbers
+    if (onSelectionChange && allLines.length > 0 && selection.end < allLines.length) {
+      const { line } = allLines[selection.end]
+      onSelectionChange(line.lineNoNew, line.lineNoOld)
+    }
+  }, [selection, allLines, onSelectionChange])
 
   // Check if a line index is within the selection range
   const isLineSelected = useCallback(
@@ -691,9 +575,21 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
             setSelection({ start: totalLines - 1, end: totalLines - 1 })
           }
           break
+        case 'c':
+          if (!editorOpen && onIncreaseContext) {
+            e.preventDefault()
+            onIncreaseContext()
+          }
+          break
+        case 'C':
+          if (!editorOpen && onDecreaseContext) {
+            e.preventDefault()
+            onDecreaseContext()
+          }
+          break
       }
     },
-    [isFocused, selection, totalLines, onNavigatePrevFile, onNavigateNextFile, editorOpen]
+    [isFocused, selection, totalLines, onNavigatePrevFile, onNavigateNextFile, editorOpen, onIncreaseContext, onDecreaseContext]
   )
 
   useEffect(() => {
@@ -732,18 +628,29 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
             <span className="diff-stats-added">+{stats.added}</span>
             <span className="diff-stats-deleted">-{stats.deleted}</span>
           </span>
-          <div className="diff-view-toggle">
+          <div className="diff-context-controls">
             <button
-              className={`diff-view-button ${viewMode === 'unified' ? 'active' : ''}`}
-              onClick={() => setViewMode('unified')}
+              className="diff-context-button"
+              onClick={onDecreaseContext}
+              disabled={contextLines <= 3}
+              title="Decrease context lines (Shift+C)"
             >
-              Unified
+              −C
             </button>
             <button
-              className={`diff-view-button ${viewMode === 'split' ? 'active' : ''}`}
-              onClick={() => setViewMode('split')}
+              className="diff-context-button"
+              onClick={onResetContext}
+              disabled={contextLines === 3}
+              title="Reset to default context (3 lines)"
             >
-              Split
+              C
+            </button>
+            <button
+              className="diff-context-button"
+              onClick={onIncreaseContext}
+              title="Increase context lines (c)"
+            >
+              +C
             </button>
           </div>
         </div>
@@ -752,7 +659,7 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
       <div className="diff-content" ref={containerRef}>
         {fileDiff.hunks.length === 0 ? (
           <div className="diff-empty-notice">No changes in this file</div>
-        ) : viewMode === 'unified' ? (
+        ) : (
           <table className="diff-table diff-table-unified">
             <tbody>
               {(() => {
@@ -792,7 +699,10 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                             isFirstSelected={isFirstSelected}
                             isLastSelected={isLastSelected}
                             lineRef={shouldAttachRef ? selectedLineRef : undefined}
-                            onClick={() => setSelection({ start: currentIndex, end: currentIndex })}
+                            onClick={() => {
+                              setSelection({ start: currentIndex, end: currentIndex })
+                              onFocus?.()
+                            }}
                           />
                           {hasComments && (
                             <tr className="diff-comment-row">
@@ -824,13 +734,6 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
               })()}
             </tbody>
           </table>
-        ) : (
-          <SplitView
-            hunks={fileDiff.hunks}
-            language={language}
-            selection={selection}
-            selectedLineRef={selectedLineRef}
-          />
         )}
       </div>
     </div>

@@ -6,6 +6,7 @@ interface FileListProps {
   selectedFile: string | null
   onSelectFile: (file: string, fileSummary: FileSummary) => void
   isFocused?: boolean
+  onFocus?: () => void
 }
 
 type FilterType = 'conversations' | 'files' | 'hidden'
@@ -72,7 +73,7 @@ function isIgnored(path: string, patterns: string[]): boolean {
   return false
 }
 
-function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
+function FileList({ selectedFile, onSelectFile, isFocused, onFocus }: FileListProps) {
   const [files, setFiles] = useState<FileSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -255,7 +256,7 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
             className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
             onClick={() => setFilter(filter === 'hidden' ? 'files' : 'hidden')}
           >
-            {hiddenFiles.length} hidden
+            {hiddenFiles.length} Hidden
           </button>
         )}
       </div>
@@ -271,7 +272,10 @@ function FileList({ selectedFile, onSelectFile, isFocused }: FileListProps) {
               key={path}
               ref={isSelected ? selectedItemRef : undefined}
               className={`file-item${isSelected ? ' selected' : ''}`}
-              onClick={() => onSelectFile(path, file)}
+              onClick={() => {
+                onSelectFile(path, file)
+                onFocus?.()
+              }}
               title={path}
             >
               <span className={`file-status status-${getStatusLabel(file.status).toLowerCase()}`}>

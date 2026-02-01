@@ -100,7 +100,8 @@ func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
 // GetDiffBetween returns the diff between a base commit and a target.
 // base is a commit SHA, target is either "current" for working directory or a commit SHA.
 // If paths is empty, returns diff for all changed files.
-func GetDiffBetween(base, target string, paths []string) (*ctypes.Diff, error) {
+// contextLines specifies the number of context lines (minimum 3, default 3).
+func GetDiffBetween(base, target string, paths []string, contextLines int) (*ctypes.Diff, error) {
 	// Validate base commit
 	// if !validCommitHash.MatchString(base) {
 	// 	base = ResolveRef(base)
@@ -109,18 +110,23 @@ func GetDiffBetween(base, target string, paths []string) (*ctypes.Diff, error) {
 	// 	}
 	// }
 
+	// Ensure contextLines is at least 3
+	if contextLines < 3 {
+		contextLines = 3
+	}
+
 	// Build git diff command
 	var args []string
 	if target == "current" {
 		// Compare base to working directory (includes committed, staged, and unstaged changes)
-		args = []string{"diff", base, "--patch", "--no-color"}
+		args = []string{"diff", base, "--patch", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}
 	} else {
 		// Validate target commit
 		if !validCommitHash.MatchString(target) {
 			return nil, fmt.Errorf("invalid target commit SHA: %s", target)
 		}
 		// Compare base to target commit
-		args = []string{"diff", base + ".." + target, "--patch", "--no-color"}
+		args = []string{"diff", base + ".." + target, "--patch", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}
 	}
 	args = append(args, diffWhitespaceOpts...)
 	if len(paths) > 0 {

@@ -8,7 +8,7 @@ func TestGetDiffBetween(t *testing.T) {
 	// Test with HEAD and working directory
 	headSHA := ResolveRef("HEAD")
 
-	diff, err := GetDiffBetween(headSHA, "current", []string{"."})
+	diff, err := GetDiffBetween(headSHA, "current", []string{"."}, 0)
 	if err != nil {
 		t.Fatalf("GetDiffBetween() error = %v", err)
 	}
@@ -29,13 +29,13 @@ func TestGetDiffBetween_InvalidBase(t *testing.T) {
 			t.Error("GetDiffBetween() should panic on invalid base ref")
 		}
 	}()
-	GetDiffBetween("invalid", "current", []string{"."})
+	GetDiffBetween("invalid", "current", []string{"."}, 0)
 }
 
 func TestGetDiffBetween_InvalidTarget(t *testing.T) {
 	headSHA := ResolveRef("HEAD")
 
-	_, err := GetDiffBetween(headSHA, "invalid", []string{"."})
+	_, err := GetDiffBetween(headSHA, "invalid", []string{"."}, 0)
 	if err == nil {
 		t.Error("GetDiffBetween() should error on invalid target commit")
 	}
@@ -52,7 +52,7 @@ func TestGetDiffBetween_CommitToCommit(t *testing.T) {
 	}
 	head1SHA := ResolveRef("HEAD~1")
 
-	diff, err := GetDiffBetween(head1SHA, headSHA, []string{"."})
+	diff, err := GetDiffBetween(head1SHA, headSHA, []string{"."}, 0)
 	if err != nil {
 		t.Fatalf("GetDiffBetween() error = %v", err)
 	}
