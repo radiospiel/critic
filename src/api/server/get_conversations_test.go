@@ -51,7 +51,7 @@ func TestGetConversations_ReturnsConversationsForFile(t *testing.T) {
 
 	conv := resp.Msg.GetConversations()[0]
 	assert.Equals(t, conv.GetId(), "conv-1", "conversation ID should match")
-	assert.Equals(t, conv.GetStatus(), "unresolved", "status should be unresolved")
+	assert.Equals(t, conv.GetStatus(), api.ConversationStatus_CONVERSATION_STATUS_UNRESOLVED, "status should be unresolved")
 	assert.Equals(t, conv.GetFilePath(), "src/main.go", "file path should match")
 	assert.Equals(t, conv.GetLineNumber(), int32(42), "line number should match")
 	assert.Equals(t, conv.GetCodeVersion(), "abc123", "code version should match")
@@ -119,11 +119,11 @@ func TestGetConversations_ReturnsMultipleConversations(t *testing.T) {
 
 	conv1 := resp.Msg.GetConversations()[0]
 	assert.Equals(t, conv1.GetId(), "conv-1", "first conversation ID should match")
-	assert.Equals(t, conv1.GetStatus(), "unresolved", "first status should be unresolved")
+	assert.Equals(t, conv1.GetStatus(), api.ConversationStatus_CONVERSATION_STATUS_UNRESOLVED, "first status should be unresolved")
 
 	conv2 := resp.Msg.GetConversations()[1]
 	assert.Equals(t, conv2.GetId(), "conv-2", "second conversation ID should match")
-	assert.Equals(t, conv2.GetStatus(), "resolved", "second status should be resolved")
+	assert.Equals(t, conv2.GetStatus(), api.ConversationStatus_CONVERSATION_STATUS_RESOLVED, "second status should be resolved")
 	assert.True(t, conv2.GetMessages()[0].GetIsUnread(), "AI message should be unread")
 }
 
@@ -208,7 +208,7 @@ func TestCriticToApiConversation(t *testing.T) {
 	apiConv := criticToApiConversation(conv, 0)
 
 	assert.Equals(t, apiConv.GetId(), "conv-uuid", "ID should match")
-	assert.Equals(t, apiConv.GetStatus(), "resolved", "status should match")
+	assert.Equals(t, apiConv.GetStatus(), api.ConversationStatus_CONVERSATION_STATUS_RESOLVED, "status should match")
 	assert.Equals(t, apiConv.GetFilePath(), "path/to/file.go", "file path should match")
 	assert.Equals(t, apiConv.GetLineNumber(), int32(55), "line number should match")
 	assert.Equals(t, apiConv.GetCodeVersion(), "sha256abc", "code version should match")

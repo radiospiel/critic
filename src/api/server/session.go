@@ -100,7 +100,8 @@ func (s *Session) GetDiffSummary() *types.Diff {
 
 // GetFileDiff returns the full diff for a specific file path.
 // It loads the diff on-demand using git.GetDiffBetween.
-func (s *Session) GetFileDiff(path string) *types.FileDiff {
+// contextLines specifies the number of context lines (minimum 3, default 3).
+func (s *Session) GetFileDiff(path string, contextLines int) *types.FileDiff {
 	s.mu.RLock()
 	currentBase := s.currentBase
 	s.mu.RUnlock()
@@ -113,7 +114,7 @@ func (s *Session) GetFileDiff(path string) *types.FileDiff {
 	preconditions.Check(path != "", "path required")
 
 	// Load the full diff for the specific file
-	diff, err := git.GetDiffBetween(currentBase, "current", []string{path})
+	diff, err := git.GetDiffBetween(currentBase, "current", []string{path}, contextLines)
 	if err != nil {
 		logger.Error("git.GetDiffBetween returns error %v", err)
 		return nil

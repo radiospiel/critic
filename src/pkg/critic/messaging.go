@@ -16,8 +16,10 @@ const (
 type ConversationStatus string
 
 const (
-	StatusUnresolved ConversationStatus = "unresolved"
-	StatusResolved   ConversationStatus = "resolved"
+	StatusUnresolved         ConversationStatus = "unresolved"
+	StatusResolved           ConversationStatus = "resolved"
+	StatusActive             ConversationStatus = "active"
+	StatusWaitingForResponse ConversationStatus = "waiting_for_response"
 )
 
 // Message represents a single message in a conversation

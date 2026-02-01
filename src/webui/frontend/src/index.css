@@ -400,11 +400,12 @@ html, body, #root {
 
 .file-item.selected {
   background-color: var(--bg-selected);
+  border-left: 3px solid transparent;
+  padding-left: 13px;
 }
 
 .file-list-container.focused .file-item.selected {
-  border-left: 3px solid var(--diff-hunk-text);
-  padding-left: 13px;
+  border-left-color: var(--diff-hunk-text);
 }
 
 .file-status {
@@ -518,6 +519,33 @@ html, body, #root {
 
 .diff-stats-deleted {
   color: var(--status-deleted-text);
+}
+
+.diff-context-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.diff-context-button {
+  padding: 2px 6px;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: none;
+  border: 1px solid var(--border-primary);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.diff-context-button:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.diff-context-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .diff-view-toggle {
@@ -1004,8 +1032,22 @@ html, body, #root {
 
 .inline-comment-editor-hint {
   font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   color: var(--text-muted);
   margin-right: auto;
+}
+
+.inline-comment-editor-hint kbd,
+.reply-editor-hint kbd {
+  display: inline-block;
+  padding: 4px 5px;
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  line-height: 1;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border: 1.4px solid var(--text-muted);
+  border-radius: 4px;
 }
 
 .inline-comment-button {
@@ -1132,6 +1174,7 @@ html, body, #root {
 
 .reply-editor-hint {
   font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   color: var(--text-muted);
 }
 
@@ -1156,11 +1199,14 @@ html, body, #root {
 
 /* Reply Button (shown when editor is hidden) */
 .reply-button-container {
+  display: flex;
+  gap: 8px;
   padding: 8px;
   border-top: 1px solid var(--border-secondary);
 }
 
-.reply-button {
+.reply-button,
+.resolve-button {
   padding: 4px 12px;
   background: none;
   color: var(--text-muted);
@@ -1170,9 +1216,15 @@ html, body, #root {
   cursor: pointer;
 }
 
-.reply-button:hover {
+.reply-button:hover,
+.resolve-button:hover {
   background-color: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.resolve-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .comment-message {

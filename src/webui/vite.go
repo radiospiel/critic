@@ -59,9 +59,18 @@ func (d *DevServer) Start() bool {
 	logger.Info("Started Vite dev server (PID %d)", d.npmProcess.Process.Pid)
 	d.started = true
 
-	// Give Vite a moment to start
-	time.Sleep(2 * time.Second)
-
+	// Wait for Vite to be ready by checking if port 5173 is accepting connections
+	viteAddr := fmt.Sprintf("localhost:%d", d.vitePort)
+	for i := 0; i < 50; i++ { // Try for up to 5 seconds
+		conn, err := net.DialTimeout("tcp", viteAddr, 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			logger.Info("Vite dev server is ready")
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	logger.Warn("Vite dev server may not be fully ready")
 	return true
 }
 

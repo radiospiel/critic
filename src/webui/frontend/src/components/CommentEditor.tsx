@@ -35,6 +35,9 @@ function InlineCommentEditor({ lineInfo, onClose, onSaved }: InlineCommentEditor
     editorProps: {
       attributes: {
         class: 'inline-comment-editor-content',
+        autocorrect: 'off',
+        autocapitalize: 'off',
+        spellcheck: 'false',
       },
     },
   })
@@ -77,7 +80,7 @@ function InlineCommentEditor({ lineInfo, onClose, onSaved }: InlineCommentEditor
     if (e.key === 'Escape') {
       e.preventDefault()
       onClose()
-    } else if (e.key === 'Enter' && e.altKey) {
+    } else if (e.key === 'Enter' && e.metaKey) {
       e.preventDefault()
       handleSave()
     }
@@ -87,7 +90,7 @@ function InlineCommentEditor({ lineInfo, onClose, onSaved }: InlineCommentEditor
     <div className="inline-comment-editor" onKeyDown={handleKeyDown}>
       <EditorContent editor={editor} />
       <div className="inline-comment-editor-actions">
-        <span className="inline-comment-editor-hint">⌥ + ↵ to save, Esc to cancel</span>
+        <span className="inline-comment-editor-hint"><kbd>⌘</kbd> + <kbd>↵</kbd> to save, <kbd>Esc</kbd> to cancel</span>
         <button
           className="inline-comment-button inline-comment-button-cancel"
           onClick={onClose}

@@ -3,7 +3,7 @@ import Markdown from 'react-markdown'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { CommentConversation, CommentMessage, replyToConversation } from '../api/client'
+import { CommentConversation, CommentMessage, replyToConversation, resolveConversation } from '../api/client'
 
 interface CommentDisplayProps {
   conversations: CommentConversation[]
@@ -51,6 +51,9 @@ function ReplyEditor({ conversationId, onReplySaved, onCancel }: ReplyEditorProp
     editorProps: {
       attributes: {
         class: 'reply-editor-content',
+        autocorrect: 'off',
+        autocapitalize: 'off',
+        spellcheck: 'false',
       },
     },
     autofocus: true,
@@ -76,7 +79,7 @@ function ReplyEditor({ conversationId, onReplySaved, onCancel }: ReplyEditorProp
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && e.altKey) {
+    if (e.key === 'Enter' && e.metaKey) {
       e.preventDefault()
       handleSave()
     } else if (e.key === 'Escape') {
@@ -89,7 +92,7 @@ function ReplyEditor({ conversationId, onReplySaved, onCancel }: ReplyEditorProp
     <div className="reply-editor" onKeyDown={handleKeyDown}>
       <EditorContent editor={editor} />
       <div className="reply-editor-actions">
-        <span className="reply-editor-hint">⌥ + ↵ to save, Esc to cancel</span>
+        <span className="reply-editor-hint"><kbd>⌘</kbd> + <kbd>↵</kbd> to save, <kbd>Esc</kbd> to cancel</span>
         <button
           className="reply-editor-button"
           onClick={handleSave}
@@ -109,10 +112,25 @@ interface ConversationItemProps {
 
 function ConversationItem({ conversation, onReplyAdded }: ConversationItemProps) {
   const [showEditor, setShowEditor] = useState(false)
+  const [resolving, setResolving] = useState(false)
 
   const handleReplySaved = () => {
     setShowEditor(false)
     onReplyAdded?.()
+  }
+
+  const handleResolve = async () => {
+    setResolving(true)
+    try {
+      const result = await resolveConversation(conversation.id)
+      if (result.success) {
+        onReplyAdded?.()
+      } else {
+        console.error('Failed to resolve conversation:', result.error)
+      }
+    } finally {
+      setResolving(false)
+    }
   }
 
   return (
@@ -138,6 +156,15 @@ function ConversationItem({ conversation, onReplyAdded }: ConversationItemProps)
           <button className="reply-button" onClick={() => setShowEditor(true)}>
             Reply
           </button>
+          {conversation.status === 'unresolved' && (
+            <button
+              className="resolve-button"
+              onClick={handleResolve}
+              disabled={resolving}
+            >
+              {resolving ? 'Resolving...' : 'Resolve'}
+            </button>
+          )}
         </div>
       )}
     </div>

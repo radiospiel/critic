@@ -121,6 +121,46 @@ proto3.util.setEnumType(LineType, "critic.v1.LineType", [
 ]);
 
 /**
+ * ConversationStatus represents the status of a conversation.
+ *
+ * @generated from enum critic.v1.ConversationStatus
+ */
+export enum ConversationStatus {
+  /**
+   * @generated from enum value: CONVERSATION_STATUS_INVALID = 0;
+   */
+  INVALID = 0,
+
+  /**
+   * @generated from enum value: CONVERSATION_STATUS_RESOLVED = 1;
+   */
+  RESOLVED = 1,
+
+  /**
+   * @generated from enum value: CONVERSATION_STATUS_UNRESOLVED = 2;
+   */
+  UNRESOLVED = 2,
+
+  /**
+   * @generated from enum value: CONVERSATION_STATUS_ACTIVE = 3;
+   */
+  ACTIVE = 3,
+
+  /**
+   * @generated from enum value: CONVERSATION_STATUS_WAITING_FOR_RESPONSE = 4;
+   */
+  WAITING_FOR_RESPONSE = 4,
+}
+// Retrieve enum metadata with: proto3.getEnumType(ConversationStatus)
+proto3.util.setEnumType(ConversationStatus, "critic.v1.ConversationStatus", [
+  { no: 0, name: "CONVERSATION_STATUS_INVALID" },
+  { no: 1, name: "CONVERSATION_STATUS_RESOLVED" },
+  { no: 2, name: "CONVERSATION_STATUS_UNRESOLVED" },
+  { no: 3, name: "CONVERSATION_STATUS_ACTIVE" },
+  { no: 4, name: "CONVERSATION_STATUS_WAITING_FOR_RESPONSE" },
+]);
+
+/**
  * RpcError represents a structured error response.
  *
  * @generated from message critic.v1.RpcError
@@ -362,6 +402,14 @@ export class GetDiffRequest extends Message$1<GetDiffRequest> {
    */
   path = "";
 
+  /**
+   * context_lines is the number of context lines to show around changes.
+   * Minimum and default is 3. Values less than 3 are treated as 3.
+   *
+   * @generated from field: int32 context_lines = 2;
+   */
+  contextLines = 0;
+
   constructor(data?: PartialMessage<GetDiffRequest>) {
     super();
     proto3.util.initPartial(data, this);
@@ -371,6 +419,7 @@ export class GetDiffRequest extends Message$1<GetDiffRequest> {
   static readonly typeName = "critic.v1.GetDiffRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "context_lines", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetDiffRequest {
@@ -1309,11 +1358,11 @@ export class Conversation extends Message$1<Conversation> {
   id = "";
 
   /**
-   * status is the conversation status ("unresolved" or "resolved").
+   * status is the conversation status.
    *
-   * @generated from field: string status = 2;
+   * @generated from field: critic.v1.ConversationStatus status = 2;
    */
-  status = "";
+  status = ConversationStatus.INVALID;
 
   /**
    * file_path is the git-relative path to the file.
@@ -1373,7 +1422,7 @@ export class Conversation extends Message$1<Conversation> {
   static readonly typeName = "critic.v1.Conversation";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
-    { no: 2, name: "status", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "status", kind: "enum", T: proto3.getEnumType(ConversationStatus) },
     { no: 3, name: "file_path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "line_number", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "code_version", kind: "scalar", T: 9 /* ScalarType.STRING */ },
@@ -1756,6 +1805,88 @@ export class ReplyToConversationResponse extends Message$1<ReplyToConversationRe
 
   static equals(a: ReplyToConversationResponse | PlainMessage<ReplyToConversationResponse> | undefined, b: ReplyToConversationResponse | PlainMessage<ReplyToConversationResponse> | undefined): boolean {
     return proto3.util.equals(ReplyToConversationResponse, a, b);
+  }
+}
+
+/**
+ * ResolveConversationRequest contains the data for resolving a conversation.
+ *
+ * @generated from message critic.v1.ResolveConversationRequest
+ */
+export class ResolveConversationRequest extends Message$1<ResolveConversationRequest> {
+  /**
+   * conversation_id is the unique identifier of the conversation to resolve.
+   *
+   * @generated from field: string conversation_id = 1;
+   */
+  conversationId = "";
+
+  constructor(data?: PartialMessage<ResolveConversationRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.ResolveConversationRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ResolveConversationRequest {
+    return new ResolveConversationRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ResolveConversationRequest {
+    return new ResolveConversationRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ResolveConversationRequest {
+    return new ResolveConversationRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: ResolveConversationRequest | PlainMessage<ResolveConversationRequest> | undefined, b: ResolveConversationRequest | PlainMessage<ResolveConversationRequest> | undefined): boolean {
+    return proto3.util.equals(ResolveConversationRequest, a, b);
+  }
+}
+
+/**
+ * ResolveConversationResponse contains the result of resolving a conversation.
+ *
+ * @generated from message critic.v1.ResolveConversationResponse
+ */
+export class ResolveConversationResponse extends Message$1<ResolveConversationResponse> {
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<ResolveConversationResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.ResolveConversationResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ResolveConversationResponse {
+    return new ResolveConversationResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ResolveConversationResponse {
+    return new ResolveConversationResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ResolveConversationResponse {
+    return new ResolveConversationResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: ResolveConversationResponse | PlainMessage<ResolveConversationResponse> | undefined, b: ResolveConversationResponse | PlainMessage<ResolveConversationResponse> | undefined): boolean {
+    return proto3.util.equals(ResolveConversationResponse, a, b);
   }
 }
 
