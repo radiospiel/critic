@@ -58,6 +58,10 @@ function AppContent() {
     if (!preserveSelection) {
       setLoading(true)
       setRestoreLineNo(null)
+      // Tell server to watch this file for changes
+      criticClient.watchFile({ path: file }).catch((err) => {
+        console.error('Failed to set watch file:', err)
+      })
     }
     const lines = ctxLines ?? contextLines
     criticClient
@@ -74,7 +78,7 @@ function AppContent() {
   }, [contextLines])
 
   // Handle WebSocket messages for live reload
-  const handleWebSocketMessage = useCallback((message: { type: string }) => {
+  const handleWebSocketMessage = useCallback((message: { type: string; path?: string }) => {
     if (message.type === 'reload') {
       console.log('Reload triggered by git change')
       // Reset the timer
@@ -84,6 +88,15 @@ function AppContent() {
       loadFileList()
       // Reload the current file diff if one is selected
       if (selectedFile) {
+        loadFileDiff(selectedFile, contextLines, true)
+      }
+    } else if (message.type === 'file-changed' && message.path) {
+      console.log('File changed:', message.path)
+      // Reset the timer
+      loadTimeRef.current = Date.now()
+      setSecondsSinceLoad(0)
+      // Reload the diff if it's the currently selected file
+      if (selectedFile === message.path) {
         loadFileDiff(selectedFile, contextLines, true)
       }
     }

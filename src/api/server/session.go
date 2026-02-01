@@ -45,6 +45,9 @@ type Session struct {
 
 	// Background task management
 	currentTask *tasks.Task[diffResult]
+
+	// File watcher for the currently viewed file
+	fileWatcher *git.FileWatcher
 }
 
 // diffResult holds the result of a diff loading operation
@@ -216,6 +219,37 @@ func (s *Session) SetCurrentDiffBase(base string) error {
 	}()
 
 	return nil
+}
+
+// SetFileWatcher sets the file watcher for the currently viewed file.
+// It stops any existing watcher first.
+func (s *Session) SetFileWatcher(watcher *git.FileWatcher) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Stop existing watcher if any
+	if s.fileWatcher != nil {
+		s.fileWatcher.Close()
+	}
+	s.fileWatcher = watcher
+}
+
+// GetFileWatcher returns the current file watcher.
+func (s *Session) GetFileWatcher() *git.FileWatcher {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.fileWatcher
+}
+
+// StopFileWatcher stops the current file watcher if one exists.
+func (s *Session) StopFileWatcher() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.fileWatcher != nil {
+		s.fileWatcher.Close()
+		s.fileWatcher = nil
+	}
 }
 
 // filterDiffByExtensions filters the diff files to only include files with

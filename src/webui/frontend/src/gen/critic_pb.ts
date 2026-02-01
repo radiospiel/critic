@@ -1890,3 +1890,86 @@ export class ResolveConversationResponse extends Message$1<ResolveConversationRe
   }
 }
 
+/**
+ * WatchFileRequest tells the server to watch a specific file for changes.
+ *
+ * @generated from message critic.v1.WatchFileRequest
+ */
+export class WatchFileRequest extends Message$1<WatchFileRequest> {
+  /**
+   * path is the file path to watch (relative to git root).
+   * Empty string to stop watching.
+   *
+   * @generated from field: string path = 1;
+   */
+  path = "";
+
+  constructor(data?: PartialMessage<WatchFileRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.WatchFileRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WatchFileRequest {
+    return new WatchFileRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): WatchFileRequest {
+    return new WatchFileRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): WatchFileRequest {
+    return new WatchFileRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: WatchFileRequest | PlainMessage<WatchFileRequest> | undefined, b: WatchFileRequest | PlainMessage<WatchFileRequest> | undefined): boolean {
+    return proto3.util.equals(WatchFileRequest, a, b);
+  }
+}
+
+/**
+ * WatchFileResponse confirms the file watch was set up.
+ *
+ * @generated from message critic.v1.WatchFileResponse
+ */
+export class WatchFileResponse extends Message$1<WatchFileResponse> {
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<WatchFileResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.WatchFileResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): WatchFileResponse {
+    return new WatchFileResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): WatchFileResponse {
+    return new WatchFileResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): WatchFileResponse {
+    return new WatchFileResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: WatchFileResponse | PlainMessage<WatchFileResponse> | undefined, b: WatchFileResponse | PlainMessage<WatchFileResponse> | undefined): boolean {
+    return proto3.util.equals(WatchFileResponse, a, b);
+  }
+}
+

@@ -235,6 +235,9 @@ func (s *Server) Start() error {
 		s.gitWatcher.Close()
 	}
 
+	// Stop file watcher if running
+	s.session.StopFileWatcher()
+
 	return nil
 }
 
