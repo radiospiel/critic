@@ -31,7 +31,6 @@ $(FRONTEND_DIST)/index.html: $(FRONTEND_DIR)/package.json $(shell find $(FRONTEN
 
 # building the frontend is required because the server embeds the frontend
 tests: build-frontend unit-tests integration-tests
-	LOG_FILE=/tmp/critic.test go test ./...
 
 unit-tests:
 	LOG_FILE=/tmp/critic.test go test $$(go list ./... | grep -v '/tests/')
