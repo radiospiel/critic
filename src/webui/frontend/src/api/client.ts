@@ -1,7 +1,7 @@
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { createPromiseClient } from '@connectrpc/connect'
 import { CriticService } from '../gen/critic_connect'
-import { Conversation, Message, FileConversationSummary } from '../gen/critic_pb'
+import { Conversation, Message, FileConversationSummary, ConversationStatus } from '../gen/critic_pb'
 
 // Create a transport for the Connect protocol
 const transport = createConnectTransport({
@@ -50,11 +50,27 @@ function convertMessage(msg: Message): CommentMessage {
   }
 }
 
+// Convert ConversationStatus enum to string
+function statusToString(status: ConversationStatus): string {
+  switch (status) {
+    case ConversationStatus.RESOLVED:
+      return 'resolved'
+    case ConversationStatus.UNRESOLVED:
+      return 'unresolved'
+    case ConversationStatus.ACTIVE:
+      return 'active'
+    case ConversationStatus.WAITING_FOR_RESPONSE:
+      return 'waiting_for_response'
+    default:
+      return 'invalid'
+  }
+}
+
 // Convert generated protobuf Conversation to CommentConversation interface
 function convertConversation(conv: Conversation): CommentConversation {
   return {
     id: conv.id,
-    status: conv.status,
+    status: statusToString(conv.status),
     filePath: conv.filePath,
     lineNumber: conv.lineNumber,
     codeVersion: conv.codeVersion,
@@ -207,6 +223,34 @@ export async function replyToConversation(conversationId: string, message: strin
     }
     return {
       success: response.success,
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
+// Types for resolve conversation
+export interface ResolveConversationResult {
+  success: boolean
+  error?: string
+}
+
+// Resolve a conversation
+export async function resolveConversation(conversationId: string): Promise<ResolveConversationResult> {
+  try {
+    const response = await criticClient.resolveConversation({ conversationId })
+    if (response.error) {
+      return {
+        success: false,
+        error: response.error.message,
+      }
+    }
+    // Absence of error means success
+    return {
+      success: true,
     }
   } catch (err) {
     return {

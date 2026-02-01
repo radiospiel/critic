@@ -22,6 +22,8 @@ service CriticService {
   rpc GetConversationsSummary(GetConversationsSummaryRequest) returns (GetConversationsSummaryResponse);
   // ReplyToConversation adds a reply message to an existing conversation.
   rpc ReplyToConversation(ReplyToConversationRequest) returns (ReplyToConversationResponse);
+  // ResolveConversation marks a conversation as resolved.
+  rpc ResolveConversation(ResolveConversationRequest) returns (ResolveConversationResponse);
   // GetDiffBases returns available diff bases and the current one.
   rpc GetDiffBases(GetDiffBasesRequest) returns (GetDiffBasesResponse);
   // SetDiffBase sets the current diff base.
@@ -75,6 +77,9 @@ message GetDiffSummaryResponse {
 message GetDiffRequest {
   // path is the file path to get the diff for.
   string path = 1;
+  // context_lines is the number of context lines to show around changes.
+  // Minimum and default is 3. Values less than 3 are treated as 3.
+  int32 context_lines = 2;
 }
 
 // GetDiffResponse contains the full diff for a single file.
@@ -233,12 +238,21 @@ message FileConversationSummary {
   bool has_unread_ai_messages = 5;
 }
 
+// ConversationStatus represents the status of a conversation.
+enum ConversationStatus {
+  CONVERSATION_STATUS_INVALID = 0;
+  CONVERSATION_STATUS_RESOLVED = 1;
+  CONVERSATION_STATUS_UNRESOLVED = 2;
+  CONVERSATION_STATUS_ACTIVE = 3;
+  CONVERSATION_STATUS_WAITING_FOR_RESPONSE = 4;
+}
+
 // Conversation represents a comment thread at a specific line.
 message Conversation {
   // id is the unique identifier for this conversation.
   string id = 1;
-  // status is the conversation status ("unresolved" or "resolved").
-  string status = 2;
+  // status is the conversation status.
+  ConversationStatus status = 2;
   // file_path is the git-relative path to the file.
   string file_path = 3;
   // line_number is the line number in the file.
@@ -310,6 +324,18 @@ message ReplyToConversationRequest {
 message ReplyToConversationResponse {
   // success indicates whether the reply was added successfully.
   bool success = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// ResolveConversationRequest contains the data for resolving a conversation.
+message ResolveConversationRequest {
+  // conversation_id is the unique identifier of the conversation to resolve.
+  string conversation_id = 1;
+}
+
+// ResolveConversationResponse contains the result of resolving a conversation.
+message ResolveConversationResponse {
   // error contains error details if the request failed.
   RpcError error = 15;
 }

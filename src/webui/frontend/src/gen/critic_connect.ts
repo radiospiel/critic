@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CreateConversationRequest, CreateConversationResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, ReplyToConversationRequest, ReplyToConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse } from "./critic_pb.js";
+import { CreateConversationRequest, CreateConversationResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, ReplyToConversationRequest, ReplyToConversationResponse, ResolveConversationRequest, ResolveConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -100,6 +100,17 @@ export const CriticService = {
       name: "ReplyToConversation",
       I: ReplyToConversationRequest,
       O: ReplyToConversationResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * ResolveConversation marks a conversation as resolved.
+     *
+     * @generated from rpc critic.v1.CriticService.ResolveConversation
+     */
+    resolveConversation: {
+      name: "ResolveConversation",
+      I: ResolveConversationRequest,
+      O: ResolveConversationResponse,
       kind: MethodKind.Unary,
     },
     /**

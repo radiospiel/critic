@@ -12,15 +12,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newAPICmd creates the api subcommand
-func newAPICmd() *cobra.Command {
+// newHTTPDCmd creates the httpd subcommand
+func newHTTPDCmd() *cobra.Command {
 	var port int
 	var dev bool
 	var diffBases []string
 	var cpuProfile string
 
 	cmd := &cobra.Command{
-		Use:   "api [flags]",
+		Use:   "httpd [flags]",
 		Short: "Start the HTTP server",
 		Long: `Start the HTTP server.
 
@@ -30,10 +30,10 @@ It uses Connect-RPC. Read more at https://connectrpc.com/
 The HTTP server also provides a react-based frontend.
 
 Examples:
-  critic api                    # Start on default port 65432
-  critic api --port=8000        # Start on custom port
-  critic api --dev              # Development mode with Vite hot reload
-  critic api --cpuprofile=cpu.prof  # Enable CPU profiling
+  critic httpd                    # Start on default port 65432
+  critic httpd --port=8000        # Start on custom port
+  critic httpd --dev              # Development mode with Vite hot reload
+  critic httpd --cpuprofile=cpu.prof  # Enable CPU profiling
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,

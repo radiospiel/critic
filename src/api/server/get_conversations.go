@@ -46,11 +46,26 @@ func criticToApiMessage(msg critic.Message, index int) *api.Message {
 	}
 }
 
+func criticStatusToApiStatus(status critic.ConversationStatus) api.ConversationStatus {
+	switch status {
+	case critic.StatusResolved:
+		return api.ConversationStatus_CONVERSATION_STATUS_RESOLVED
+	case critic.StatusUnresolved:
+		return api.ConversationStatus_CONVERSATION_STATUS_UNRESOLVED
+	case critic.StatusActive:
+		return api.ConversationStatus_CONVERSATION_STATUS_ACTIVE
+	case critic.StatusWaitingForResponse:
+		return api.ConversationStatus_CONVERSATION_STATUS_WAITING_FOR_RESPONSE
+	default:
+		return api.ConversationStatus_CONVERSATION_STATUS_INVALID
+	}
+}
+
 func criticToApiConversation(conv *critic.Conversation, index int) *api.Conversation {
 	messages := lo.Map(conv.Messages, criticToApiMessage)
 	return &api.Conversation{
 		Id:          conv.UUID,
-		Status:      string(conv.Status),
+		Status:      criticStatusToApiStatus(conv.Status),
 		FilePath:    conv.FilePath,
 		LineNumber:  int32(conv.LineNumber),
 		CodeVersion: conv.CodeVersion,

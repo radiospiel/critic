@@ -86,8 +86,8 @@ func (p *DiffProcessor) loadDiffAsync() {
 
 	logger.Info("DiffProcessor: Loading diff from %s (%s) to HEAD (%s)", baseName, truncateSHA(baseSHA), truncateSHA(targetSHA))
 
-	// Get the diff
-	diff, err := git.GetDiffBetween(baseSHA, targetSHA, args.Paths)
+	// Get the diff (use default context lines)
+	diff, err := git.GetDiffBetween(baseSHA, targetSHA, args.Paths, 0)
 	if err != nil {
 		p.notifyDiffLoaded(nil, fmt.Errorf("failed to get diff: %w", err))
 		return

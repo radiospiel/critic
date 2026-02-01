@@ -55,6 +55,9 @@ const (
 	// CriticServiceReplyToConversationProcedure is the fully-qualified name of the CriticService's
 	// ReplyToConversation RPC.
 	CriticServiceReplyToConversationProcedure = "/critic.v1.CriticService/ReplyToConversation"
+	// CriticServiceResolveConversationProcedure is the fully-qualified name of the CriticService's
+	// ResolveConversation RPC.
+	CriticServiceResolveConversationProcedure = "/critic.v1.CriticService/ResolveConversation"
 	// CriticServiceGetDiffBasesProcedure is the fully-qualified name of the CriticService's
 	// GetDiffBases RPC.
 	CriticServiceGetDiffBasesProcedure = "/critic.v1.CriticService/GetDiffBases"
@@ -81,6 +84,8 @@ type CriticServiceClient interface {
 	GetConversationsSummary(context.Context, *connect.Request[api.GetConversationsSummaryRequest]) (*connect.Response[api.GetConversationsSummaryResponse], error)
 	// ReplyToConversation adds a reply message to an existing conversation.
 	ReplyToConversation(context.Context, *connect.Request[api.ReplyToConversationRequest]) (*connect.Response[api.ReplyToConversationResponse], error)
+	// ResolveConversation marks a conversation as resolved.
+	ResolveConversation(context.Context, *connect.Request[api.ResolveConversationRequest]) (*connect.Response[api.ResolveConversationResponse], error)
 	// GetDiffBases returns available diff bases and the current one.
 	GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error)
 	// SetDiffBase sets the current diff base.
@@ -146,6 +151,12 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(criticServiceMethods.ByName("ReplyToConversation")),
 			connect.WithClientOptions(opts...),
 		),
+		resolveConversation: connect.NewClient[api.ResolveConversationRequest, api.ResolveConversationResponse](
+			httpClient,
+			baseURL+CriticServiceResolveConversationProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("ResolveConversation")),
+			connect.WithClientOptions(opts...),
+		),
 		getDiffBases: connect.NewClient[api.GetDiffBasesRequest, api.GetDiffBasesResponse](
 			httpClient,
 			baseURL+CriticServiceGetDiffBasesProcedure,
@@ -171,6 +182,7 @@ type criticServiceClient struct {
 	getConversations        *connect.Client[api.GetConversationsRequest, api.GetConversationsResponse]
 	getConversationsSummary *connect.Client[api.GetConversationsSummaryRequest, api.GetConversationsSummaryResponse]
 	replyToConversation     *connect.Client[api.ReplyToConversationRequest, api.ReplyToConversationResponse]
+	resolveConversation     *connect.Client[api.ResolveConversationRequest, api.ResolveConversationResponse]
 	getDiffBases            *connect.Client[api.GetDiffBasesRequest, api.GetDiffBasesResponse]
 	setDiffBase             *connect.Client[api.SetDiffBaseRequest, api.SetDiffBaseResponse]
 }
@@ -215,6 +227,11 @@ func (c *criticServiceClient) ReplyToConversation(ctx context.Context, req *conn
 	return c.replyToConversation.CallUnary(ctx, req)
 }
 
+// ResolveConversation calls critic.v1.CriticService.ResolveConversation.
+func (c *criticServiceClient) ResolveConversation(ctx context.Context, req *connect.Request[api.ResolveConversationRequest]) (*connect.Response[api.ResolveConversationResponse], error) {
+	return c.resolveConversation.CallUnary(ctx, req)
+}
+
 // GetDiffBases calls critic.v1.CriticService.GetDiffBases.
 func (c *criticServiceClient) GetDiffBases(ctx context.Context, req *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error) {
 	return c.getDiffBases.CallUnary(ctx, req)
@@ -243,6 +260,8 @@ type CriticServiceHandler interface {
 	GetConversationsSummary(context.Context, *connect.Request[api.GetConversationsSummaryRequest]) (*connect.Response[api.GetConversationsSummaryResponse], error)
 	// ReplyToConversation adds a reply message to an existing conversation.
 	ReplyToConversation(context.Context, *connect.Request[api.ReplyToConversationRequest]) (*connect.Response[api.ReplyToConversationResponse], error)
+	// ResolveConversation marks a conversation as resolved.
+	ResolveConversation(context.Context, *connect.Request[api.ResolveConversationRequest]) (*connect.Response[api.ResolveConversationResponse], error)
 	// GetDiffBases returns available diff bases and the current one.
 	GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error)
 	// SetDiffBase sets the current diff base.
@@ -304,6 +323,12 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(criticServiceMethods.ByName("ReplyToConversation")),
 		connect.WithHandlerOptions(opts...),
 	)
+	criticServiceResolveConversationHandler := connect.NewUnaryHandler(
+		CriticServiceResolveConversationProcedure,
+		svc.ResolveConversation,
+		connect.WithSchema(criticServiceMethods.ByName("ResolveConversation")),
+		connect.WithHandlerOptions(opts...),
+	)
 	criticServiceGetDiffBasesHandler := connect.NewUnaryHandler(
 		CriticServiceGetDiffBasesProcedure,
 		svc.GetDiffBases,
@@ -334,6 +359,8 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 			criticServiceGetConversationsSummaryHandler.ServeHTTP(w, r)
 		case CriticServiceReplyToConversationProcedure:
 			criticServiceReplyToConversationHandler.ServeHTTP(w, r)
+		case CriticServiceResolveConversationProcedure:
+			criticServiceResolveConversationHandler.ServeHTTP(w, r)
 		case CriticServiceGetDiffBasesProcedure:
 			criticServiceGetDiffBasesHandler.ServeHTTP(w, r)
 		case CriticServiceSetDiffBaseProcedure:
@@ -377,6 +404,10 @@ func (UnimplementedCriticServiceHandler) GetConversationsSummary(context.Context
 
 func (UnimplementedCriticServiceHandler) ReplyToConversation(context.Context, *connect.Request[api.ReplyToConversationRequest]) (*connect.Response[api.ReplyToConversationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.ReplyToConversation is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) ResolveConversation(context.Context, *connect.Request[api.ResolveConversationRequest]) (*connect.Response[api.ResolveConversationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.ResolveConversation is not implemented"))
 }
 
 func (UnimplementedCriticServiceHandler) GetDiffBases(context.Context, *connect.Request[api.GetDiffBasesRequest]) (*connect.Response[api.GetDiffBasesResponse], error) {

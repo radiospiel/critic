@@ -91,24 +91,36 @@ func (s *Server) Start() error {
 	// WebSocket
 	mux.HandleFunc("GET /ws", webui.WebSocketHandler(s.wsHub))
 
-	// Serve React app
+	// In dev mode, we need to start the HTTP server first so Vite's proxy can connect.
+	// We'll add the frontend handler after the server is listening.
+	var frontendHandler http.Handler
+
 	if s.config.Dev {
-		// Try to start Vite dev server
+		// Defer Vite startup until HTTP server is ready
 		s.devServer = webui.NewDevServer("src/webui/frontend", 5173)
-		if s.devServer.Start() {
-			mux.Handle("/", s.devServer.Handler())
-			fmt.Println("Development mode: proxying to Vite dev server at http://localhost:5173")
-		}
 	}
 
-	if s.devServer == nil || !s.devServer.Started() {
-		// Production mode or dev fallback: serve embedded files
+	if s.devServer == nil {
+		// Production mode: serve embedded files
 		distFS, err := webui.DistFS()
 		if err != nil {
 			return fmt.Errorf("failed to get dist fs: %w", err)
 		}
-		mux.Handle("/", http.FileServer(distFS))
+		frontendHandler = http.FileServer(distFS)
 	}
+
+	// Use a dynamic handler that can be updated after Vite starts
+	var dynamicFrontendHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if frontendHandler != nil {
+			frontendHandler.ServeHTTP(w, r)
+		} else {
+			// Vite not ready yet, return a simple "loading" response
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="1"></head><body>Starting dev server...</body></html>`))
+		}
+	})
+	mux.Handle("/", dynamicFrontendHandler)
 
 	// Set up HTTP server with graceful shutdown
 	addr := fmt.Sprintf(":%d", s.config.Port)
@@ -129,6 +141,17 @@ func (s *Server) Start() error {
 			serverErr <- err
 		}
 	}()
+
+	// Start Vite dev server after HTTP server is listening (in dev mode)
+	if s.devServer != nil {
+		// Give HTTP server a moment to start listening
+		time.Sleep(100 * time.Millisecond)
+		if !s.devServer.Start() {
+			return fmt.Errorf("failed to start Vite dev server")
+		}
+		frontendHandler = s.devServer.Handler()
+		fmt.Println("Development mode: proxying to Vite dev server at http://localhost:5173")
+	}
 
 	// Wait for shutdown signal or server error
 	select {
