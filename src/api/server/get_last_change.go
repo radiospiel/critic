@@ -20,8 +20,12 @@ func (s *Server) GetLastChange(
 }
 
 func getLastChangeImpl(server *Server, req *api.GetLastChangeRequest) (*api.GetLastChangeResponse, error) {
-	now := time.Now().UnixMilli()
+	// Use tracked timestamp if available, otherwise use current time
+	timestamp := server.LastChangeTime()
+	if timestamp == 0 {
+		timestamp = time.Now().UnixMilli()
+	}
 	return &api.GetLastChangeResponse{
-		MtimeMsecs: uint64(now),
+		MtimeMsecs: uint64(timestamp),
 	}, nil
 }

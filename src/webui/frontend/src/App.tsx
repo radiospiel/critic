@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import FileList from './components/FileList'
 import DiffView from './components/DiffView'
@@ -6,6 +6,7 @@ import DiffBaseSelector from './components/DiffBaseSelector'
 import HelpModal from './components/HelpModal'
 import { criticClient } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
+import { useWebSocket } from './hooks/useWebSocket'
 
 type FocusedPanel = 'fileList' | 'diffView'
 
@@ -23,7 +24,17 @@ function AppContent() {
   const [contextLines, setContextLines] = useState(3)
   const [currentLineNo, setCurrentLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [restoreLineNo, setRestoreLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
+  const [secondsSinceLoad, setSecondsSinceLoad] = useState(0)
+  const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
+
+  // Timer to update seconds since last reload
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsSinceLoad(Math.floor((Date.now() - loadTimeRef.current) / 1000))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   // Load file list for navigation
   const loadFileList = useCallback(() => {
@@ -61,6 +72,24 @@ function AppContent() {
         setLoading(false)
       })
   }, [contextLines])
+
+  // Handle WebSocket messages for live reload
+  const handleWebSocketMessage = useCallback((message: { type: string }) => {
+    if (message.type === 'reload') {
+      console.log('Reload triggered by git change')
+      // Reset the timer
+      loadTimeRef.current = Date.now()
+      setSecondsSinceLoad(0)
+      // Reload the file list
+      loadFileList()
+      // Reload the current file diff if one is selected
+      if (selectedFile) {
+        loadFileDiff(selectedFile, contextLines, true)
+      }
+    }
+  }, [loadFileList, loadFileDiff, selectedFile, contextLines])
+
+  useWebSocket(handleWebSocketMessage)
 
   // Handle base change - reload file list and preserve current file if still present
   const handleBaseChange = useCallback(() => {
@@ -181,6 +210,7 @@ function AppContent() {
       <aside className="sidebar">
         <div className="app-header">
           <span>Critic</span>
+          <span className="render-timestamp">{secondsSinceLoad}s</span>
           <div className="header-buttons">
             <DiffBaseSelector onBaseChange={handleBaseChange} />
             <button className="help-button" onClick={() => setShowHelp(true)} title="Keyboard shortcuts">

@@ -1,8 +1,6 @@
 package git
 
 import (
-	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -49,8 +47,8 @@ func NewGitWatcher(gitDir string, debounceMs int) (*GitWatcher, error) {
 	// Set initial last change time
 	gw.lastChange.Store(time.Now().UnixMilli())
 
-	// Watch the git directory recursively
-	if err := gw.watchRecursive(gitDir); err != nil {
+	// Watch the git directory (non-recursive - just the .git directory itself)
+	if err := w.Add(gitDir); err != nil {
 		w.Close()
 		return nil, err
 	}
@@ -60,26 +58,6 @@ func NewGitWatcher(gitDir string, debounceMs int) (*GitWatcher, error) {
 
 	logger.Info("NewGitWatcher: Started watching %s", gitDir)
 	return gw, nil
-}
-
-// watchRecursive adds the directory and all subdirectories to the watcher
-func (gw *GitWatcher) watchRecursive(root string) error {
-	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Only watch directories
-		if info.IsDir() {
-			if err := gw.watcher.Add(path); err != nil {
-				logger.Error("GitWatcher: Failed to add %s: %v", path, err)
-				return err
-			}
-			logger.Debug("GitWatcher: Watching directory %s", path)
-		}
-
-		return nil
-	})
 }
 
 // eventLoop handles fsnotify events and debounces them

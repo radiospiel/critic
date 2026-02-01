@@ -1,12 +1,15 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -14,6 +17,7 @@ import (
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/api/apiconnect"
+	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/webui"
 	"google.golang.org/protobuf/proto"
@@ -29,6 +33,14 @@ type responseWriter struct {
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+// Hijack implements http.Hijacker for WebSocket support
+func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hijacker, ok := rw.ResponseWriter.(http.Hijacker); ok {
+		return hijacker.Hijack()
+	}
+	return nil, nil, fmt.Errorf("underlying ResponseWriter does not support hijacking")
 }
 
 // loggingMiddleware logs HTTP requests
@@ -54,10 +66,12 @@ type Config struct {
 
 // Server implements the CriticService API.
 type Server struct {
-	config    Config
-	session   *Session
-	wsHub     *webui.Hub
-	devServer *webui.DevServer
+	config         Config
+	session        *Session
+	wsHub          *webui.Hub
+	devServer      *webui.DevServer
+	gitWatcher     *git.GitWatcher
+	lastChangeTime atomic.Int64 // Unix milliseconds of last detected change
 }
 
 // NewServer creates a new API server with the given configuration.
@@ -76,10 +90,52 @@ func (s *Server) GetSession() *Session {
 	return s.session
 }
 
+// SetLastChangeTime sets the timestamp of the last detected change.
+func (s *Server) SetLastChangeTime(t int64) {
+	s.lastChangeTime.Store(t)
+}
+
+// LastChangeTime returns the timestamp of the last detected change.
+// Returns 0 if no change has been recorded.
+func (s *Server) LastChangeTime() int64 {
+	return s.lastChangeTime.Load()
+}
+
+// handleGitChanges listens for git directory changes and broadcasts reload messages.
+func (s *Server) handleGitChanges() {
+	if s.gitWatcher == nil {
+		return
+	}
+
+	for range s.gitWatcher.Changes() {
+		// Update last change time
+		s.SetLastChangeTime(s.gitWatcher.LastChangeTime())
+		logger.Info("Git change detected, broadcasting reload")
+
+		// Broadcast reload message to all connected clients
+		s.wsHub.Broadcast([]byte(`{"type":"reload"}`))
+	}
+}
+
 // Start starts the API server and blocks until it receives an error.
 func (s *Server) Start() error {
 	// Start WebSocket hub
 	go s.wsHub.Run()
+
+	// Start git directory watcher
+	if s.config.GitRoot != "" {
+		gitDir := s.config.GitRoot + "/.git"
+		watcher, err := git.NewGitWatcher(gitDir, 100) // 100ms debounce
+		if err != nil {
+			logger.Error("Failed to start git watcher: %v", err)
+		} else {
+			s.gitWatcher = watcher
+			// Set initial last change time
+			s.SetLastChangeTime(watcher.LastChangeTime())
+			// Listen for changes
+			go s.handleGitChanges()
+		}
+	}
 
 	mux := http.NewServeMux()
 
@@ -172,6 +228,11 @@ func (s *Server) Start() error {
 	// Stop dev server if running
 	if s.devServer != nil {
 		s.devServer.Stop()
+	}
+
+	// Stop git watcher if running
+	if s.gitWatcher != nil {
+		s.gitWatcher.Close()
 	}
 
 	return nil

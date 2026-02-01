@@ -48,32 +48,6 @@ func TestGitWatcherDetectsFileChange(t *testing.T) {
 	}
 }
 
-func TestGitWatcherDetectsSubdirectoryChange(t *testing.T) {
-	// Create a temporary directory with a .git subdirectory and refs
-	tmpDir := t.TempDir()
-	gitDir := filepath.Join(tmpDir, ".git")
-	refsDir := filepath.Join(gitDir, "refs", "heads")
-	err := os.MkdirAll(refsDir, 0755)
-	assert.NoError(t, err)
-
-	watcher, err := NewGitWatcher(gitDir, 50)
-	assert.NoError(t, err)
-	defer watcher.Close()
-
-	// Create a ref file (simulates a commit)
-	refFile := filepath.Join(refsDir, "main")
-	err = os.WriteFile(refFile, []byte("abc123\n"), 0644)
-	assert.NoError(t, err)
-
-	// Wait for change notification with timeout
-	select {
-	case <-watcher.Changes():
-		// Success - we received a change notification
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("expected change notification but got none")
-	}
-}
-
 func TestGitWatcherDebouncing(t *testing.T) {
 	// Create a temporary directory with a .git subdirectory
 	tmpDir := t.TempDir()
