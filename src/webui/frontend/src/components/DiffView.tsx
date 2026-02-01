@@ -703,7 +703,7 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
 
   if (fileDiff.isBinary) {
     return (
-      <div className="diff-view">
+      <div className={`diff-view${isFocused ? ' focused' : ''}`}>
         <div className="diff-header">
           <div className="diff-header-info">
             <span className="diff-file-path">{path}</span>
@@ -718,7 +718,7 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
   const selectionLineInfo = getSelectionLineInfo()
 
   return (
-    <div className="diff-view">
+    <div className={`diff-view${isFocused ? ' focused' : ''}`}>
       <div className="diff-header">
         <div className="diff-header-info">
           <span className="diff-file-path">{path}</span>

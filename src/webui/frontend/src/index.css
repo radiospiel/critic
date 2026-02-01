@@ -402,6 +402,11 @@ html, body, #root {
   background-color: var(--bg-selected);
 }
 
+.file-list-container.focused .file-item.selected {
+  border-left: 3px solid var(--diff-hunk-text);
+  padding-left: 13px;
+}
+
 .file-status {
   font-size: 12px;
   font-weight: 600;
@@ -698,12 +703,12 @@ html, body, #root {
   background-color: rgba(200, 200, 200, 0.12) !important;
 }
 
-/* Selection border - only on first and last lines */
-.diff-line-selected-first td {
+/* Selection border - only on first and last lines, and only when diff view is focused */
+.diff-view.focused .diff-line-selected-first td {
   border-top: 2px solid var(--diff-hunk-text);
 }
 
-.diff-line-selected-last td {
+.diff-view.focused .diff-line-selected-last td {
   border-bottom: 2px solid var(--diff-hunk-text);
 }
 
