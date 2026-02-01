@@ -1,0 +1,4 @@
+# Patterns for test files (gitignore-style syntax)
+# Files matching these patterns will appear in the "Tests" section
+
+*_test.go

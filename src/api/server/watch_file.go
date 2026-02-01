@@ -7,8 +7,8 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/utils"
 	"github.com/radiospiel/critic/src/api"
-	"github.com/radiospiel/critic/src/git"
 )
 
 // WatchFile sets up a file watcher for the specified file path.
@@ -39,7 +39,7 @@ func watchFileImpl(server *Server, req *api.WatchFileRequest) (*api.WatchFileRes
 	absPath := filepath.Join(server.config.GitRoot, path)
 
 	// Create a new file watcher
-	watcher, err := git.NewFileWatcher(absPath, 100) // 100ms debounce
+	watcher, err := utils.NewFileWatcher(absPath, 100) // 100ms debounce
 	if err != nil {
 		logger.Error("WatchFile: Failed to create watcher for %s: %v", path, err)
 		return &api.WatchFileResponse{}, err
@@ -55,7 +55,7 @@ func watchFileImpl(server *Server, req *api.WatchFileRequest) (*api.WatchFileRes
 }
 
 // handleFileChanges listens for file changes and broadcasts file-changed messages.
-func handleFileChanges(server *Server, watcher *git.FileWatcher) {
+func handleFileChanges(server *Server, watcher *utils.FileWatcher) {
 	path := watcher.Path()
 
 	for range watcher.Changes() {

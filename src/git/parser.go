@@ -69,28 +69,6 @@ func AbsPathToGitPath(absPath string) string {
 	return relPath
 }
 
-// GitPathToDisplayPath converts a git-relative path to a path relative to cwd
-// Used for display in the UI
-func GitPathToDisplayPath(gitPath string) string {
-	initPathCache()
-
-	if gitPath == "" || gitPath == "/dev/null" {
-		return gitPath
-	}
-
-	// Git path is relative to git root, convert to absolute
-	absPath := filepath.Join(gitRootCache, gitPath)
-
-	// Make relative to cwd for display
-	relPath, err := filepath.Rel(cwdCache, absPath)
-	if err != nil {
-		// If we can't make it relative, return the git path as-is
-		return gitPath
-	}
-
-	return relPath
-}
-
 // ParseDiff parses git diff output into a structured Diff object
 func ParseDiff(diffText string) (*ctypes.Diff, error) {
 	lines := splitLines(diffText)

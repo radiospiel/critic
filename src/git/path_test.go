@@ -25,16 +25,3 @@ func TestAbsPathToGitPath(t *testing.T) {
 	t.Logf("Abs path: %s", absPath)
 	t.Logf("Git path: %s", gitPath)
 }
-
-func TestGitPathToDisplayPath(t *testing.T) {
-	// Force initialization
-	initPathCache()
-
-	gitPath := "docs/CLI.md"
-	displayPath := GitPathToDisplayPath(gitPath)
-
-	t.Logf("Git root: %s", gitRootCache)
-	t.Logf("Cwd: %s", cwdCache)
-	t.Logf("Git path: %s", gitPath)
-	t.Logf("Display path: %s", displayPath)
-}

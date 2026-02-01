@@ -3,7 +3,7 @@
 /cmd
 critic.bin
 *.prof
-.critic.db*
+.critic/
 .critic.version
 .install-deps.mtime
 

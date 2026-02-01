@@ -123,9 +123,6 @@ type Session struct {
 	dbWatcher  *DBWatcher
 	gitWatcher *GitWatcher
 
-	// Processor
-	diffProcessor *DiffProcessor
-
 	// Internal subscriptions (for cleanup)
 	internalSubs []observable.Subscription
 }
@@ -157,9 +154,6 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 	s.SetValueAtKey(Keys.FocusedPane, "fileList")
 	s.SetValueAtKey(Keys.Conversations, map[string]any{})
 	s.SetValueAtKey(Keys.ConversationSummaries, map[string]any{})
-
-	// Create diffProcessor
-	s.diffProcessor = NewDiffProcessor(s)
 
 	// Create watchers
 	dbWatcher, err := NewDBWatcher(gitRoot, func() {

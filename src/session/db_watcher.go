@@ -1,48 +1,43 @@
 package session
 
 import (
-	"database/sql"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/radiospiel/critic/simple-go/logger"
-	_ "github.com/mattn/go-sqlite3"
 )
 
-// DBWatcher watches the messaging database for changes using SQLite triggers
+// DBWatcher watches the .critic directory for changes using fsnotify
 type DBWatcher struct {
-	dbPath       string
-	db           *sql.DB
-	onChange     func()
-	stopChan     chan struct{}
-	mu           sync.Mutex
-	running      bool
-	pollInterval time.Duration
-	lastMtime    int64
+	criticDir  string
+	watcher    *fsnotify.Watcher
+	onChange   func()
+	stopChan   chan struct{}
+	mu         sync.Mutex
+	running    bool
+	debounceMs int
+
+	// Debouncing state
+	debounceTimer *time.Timer
+	debounceMu    sync.Mutex
 }
 
-// NewDBWatcher creates a new database watcher
+// NewDBWatcher creates a new database watcher for the .critic directory
 func NewDBWatcher(gitRoot string, onChange func()) (*DBWatcher, error) {
-	dbPath := filepath.Join(gitRoot, ".critic.db")
+	criticDir := filepath.Join(gitRoot, ".critic")
 
 	return &DBWatcher{
-		dbPath:       dbPath,
-		onChange:     onChange,
-		stopChan:     make(chan struct{}),
-		pollInterval: 500 * time.Millisecond,
+		criticDir:  criticDir,
+		onChange:   onChange,
+		stopChan:   make(chan struct{}),
+		debounceMs: 100,
 	}, nil
 }
 
-// SetPollInterval sets the polling interval
-func (w *DBWatcher) SetPollInterval(interval time.Duration) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.pollInterval = interval
-}
-
-// Start starts watching the database
-// The database must have been initialized with the schema (which creates the _db_mtime table)
+// Start starts watching the .critic directory
 func (w *DBWatcher) Start() error {
 	w.mu.Lock()
 	if w.running {
@@ -51,45 +46,93 @@ func (w *DBWatcher) Start() error {
 	}
 	w.mu.Unlock()
 
-	// Open database connection
-	db, err := sql.Open("sqlite3", w.dbPath)
+	// Create .critic directory if it doesn't exist
+	if err := os.MkdirAll(w.criticDir, 0755); err != nil {
+		return err
+	}
+
+	// Create fsnotify watcher
+	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
 	}
 
-	// Enable WAL mode for better concurrency
-	_, err = db.Exec("PRAGMA journal_mode = WAL")
-	if err != nil {
-		db.Close()
-		return err
-	}
-
-	// Get initial mtime (requires _db_mtime table from schema initialization)
-	mtime, err := w.getMtime(db)
-	if err != nil {
-		db.Close()
+	// Watch the .critic directory
+	if err := watcher.Add(w.criticDir); err != nil {
+		watcher.Close()
 		return err
 	}
 
 	w.mu.Lock()
-	w.db = db
-	w.lastMtime = mtime
+	w.watcher = watcher
 	w.running = true
 	w.mu.Unlock()
 
-	go w.pollLoop()
-	logger.Info("DBWatcher: Started watching %s (mtime=%d)", w.dbPath, mtime)
+	go w.eventLoop()
+	logger.Info("DBWatcher: Started watching %s", w.criticDir)
 	return nil
 }
 
-// getMtime reads the current mtime for the messages table from the database
-func (w *DBWatcher) getMtime(db *sql.DB) (int64, error) {
-	var mtime int64
-	err := db.QueryRow("SELECT mtime_msec FROM _db_mtime WHERE tablename = 'messages'").Scan(&mtime)
-	if err == sql.ErrNoRows {
-		return 0, nil
+// eventLoop handles fsnotify events
+func (w *DBWatcher) eventLoop() {
+	// Get local reference to watcher channels (safe since watcher is set before goroutine starts)
+	w.mu.Lock()
+	watcher := w.watcher
+	w.mu.Unlock()
+
+	if watcher == nil {
+		return
 	}
-	return mtime, err
+
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				logger.Info("DBWatcher: Events channel closed")
+				return
+			}
+
+			// Only care about write, create, remove events
+			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove) != 0 {
+				logger.Debug("DBWatcher: Event: %s %s", event.Op, event.Name)
+				w.scheduleNotification()
+			}
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				logger.Info("DBWatcher: Errors channel closed")
+				return
+			}
+			logger.Error("DBWatcher: Error: %v", err)
+
+		case <-w.stopChan:
+			logger.Info("DBWatcher: Stop signal received")
+			return
+		}
+	}
+}
+
+// scheduleNotification schedules a debounced change notification
+func (w *DBWatcher) scheduleNotification() {
+	w.debounceMu.Lock()
+	defer w.debounceMu.Unlock()
+
+	// Cancel existing timer if any
+	if w.debounceTimer != nil {
+		w.debounceTimer.Stop()
+	}
+
+	// Schedule new notification
+	w.debounceTimer = time.AfterFunc(time.Duration(w.debounceMs)*time.Millisecond, func() {
+		w.mu.Lock()
+		callback := w.onChange
+		w.mu.Unlock()
+
+		if callback != nil {
+			logger.Info("DBWatcher: Change detected in .critic directory")
+			callback()
+		}
+	})
 }
 
 // Stop stops the watcher
@@ -104,60 +147,21 @@ func (w *DBWatcher) Stop() {
 
 	close(w.stopChan)
 
+	// Stop any pending timer
+	w.debounceMu.Lock()
+	if w.debounceTimer != nil {
+		w.debounceTimer.Stop()
+	}
+	w.debounceMu.Unlock()
+
 	w.mu.Lock()
-	if w.db != nil {
-		w.db.Close()
-		w.db = nil
+	if w.watcher != nil {
+		w.watcher.Close()
+		w.watcher = nil
 	}
 	w.mu.Unlock()
 
 	logger.Info("DBWatcher: Stopped")
-}
-
-// pollLoop periodically checks for version changes
-func (w *DBWatcher) pollLoop() {
-	ticker := time.NewTicker(w.pollInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			w.checkForChanges()
-		case <-w.stopChan:
-			return
-		}
-	}
-}
-
-// checkForChanges checks if the database mtime has changed
-func (w *DBWatcher) checkForChanges() {
-	w.mu.Lock()
-	db := w.db
-	lastMtime := w.lastMtime
-	w.mu.Unlock()
-
-	if db == nil {
-		return
-	}
-
-	mtime, err := w.getMtime(db)
-	if err != nil {
-		logger.Error("DBWatcher: Failed to get mtime: %v", err)
-		return
-	}
-
-	if mtime != lastMtime {
-		w.mu.Lock()
-		w.lastMtime = mtime
-		callback := w.onChange
-		w.mu.Unlock()
-
-		logger.Info("DBWatcher: mtime changed from %d to %d", lastMtime, mtime)
-
-		if callback != nil {
-			callback()
-		}
-	}
 }
 
 // IsRunning returns whether the watcher is running
@@ -167,8 +171,9 @@ func (w *DBWatcher) IsRunning() bool {
 	return w.running
 }
 
-// SetDebounceMs is a no-op for compatibility (polling interval is used instead)
-// Deprecated: Use SetPollInterval instead
+// SetDebounceMs sets the debounce interval in milliseconds
 func (w *DBWatcher) SetDebounceMs(ms int) {
-	w.SetPollInterval(time.Duration(ms) * time.Millisecond)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.debounceMs = ms
 }
