@@ -5,7 +5,6 @@ import (
 	"os"
 	"runtime/pprof"
 
-	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api/server"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/messagedb"
@@ -62,9 +61,6 @@ Examples:
 				defer pprof.StopCPUProfile()
 				fmt.Fprintf(cmd.ErrOrStderr(), "CPU profiling enabled, writing to %s\n", cpuProfile)
 			}
-
-			// Log to stderr for the API server
-			logger.SetLogFile("/dev/stderr")
 
 			// Get git root directory
 			gitRoot := git.GetGitRoot()
