@@ -23,6 +23,24 @@ make build
 
 To install system-wide: `make install`
 
+## Quick Start
+
+```bash
+# 1. Build critic
+git clone https://github.com/radiospiel/critic.git
+cd critic
+make build
+
+# 2. Register as MCP server with Claude Code
+claude mcp add critic -- $(pwd)/critic mcp
+
+# 3. Start the web UI (in your project directory)
+cd /path/to/your/project
+critic webui
+```
+
+Now Claude Code can participate in code reviews. Add `/critic` command support to your project's `CLAUDE.md` - see [docs/installation.md](docs/installation.md) for the configuration.
+
 ## Usage
 
 ### Web UI
