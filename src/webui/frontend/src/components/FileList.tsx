@@ -5,6 +5,7 @@ import { FileSummary, FileStatus } from '../gen/critic_pb'
 export type FilterType = 'automatic' | 'conversations' | 'files' | 'tests' | 'hidden'
 
 interface FileListProps {
+  files: FileSummary[]
   selectedFile: string | null
   onSelectFile: (file: string, fileSummary: FileSummary) => void
   isFocused?: boolean
@@ -86,8 +87,7 @@ function isTestFile(path: string, patterns: string[]): boolean {
   return matchesPattern(path, patterns)
 }
 
-function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChange }: FileListProps) {
-  const [files, setFiles] = useState<FileSummary[]>([])
+function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFilterChange }: FileListProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
@@ -103,15 +103,13 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
   }
 
   useEffect(() => {
-    // Fetch diff summary, .criticignore, .critictest, and conversation summaries in parallel
+    // Fetch .criticignore, .critictest, and conversation summaries in parallel
     Promise.all([
-      criticClient.getDiffSummary({}),
       criticClient.getFile({ path: '.criticignore' }).catch(() => null),
       criticClient.getFile({ path: '.critictest' }).catch(() => null),
       getConversationsSummary(),
     ])
-      .then(([diffResponse, ignoreFileResponse, testFileResponse, summaryResponse]) => {
-        setFiles(diffResponse.diff?.files || [])
+      .then(([ignoreFileResponse, testFileResponse, summaryResponse]) => {
         if (ignoreFileResponse?.content) {
           const patterns = ignoreFileResponse.content
             .split('\n')
