@@ -15,6 +15,8 @@ This design allows the MCP server to run independently (even in a different proc
 
 ## Architecture Diagram
 
+blob:https://whimsical.com/e1f58a5f-c1aa-4957-87c0-ce27e0e184aa<img width="1219" height="968" alt="image" src="https://github.com/user-attachments/assets/4169ba12-2e6d-441b-b540-c7a9dc5a9439" />
+
 ```
 ┌─────────────────────┐         ┌─────────────────────┐
 │    Claude Code      │         │       Browser       │
