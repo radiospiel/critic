@@ -1,11 +1,11 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/radiospiel/critic/simple-go/json"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
@@ -112,12 +112,7 @@ Examples:
 					CreatedAt: reply.CreatedAt.Format("2006-01-02 15:04:05"),
 				}
 
-				output, err := json.MarshalIndent(response, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal response: %w", err)
-				}
-
-				fmt.Println(string(output))
+				fmt.Println(json.ToPrettyJson(response))
 			} else {
 				// Create new conversation
 				codeVersion := git.ResolveRef("HEAD")
@@ -158,12 +153,7 @@ Examples:
 					Messages:    messages,
 				}
 
-				output, err := json.MarshalIndent(response, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal response: %w", err)
-				}
-
-				fmt.Println(string(output))
+				fmt.Println(json.ToPrettyJson(response))
 			}
 
 			return nil
