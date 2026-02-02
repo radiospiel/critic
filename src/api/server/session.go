@@ -118,17 +118,17 @@ func (s *Session) GetFileDiff(path string, contextLines int) *types.FileDiff {
 	preconditions.Check(path != "", "path required")
 
 	// Load the full diff for the specific file
-	diff, err := git.GetDiff(currentBase, []string{path}, contextLines)
+	fileDiff, err := git.GetDiff(currentBase, path, contextLines)
 	if err != nil {
 		logger.Error("git.GetDiff returns error %v", err)
 		return nil
 	}
-	if diff == nil || len(diff.Files) == 0 {
+	if fileDiff == nil {
 		logger.Error("git.GetDiff returns empty diff")
 		return nil
 	}
 
-	return diff.Files[0]
+	return fileDiff
 }
 
 // HeadCommit returns the current HEAD commit SHA

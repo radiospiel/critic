@@ -209,7 +209,7 @@ func TestConversationsScenario(t *testing.T) {
 
 	conv := getResp.Msg.GetConversations()[0]
 	assert.Equals(t, conv.GetFilePath(), filePath, "conversation file path should match")
-	assert.Equals(t, conv.GetStatus(), "unresolved", "new conversation should be unresolved")
+	assert.Equals(t, conv.GetStatus(), api.ConversationStatus_CONVERSATION_STATUS_UNRESOLVED, "new conversation should be unresolved")
 	assert.Equals(t, len(conv.GetMessages()), 1, "conversation should have one message")
 	assert.Equals(t, conv.GetMessages()[0].GetContent(), "This function needs better error handling", "message content should match")
 	assert.Equals(t, conv.GetMessages()[0].GetAuthor(), "human", "message author should be human")

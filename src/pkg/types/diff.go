@@ -13,15 +13,16 @@ type Diff struct {
 
 // FileDiff represents changes to a single file
 type FileDiff struct {
-	OldPath   string  `json:"old_path"`
-	NewPath   string  `json:"new_path"`
-	OldMode   string  `json:"old_mode,omitempty"`
-	NewMode   string  `json:"new_mode,omitempty"`
-	IsNew     bool    `json:"is_new,omitempty"`
-	IsDeleted bool    `json:"is_deleted,omitempty"`
-	IsRenamed bool    `json:"is_renamed,omitempty"`
-	IsBinary  bool    `json:"is_binary,omitempty"`
-	Hunks     []*Hunk `json:"hunks"`
+	OldPath     string  `json:"old_path"`
+	NewPath     string  `json:"new_path"`
+	OldMode     string  `json:"old_mode,omitempty"`
+	NewMode     string  `json:"new_mode,omitempty"`
+	IsNew       bool    `json:"is_new,omitempty"`
+	IsDeleted   bool    `json:"is_deleted,omitempty"`
+	IsRenamed   bool    `json:"is_renamed,omitempty"`
+	IsBinary    bool    `json:"is_binary,omitempty"`
+	IsUntracked bool    `json:"is_untracked,omitempty"`
+	Hunks       []*Hunk `json:"hunks"`
 }
 
 func (d FileDiff) GetPath() string {

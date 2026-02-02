@@ -5,22 +5,17 @@ import (
 )
 
 func TestGetDiff(t *testing.T) {
-	// Test with HEAD and working directory
+	// Test with HEAD and a known file
 	headSHA := ResolveRef("HEAD")
 
-	diff, err := GetDiff(headSHA, []string{"."}, 0)
+	// Use a file that exists in the repo
+	fileDiff, err := GetDiff(headSHA, "go.mod", 0)
 	if err != nil {
 		t.Fatalf("GetDiff() error = %v", err)
 	}
 
-	if diff == nil {
-		t.Fatal("GetDiff() returned nil diff")
-	}
-
-	// Should have Files field (even if empty)
-	if diff.Files == nil {
-		t.Error("GetDiff() diff.Files is nil")
-	}
+	// fileDiff may be nil if the file hasn't changed, which is valid
+	_ = fileDiff
 }
 
 func TestGetDiff_InvalidBase(t *testing.T) {
@@ -29,5 +24,5 @@ func TestGetDiff_InvalidBase(t *testing.T) {
 			t.Error("GetDiff() should panic on invalid base ref")
 		}
 	}()
-	GetDiff("invalid", []string{"."}, 0)
+	GetDiff("invalid", "go.mod", 0)
 }

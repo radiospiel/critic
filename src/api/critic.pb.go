@@ -86,6 +86,7 @@ const (
 	FileStatus_FILE_STATUS_NEW         FileStatus = 2
 	FileStatus_FILE_STATUS_DELETED     FileStatus = 3
 	FileStatus_FILE_STATUS_RENAMED     FileStatus = 4
+	FileStatus_FILE_STATUS_UNTRACKED   FileStatus = 5
 )
 
 // Enum value maps for FileStatus.
@@ -96,6 +97,7 @@ var (
 		2: "FILE_STATUS_NEW",
 		3: "FILE_STATUS_DELETED",
 		4: "FILE_STATUS_RENAMED",
+		5: "FILE_STATUS_UNTRACKED",
 	}
 	FileStatus_value = map[string]int32{
 		"FILE_STATUS_UNSPECIFIED": 0,
@@ -103,6 +105,7 @@ var (
 		"FILE_STATUS_NEW":         2,
 		"FILE_STATUS_DELETED":     3,
 		"FILE_STATUS_RENAMED":     4,
+		"FILE_STATUS_UNTRACKED":   5,
 	}
 )
 
@@ -2559,14 +2562,15 @@ const file_critic_proto_rawDesc = "" +
 	"\x1bERROR_CODE_INVALID_ARGUMENT\x10\x01\x12\x18\n" +
 	"\x14ERROR_CODE_NOT_FOUND\x10\x02\x12\x17\n" +
 	"\x13ERROR_CODE_INTERNAL\x10\x03\x12\x1a\n" +
-	"\x16ERROR_CODE_UNAVAILABLE\x10\x04*\x8a\x01\n" +
+	"\x16ERROR_CODE_UNAVAILABLE\x10\x04*\xa5\x01\n" +
 	"\n" +
 	"FileStatus\x12\x1b\n" +
 	"\x17FILE_STATUS_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14FILE_STATUS_MODIFIED\x10\x01\x12\x13\n" +
 	"\x0fFILE_STATUS_NEW\x10\x02\x12\x17\n" +
 	"\x13FILE_STATUS_DELETED\x10\x03\x12\x17\n" +
-	"\x13FILE_STATUS_RENAMED\x10\x04*h\n" +
+	"\x13FILE_STATUS_RENAMED\x10\x04\x12\x19\n" +
+	"\x15FILE_STATUS_UNTRACKED\x10\x05*h\n" +
 	"\bLineType\x12\x19\n" +
 	"\x15LINE_TYPE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11LINE_TYPE_CONTEXT\x10\x01\x12\x13\n" +

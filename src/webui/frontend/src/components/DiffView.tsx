@@ -4,6 +4,7 @@ import { FileDiff, FileStatus, Line, LineType } from '../gen/critic_pb'
 import InlineCommentEditor, { CommentLineInfo } from './CommentEditor'
 import CommentDisplay from './CommentDisplay'
 import { getConversations, CommentConversation, ServerConfig } from '../api/client'
+import LinkToSource from './LinkToSource'
 
 const ALT_JUMP_SIZE = 25
 
@@ -21,11 +22,6 @@ interface DiffViewProps {
   restoreLineNo?: { lineNoNew: number; lineNoOld: number } | null
   showOnlyConversations?: boolean
   serverConfig?: ServerConfig | null
-}
-
-// Check if we're on localhost
-function isLocalhost(): boolean {
-  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 }
 
 function getFileExtension(path: string): string {
@@ -329,18 +325,7 @@ function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelect
       </td>
       <td className="diff-line-number diff-line-number-new">
         {line.type !== LineType.DELETED && line.lineNoNew > 0 ? (
-          serverConfig?.devMode && isLocalhost() && filePath ? (
-            <a
-              href={`goland://open?file=${serverConfig.gitRoot}/${filePath}&line=${line.lineNoNew}`}
-              onClick={(e) => e.stopPropagation()}
-              title="Open in GoLand"
-              className="line-number-link"
-            >
-              {line.lineNoNew}
-            </a>
-          ) : (
-            line.lineNoNew
-          )
+          <LinkToSource lineNo={line.lineNoNew} filePath={filePath || ''} serverConfig={serverConfig} />
         ) : ''}
       </td>
       <td className="diff-line-prefix">{prefix}</td>

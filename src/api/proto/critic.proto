@@ -121,6 +121,7 @@ enum FileStatus {
   FILE_STATUS_NEW = 2;
   FILE_STATUS_DELETED = 3;
   FILE_STATUS_RENAMED = 4;
+  FILE_STATUS_UNTRACKED = 5;
 }
 
 // FileDiff represents changes to a single file.

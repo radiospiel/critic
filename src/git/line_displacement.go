@@ -210,7 +210,7 @@ func colorToBlock(colorName string, lineCount, oldLine, newLine int, textHash st
 
 // getColoredDiff calls git diff with color configuration for move detection
 func getColoredDiff(path string, ref1 string, ref2 string) []byte {
-	return must.Exec("git",
+	return git(
 		"-c", gitColorConfig("new"),
 		"-c", gitColorConfig("newMoved"),
 		"-c", gitColorConfig("newMovedAlternative"),
@@ -535,6 +535,6 @@ func revParse(ref string) string {
 	}
 
 	// Use git rev-parse to get the SHA1
-	output := must.Exec("git", "rev-parse", ref)
+	output := git("rev-parse", ref)
 	return strings.TrimSpace(string(output))
 }

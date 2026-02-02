@@ -76,6 +76,11 @@ export enum FileStatus {
    * @generated from enum value: FILE_STATUS_RENAMED = 4;
    */
   RENAMED = 4,
+
+  /**
+   * @generated from enum value: FILE_STATUS_UNTRACKED = 5;
+   */
+  UNTRACKED = 5,
 }
 // Retrieve enum metadata with: proto3.getEnumType(FileStatus)
 proto3.util.setEnumType(FileStatus, "critic.v1.FileStatus", [
@@ -84,6 +89,7 @@ proto3.util.setEnumType(FileStatus, "critic.v1.FileStatus", [
   { no: 2, name: "FILE_STATUS_NEW" },
   { no: 3, name: "FILE_STATUS_DELETED" },
   { no: 4, name: "FILE_STATUS_RENAMED" },
+  { no: 5, name: "FILE_STATUS_UNTRACKED" },
 ]);
 
 /**

@@ -24,6 +24,8 @@
   --status-deleted-text: #721c24;
   --status-renamed-bg: #d1ecf1;
   --status-renamed-text: #0c5460;
+  --status-untracked-bg: #cce5ff;
+  --status-untracked-text: #004085;
 
   /* Diff colors */
   --diff-added-bg: #e6ffec;
@@ -75,6 +77,8 @@
   --status-deleted-text: #f85149;
   --status-renamed-bg: #0d3246;
   --status-renamed-text: #58a6ff;
+  --status-untracked-bg: #0d3d62;
+  --status-untracked-text: #79c0ff;
 
   /* Diff colors - dark */
   --diff-added-bg: #12261e;
@@ -447,6 +451,11 @@ html, body, #root {
 .file-status.status-r {
   background-color: var(--status-renamed-bg);
   color: var(--status-renamed-text);
+}
+
+.file-status.status-\? {
+  background-color: var(--status-untracked-bg);
+  color: var(--status-untracked-text);
 }
 
 .file-path {
