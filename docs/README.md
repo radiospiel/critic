@@ -1,6 +1,8 @@
 # Critic Documentation
 
-Critic is a git diff viewer with integrated code review comments. It enables human-in-the-loop code review workflows with AI assistants through MCP (Model Context Protocol) integration.
+Critic is a mcp and web server which offers a git diff viewer and integrates code review comments. It enables human-in-the-loop code review workflows with AI assistants through MCP (Model Context Protocol) integration. It allows humans to review code changes made by the agent, and to ask for adjustments, without going through a github. This allows for a faster turn-around between changes and review, allowing the agent to actively employ a human-in-the-loop review process.
+
+**Note that critic is designed as a single-user experience.** A typical scenario runs the critic mcp and http servers on the same machine that also runs the coding agent, and only listens on localhost. It is important to not deploy critic in an unsecured environment, since the web client has access to the entire tree of source files.
 
 ## Documentation
 
