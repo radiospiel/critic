@@ -56,10 +56,6 @@ type Session struct {
 	// Diff state
 	diffArgs  DiffArgs
 	fileDiffs []*types.FileDiff
-
-	// Watchers
-	dbWatcher  *DBWatcher
-	gitWatcher *GitWatcher
 }
 
 // NewSession creates a new Session with the given parameters.
@@ -72,51 +68,13 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 	s := &Session{
 		messaging: messaging,
 		gitRoot:   gitRoot,
-		diffArgs:  DiffArgs{},
-	}
-
-	// Create watchers
-	dbWatcher, err := NewDBWatcher(gitRoot, func() {
-		logger.Info("Session: DB changed, refreshing conversations")
-		if err := s.RefreshConversations(); err != nil {
-			logger.Warn("Session: Failed to refresh conversations: %v", err)
-		}
-	})
-	if err != nil {
-		return nil, err
-	}
-	s.dbWatcher = dbWatcher
-
-	gitWatcher := NewGitWatcher(s)
-	gitWatcher.SetBases(args.Bases)
-	s.gitWatcher = gitWatcher
-
-	// Set initial fileDiffs args
-	if len(args.Bases) > 0 {
-		s.SetDiffArgs(args)
+		diffArgs:  args,
 	}
 
 	return s, nil
 }
 
 // --- Diff Args ---
-
-// SetDiffArgs sets the fileDiffs arguments
-func (s *Session) SetDiffArgs(args DiffArgs) {
-	s.mu.Lock()
-	s.diffArgs = args
-	if s.gitWatcher != nil {
-		s.gitWatcher.SetBases(args.Bases)
-	}
-	s.mu.Unlock()
-}
-
-// GetDiffArgs returns the current fileDiffs arguments
-func (s *Session) GetDiffArgs() DiffArgs {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.diffArgs
-}
 
 // SetCurrentBase sets the current base index
 func (s *Session) SetCurrentBase(index int) {
@@ -134,7 +92,7 @@ func (s *Session) GetCurrentBase() int {
 
 // GetCurrentBaseName returns the name of the current base ref
 func (s *Session) GetCurrentBaseName() string {
-	args := s.GetDiffArgs()
+	args := s.diffArgs
 	if args.CurrentBase < 0 || args.CurrentBase >= len(args.Bases) {
 		return ""
 	}
@@ -143,7 +101,7 @@ func (s *Session) GetCurrentBaseName() string {
 
 // CycleBase cycles to the next base
 func (s *Session) CycleBase() int {
-	args := s.GetDiffArgs()
+	args := s.diffArgs
 	if len(args.Bases) == 0 {
 		return 0
 	}
@@ -204,60 +162,5 @@ func (s *Session) GetConversationSummary(filePath string) (*critic.FileConversat
 func (s *Session) RefreshConversations() error {
 	// Conversations are fetched directly from messaging when needed,
 	// so this is a no-op now. Keeping the method for API compatibility.
-	return nil
-}
-
-// --- Watchers ---
-
-// StartWatchers starts all watchers in goroutines
-func (s *Session) StartWatchers() error {
-	var wg sync.WaitGroup
-	var dbErr, gitErr error
-
-	if s.dbWatcher != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := s.dbWatcher.Start(); err != nil {
-				dbErr = err
-			}
-		}()
-	}
-
-	if s.gitWatcher != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := s.gitWatcher.Start(); err != nil {
-				gitErr = err
-			}
-		}()
-	}
-
-	wg.Wait()
-
-	if dbErr != nil {
-		return dbErr
-	}
-	if gitErr != nil {
-		return gitErr
-	}
-
-	return nil
-}
-
-// StopWatchers stops all watchers
-func (s *Session) StopWatchers() {
-	if s.dbWatcher != nil {
-		s.dbWatcher.Stop()
-	}
-	if s.gitWatcher != nil {
-		s.gitWatcher.Stop()
-	}
-}
-
-// Close cleans up resources
-func (s *Session) Close() error {
-	s.StopWatchers()
 	return nil
 }
