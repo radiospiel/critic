@@ -42,5 +42,8 @@ Note that this quick start guide does not instruct the coding agent to use criti
 
 If the "critic" or "critic2" MCP server is available, but not on claude code for web:
 
-Before committing any significant code changes, call the get_review_feedback tool with a summary of what you've done, if a critic or critic2 MCP server is available. Wait for reviewer approval before proceeding. Address any feedback in subsequent iterations.
+Before committing any significant code changes, call the get_review_feedback tool
+with a summary of what you've done, if a critic or critic2 MCP server is available.
+Wait for reviewer approval before proceeding. Address any feedback in subsequent
+iterations.
 ```
