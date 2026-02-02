@@ -27,7 +27,7 @@ type keys struct {
 	ResolvedBases string // "resolvedBases" - map[string]string - base ref -> resolved SHA
 
 	// Diff data
-	Diff  string // "diff" - *types.Diff - the parsed diff
+	Diff  string // "diff" - []*types.FileDiff - the parsed diff
 	Files string // "diff.files" - []*types.FileDiff - list of files in the diff
 
 	// TUI state
@@ -117,7 +117,7 @@ type Session struct {
 	mu        sync.RWMutex
 
 	// Direct state (not stored in observable since it's not map/slice)
-	diff *types.Diff
+	diff []*types.FileDiff
 
 	// Watchers
 	dbWatcher  *DBWatcher
@@ -301,7 +301,7 @@ func (s *Session) GetResolvedBase(baseRef string) (string, bool) {
 // --- Diff Data ---
 
 // SetDiff sets the diff data
-func (s *Session) SetDiff(diff *types.Diff) {
+func (s *Session) SetDiff(diff []*types.FileDiff) {
 	// Store diff in direct field (not observable since it's a struct pointer)
 	s.mu.Lock()
 	s.diff = diff
@@ -312,8 +312,8 @@ func (s *Session) SetDiff(diff *types.Diff) {
 	if diff == nil {
 		files = []any{}
 	} else {
-		files = make([]any, len(diff.Files))
-		for i, f := range diff.Files {
+		files = make([]any, len(diff))
+		for i, f := range diff {
 			files[i] = map[string]any{
 				"oldPath":   f.OldPath,
 				"newPath":   f.NewPath,
@@ -331,7 +331,7 @@ func (s *Session) SetDiff(diff *types.Diff) {
 }
 
 // GetDiff returns the current diff
-func (s *Session) GetDiff() *types.Diff {
+func (s *Session) GetDiff() []*types.FileDiff {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.diff
@@ -339,20 +339,12 @@ func (s *Session) GetDiff() *types.Diff {
 
 // GetFiles returns the list of file diffs
 func (s *Session) GetFiles() []*types.FileDiff {
-	diff := s.GetDiff()
-	if diff == nil {
-		return nil
-	}
-	return diff.Files
+	return s.GetDiff()
 }
 
 // GetFileCount returns the number of files in the diff
 func (s *Session) GetFileCount() int {
-	diff := s.GetDiff()
-	if diff == nil {
-		return 0
-	}
-	return len(diff.Files)
+	return len(s.GetDiff())
 }
 
 // --- Selection ---
@@ -364,12 +356,12 @@ func (s *Session) SetSelectedFile(filePath string) {
 
 // SetSelectedFilePath sets the selected file by path
 func (s *Session) SetSelectedFilePath(path string) {
-	diff := s.GetDiff()
-	if diff == nil {
+	files := s.GetDiff()
+	if files == nil {
 		return
 	}
 
-	for _, file := range diff.Files {
+	for _, file := range files {
 		if file.GetPath() == path {
 			s.SetValueAtKey(Keys.SelectedFilePath, path)
 			return
@@ -389,14 +381,14 @@ func (s *Session) GetSelectedFile() *types.FileDiff {
 }
 
 func (s *Session) GetFileFromDiff(filePath string) *types.FileDiff {
-	diff := s.GetDiff()
-	if diff == nil {
+	files := s.GetDiff()
+	if files == nil {
 		return nil
 	}
 
-	for index, file := range diff.Files {
+	for _, file := range files {
 		if file.GetPath() == filePath {
-			return diff.Files[index]
+			return file
 		}
 	}
 
@@ -409,13 +401,13 @@ func (s *Session) getSelectedFilePath() string {
 
 // GetSelectedFileIndex returns the index of the selected file (-1 if no selection)
 func getSelectedFileIndex(s *Session) int {
-	diff := s.GetDiff()
-	if diff == nil {
+	files := s.GetDiff()
+	if files == nil {
 		return -1
 	}
 
 	filePath := s.getSelectedFilePath()
-	for index, file := range diff.Files {
+	for index, file := range files {
 		if file.GetPath() == filePath {
 			return index
 		}
@@ -425,8 +417,8 @@ func getSelectedFileIndex(s *Session) int {
 }
 
 func (s *Session) moveFileSelection(offset int) bool {
-	diff := s.GetDiff()
-	if diff == nil {
+	files := s.GetDiff()
+	if files == nil {
 		return false
 	}
 
@@ -438,7 +430,7 @@ func (s *Session) moveFileSelection(offset int) bool {
 		return false
 	}
 
-	s.SetSelectedFilePath(diff.Files[newIndex].GetPath())
+	s.SetSelectedFilePath(files[newIndex].GetPath())
 	return true
 }
 
@@ -547,12 +539,12 @@ func (s *Session) GetConversationSummary(filePath string) (*critic.FileConversat
 
 // RefreshConversations refreshes conversation data for all files in the diff
 func (s *Session) RefreshConversations() error {
-	diff := s.GetDiff()
-	if diff == nil {
+	files := s.GetDiff()
+	if files == nil {
 		return nil
 	}
 
-	for _, file := range diff.Files {
+	for _, file := range files {
 		filePath := file.NewPath
 		if file.IsDeleted {
 			filePath = file.OldPath

@@ -6,11 +6,6 @@ import (
 	"github.com/radiospiel/critic/simple-go/utils"
 )
 
-// Diff represents a git diff with multiple file changes
-type Diff struct {
-	Files []*FileDiff `json:"files"`
-}
-
 // FileDiff represents changes to a single file
 type FileDiff struct {
 	OldPath     string  `json:"old_path"`

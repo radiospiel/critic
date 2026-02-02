@@ -14,36 +14,34 @@ func TestConvertDiffSummary(t *testing.T) {
 	assert.Nil(t, result, "nil diff should return nil")
 
 	// Test empty diff
-	diff := &types.Diff{Files: []*types.FileDiff{}}
-	result = convertDiffSummary(diff)
+	files := []*types.FileDiff{}
+	result = convertDiffSummary(files)
 	assert.NotNil(t, result, "empty diff should not be nil")
 	assert.Equals(t, len(result.Files), 0, "empty diff should have no files")
 
 	// Test diff with files
-	diff = &types.Diff{
-		Files: []*types.FileDiff{
-			{
-				OldPath:   "old.go",
-				NewPath:   "new.go",
-				IsRenamed: true,
-				Hunks: []*types.Hunk{
-					{
-						OldStart: 1,
-						OldLines: 5,
-						NewStart: 1,
-						NewLines: 7,
-						Header:   "@@ -1,5 +1,7 @@",
-						Stats:    types.HunkStats{Added: 3, Deleted: 1},
-						Lines: []*types.Line{
-							{Type: types.LineContext, Content: "context line", OldNum: 1, NewNum: 1},
-						},
+	files = []*types.FileDiff{
+		{
+			OldPath:   "old.go",
+			NewPath:   "new.go",
+			IsRenamed: true,
+			Hunks: []*types.Hunk{
+				{
+					OldStart: 1,
+					OldLines: 5,
+					NewStart: 1,
+					NewLines: 7,
+					Header:   "@@ -1,5 +1,7 @@",
+					Stats:    types.HunkStats{Added: 3, Deleted: 1},
+					Lines: []*types.Line{
+						{Type: types.LineContext, Content: "context line", OldNum: 1, NewNum: 1},
 					},
 				},
 			},
 		},
 	}
 
-	result = convertDiffSummary(diff)
+	result = convertDiffSummary(files)
 	assert.NotNil(t, result, "diff should not be nil")
 	assert.Equals(t, len(result.Files), 1, "should have 1 file")
 

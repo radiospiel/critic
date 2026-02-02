@@ -30,19 +30,19 @@ func getDiffSummaryImpl(server *Server, req *api.GetDiffSummaryRequest) (*api.Ge
 	}, nil
 }
 
-// convertDiffSummary converts a types.Diff to an api.DiffSummary (without hunks)
-func convertDiffSummary(d *types.Diff) *api.DiffSummary {
-	if d == nil {
+// convertDiffSummary converts a []*types.FileDiff to an api.DiffSummary (without hunks)
+func convertDiffSummary(files []*types.FileDiff) *api.DiffSummary {
+	if files == nil {
 		return nil
 	}
 
-	files := make([]*api.FileSummary, len(d.Files))
-	for i, f := range d.Files {
-		files[i] = convertFileSummary(f)
+	apiFiles := make([]*api.FileSummary, len(files))
+	for i, f := range files {
+		apiFiles[i] = convertFileSummary(f)
 	}
 
 	return &api.DiffSummary{
-		Files: files,
+		Files: apiFiles,
 	}
 }
 

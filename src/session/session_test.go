@@ -106,11 +106,9 @@ func TestDiff(t *testing.T) {
 	assert.Equals(t, session.GetFileCount(), 0, "initial file count should be 0")
 
 	// Set diff
-	diff := &types.Diff{
-		Files: []*types.FileDiff{
-			{NewPath: "file1.go", OldPath: "file1.go"},
-			{NewPath: "file2.go", OldPath: "file2.go"},
-		},
+	diff := []*types.FileDiff{
+		{NewPath: "file1.go", OldPath: "file1.go"},
+		{NewPath: "file2.go", OldPath: "file2.go"},
 	}
 	session.SetDiff(diff)
 
@@ -126,12 +124,10 @@ func TestSelection(t *testing.T) {
 	session := createTestSession(t, nil)
 
 	// Set diff first
-	diff := &types.Diff{
-		Files: []*types.FileDiff{
-			{NewPath: "file1.go", OldPath: "file1.go"},
-			{NewPath: "file2.go", OldPath: "file2.go"},
-			{NewPath: "file3.go", OldPath: "file3.go"},
-		},
+	diff := []*types.FileDiff{
+		{NewPath: "file1.go", OldPath: "file1.go"},
+		{NewPath: "file2.go", OldPath: "file2.go"},
+		{NewPath: "file3.go", OldPath: "file3.go"},
 	}
 	session.SetDiff(diff)
 
@@ -245,10 +241,10 @@ func TestOnKeyChange(t *testing.T) {
 	})
 	defer session.ClearSubscriptions(subs)
 
-	diff := &types.Diff{Files: []*types.FileDiff{
+	diff := []*types.FileDiff{
 		{NewPath: "test1.go"},
 		{NewPath: "test2.go"},
-	}}
+	}
 	session.SetDiff(diff)
 	assert.True(t, filesChangeCalled, "OnKeyChange callback should be called")
 	assert.Equals(t, changedKey, Keys.Files, "changed key should be Keys.Files")
@@ -292,11 +288,9 @@ func TestDeletedFileSelection(t *testing.T) {
 	session := createTestSession(t, nil)
 
 	// Set diff with a deleted file
-	diff := &types.Diff{
-		Files: []*types.FileDiff{
-			{NewPath: "file1.go", OldPath: "file1.go"},
-			{NewPath: "", OldPath: "deleted.go", IsDeleted: true},
-		},
+	diff := []*types.FileDiff{
+		{NewPath: "file1.go", OldPath: "file1.go"},
+		{NewPath: "", OldPath: "deleted.go", IsDeleted: true},
 	}
 	session.SetDiff(diff)
 

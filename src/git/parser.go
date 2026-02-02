@@ -69,14 +69,11 @@ func AbsPathToGitPath(absPath string) string {
 	return relPath
 }
 
-// ParseDiff parses git diff output into a structured Diff object
-func ParseDiff(diffText string) (*ctypes.Diff, error) {
+// ParseDiff parses git diff output into a slice of FileDiff objects
+func ParseDiff(diffText string) ([]*ctypes.FileDiff, error) {
 	lines := splitLines(diffText)
 
-	diff := &ctypes.Diff{
-		Files: []*ctypes.FileDiff{},
-	}
-
+	var files []*ctypes.FileDiff
 	var currentFile *ctypes.FileDiff
 	var currentHunk *ctypes.Hunk
 	var oldLineNum, newLineNum int
@@ -92,7 +89,7 @@ func ParseDiff(diffText string) (*ctypes.Diff, error) {
 					currentFile.Hunks = append(currentFile.Hunks, currentHunk)
 					currentHunk = nil
 				}
-				diff.Files = append(diff.Files, currentFile)
+				files = append(files, currentFile)
 			}
 
 			// Create new file diff
@@ -235,10 +232,10 @@ func ParseDiff(diffText string) (*ctypes.Diff, error) {
 		currentFile.Hunks = append(currentFile.Hunks, currentHunk)
 	}
 	if currentFile != nil {
-		diff.Files = append(diff.Files, currentFile)
+		files = append(files, currentFile)
 	}
 
-	return diff, nil
+	return files, nil
 }
 
 // splitLines splits text into lines, handling both \n and \r\n
@@ -256,15 +253,13 @@ func splitLines(text string) []string {
 	return lines
 }
 
-// ParseDiffNameStatus parses `git diff --name-status` output into a Diff object.
+// ParseDiffNameStatus parses `git diff --name-status` output into a slice of FileDiff.
 // The output format is: STATUS\tPATH or STATUS\tOLD_PATH\tNEW_PATH for renames.
 // Status codes: A=Added, D=Deleted, M=Modified, R=Renamed, C=Copied, T=Type changed
-func ParseDiffNameStatus(output string) (*ctypes.Diff, error) {
+func ParseDiffNameStatus(output string) ([]*ctypes.FileDiff, error) {
 	lines := splitLines(output)
 
-	diff := &ctypes.Diff{
-		Files: []*ctypes.FileDiff{},
-	}
+	var files []*ctypes.FileDiff
 
 	for _, line := range lines {
 		if line == "" {
@@ -304,8 +299,8 @@ func ParseDiffNameStatus(output string) (*ctypes.Diff, error) {
 			}
 		}
 
-		diff.Files = append(diff.Files, fileDiff)
+		files = append(files, fileDiff)
 	}
 
-	return diff, nil
+	return files, nil
 }

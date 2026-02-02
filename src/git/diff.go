@@ -67,16 +67,16 @@ func GetDiff(base string, path string, contextLines int) (*ctypes.FileDiff, erro
 	output := git(args...)
 
 	// Parse the diff output
-	diff, err := ParseDiff(string(output))
+	files, err := ParseDiff(string(output))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse diff: %w", err)
 	}
 
-	if len(diff.Files) == 0 {
+	if len(files) == 0 {
 		return nil, nil
 	}
 
-	return diff.Files[0], nil
+	return files[0], nil
 }
 
 // isUntracked checks if a file is untracked by git
@@ -136,7 +136,7 @@ func readUntrackedFile(path string) (*ctypes.FileDiff, error) {
 // base is a commit SHA, target is either "current" for working directory or a commit SHA.
 // This is more efficient than GetDiff when you only need to know which files changed.
 // Also includes untracked files (new files not yet added to git).
-func GetDiffNames(base string, paths []string) (*ctypes.Diff, error) {
+func GetDiffNames(base string, paths []string) ([]*ctypes.FileDiff, error) {
 	for _, path := range paths {
 		preconditions.Check(len(path) > 0, "Path cannot be empty")
 	}
@@ -151,7 +151,7 @@ func GetDiffNames(base string, paths []string) (*ctypes.Diff, error) {
 	output := git(args...)
 
 	// Parse the name-status output
-	diff, err := ParseDiffNameStatus(string(output))
+	files, err := ParseDiffNameStatus(string(output))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse diff name-status: %w", err)
 	}
@@ -163,12 +163,12 @@ func GetDiffNames(base string, paths []string) (*ctypes.Diff, error) {
 		if path == "" {
 			continue
 		}
-		diff.Files = append(diff.Files, &ctypes.FileDiff{
+		files = append(files, &ctypes.FileDiff{
 			OldPath:     "",
 			NewPath:     path,
 			IsUntracked: true,
 		})
 	}
 
-	return diff, nil
+	return files, nil
 }
