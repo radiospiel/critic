@@ -4,57 +4,17 @@ This document describes the communication architecture between the WebUI, MCP se
 
 ## Overview
 
-Critic uses a **loosely-coupled, event-driven architecture** where components communicate indirectly through:
+Critic is a mcp and web server which orchestrates the communication between changes a coding agent and a human user. It allows humans to review code changes made by the agent, and to ask for adjustments, without going through a github. This allows for a faster turn-around between changes and review, allowing the agent to actively employ a human-in-the-loop review process. 
 
-1. A shared SQLite database
-2. A git file system watcher
-3. A database modification time watcher
-4. WebSocket broadcasts to connected clients
+Critic uses a **loosely-coupled, event-driven architecture**. This design allows the MCP server to run independently from the HTTP server. Messaging between the agent and the user takes place using a SQLite database, changes in the source code are directly handled via a git-controlled file system.
 
-This design allows the MCP server to run independently (even in a different process) while the WebUI automatically reflects changes in real-time.
+The event-driven architecture allows the WebUI to automatically reflects changes, both to the source files and in the messages between users and agents, in real-time. The WebUI is also only *one* UI – a terminal-driven UI would equally possible.
+
+**Note that critic is designed as a single-user experience.** A typical scenario runs the critic mcp and http servers on the same machine that also runs the coding agent, and only listens on localhost. It is important to not deploy critic in an unsecured environment, since the web client has access to **the entire tree of source files**. 
 
 ## Architecture Diagram
 
-blob:https://whimsical.com/e1f58a5f-c1aa-4957-87c0-ce27e0e184aa<img width="1219" height="968" alt="image" src="https://github.com/user-attachments/assets/4169ba12-2e6d-441b-b540-c7a9dc5a9439" />
-
-```
-┌─────────────────────┐         ┌─────────────────────┐
-│    Claude Code      │         │       Browser       │
-│    (AI Client)      │         │      (WebUI)        │
-└──────────┬──────────┘         └──────────┬──────────┘
-           │ JSON-RPC 2.0                  │ WebSocket
-           │ (stdin/stdout)                │
-           ▼                               ▼
-┌──────────────────────┐       ┌───────────────────────┐
-│     MCP Server       │       │      API Server       │
-│  (src/mcp/server.go) │       │ (src/api/server/)     │
-└──────────┬───────────┘       └───────────┬───────────┘
-           │                               │
-           │   ┌───────────────────────────┤
-           │   │                           │
-           │   │  ┌──────────────────┐     │
-           │   │  │    DBWatcher     │     │
-           │   │  │ (polls _db_mtime)│◄────┤
-           │   │  └────────┬─────────┘     │
-           │   │           │               │
-           ▼   ▼           ▼               ▼
-    ┌────────────────────────────────────────────┐
-    │                SQLite Database              │
-    │            (.critic/critic.db)              │
-    │  ┌──────────────────────────────────────┐  │
-    │  │  messages table                       │  │
-    │  │  _db_mtime table (with triggers)      │  │
-    │  └──────────────────────────────────────┘  │
-    └────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────┐
-│              Git Repository                     │
-│  ┌──────────────────────────────────────────┐  │
-│  │  .git/ directory                          │  │
-│  │    └── GitWatcher (fsnotify)              │  │
-│  └──────────────────────────────────────────┘  │
-└────────────────────────────────────────────────┘
-```
+<img width="2445" height="2010" alt="image" src="https://github.com/user-attachments/assets/1554099e-b90a-422d-9e6d-22d4739589da" />
 
 ## Components
 
@@ -70,25 +30,25 @@ The MCP server provides tools for AI assistants to interact with code review con
 
 The MCP server connects directly to the SQLite database to read and write messages.
 
-### 2. API Server (`src/api/server/`)
+### 2. HTTP Server (`src/api/server/`)
 
-The API server provides:
+The HTTP server provides:
 - HTTP/Connect API for the frontend
 - WebSocket hub for real-time updates
-- Git and database watchers for change detection
+- Embedded react frontend
 
-### 3. Database Watcher (`src/messagedb/db_watcher.go`)
+The HTTP server employs Git and database watchers to detect changes, and informs the frontend via Websockets about changes.
+
+#### Database Watcher (`src/messagedb/db_watcher.go`)
 
 Detects database changes made by external processes (like the MCP server).
 
 **How it works:**
-- Polls the `_db_mtime` table every 1000ms using fresh connections
+- Polls the `_db_mtime` table every 1000ms. Note that this is using fresh connections, to work around limitations with WAL mode.
 - SQLite triggers automatically update `_db_mtime` when messages change
 - When a change is detected, notifies the API server
 
-**Why fresh connections?** Using a fresh connection each poll ensures changes made by other processes (like the MCP server) are visible, even in SQLite's WAL mode.
-
-### 4. Git Watcher (`src/git/git_watcher.go`)
+#### Git Watcher (`src/git/git_watcher.go`)
 
 Monitors the `.git/` directory for changes using fsnotify.
 
@@ -96,7 +56,7 @@ Monitors the `.git/` directory for changes using fsnotify.
 - Debounced notifications (100ms default) to prevent notification spam
 - Detects commits, checkouts, pulls, and other git operations
 
-### 5. WebSocket Hub (`src/webui/websocket.go`)
+#### WebSocket Hub (`src/webui/websocket.go`)
 
 Manages WebSocket connections and broadcasts updates to all connected clients.
 
