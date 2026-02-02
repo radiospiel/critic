@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/radiospiel/critic/simple-go/assert"
+	"github.com/radiospiel/critic/src/pkg/critic"
 )
 
 func setupTestDB(t *testing.T) (*DB, func()) {
@@ -129,7 +130,7 @@ func TestGetUnresolvedRootMessages(t *testing.T) {
 	db.CreateReply(AuthorAI, "Reply to msg1", msg1.ID)
 
 	// Mark msg2 as resolved
-	db.MarkAsResolved(msg2.ID)
+	db.MarkConversationAs(msg2.ID, critic.ConversationResolved)
 
 	// Get unresolved
 	unresolved, err := db.GetUnresolvedRootMessages()
@@ -164,7 +165,7 @@ func TestGetMessagesByFile(t *testing.T) {
 	assert.Equals(t, messages[1].ID, msg2.ID, "expected msg2 to be second (line 20)")
 }
 
-func TestMarkAsResolved(t *testing.T) {
+func TestMarkConversationAsResolved(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -173,7 +174,7 @@ func TestMarkAsResolved(t *testing.T) {
 	reply, _ := db.CreateReply(AuthorAI, "Reply", parent.ID)
 
 	// Mark as resolved
-	err := db.MarkAsResolved(parent.ID)
+	err := db.MarkConversationAs(parent.ID, critic.ConversationResolved)
 	assert.NoError(t, err, "failed to mark as resolved")
 
 	// Check parent
@@ -185,7 +186,7 @@ func TestMarkAsResolved(t *testing.T) {
 	assert.Equals(t, replyAfter.Status, StatusResolved)
 }
 
-func TestMarkAsRead(t *testing.T) {
+func TestMarkMessageAsRead(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -194,7 +195,7 @@ func TestMarkAsRead(t *testing.T) {
 	assert.Equals(t, msg.ReadStatus, ReadStatusUnread, "expected AI message to be unread initially")
 
 	// Mark as read
-	err := db.MarkAsRead(msg.ID)
+	err := db.MarkMessageAs(msg.ID, critic.MessageRead)
 	assert.NoError(t, err, "failed to mark as read")
 
 	// Check status
@@ -215,7 +216,7 @@ func TestGetFilesWithUnreadAIMessages(t *testing.T) {
 	db.CreateMessage(AuthorHuman, "Human comment", "src/test.go", 5, "abc123", "content")
 
 	// Mark one as read
-	db.MarkAsRead(msg2.ID)
+	db.MarkMessageAs(msg2.ID, critic.MessageRead)
 
 	// Get files with unread
 	files, err := db.GetFilesWithUnreadAIMessages()
@@ -288,7 +289,7 @@ func TestGetConversationsWithStatusFilter(t *testing.T) {
 	db.CreateReply(AuthorAI, "Reply to conv3", conv3.ID)
 
 	// Mark conv3 as resolved
-	db.MarkAsResolved(conv3.ID)
+	db.MarkConversationAs(conv3.ID, critic.ConversationResolved)
 
 	// Get unresolved conversations
 	unresolved, err := db.GetConversations("unresolved")
@@ -309,7 +310,7 @@ func TestGetConversationsWithStatusFilter(t *testing.T) {
 	assert.Equals(t, resolved[0].UUID, conv3.ID, "expected conv3 in resolved conversations")
 }
 
-func TestMarkAsReadByAI(t *testing.T) {
+func TestMarkConversationAsReadByAI(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -326,7 +327,7 @@ func TestMarkAsReadByAI(t *testing.T) {
 	assert.NoError(t, err, "failed to create reply2")
 
 	// Mark conversation as read by AI
-	err = db.MarkAsReadByAI(parent.ID)
+	err = db.MarkConversationAs(parent.ID, critic.ConversationReadByAI)
 	assert.NoError(t, err, "failed to mark as read by AI")
 
 	// Verify all messages in conversation are marked
@@ -349,7 +350,7 @@ func TestReadByAIFieldInGetThreadMessages(t *testing.T) {
 	db.CreateReply(AuthorAI, "Reply", parent.ID)
 
 	// Mark as read by AI
-	db.MarkAsReadByAI(parent.ID)
+	db.MarkConversationAs(parent.ID, critic.ConversationReadByAI)
 
 	// Get thread messages and verify ReadByAI field
 	thread, err := db.GetThreadMessages(parent.ID)

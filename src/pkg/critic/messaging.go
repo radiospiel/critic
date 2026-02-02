@@ -22,6 +22,23 @@ const (
 	StatusWaitingForResponse ConversationStatus = "waiting_for_response"
 )
 
+// ConversationUpdate represents an update to apply to a conversation
+type ConversationUpdate string
+
+const (
+	ConversationResolved   ConversationUpdate = "resolved"
+	ConversationUnresolved ConversationUpdate = "unresolved"
+	ConversationReadByAI   ConversationUpdate = "read_by_ai"
+)
+
+// MessageReadStatus represents the read status of a message
+type MessageReadStatus string
+
+const (
+	MessageRead   MessageReadStatus = "read"
+	MessageUnread MessageReadStatus = "unread"
+)
+
 // Message represents a single message in a conversation
 type Message struct {
 	UUID      string
@@ -72,13 +89,9 @@ type Messaging interface {
 	// GetConversationsForFile returns all Conversations for a specific file
 	GetConversationsForFile(filePath string) ([]*Conversation, error)
 
-	// GetFileConversationSummary returns a summary of Conversations for a file
-	// This is used for efficient file list rendering
-	GetFileConversationSummary(filePath string) (*FileConversationSummary, error)
-
-	// GetAllFileConversationSummaries returns summaries for all files that have conversations
+	// GetConversationsSummary returns summaries for all files that have conversations
 	// Only includes files with at least one conversation
-	GetAllFileConversationSummaries() ([]*FileConversationSummary, error)
+	GetConversationsSummary() ([]*FileConversationSummary, error)
 
 	// ReplyToConversation adds a reply to an existing conversation
 	ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error)
@@ -86,17 +99,11 @@ type Messaging interface {
 	// CreateConversation creates a new conversation (root message)
 	CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error)
 
-	// MarkAsResolved marks a conversation as resolved
-	MarkAsResolved(conversationUUID string) error
+	// MarkConversationAs applies an update to a conversation (resolved, unresolved, read_by_ai)
+	MarkConversationAs(conversationUUID string, update ConversationUpdate) error
 
-	// MarkAsUnresolved marks a conversation as unresolved
-	MarkAsUnresolved(conversationUUID string) error
-
-	// MarkAsRead marks an AI message as read
-	MarkAsRead(messageUUID string) error
-
-	// MarkAsReadByAI marks a conversation as having been read by the AI
-	MarkAsReadByAI(conversationUUID string) error
+	// MarkMessageAs marks a message with a given read status
+	MarkMessageAs(messageUUID string, status MessageReadStatus) error
 
 	// Close closes the messaging system and releases resources
 	Close() error
@@ -140,11 +147,7 @@ func (m *DummyMessaging) GetConversationsForFile(filePath string) ([]*Conversati
 	return m.Conversations[filePath], nil
 }
 
-func (m *DummyMessaging) GetFileConversationSummary(filePath string) (*FileConversationSummary, error) {
-	return m.Summaries[filePath], nil
-}
-
-func (m *DummyMessaging) GetAllFileConversationSummaries() ([]*FileConversationSummary, error) {
+func (m *DummyMessaging) GetConversationsSummary() ([]*FileConversationSummary, error) {
 	var summaries []*FileConversationSummary
 	for _, s := range m.Summaries {
 		summaries = append(summaries, s)
@@ -160,8 +163,10 @@ func (m *DummyMessaging) CreateConversation(author Author, message, filePath str
 	return &Conversation{UUID: "conv-1"}, nil
 }
 
-func (m *DummyMessaging) MarkAsResolved(conversationUUID string) error   { return nil }
-func (m *DummyMessaging) MarkAsUnresolved(conversationUUID string) error { return nil }
-func (m *DummyMessaging) MarkAsRead(messageUUID string) error            { return nil }
-func (m *DummyMessaging) MarkAsReadByAI(conversationUUID string) error   { return nil }
+func (m *DummyMessaging) MarkConversationAs(conversationUUID string, update ConversationUpdate) error {
+	return nil
+}
+func (m *DummyMessaging) MarkMessageAs(messageUUID string, status MessageReadStatus) error {
+	return nil
+}
 func (m *DummyMessaging) Close() error                                   { return nil }

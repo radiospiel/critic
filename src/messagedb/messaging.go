@@ -142,64 +142,8 @@ func (db *DB) GetConversationsForFile(filePath string) ([]*critic.Conversation, 
 	return conversations, nil
 }
 
-// GetFileConversationSummary returns a summary of conversations for a file
-func (db *DB) GetFileConversationSummary(filePath string) (*critic.FileConversationSummary, error) {
-	summary := &critic.FileConversationSummary{
-		FilePath: filePath,
-	}
-
-	// Query to check for unresolved, resolved, and unread conversations in one go
-	query := `
-		SELECT
-			CASE WHEN status != 'resolved' THEN 1 ELSE 0 END as is_unresolved,
-			CASE WHEN status = 'resolved' THEN 1 ELSE 0 END as is_resolved,
-			CASE WHEN author = 'ai' AND read_status = 'unread' THEN 1 ELSE 0 END as has_unread_ai
-		FROM messages
-		WHERE file_path = ? AND id = conversation_id
-	`
-
-	rows, err := db.db.Query(query, filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query file summary: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var isUnresolved, isResolved, hasUnreadAI int
-		if err := rows.Scan(&isUnresolved, &isResolved, &hasUnreadAI); err != nil {
-			return nil, fmt.Errorf("failed to scan file summary: %w", err)
-		}
-		summary.TotalCount++
-		if isUnresolved == 1 {
-			summary.UnresolvedCount++
-			summary.HasUnresolvedComments = true
-		}
-		if isResolved == 1 {
-			summary.ResolvedCount++
-			summary.HasResolvedComments = true
-		}
-		if hasUnreadAI == 1 {
-			summary.HasUnreadAIMessages = true
-		}
-	}
-
-	// Also check for unread AI messages in replies (not just root messages)
-	if !summary.HasUnreadAIMessages {
-		unreadQuery := `
-			SELECT COUNT(*) FROM messages
-			WHERE file_path = ? AND author = 'ai' AND read_status = 'unread'
-		`
-		var count int
-		if err := db.db.QueryRow(unreadQuery, filePath).Scan(&count); err == nil && count > 0 {
-			summary.HasUnreadAIMessages = true
-		}
-	}
-
-	return summary, nil
-}
-
-// GetAllFileConversationSummaries returns summaries for all files that have conversations
-func (db *DB) GetAllFileConversationSummaries() ([]*critic.FileConversationSummary, error) {
+// GetConversationsSummary returns summaries for all files that have conversations
+func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, error) {
 	// Query to get summaries for all files that have conversations
 	query := `
 		SELECT

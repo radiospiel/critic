@@ -54,7 +54,7 @@ Implement gRPC endpoints for conversation management:
    - Updated `DummyMessaging` implementation
 
 3. **MessageDB** (`src/messagedb/messaging.go`):
-   - Updated `GetFileConversationSummary` to populate count fields
+   - Updated `getFileConversationSummary` to populate count fields
    - Added `GetAllFileConversationSummaries()` implementation
 
 4. **API handlers** (`src/api/server/`):
@@ -86,6 +86,6 @@ Implement gRPC endpoints for conversation management:
 
 ## Notes
 
-- The messaging interface already has `GetFileConversationSummary` which was extended
+- The messaging interface already has `getFileConversationSummary` which was extended
 - Conversations are already rendered in DiffView, so that functionality was unchanged
 - Legacy `getComments` alias maintained for backward compatibility

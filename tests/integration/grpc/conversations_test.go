@@ -52,7 +52,7 @@ func (m *TestMessaging) GetConversationsForFile(filePath string) ([]*critic.Conv
 	return m.conversations[filePath], nil
 }
 
-func (m *TestMessaging) GetFileConversationSummary(filePath string) (*critic.FileConversationSummary, error) {
+func (m *TestMessaging) getFileConversationSummary(filePath string) (*critic.FileConversationSummary, error) {
 	convs := m.conversations[filePath]
 	if len(convs) == 0 {
 		return nil, nil
@@ -83,10 +83,10 @@ func (m *TestMessaging) GetFileConversationSummary(filePath string) (*critic.Fil
 	return summary, nil
 }
 
-func (m *TestMessaging) GetAllFileConversationSummaries() ([]*critic.FileConversationSummary, error) {
+func (m *TestMessaging) GetConversationsSummary() ([]*critic.FileConversationSummary, error) {
 	var summaries []*critic.FileConversationSummary
 	for filePath := range m.conversations {
-		summary, err := m.GetFileConversationSummary(filePath)
+		summary, err := m.getFileConversationSummary(filePath)
 		if err != nil {
 			return nil, err
 		}
@@ -145,11 +145,18 @@ func (m *TestMessaging) CreateConversation(author critic.Author, message, filePa
 	return conv, nil
 }
 
-func (m *TestMessaging) MarkAsResolved(conversationUUID string) error {
+func (m *TestMessaging) MarkConversationAs(conversationUUID string, update critic.ConversationUpdate) error {
 	for _, convs := range m.conversations {
 		for _, c := range convs {
 			if c.UUID == conversationUUID {
-				c.Status = critic.StatusResolved
+				switch update {
+				case critic.ConversationResolved:
+					c.Status = critic.StatusResolved
+				case critic.ConversationUnresolved:
+					c.Status = critic.StatusUnresolved
+				case critic.ConversationReadByAI:
+					c.ReadByAI = true
+				}
 				return nil
 			}
 		}
@@ -157,22 +164,10 @@ func (m *TestMessaging) MarkAsResolved(conversationUUID string) error {
 	return nil
 }
 
-func (m *TestMessaging) MarkAsUnresolved(conversationUUID string) error {
-	for _, convs := range m.conversations {
-		for _, c := range convs {
-			if c.UUID == conversationUUID {
-				c.Status = critic.StatusUnresolved
-				return nil
-			}
-		}
-	}
+func (m *TestMessaging) MarkMessageAs(messageUUID string, status critic.MessageReadStatus) error {
 	return nil
 }
-
-func (m *TestMessaging) MarkAsRead(messageUUID string) error            { return nil }
-func (m *TestMessaging) MarkAsReadByAI(conversationUUID string) error   { return nil }
-func (m *TestMessaging) Close() error                                   { return nil }
-
+func (m *TestMessaging) Close() error                                 { return nil }
 
 // TestConversationsScenario runs through all conversation-related GRPC endpoints
 // in a realistic scenario: create a conversation, retrieve it, get summaries,
