@@ -78,13 +78,18 @@ To enable human-in-the-loop code review, configure your AI coding agent to check
 ```markdown
 ### Human-in-the-Loop Code Review
 
-Before committing significant code changes, check for reviewer feedback:
+**The `/critic` command:** When the user types `/critic`, check for and respond to reviewer feedback:
 
 1. Call `get_critic_conversations(status: "unresolved")` to check for pending feedback
 2. For each conversation, call `get_full_critic_conversation(uuid)` to read the feedback
 3. Address the feedback in your code changes
 4. Call `reply_to_critic_conversation(uuid, message)` to acknowledge or discuss
 5. Wait for reviewer approval before proceeding
+
+**Command variations:**
+- `/critic` - Check for feedback and respond to all unresolved conversations
+- `/critic wait` - Notify the user you're waiting, then check for feedback when they respond
+- `/critic status` - Just report the count of unresolved conversations
 
 If the critic MCP server is available:
 - Proactively check for feedback after completing implementation tasks
@@ -95,12 +100,22 @@ If the critic MCP server is available:
 ### Workflow Example
 
 1. **Developer starts AI coding session** with critic MCP server configured
-2. **AI implements feature**, then checks `get_critic_conversations`
-3. **Human reviewer** opens `critic webui` and adds inline comments on the diff
-4. **AI detects new conversations** and reads the feedback
-5. **AI addresses feedback** and replies to acknowledge changes
+2. **AI implements feature**, developer reviews in `critic webui`
+3. **Human reviewer** adds inline comments on the diff
+4. **Developer types `/critic`** to trigger feedback check
+5. **AI reads feedback**, addresses it, and replies to acknowledge
 6. **Human approves** or continues the conversation
 7. **AI commits** once approved
+
+### Interactive Review Session
+
+For a more interactive workflow, the human can:
+
+1. Run `critic webui` in a terminal
+2. Tell the AI: `/critic wait`
+3. Add comments in the web UI
+4. Press Enter in Claude Code to signal "feedback ready"
+5. AI processes all feedback and responds
 
 ## Database
 
