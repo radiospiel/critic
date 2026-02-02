@@ -11,7 +11,7 @@ func TestGetDiff(t *testing.T) {
 	// Use a file that exists in the repo
 	fileDiff, err := GetDiff(headSHA, "go.mod", 0)
 	if err != nil {
-		t.Fatalf("GetFileDiffs() error = %v", err)
+		t.Fatalf("GetDiff() error = %v", err)
 	}
 
 	// fileDiff may be nil if the file hasn't changed, which is valid
@@ -21,7 +21,7 @@ func TestGetDiff(t *testing.T) {
 func TestGetDiff_InvalidBase(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("GetFileDiffs() should panic on invalid base ref")
+			t.Error("GetDiff() should panic on invalid base ref")
 		}
 	}()
 	GetDiff("invalid", "go.mod", 0)

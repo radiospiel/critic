@@ -23,7 +23,7 @@ func TestValidateRequest_GetDiffSummary(t *testing.T) {
 }
 
 func TestValidateRequest_GetDiff(t *testing.T) {
-	procedure := "/critic.v1.CriticService/GetFileDiffs"
+	procedure := "/critic.v1.CriticService/GetDiff"
 
 	// Missing required field
 	err := ValidateRequest(procedure, map[string]any{})
@@ -37,7 +37,7 @@ func TestValidateRequest_GetDiff(t *testing.T) {
 
 	// Valid request
 	err = ValidateRequest(procedure, map[string]any{"path": "src/main.go"})
-	assert.NoError(t, err, "valid GetFileDiffs request should have no errors")
+	assert.NoError(t, err, "valid GetDiff request should have no errors")
 }
 
 func TestValidateRequest_UnknownProcedure(t *testing.T) {
@@ -51,7 +51,7 @@ func TestFormatValidationError(t *testing.T) {
 	assert.Equals(t, FormatValidationError(nil), "", "nil error should return empty string")
 
 	// Actual validation error
-	err := ValidateRequest("/critic.v1.CriticService/GetFileDiffs", map[string]any{})
+	err := ValidateRequest("/critic.v1.CriticService/GetDiff", map[string]any{})
 	formatted := FormatValidationError(err)
 	assert.Contains(t, formatted, "path", "formatted error should mention the field")
 }

@@ -327,8 +327,8 @@ func (s *Session) SetDiff(diff []*types.FileDiff) {
 	s.SetValueAtKey(Keys.Files, files)
 }
 
-// GetFileDiffs returns the current fileDiffs
-func (s *Session) GetFileDiffs() []*types.FileDiff {
+// GetDiff returns the current diff
+func (s *Session) GetDiff() []*types.FileDiff {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.fileDiffs
@@ -336,7 +336,7 @@ func (s *Session) GetFileDiffs() []*types.FileDiff {
 
 // GetFileCount returns the number of files in the fileDiffs
 func (s *Session) GetFileCount() int {
-	return len(s.GetFileDiffs())
+	return len(s.GetDiff())
 }
 
 // --- Selection ---
@@ -348,7 +348,7 @@ func (s *Session) SetSelectedFile(filePath string) {
 
 // SetSelectedFilePath sets the selected file by path
 func (s *Session) SetSelectedFilePath(path string) {
-	files := s.GetFileDiffs()
+	files := s.GetDiff()
 	if files == nil {
 		return
 	}
@@ -373,7 +373,7 @@ func (s *Session) GetSelectedFile() *types.FileDiff {
 }
 
 func (s *Session) GetFileFromDiff(filePath string) *types.FileDiff {
-	files := s.GetFileDiffs()
+	files := s.GetDiff()
 	if files == nil {
 		return nil
 	}
@@ -393,7 +393,7 @@ func (s *Session) getSelectedFilePath() string {
 
 // GetSelectedFileIndex returns the index of the selected file (-1 if no selection)
 func getSelectedFileIndex(s *Session) int {
-	files := s.GetFileDiffs()
+	files := s.GetDiff()
 	if files == nil {
 		return -1
 	}
@@ -409,7 +409,7 @@ func getSelectedFileIndex(s *Session) int {
 }
 
 func (s *Session) moveFileSelection(offset int) bool {
-	files := s.GetFileDiffs()
+	files := s.GetDiff()
 	if files == nil {
 		return false
 	}
@@ -531,7 +531,7 @@ func (s *Session) GetConversationSummary(filePath string) (*critic.FileConversat
 
 // RefreshConversations refreshes conversation data for all files in the fileDiffs
 func (s *Session) RefreshConversations() error {
-	files := s.GetFileDiffs()
+	files := s.GetDiff()
 	if files == nil {
 		return nil
 	}

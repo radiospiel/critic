@@ -102,7 +102,7 @@ func TestDiff(t *testing.T) {
 	session := createTestSession(t, nil)
 
 	// Initially nil
-	assert.Nil(t, session.GetFileDiffs(), "initial fileDiffs should be nil")
+	assert.Nil(t, session.GetDiff(), "initial fileDiffs should be nil")
 	assert.Equals(t, session.GetFileCount(), 0, "initial file count should be 0")
 
 	// Set fileDiffs
@@ -112,7 +112,7 @@ func TestDiff(t *testing.T) {
 	}
 	session.SetDiff(diff)
 
-	assert.NotNil(t, session.GetFileDiffs(), "fileDiffs should be set")
+	assert.NotNil(t, session.GetDiff(), "fileDiffs should be set")
 	assert.Equals(t, session.GetFileCount(), 2, "file count should be 2")
 }
 

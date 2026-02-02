@@ -120,11 +120,11 @@ func (s *Session) GetFileDiff(path string, contextLines int) *types.FileDiff {
 	// Load the full diff for the specific file
 	fileDiff, err := git.GetDiff(currentBase, path, contextLines)
 	if err != nil {
-		logger.Error("git.GetFileDiffs returns error %v", err)
+		logger.Error("git.GetDiff returns error %v", err)
 		return nil
 	}
 	if fileDiff == nil {
-		logger.Error("git.GetFileDiffs returns empty diff")
+		logger.Error("git.GetDiff returns empty diff")
 		return nil
 	}
 
