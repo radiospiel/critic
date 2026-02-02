@@ -40,9 +40,9 @@ Note that timestamps **must always** have the time of day! It is important to al
 
 ### Ask for human reviewer approval
 
-If the "critic" or "critic2" MCP server is available, but not on claude code for web:
+If the "critic" MCP server is available, but not on claude code for web:
 
-- Before committing any significant code changes, call the get_review_feedback tool with a summary of what you've done, if a critic or critic2 MCP server is available. Wait for reviewer approval before proceeding. Address any feedback in subsequent iterations.
+- Before committing any significant code changes, call the get_review_feedback tool. Wait for reviewer approval before proceeding. Address any feedback in subsequent iterations.
 
 ### Test
 
@@ -55,4 +55,3 @@ If the "critic" or "critic2" MCP server is available, but not on claude code for
 should use 
 
     assert.Contains(t, conversations, conv1.ID, "expected %v in conversations %v", conv1.ID, conversations)
-	
