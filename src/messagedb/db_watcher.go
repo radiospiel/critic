@@ -1,20 +1,17 @@
 package messagedb
 
 import (
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/radiospiel/critic/simple-go/logger"
-	"github.com/radiospiel/critic/simple-go/utils"
 )
 
-// DBWatcher watches the critic database for changes and notifies when the
-// messages table mtime changes.
+// DBWatcher watches the critic database for changes by polling the _db_mtime table.
+// It opens a fresh connection for each poll to ensure it sees the latest data.
 type DBWatcher struct {
-	fileWatcher *utils.FileWatcher
-	db          *DB
 	gitRoot     string
+	pollInterval time.Duration
 
 	lastMtime   int64
 	lastMtimeMu sync.Mutex
@@ -23,54 +20,51 @@ type DBWatcher struct {
 	stopChan    chan struct{}
 }
 
-// NewDBWatcher creates a watcher that monitors the critic database for message changes.
-// It watches the .critic/critic.db file and compares the _db_mtime to detect actual data changes.
-func NewDBWatcher(gitRoot string, debounceMs int) (*DBWatcher, error) {
-	dbPath := filepath.Join(gitRoot, ".critic", "critic.db")
-	logger.Info("NewDBWatcher: Creating watcher for %s", dbPath)
+// NewDBWatcher creates a watcher that polls the database for message changes.
+// pollIntervalMs specifies how often to check for changes (in milliseconds).
+func NewDBWatcher(gitRoot string, pollIntervalMs int) (*DBWatcher, error) {
+	logger.Info("NewDBWatcher: Creating polling watcher for %s with interval=%dms", gitRoot, pollIntervalMs)
 
-	// Create file watcher for the database file
-	fileWatcher, err := utils.NewFileWatcher(dbPath, debounceMs)
+	// Get initial mtime with a fresh connection
+	initialMtime, err := getMtimeWithFreshConnection(gitRoot)
 	if err != nil {
-		return nil, err
-	}
-
-	// Open database connection to query mtime
-	db, err := New(gitRoot)
-	if err != nil {
-		fileWatcher.Close()
-		return nil, err
-	}
-
-	// Get initial mtime
-	initialMtime, err := db.GetMessagesMtime()
-	if err != nil {
-		db.Close()
-		fileWatcher.Close()
 		return nil, err
 	}
 
 	dw := &DBWatcher{
-		fileWatcher: fileWatcher,
-		db:          db,
-		gitRoot:     gitRoot,
-		lastMtime:   initialMtime,
-		changesChan: make(chan struct{}, 10),
-		stopChan:    make(chan struct{}),
+		gitRoot:      gitRoot,
+		pollInterval: time.Duration(pollIntervalMs) * time.Millisecond,
+		lastMtime:    initialMtime,
+		changesChan:  make(chan struct{}, 10),
+		stopChan:     make(chan struct{}),
 	}
 
-	// Start the mtime checking loop
-	go dw.checkLoop()
+	// Start the polling loop
+	go dw.pollLoop()
 
-	logger.Info("NewDBWatcher: Started watching database, initial mtime=%d", initialMtime)
+	logger.Info("NewDBWatcher: Started polling database, initial mtime=%d", initialMtime)
 	return dw, nil
 }
 
-// checkLoop listens for file changes and checks if mtime has actually changed
-func (dw *DBWatcher) checkLoop() {
+// getMtimeWithFreshConnection opens a new connection, queries mtime, and closes it
+func getMtimeWithFreshConnection(gitRoot string) (int64, error) {
+	db, err := New(gitRoot)
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+
+	return db.GetMessagesMtime()
+}
+
+// pollLoop periodically checks the mtime using fresh connections
+func (dw *DBWatcher) pollLoop() {
+	ticker := time.NewTicker(dw.pollInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
-		case <-dw.fileWatcher.Changes():
+		case <-ticker.C:
 			dw.checkMtime()
 		case <-dw.stopChan:
 			logger.Info("DBWatcher: Stop signal received")
@@ -79,9 +73,9 @@ func (dw *DBWatcher) checkLoop() {
 	}
 }
 
-// checkMtime queries the current mtime and sends notification if it changed
+// checkMtime queries the current mtime with a fresh connection and sends notification if changed
 func (dw *DBWatcher) checkMtime() {
-	currentMtime, err := dw.db.GetMessagesMtime()
+	currentMtime, err := getMtimeWithFreshConnection(dw.gitRoot)
 	if err != nil {
 		logger.Error("DBWatcher: Failed to get mtime: %v", err)
 		return
@@ -95,14 +89,6 @@ func (dw *DBWatcher) checkMtime() {
 
 		logger.Info("DBWatcher: Messages mtime changed from %d to %d", lastMtime, currentMtime)
 
-		// Checkpoint WAL to flush pending writes to main database
-		if err := dw.db.WalCheckpoint(); err != nil {
-			logger.Error("DBWatcher: WAL checkpoint failed: %v", err)
-		}
-
-		// Additional delay to ensure other connections see the changes
-		time.Sleep(100 * time.Millisecond)
-
 		select {
 		case dw.changesChan <- struct{}{}:
 			logger.Info("DBWatcher: Change notification sent")
@@ -111,7 +97,6 @@ func (dw *DBWatcher) checkMtime() {
 		}
 	} else {
 		dw.lastMtimeMu.Unlock()
-		logger.Debug("DBWatcher: File changed but mtime unchanged (%d)", currentMtime)
 	}
 }
 
@@ -127,21 +112,9 @@ func (dw *DBWatcher) LastChangeTime() int64 {
 	return dw.lastMtime
 }
 
-// Close stops the watcher and releases resources.
+// Close stops the watcher.
 func (dw *DBWatcher) Close() error {
 	logger.Info("DBWatcher: Closing")
-
-	// Stop the check loop
 	close(dw.stopChan)
-
-	// Small delay to let goroutine exit
-	time.Sleep(10 * time.Millisecond)
-
-	// Close file watcher
-	if err := dw.fileWatcher.Close(); err != nil {
-		logger.Error("DBWatcher: Failed to close file watcher: %v", err)
-	}
-
-	// Close database connection
-	return dw.db.Close()
+	return nil
 }

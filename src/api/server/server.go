@@ -163,7 +163,7 @@ func (s *Server) Start() error {
 
 	// Start database watcher for conversation changes
 	if s.config.GitRoot != "" {
-		dbWatcher, err := messagedb.NewDBWatcher(s.config.GitRoot, 100) // 100ms debounce
+		dbWatcher, err := messagedb.NewDBWatcher(s.config.GitRoot, 1000) // 1 second polling
 		if err != nil {
 			logger.Error("Failed to start database watcher: %v", err)
 		} else {

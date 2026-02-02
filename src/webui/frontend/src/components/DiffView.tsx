@@ -370,7 +370,7 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
 
   useEffect(() => {
     fetchComments()
-  }, [fetchComments])
+  }, [fetchComments, fileDiff])
 
   // Filter hunks to only show those with conversations when in conversations mode
   const filteredHunks = useMemo(() => {
