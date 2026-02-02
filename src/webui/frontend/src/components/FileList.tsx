@@ -102,14 +102,13 @@ function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFil
     onFilterChange?.(newFilter)
   }
 
+  // Fetch .criticignore and .critictest patterns once on mount
   useEffect(() => {
-    // Fetch .criticignore, .critictest, and conversation summaries in parallel
     Promise.all([
       criticClient.getFile({ path: '.criticignore' }).catch(() => null),
       criticClient.getFile({ path: '.critictest' }).catch(() => null),
-      getConversationsSummary(),
     ])
-      .then(([ignoreFileResponse, testFileResponse, summaryResponse]) => {
+      .then(([ignoreFileResponse, testFileResponse]) => {
         if (ignoreFileResponse?.content) {
           const patterns = ignoreFileResponse.content
             .split('\n')
@@ -124,12 +123,6 @@ function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFil
             .filter((line) => line && !line.startsWith('#'))
           setTestPatterns(patterns)
         }
-        // Build a map of file path to conversation summary for quick lookup
-        const summaryMap = new Map<string, ConversationSummary>()
-        for (const summary of summaryResponse.summaries) {
-          summaryMap.set(summary.filePath, summary)
-        }
-        setConversationSummaries(summaryMap)
         setLoading(false)
       })
       .catch((err) => {
@@ -137,6 +130,21 @@ function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFil
         setLoading(false)
       })
   }, [])
+
+  // Fetch conversation summaries whenever files change (on reload)
+  useEffect(() => {
+    getConversationsSummary()
+      .then((summaryResponse) => {
+        const summaryMap = new Map<string, ConversationSummary>()
+        for (const summary of summaryResponse.summaries) {
+          summaryMap.set(summary.filePath, summary)
+        }
+        setConversationSummaries(summaryMap)
+      })
+      .catch((err) => {
+        console.error('Failed to fetch conversation summaries:', err)
+      })
+  }, [files])
 
   // Scroll selected item into view
   useEffect(() => {
