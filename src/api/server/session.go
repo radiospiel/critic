@@ -42,7 +42,7 @@ type Session struct {
 	// State
 	state       State
 	currentBase string
-	diff        *types.Diff
+	diff        []*types.FileDiff
 
 	// Background task management
 	currentTask *tasks.Task[diffResult]
@@ -53,8 +53,8 @@ type Session struct {
 
 // diffResult holds the result of a diff loading operation
 type diffResult struct {
-	diff *types.Diff
-	err  error
+	files []*types.FileDiff
+	err   error
 }
 
 // NewSession creates a new API session with the given diff bases.
@@ -96,7 +96,7 @@ func (s *Session) GetDiffBases() []string {
 }
 
 // GetDiffSummary returns the current diff summary (file list without hunks)
-func (s *Session) GetDiffSummary() *types.Diff {
+func (s *Session) GetDiffSummary() []*types.FileDiff {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.diff
@@ -184,17 +184,17 @@ func (s *Session) TriggerDiff() <-chan struct{} {
 
 	// Start background task to load diff summary
 	task, err := tasks.RunExclusively("api-session-diff", func() diffResult {
-		diff, err := git.GetDiffNames(currentBase, []string{})
+		files, err := git.GetDiffNames(currentBase, []string{})
 		if err != nil {
 			return diffResult{err: err}
 		}
 
 		// Filter by paths if specified
 		if len(s.paths) > 0 {
-			diff = filterDiffByPaths(diff, s.paths)
+			files = filterDiffByPaths(files, s.paths)
 		}
 
-		return diffResult{diff: diff}
+		return diffResult{files: files}
 	})
 
 	if err != nil {
@@ -218,7 +218,7 @@ func (s *Session) TriggerDiff() <-chan struct{} {
 		if s.currentTask == task {
 			s.currentTask = nil
 			if result.err == nil {
-				s.diff = result.diff
+				s.diff = result.files
 			}
 			s.state = StateReady
 		}
@@ -263,9 +263,9 @@ func (s *Session) StopFileWatcher() {
 
 // filterDiffByExtensions filters the diff files to only include files with
 // the specified extensions.
-func filterDiffByExtensions(diff *types.Diff, extensions []string) *types.Diff {
-	if diff == nil || len(extensions) == 0 {
-		return diff
+func filterDiffByExtensions(files []*types.FileDiff, extensions []string) []*types.FileDiff {
+	if files == nil || len(extensions) == 0 {
+		return files
 	}
 
 	extMap := make(map[string]bool, len(extensions))
@@ -277,15 +277,13 @@ func filterDiffByExtensions(diff *types.Diff, extensions []string) *types.Diff {
 		extMap[ext] = true
 	}
 
-	filtered := &types.Diff{
-		Files: make([]*types.FileDiff, 0, len(diff.Files)),
-	}
+	filtered := make([]*types.FileDiff, 0, len(files))
 
-	for _, file := range diff.Files {
+	for _, file := range files {
 		path := file.GetPath()
 		for ext := range extMap {
 			if len(path) >= len(ext) && path[len(path)-len(ext):] == ext {
-				filtered.Files = append(filtered.Files, file)
+				filtered = append(filtered, file)
 				break
 			}
 		}
@@ -296,21 +294,19 @@ func filterDiffByExtensions(diff *types.Diff, extensions []string) *types.Diff {
 
 // filterDiffByPaths filters the diff files to only include files that match
 // any of the specified path patterns.
-func filterDiffByPaths(diff *types.Diff, paths []string) *types.Diff {
-	if diff == nil || len(paths) == 0 {
-		return diff
+func filterDiffByPaths(files []*types.FileDiff, paths []string) []*types.FileDiff {
+	if files == nil || len(paths) == 0 {
+		return files
 	}
 
-	filtered := &types.Diff{
-		Files: make([]*types.FileDiff, 0, len(diff.Files)),
-	}
+	filtered := make([]*types.FileDiff, 0, len(files))
 
-	for _, file := range diff.Files {
+	for _, file := range files {
 		filePath := file.GetPath()
 		for _, pattern := range paths {
 			// Simple prefix matching for now
 			if strings.HasPrefix(filePath, pattern) || filePath == pattern {
-				filtered.Files = append(filtered.Files, file)
+				filtered = append(filtered, file)
 				break
 			}
 		}

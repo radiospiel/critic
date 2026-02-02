@@ -1,16 +1,16 @@
 // Package session provides an observable data structure for managing application state
-// including diff arguments, files, conversations, and watchers for changes.
+// including fileDiffs arguments, files, conversations, and watchers for changes.
 package session
 
 import (
 	"sync"
 
-	"github.com/radiospiel/critic/src/pkg/critic"
-	"github.com/radiospiel/critic/src/pkg/types"
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/simple-go/observable"
 	"github.com/radiospiel/critic/simple-go/preconditions"
 	"github.com/radiospiel/critic/simple-go/utils"
+	"github.com/radiospiel/critic/src/pkg/critic"
+	"github.com/radiospiel/critic/src/pkg/types"
 )
 
 // Keys holds all observable state key names for the session.
@@ -20,15 +20,15 @@ type keys struct {
 	DiffArgs    string // "diffArgs"
 	BasesRefs   string // "diffArgs.bases" - []string - list of base refs
 	CurrentBase string // "diffArgs.currentBase" - int - index of current base
-	Paths       string // "diffArgs.paths" - []string - file path patterns to diff
+	Paths       string // "diffArgs.paths" - []string - file path patterns to fileDiffs
 	Extensions  string // "diffArgs.extensions" - []string - file extensions to include
 
 	// Resolved git refs
 	ResolvedBases string // "resolvedBases" - map[string]string - base ref -> resolved SHA
 
 	// Diff data
-	Diff  string // "diff" - *types.Diff - the parsed diff
-	Files string // "diff.files" - []*types.FileDiff - list of files in the diff
+	Diff  string // "fileDiffs" - []*types.FileDiff - the parsed fileDiffs
+	Files string // "fileDiffs.files" - []*types.FileDiff - list of files in the fileDiffs
 
 	// TUI state
 	SelectedFilePath string // "tui.filePath" - string - path of currently selected file
@@ -50,8 +50,8 @@ var Keys = keys{
 	Paths:                 "diffArgs.paths",
 	Extensions:            "diffArgs.extensions",
 	ResolvedBases:         "resolvedBases",
-	Diff:                  "diff",
-	Files:                 "diff.files",
+	Diff:                  "fileDiffs",
+	Files:                 "fileDiffs.files",
 	SelectedFilePath:      "tui.filePath",
 	FocusedPane:           "tui.focusedPane",
 	Conversations:         "conversations",
@@ -80,7 +80,7 @@ func (m FilterMode) String() string {
 	}
 }
 
-// DiffArgs holds the arguments for generating a diff
+// DiffArgs holds the arguments for generating a fileDiffs
 type DiffArgs struct {
 	Bases       []string `json:"bases"`       // List of base refs
 	CurrentBase int      `json:"currentBase"` // Index of current base
@@ -116,8 +116,7 @@ type Session struct {
 	gitRoot   string
 	mu        sync.RWMutex
 
-	// Direct state (not stored in observable since it's not map/slice)
-	diff *types.Diff
+	fileDiffs []*types.FileDiff
 
 	// Watchers
 	dbWatcher  *DBWatcher
@@ -170,25 +169,25 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 	gitWatcher := NewGitWatcher(s)
 	gitWatcher.SetBases(args.Bases)
 	// gitWatcher.OnBasesChanged(func() {
-	// 	logger.Info("Session: Git bases changed, loading diff")
+	// 	logger.Info("Session: Git bases changed, loading fileDiffs")
 	// 	s.diffProcessor.LoadDiff()
 	// })
 	s.gitWatcher = gitWatcher
 
 	// Wire up internal state change subscriptions
-	// When diff args change, load diff
+	// When fileDiffs args change, load fileDiffs
 	// diffArgsSubs := s.OnKeyChange(Keys.DiffArgs, func(key string) {
-	// 	logger.Info("Session: DiffArgs changed (%s), loading diff", key)
+	// 	logger.Info("Session: DiffArgs changed (%s), loading fileDiffs", key)
 	// 	s.diffProcessor.LoadDiff()
 	// })
 	// s.internalSubs = append(s.internalSubs, diffArgsSubs)
 	// baseSubs := s.OnKeyChange(Keys.CurrentBase, func(key string) {
-	// 	logger.Info("Session: CurrentBase changed (%s), loading diff", key)
+	// 	logger.Info("Session: CurrentBase changed (%s), loading fileDiffs", key)
 	// 	s.diffProcessor.LoadDiff()
 	// })
 	// s.internalSubs = append(s.internalSubs, baseSubs)
 
-	// Set initial diff args
+	// Set initial fileDiffs args
 	if len(args.Bases) > 0 {
 		s.SetDiffArgs(args)
 	}
@@ -198,7 +197,7 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 
 // --- Diff Args ---
 
-// SetDiffArgs sets the diff arguments
+// SetDiffArgs sets the fileDiffs arguments
 func (s *Session) SetDiffArgs(args DiffArgs) {
 	// Convert to observable-compatible types
 	bases := make([]any, len(args.Bases))
@@ -231,7 +230,7 @@ func (s *Session) SetDiffArgs(args DiffArgs) {
 	})
 }
 
-// GetDiffArgs returns the current diff arguments
+// GetDiffArgs returns the current fileDiffs arguments
 func (s *Session) GetDiffArgs() DiffArgs {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -300,11 +299,11 @@ func (s *Session) GetResolvedBase(baseRef string) (string, bool) {
 
 // --- Diff Data ---
 
-// SetDiff sets the diff data
-func (s *Session) SetDiff(diff *types.Diff) {
-	// Store diff in direct field (not observable since it's a struct pointer)
+// SetDiff sets the fileDiffs data
+func (s *Session) SetDiff(diff []*types.FileDiff) {
+	// Store fileDiffs in direct field (not observable since it's a struct pointer)
 	s.mu.Lock()
-	s.diff = diff
+	s.fileDiffs = diff
 	s.mu.Unlock()
 
 	// Prepare file info for observable
@@ -312,15 +311,13 @@ func (s *Session) SetDiff(diff *types.Diff) {
 	if diff == nil {
 		files = []any{}
 	} else {
-		files = make([]any, len(diff.Files))
-		for i, f := range diff.Files {
+		files = make([]any, len(diff))
+		for i, f := range diff {
 			files[i] = map[string]any{
-				"oldPath":   f.OldPath,
-				"newPath":   f.NewPath,
-				"isNew":     f.IsNew,
-				"isDeleted": f.IsDeleted,
-				"isRenamed": f.IsRenamed,
-				"isBinary":  f.IsBinary,
+				"oldPath":    f.OldPath,
+				"newPath":    f.NewPath,
+				"fileStatus": f.FileStatus,
+				"isBinary":   f.IsBinary,
 			}
 		}
 	}
@@ -331,28 +328,15 @@ func (s *Session) SetDiff(diff *types.Diff) {
 }
 
 // GetDiff returns the current diff
-func (s *Session) GetDiff() *types.Diff {
+func (s *Session) GetDiff() []*types.FileDiff {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.diff
+	return s.fileDiffs
 }
 
-// GetFiles returns the list of file diffs
-func (s *Session) GetFiles() []*types.FileDiff {
-	diff := s.GetDiff()
-	if diff == nil {
-		return nil
-	}
-	return diff.Files
-}
-
-// GetFileCount returns the number of files in the diff
+// GetFileCount returns the number of files in the fileDiffs
 func (s *Session) GetFileCount() int {
-	diff := s.GetDiff()
-	if diff == nil {
-		return 0
-	}
-	return len(diff.Files)
+	return len(s.GetDiff())
 }
 
 // --- Selection ---
@@ -364,12 +348,12 @@ func (s *Session) SetSelectedFile(filePath string) {
 
 // SetSelectedFilePath sets the selected file by path
 func (s *Session) SetSelectedFilePath(path string) {
-	diff := s.GetDiff()
-	if diff == nil {
+	files := s.GetDiff()
+	if files == nil {
 		return
 	}
 
-	for _, file := range diff.Files {
+	for _, file := range files {
 		if file.GetPath() == path {
 			s.SetValueAtKey(Keys.SelectedFilePath, path)
 			return
@@ -382,21 +366,21 @@ func (s *Session) GetSelectedFilePath() string {
 	return observable.GetValueAs[string](s.Observable, Keys.SelectedFilePath)
 }
 
-// GetSelectedFile returns the selected file diff
+// GetSelectedFile returns the selected file fileDiffs
 func (s *Session) GetSelectedFile() *types.FileDiff {
 	filePath := observable.GetValueAs[string](s.Observable, Keys.SelectedFilePath)
 	return s.GetFileFromDiff(filePath)
 }
 
 func (s *Session) GetFileFromDiff(filePath string) *types.FileDiff {
-	diff := s.GetDiff()
-	if diff == nil {
+	files := s.GetDiff()
+	if files == nil {
 		return nil
 	}
 
-	for index, file := range diff.Files {
+	for _, file := range files {
 		if file.GetPath() == filePath {
-			return diff.Files[index]
+			return file
 		}
 	}
 
@@ -409,13 +393,13 @@ func (s *Session) getSelectedFilePath() string {
 
 // GetSelectedFileIndex returns the index of the selected file (-1 if no selection)
 func getSelectedFileIndex(s *Session) int {
-	diff := s.GetDiff()
-	if diff == nil {
+	files := s.GetDiff()
+	if files == nil {
 		return -1
 	}
 
 	filePath := s.getSelectedFilePath()
-	for index, file := range diff.Files {
+	for index, file := range files {
 		if file.GetPath() == filePath {
 			return index
 		}
@@ -425,8 +409,8 @@ func getSelectedFileIndex(s *Session) int {
 }
 
 func (s *Session) moveFileSelection(offset int) bool {
-	diff := s.GetDiff()
-	if diff == nil {
+	files := s.GetDiff()
+	if files == nil {
 		return false
 	}
 
@@ -438,7 +422,7 @@ func (s *Session) moveFileSelection(offset int) bool {
 		return false
 	}
 
-	s.SetSelectedFilePath(diff.Files[newIndex].GetPath())
+	s.SetSelectedFilePath(files[newIndex].GetPath())
 	return true
 }
 
@@ -464,7 +448,7 @@ func (s *Session) GetFocusedPane() string {
 	return observable.GetValueAs[string](s.Observable, Keys.FocusedPane)
 }
 
-// ToggleFocus toggles focus between file list and diff view
+// ToggleFocus toggles focus between file list and fileDiffs view
 func (s *Session) ToggleFocus() {
 	if s.GetFocusedPane() == "fileList" {
 		s.SetFocusedPane("diffView")
@@ -545,16 +529,16 @@ func (s *Session) GetConversationSummary(filePath string) (*critic.FileConversat
 	return s.messaging.GetFileConversationSummary(filePath)
 }
 
-// RefreshConversations refreshes conversation data for all files in the diff
+// RefreshConversations refreshes conversation data for all files in the fileDiffs
 func (s *Session) RefreshConversations() error {
-	diff := s.GetDiff()
-	if diff == nil {
+	files := s.GetDiff()
+	if files == nil {
 		return nil
 	}
 
-	for _, file := range diff.Files {
+	for _, file := range files {
 		filePath := file.NewPath
-		if file.IsDeleted {
+		if file.FileStatus == types.FileStatusDeleted {
 			filePath = file.OldPath
 		}
 

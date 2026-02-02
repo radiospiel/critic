@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/samber/lo"
+
 	"github.com/radiospiel/critic/simple-go/preconditions"
 	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
@@ -67,16 +69,16 @@ func GetDiff(base string, path string, contextLines int) (*ctypes.FileDiff, erro
 	output := git(args...)
 
 	// Parse the diff output
-	diff, err := ParseDiff(string(output))
+	files, err := ParseDiff(string(output))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse diff: %w", err)
 	}
 
-	if len(diff.Files) == 0 {
+	if len(files) == 0 {
 		return nil, nil
 	}
 
-	return diff.Files[0], nil
+	return files[0], nil
 }
 
 // isUntracked checks if a file is untracked by git
@@ -112,9 +114,9 @@ func readUntrackedFile(path string) (*ctypes.FileDiff, error) {
 	}
 
 	return &ctypes.FileDiff{
-		OldPath:     "",
-		NewPath:     path,
-		IsUntracked: true,
+		OldPath:    "",
+		NewPath:    path,
+		FileStatus: ctypes.FileStatusUntracked,
 		Hunks: []*ctypes.Hunk{
 			{
 				OldStart: 0,
@@ -136,7 +138,7 @@ func readUntrackedFile(path string) (*ctypes.FileDiff, error) {
 // base is a commit SHA, target is either "current" for working directory or a commit SHA.
 // This is more efficient than GetDiff when you only need to know which files changed.
 // Also includes untracked files (new files not yet added to git).
-func GetDiffNames(base string, paths []string) (*ctypes.Diff, error) {
+func GetDiffNames(base string, paths []string) ([]*ctypes.FileDiff, error) {
 	for _, path := range paths {
 		preconditions.Check(len(path) > 0, "Path cannot be empty")
 	}
@@ -151,24 +153,29 @@ func GetDiffNames(base string, paths []string) (*ctypes.Diff, error) {
 	output := git(args...)
 
 	// Parse the name-status output
-	diff, err := ParseDiffNameStatus(string(output))
+	files, err := ParseDiffNameStatus(string(output))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse diff name-status: %w", err)
 	}
 
 	// Get untracked files and add them as untracked
-	untrackedOutput := git("ls-files", "--others", "--exclude-standard")
-	untrackedFiles := strings.Split(strings.TrimSpace(string(untrackedOutput)), "\n")
-	for _, path := range untrackedFiles {
-		if path == "" {
-			continue
-		}
-		diff.Files = append(diff.Files, &ctypes.FileDiff{
-			OldPath:     "",
-			NewPath:     path,
-			IsUntracked: true,
-		})
-	}
+	untrackedDiffs := getUntrackedDiffs()
+	files = append(files, untrackedDiffs...)
 
-	return diff, nil
+	return files, nil
+}
+
+func getUntrackedDiffs() []*ctypes.FileDiff {
+	output := git("ls-files", "--others", "--exclude-standard")
+	files := lo.Filter(
+		strings.Split(strings.TrimSpace(string(output)), "\n"),
+		func(path string, _ int) bool { return path != "" },
+	)
+	return lo.Map(files, func(path string, _ int) *ctypes.FileDiff {
+		return &ctypes.FileDiff{
+			OldPath:    "",
+			NewPath:    path,
+			FileStatus: ctypes.FileStatusUntracked,
+		}
+	})
 }

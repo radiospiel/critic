@@ -94,15 +94,15 @@ func TestGetDiffNames_MultipleFiles(t *testing.T) {
 
 	// Get diff names
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiffNames(headSHA, []string{})
+	files, err := git.GetDiffNames(headSHA, []string{})
 	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 2, "Expected 2 files in diff")
+	assert.Equals(t, len(files), 2, "Expected 2 files in diff")
 
 	// Verify both files are in diff
-	hasFile1 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+	hasFile1 := lo.ContainsBy(files, func(f *ctypes.FileDiff) bool {
 		return f.NewPath == "file1.go"
 	})
-	hasFile2 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+	hasFile2 := lo.ContainsBy(files, func(f *ctypes.FileDiff) bool {
 		return f.NewPath == "file2.go"
 	})
 
@@ -126,7 +126,7 @@ func TestGetDiff_NewFile(t *testing.T) {
 	file, err := git.GetDiff(headSHA, "new.go", 3)
 	assert.NoError(t, err)
 	assert.NotNil(t, file, "Expected new.go in diff")
-	assert.True(t, file.IsNew, "Expected new.go to be marked as new file")
+	assert.Equals(t, file.FileStatus, ctypes.FileStatusNew, "Expected new.go to be marked as new file")
 }
 
 func TestGetDiff_DeletedFile(t *testing.T) {
@@ -143,16 +143,16 @@ func TestGetDiff_DeletedFile(t *testing.T) {
 
 	// Get diff names to find deleted file
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiffNames(headSHA, []string{})
+	files, err := git.GetDiffNames(headSHA, []string{})
 	assert.NoError(t, err)
 
 	// Should show the deleted file
-	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
+	file, found := lo.Find(files, func(f *ctypes.FileDiff) bool {
 		return f.OldPath == "delete.go"
 	})
 
 	assert.True(t, found, "Expected delete.go in diff")
-	assert.True(t, file.IsDeleted, "Expected delete.go to be marked as deleted")
+	assert.Equals(t, file.FileStatus, ctypes.FileStatusDeleted, "Expected delete.go to be marked as deleted")
 }
 
 func TestGetDiff_FileInSubdirectory(t *testing.T) {

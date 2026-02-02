@@ -30,19 +30,19 @@ func getDiffSummaryImpl(server *Server, req *api.GetDiffSummaryRequest) (*api.Ge
 	}, nil
 }
 
-// convertDiffSummary converts a types.Diff to an api.DiffSummary (without hunks)
-func convertDiffSummary(d *types.Diff) *api.DiffSummary {
-	if d == nil {
+// convertDiffSummary converts a []*types.FileDiff to an api.DiffSummary (without hunks)
+func convertDiffSummary(files []*types.FileDiff) *api.DiffSummary {
+	if files == nil {
 		return nil
 	}
 
-	files := make([]*api.FileSummary, len(d.Files))
-	for i, f := range d.Files {
-		files[i] = convertFileSummary(f)
+	apiFiles := make([]*api.FileSummary, len(files))
+	for i, f := range files {
+		apiFiles[i] = convertFileSummary(f)
 	}
 
 	return &api.DiffSummary{
-		Files: files,
+		Files: apiFiles,
 	}
 }
 
@@ -52,24 +52,30 @@ func convertFileSummary(f *types.FileDiff) *api.FileSummary {
 		return nil
 	}
 
-	status := api.FileStatus_FILE_STATUS_MODIFIED
-	switch {
-	case f.IsUntracked:
-		status = api.FileStatus_FILE_STATUS_UNTRACKED
-	case f.IsNew:
-		status = api.FileStatus_FILE_STATUS_NEW
-	case f.IsDeleted:
-		status = api.FileStatus_FILE_STATUS_DELETED
-	case f.IsRenamed:
-		status = api.FileStatus_FILE_STATUS_RENAMED
-	}
-
 	return &api.FileSummary{
 		OldPath:     f.OldPath,
 		NewPath:     f.NewPath,
 		FileModeOld: f.OldMode,
 		FileModeNew: f.NewMode,
-		Status:      status,
+		Status:      convertFileStatus(f.FileStatus),
 		IsBinary:    f.IsBinary,
+	}
+}
+
+// convertFileStatus converts types.FileStatus to api.FileStatus
+func convertFileStatus(s types.FileStatus) api.FileStatus {
+	switch s {
+	case types.FileStatusNew:
+		return api.FileStatus_FILE_STATUS_NEW
+	case types.FileStatusDeleted:
+		return api.FileStatus_FILE_STATUS_DELETED
+	case types.FileStatusRenamed:
+		return api.FileStatus_FILE_STATUS_RENAMED
+	case types.FileStatusUntracked:
+		return api.FileStatus_FILE_STATUS_UNTRACKED
+	case types.FileStatusModified:
+		return api.FileStatus_FILE_STATUS_MODIFIED
+	default:
+		return api.FileStatus_FILE_STATUS_UNSPECIFIED
 	}
 }

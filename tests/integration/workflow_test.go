@@ -72,7 +72,7 @@ func TestGitWorkflow_NewFile(t *testing.T) {
 	file, err := git.GetDiff(headSHA, "new.go", 3)
 	assert.NoError(t, err)
 	assert.NotNil(t, file, "Expected new.go in diff")
-	assert.True(t, file.IsNew, "Expected new.go to be marked as new file")
+	assert.Equals(t, file.FileStatus, ctypes.FileStatusNew, "Expected new.go to be marked as new file")
 }
 
 func TestGitWorkflow_MultipleFiles(t *testing.T) {
@@ -90,15 +90,15 @@ func TestGitWorkflow_MultipleFiles(t *testing.T) {
 
 	// Get diff names
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiffNames(headSHA, []string{})
+	files, err := git.GetDiffNames(headSHA, []string{})
 	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 2, "Expected 2 files in diff")
+	assert.Equals(t, len(files), 2, "Expected 2 files in diff")
 
 	// Verify both files are in diff
-	hasFile1 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+	hasFile1 := lo.ContainsBy(files, func(f *ctypes.FileDiff) bool {
 		return f.NewPath == "file1.go"
 	})
-	hasFile2 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
+	hasFile2 := lo.ContainsBy(files, func(f *ctypes.FileDiff) bool {
 		return f.NewPath == "file2.go"
 	})
 
