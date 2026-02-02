@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CreateConversationRequest, CreateConversationResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, ReplyToConversationRequest, ReplyToConversationResponse, ResolveConversationRequest, ResolveConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse } from "./critic_pb.js";
+import { CreateConversationRequest, CreateConversationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, ReplyToConversationRequest, ReplyToConversationResponse, ResolveConversationRequest, ResolveConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -133,6 +133,28 @@ export const CriticService = {
       name: "SetDiffBase",
       I: SetDiffBaseRequest,
       O: SetDiffBaseResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * WatchFile tells the server to watch a specific file for changes.
+     *
+     * @generated from rpc critic.v1.CriticService.WatchFile
+     */
+    watchFile: {
+      name: "WatchFile",
+      I: WatchFileRequest,
+      O: WatchFileResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * GetConfig returns server configuration for the frontend.
+     *
+     * @generated from rpc critic.v1.CriticService.GetConfig
+     */
+    getConfig: {
+      name: "GetConfig",
+      I: GetConfigRequest,
+      O: GetConfigResponse,
       kind: MethodKind.Unary,
     },
   }

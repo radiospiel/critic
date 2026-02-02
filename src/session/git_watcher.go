@@ -4,11 +4,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/src/git"
 )
 
-// GitWatcher watches for changes to git references and kicks off diff reloading
+// GitWatcher watches for changes to git references and kicks off fileDiffs reloading
 type GitWatcher struct {
 	state         *Session
 	bases         []string          // Base refs to watch (e.g., ["main", "origin/main", "HEAD"])
@@ -21,7 +21,7 @@ type GitWatcher struct {
 
 	// Callbacks
 	onBasesChanged func()
-	onDiffNeeded   func(baseRef string, baseSHA string) // Called when diff needs to be reloaded
+	onDiffNeeded   func(baseRef string, baseSHA string) // Called when fileDiffs needs to be reloaded
 }
 
 // NewGitWatcher creates a new git watcher
@@ -55,7 +55,7 @@ func (w *GitWatcher) OnBasesChanged(callback func()) {
 	w.onBasesChanged = callback
 }
 
-// OnDiffNeeded sets the callback for when diff needs reloading
+// OnDiffNeeded sets the callback for when fileDiffs needs reloading
 func (w *GitWatcher) OnDiffNeeded(callback func(baseRef string, baseSHA string)) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -124,7 +124,7 @@ func (w *GitWatcher) resolveAll() {
 	defer w.mu.Unlock()
 
 	for _, base := range w.bases {
-		sha := w.resolveOne(base)
+		sha := git.ResolveRef(base)
 		w.resolvedBases[base] = sha
 	}
 
@@ -134,23 +134,6 @@ func (w *GitWatcher) resolveAll() {
 	}
 }
 
-// resolveOne resolves a single base ref to a SHA
-func (w *GitWatcher) resolveOne(base string) string {
-	// Special case: "merge-base" resolves to merge base with main/master
-	if base == "merge-base" {
-		return git.GetMergeBase()
-	}
-
-	// For branches like "main" or "master", we need to get the merge-base
-	// to match the behavior in app.go
-	if !git.IsCommitSHA(base) {
-		baseSHA := git.ResolveRef(base)
-		return git.GetMergeBaseBetween("HEAD", baseSHA)
-	}
-
-	return git.ResolveRef(base)
-}
-
 // checkForChanges checks if any bases have changed
 func (w *GitWatcher) checkForChanges() bool {
 	w.mu.Lock()
@@ -158,7 +141,7 @@ func (w *GitWatcher) checkForChanges() bool {
 
 	changed := false
 	for _, base := range w.bases {
-		sha := w.resolveOne(base)
+		sha := git.ResolveRef(base)
 
 		if w.resolvedBases[base] != sha {
 			logger.Info("GitWatcher: Base %s changed from %s to %s",

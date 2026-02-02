@@ -42,22 +42,19 @@ func TestLineType_String(t *testing.T) {
 }
 
 func TestStructCreation(t *testing.T) {
-	// Test Diff creation
-	diff := &Diff{
-		Files: []*FileDiff{},
-	}
-	assert.NotNil(t, diff, "Failed to create Diff")
-	assert.NotNil(t, diff.Files, "Diff.Files should not be nil")
+	// Test FileDiff slice creation
+	files := []*FileDiff{}
+	assert.NotNil(t, files, "FileDiff slice should not be nil")
 
 	// Test FileDiff creation
 	fileDiff := &FileDiff{
-		OldPath:   "old.go",
-		NewPath:   "new.go",
-		IsRenamed: true,
-		Hunks:     []*Hunk{},
+		OldPath:    "old.go",
+		NewPath:    "new.go",
+		FileStatus: FileStatusRenamed,
+		Hunks:      []*Hunk{},
 	}
 	assert.Equals(t, fileDiff.OldPath, "old.go")
-	assert.True(t, fileDiff.IsRenamed, "FileDiff.IsRenamed should be true")
+	assert.Equals(t, fileDiff.FileStatus, FileStatusRenamed, "FileDiff.FileStatus should be FileStatusRenamed")
 
 	// Test Hunk creation
 	hunk := &Hunk{

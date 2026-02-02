@@ -7,6 +7,7 @@ import (
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/simple-go/preconditions"
 	"github.com/radiospiel/critic/simple-go/tasks"
+	"github.com/radiospiel/critic/simple-go/utils"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/pkg/types"
@@ -41,16 +42,19 @@ type Session struct {
 	// State
 	state       State
 	currentBase string
-	diff        *types.Diff
+	diff        []*types.FileDiff
 
 	// Background task management
 	currentTask *tasks.Task[diffResult]
+
+	// File watcher for the currently viewed file
+	fileWatcher *utils.FileWatcher
 }
 
 // diffResult holds the result of a diff loading operation
 type diffResult struct {
-	diff *types.Diff
-	err  error
+	files []*types.FileDiff
+	err   error
 }
 
 // NewSession creates a new API session with the given diff bases.
@@ -92,14 +96,14 @@ func (s *Session) GetDiffBases() []string {
 }
 
 // GetDiffSummary returns the current diff summary (file list without hunks)
-func (s *Session) GetDiffSummary() *types.Diff {
+func (s *Session) GetDiffSummary() []*types.FileDiff {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.diff
 }
 
 // GetFileDiff returns the full diff for a specific file path.
-// It loads the diff on-demand using git.GetDiffBetween.
+// It loads the diff on-demand using git.GetDiff.
 // contextLines specifies the number of context lines (minimum 3, default 3).
 func (s *Session) GetFileDiff(path string, contextLines int) *types.FileDiff {
 	s.mu.RLock()
@@ -114,17 +118,17 @@ func (s *Session) GetFileDiff(path string, contextLines int) *types.FileDiff {
 	preconditions.Check(path != "", "path required")
 
 	// Load the full diff for the specific file
-	diff, err := git.GetDiffBetween(currentBase, "current", []string{path}, contextLines)
+	fileDiff, err := git.GetDiff(currentBase, path, contextLines)
 	if err != nil {
-		logger.Error("git.GetDiffBetween returns error %v", err)
+		logger.Error("git.GetDiff returns error %v", err)
 		return nil
 	}
-	if diff == nil || len(diff.Files) == 0 {
-		logger.Error("git.GetDiffBetween returns empty diff")
+	if fileDiff == nil {
+		logger.Error("git.GetDiff returns empty diff")
 		return nil
 	}
 
-	return diff.Files[0]
+	return fileDiff
 }
 
 // HeadCommit returns the current HEAD commit SHA
@@ -148,6 +152,25 @@ func (s *Session) SetDiffBases(bases []string) error {
 // starts loading the diff in the background.
 func (s *Session) SetCurrentDiffBase(base string) error {
 	s.mu.Lock()
+	s.currentBase = base
+	s.mu.Unlock()
+
+	<-s.TriggerDiff()
+	return nil
+}
+
+// TriggerDiff reloads the diff with the current base.
+// Returns a channel that closes when the diff is ready.
+func (s *Session) TriggerDiff() <-chan struct{} {
+	done := make(chan struct{})
+
+	currentBase := s.GetCurrentBase()
+	if currentBase == "" {
+		close(done)
+		return done
+	}
+
+	s.mu.Lock()
 
 	// Abort any existing task
 	if s.currentTask != nil {
@@ -159,70 +182,90 @@ func (s *Session) SetCurrentDiffBase(base string) error {
 	s.state = StateInitialising
 	s.mu.Unlock()
 
-	// Start background task to load diff summary. Only up to one diff loading
-	// operation runs at a time: if a diff load is already in progress, it will
-	// be aborted.
+	// Start background task to load diff summary
 	task, err := tasks.RunExclusively("api-session-diff", func() diffResult {
-		// Resolve the base ref to a commit SHA
-		// base := git.ResolveRef(base)
-
-		// Run git diff --name-status for file summary (no hunks)
-		diff, err := git.GetDiffNamesBetween(base, "current")
+		files, err := git.GetDiffNames(currentBase, []string{})
 		if err != nil {
 			return diffResult{err: err}
 		}
 
-		// TODO(bot): add support for filtering by type:
-		// - Use "rg --type-list" to collect a filelist and their extensions
-		// - add a -t/--type argument to include one or more types
-		// - add a -T/--skip-type argument to exclude one or more types
-
 		// Filter by paths if specified
 		if len(s.paths) > 0 {
-			diff = filterDiffByPaths(diff, s.paths)
+			files = filterDiffByPaths(files, s.paths)
 		}
 
-		return diffResult{diff: diff}
+		return diffResult{files: files}
 	})
 
 	if err != nil {
-		// Task with same ID already running - this shouldn't happen since we abort above
 		s.mu.Lock()
 		s.state = StateReady
 		s.mu.Unlock()
-		return err
+		close(done)
+		return done
 	}
 
 	s.mu.Lock()
 	s.currentTask = task
 	s.mu.Unlock()
 
-	// Wait for result in background and update state
+	// Wait for result in background, update state, and signal done
 	go func() {
 		result := <-task.Done()
 
 		s.mu.Lock()
-		defer s.mu.Unlock()
-
 		// Only update if this task is still current
 		if s.currentTask == task {
 			s.currentTask = nil
 			if result.err == nil {
-				s.currentBase = base
-				s.diff = result.diff
+				s.diff = result.files
 			}
 			s.state = StateReady
 		}
+		s.mu.Unlock()
+
+		close(done)
 	}()
 
-	return nil
+	return done
+}
+
+// SetFileWatcher sets the file watcher for the currently viewed file.
+// It stops any existing watcher first.
+func (s *Session) SetFileWatcher(watcher *utils.FileWatcher) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Stop existing watcher if any
+	if s.fileWatcher != nil {
+		s.fileWatcher.Close()
+	}
+	s.fileWatcher = watcher
+}
+
+// GetFileWatcher returns the current file watcher.
+func (s *Session) GetFileWatcher() *utils.FileWatcher {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.fileWatcher
+}
+
+// StopFileWatcher stops the current file watcher if one exists.
+func (s *Session) StopFileWatcher() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.fileWatcher != nil {
+		s.fileWatcher.Close()
+		s.fileWatcher = nil
+	}
 }
 
 // filterDiffByExtensions filters the diff files to only include files with
 // the specified extensions.
-func filterDiffByExtensions(diff *types.Diff, extensions []string) *types.Diff {
-	if diff == nil || len(extensions) == 0 {
-		return diff
+func filterDiffByExtensions(files []*types.FileDiff, extensions []string) []*types.FileDiff {
+	if files == nil || len(extensions) == 0 {
+		return files
 	}
 
 	extMap := make(map[string]bool, len(extensions))
@@ -234,15 +277,13 @@ func filterDiffByExtensions(diff *types.Diff, extensions []string) *types.Diff {
 		extMap[ext] = true
 	}
 
-	filtered := &types.Diff{
-		Files: make([]*types.FileDiff, 0, len(diff.Files)),
-	}
+	filtered := make([]*types.FileDiff, 0, len(files))
 
-	for _, file := range diff.Files {
+	for _, file := range files {
 		path := file.GetPath()
 		for ext := range extMap {
 			if len(path) >= len(ext) && path[len(path)-len(ext):] == ext {
-				filtered.Files = append(filtered.Files, file)
+				filtered = append(filtered, file)
 				break
 			}
 		}
@@ -253,21 +294,19 @@ func filterDiffByExtensions(diff *types.Diff, extensions []string) *types.Diff {
 
 // filterDiffByPaths filters the diff files to only include files that match
 // any of the specified path patterns.
-func filterDiffByPaths(diff *types.Diff, paths []string) *types.Diff {
-	if diff == nil || len(paths) == 0 {
-		return diff
+func filterDiffByPaths(files []*types.FileDiff, paths []string) []*types.FileDiff {
+	if files == nil || len(paths) == 0 {
+		return files
 	}
 
-	filtered := &types.Diff{
-		Files: make([]*types.FileDiff, 0, len(diff.Files)),
-	}
+	filtered := make([]*types.FileDiff, 0, len(files))
 
-	for _, file := range diff.Files {
+	for _, file := range files {
 		filePath := file.GetPath()
 		for _, pattern := range paths {
 			// Simple prefix matching for now
 			if strings.HasPrefix(filePath, pattern) || filePath == pattern {
-				filtered.Files = append(filtered.Files, file)
+				filtered = append(filtered, file)
 				break
 			}
 		}

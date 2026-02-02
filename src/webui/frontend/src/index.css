@@ -24,6 +24,8 @@
   --status-deleted-text: #721c24;
   --status-renamed-bg: #d1ecf1;
   --status-renamed-text: #0c5460;
+  --status-untracked-bg: #cce5ff;
+  --status-untracked-text: #004085;
 
   /* Diff colors */
   --diff-added-bg: #e6ffec;
@@ -75,6 +77,8 @@
   --status-deleted-text: #f85149;
   --status-renamed-bg: #0d3246;
   --status-renamed-text: #58a6ff;
+  --status-untracked-bg: #0d3d62;
+  --status-untracked-text: #79c0ff;
 
   /* Diff colors - dark */
   --diff-added-bg: #12261e;
@@ -150,6 +154,14 @@ html, body, #root {
   padding: 12px 16px;
   background-color: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-primary);
+  gap: 8px;
+}
+
+.render-timestamp {
+  font-family: 'PT Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .theme-toggle {
@@ -408,6 +420,11 @@ html, body, #root {
   border-left-color: var(--diff-hunk-text);
 }
 
+.file-list-container.focused .file-item.selected {
+  border-left: 3px solid var(--diff-hunk-text);
+  padding-left: 13px;
+}
+
 .file-status {
   font-size: 12px;
   font-weight: 600;
@@ -436,10 +453,16 @@ html, body, #root {
   color: var(--status-renamed-text);
 }
 
+.file-status.status-\? {
+  background-color: var(--status-untracked-bg);
+  color: var(--status-untracked-text);
+}
+
 .file-path {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
 }
 
 /* Empty state */
@@ -667,6 +690,17 @@ html, body, #root {
   user-select: none;
   vertical-align: top;
   border-right: 1px solid var(--border-secondary);
+}
+
+/* GoLand link in line numbers - dev mode only */
+.line-number-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.line-number-link:hover {
+  text-decoration: underline;
+  color: var(--text-primary);
 }
 
 .diff-line-prefix {
@@ -1414,6 +1448,11 @@ html, body, #root {
   background-color: var(--status-modified-bg);
   color: var(--status-modified-text);
   animation: pulse 2s ease-in-out infinite;
+}
+
+.conversation-icon.resolved {
+  background-color: var(--status-untracked-bg);
+  color: var(--status-untracked-text);
 }
 
 @keyframes pulse {

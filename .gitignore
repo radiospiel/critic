@@ -3,7 +3,7 @@
 /cmd
 critic.bin
 *.prof
-.critic.db*
+.critic/
 .critic.version
 .install-deps.mtime
 
@@ -29,3 +29,5 @@ docs/plans
 node_modules/
 src/webui/dist/
 src/webui/frontend/.vite/
+.DS_Store
+.idea

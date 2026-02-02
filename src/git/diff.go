@@ -2,45 +2,25 @@ package git
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
-	"github.com/radiospiel/critic/simple-go/must"
+	"github.com/samber/lo"
+
 	"github.com/radiospiel/critic/simple-go/preconditions"
 	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
 // GetGitRoot returns the root directory of the git repository
 func GetGitRoot() string {
-	output := must.Exec("git", "rev-parse", "--show-toplevel")
+	output := git("rev-parse", "--show-toplevel")
 	return strings.TrimSpace(string(output))
 }
 
 // validCommitHash checks if a string is a valid git commit hash (SHA-1 or short form)
 var validCommitHash = regexp.MustCompile(`^[a-f0-9]{6,40}$`)
-
-// DiffMode represents the type of diff to show
-type DiffMode int
-
-const (
-	DiffToMergeBase  DiffMode = iota // Diff from merge base to working directory
-	DiffToLastCommit                 // Diff of last commit (HEAD~1..HEAD)
-	DiffUnstaged                     // Diff of unstaged changes only
-)
-
-// String returns the name of the diff mode
-func (m DiffMode) String() string {
-	switch m {
-	case DiffToMergeBase:
-		return "Merge Base"
-	case DiffToLastCommit:
-		return "Last Commit"
-	case DiffUnstaged:
-		return "Unstaged"
-	default:
-		return "Unknown"
-	}
-}
 
 // Whitespace options for git diff. Using -w to ignore all whitespace and
 // --ignore-blank-lines to ignore blank line changes.
@@ -48,109 +28,9 @@ func (m DiffMode) String() string {
 // --ignore-cr-at-eol
 var diffWhitespaceOpts = []string{"-w", "--ignore-blank-lines"}
 
-// GetDiff returns the diff for the specified paths and mode.
-// If paths is empty, returns diff for all changed files.
-func GetDiff(paths []string, mode DiffMode) (*ctypes.Diff, error) {
-	// Build git diff command based on mode
-	var args []string
-
-	switch mode {
-	case DiffToMergeBase:
-		// Get merge base
-		base := GetMergeBase()
-
-		// Compare merge base to working directory (includes committed, staged, and unstaged changes)
-		args = []string{"diff", base, "--patch", "--no-color"}
-		args = append(args, diffWhitespaceOpts...)
-		if len(paths) > 0 {
-			args = append(args, "--")
-			args = append(args, paths...)
-		}
-
-	case DiffToLastCommit:
-		// Show the last commit
-		args = []string{"show", "HEAD", "--patch", "--no-color"}
-		args = append(args, diffWhitespaceOpts...)
-		if len(paths) > 0 {
-			args = append(args, "--")
-			args = append(args, paths...)
-		}
-
-	case DiffUnstaged:
-		// Show only unstaged changes
-		args = []string{"diff", "--patch", "--no-color"}
-		args = append(args, diffWhitespaceOpts...)
-		if len(paths) > 0 {
-			args = append(args, "--")
-			args = append(args, paths...)
-		}
-	}
-
-	output := must.Exec("git", args...)
-
-	// Parse the diff output
-	diff, err := ParseDiff(string(output))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse diff: %w", err)
-	}
-
-	return diff, nil
-}
-
-// GetDiffBetween returns the diff between a base commit and a target.
-// base is a commit SHA, target is either "current" for working directory or a commit SHA.
-// If paths is empty, returns diff for all changed files.
-// contextLines specifies the number of context lines (minimum 3, default 3).
-func GetDiffBetween(base, target string, paths []string, contextLines int) (*ctypes.Diff, error) {
-	// Validate base commit
-	// if !validCommitHash.MatchString(base) {
-	// 	base = ResolveRef(base)
-	// 	if !validCommitHash.MatchString(base) {
-	// 		return nil, fmt.Errorf("invalid base commit SHA: %s", base)
-	// 	}
-	// }
-
-	// Ensure contextLines is at least 3
-	if contextLines < 3 {
-		contextLines = 3
-	}
-
-	// Build git diff command
-	var args []string
-	if target == "current" {
-		// Compare base to working directory (includes committed, staged, and unstaged changes)
-		args = []string{"diff", base, "--patch", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}
-	} else {
-		// Validate target commit
-		if !validCommitHash.MatchString(target) {
-			return nil, fmt.Errorf("invalid target commit SHA: %s", target)
-		}
-		// Compare base to target commit
-		args = []string{"diff", base + ".." + target, "--patch", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}
-	}
-	args = append(args, diffWhitespaceOpts...)
-	if len(paths) > 0 {
-		args = append(args, "--")
-		for _, path := range paths {
-			preconditions.Check(len(path) > 0, "Path cannot be empty")
-		}
-		args = append(args, paths...)
-	}
-
-	output := must.Exec("git", args...)
-
-	// Parse the diff output
-	diff, err := ParseDiff(string(output))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse diff: %w", err)
-	}
-
-	return diff, nil
-}
-
 // ResolveRef resolves a git reference (branch, tag, or commit) to a commit SHA
 func ResolveRef(ref string) string {
-	output := must.Exec("git", "rev-parse", "--verify", ref)
+	output := git("rev-parse", "--verify", ref)
 	sha := strings.TrimSpace(string(output))
 	if !validCommitHash.MatchString(sha) {
 		panic(fmt.Sprintf("invalid commit SHA returned for ref %s: %s", ref, sha))
@@ -158,52 +38,144 @@ func ResolveRef(ref string) string {
 	return sha
 }
 
-// IsCommitSHA checks if a string looks like a commit SHA (hexadecimal, 6-40 chars)
-func IsCommitSHA(s string) bool {
-	return validCommitHash.MatchString(s)
-}
-
 // HasRef checks if a git ref exists
 func HasRef(ref string) bool {
 	// Try to resolve the ref
-	_, err := must.TryExec("git", "rev-parse", "--verify", ref)
+	_, err := tryGit("rev-parse", "--verify", ref)
 	return err == nil
 }
 
-// GetDiffNamesBetween returns a diff summary (file metadata only, no hunks) between a base commit and a target.
+// GetDiff returns the diff for a single file between a base commit and the working directory.
+// base is a commit SHA, path is the file path to diff.
+// contextLines specifies the number of context lines (minimum 3, default 3).
+func GetDiff(base string, path string, contextLines int) (*ctypes.FileDiff, error) {
+	preconditions.Check(len(path) > 0, "Path cannot be empty")
+
+	// Ensure contextLines is at least 3
+	if contextLines < 3 {
+		contextLines = 3
+	}
+
+	// Check if file is untracked first
+	if isUntracked(path) {
+		return readUntrackedFile(path)
+	}
+
+	// Build git diff command
+	args := []string{"diff", base, "--merge-base", "--patch", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}
+	args = append(args, diffWhitespaceOpts...)
+	args = append(args, "--", path)
+
+	output := git(args...)
+
+	// Parse the diff output
+	files, err := ParseDiff(string(output))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse diff: %w", err)
+	}
+
+	if len(files) == 0 {
+		return nil, nil
+	}
+
+	return files[0], nil
+}
+
+// isUntracked checks if a file is untracked by git
+func isUntracked(path string) bool {
+	output := git("ls-files", "--others", "--exclude-standard", "--", path)
+	return strings.TrimSpace(string(output)) == path
+}
+
+// readUntrackedFile reads an untracked file and returns a FileDiff with all lines as added
+func readUntrackedFile(path string) (*ctypes.FileDiff, error) {
+	gitRoot := GetGitRoot()
+	fullPath := filepath.Join(gitRoot, path)
+
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read untracked file %s: %w", path, err)
+	}
+
+	lines := strings.Split(string(content), "\n")
+	// Remove trailing empty line if file ends with newline
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	hunkLines := make([]*ctypes.Line, len(lines))
+	for i, line := range lines {
+		hunkLines[i] = &ctypes.Line{
+			Type:    ctypes.LineAdded,
+			Content: line,
+			OldNum:  0,
+			NewNum:  i + 1,
+		}
+	}
+
+	return &ctypes.FileDiff{
+		OldPath:    "",
+		NewPath:    path,
+		FileStatus: ctypes.FileStatusUntracked,
+		Hunks: []*ctypes.Hunk{
+			{
+				OldStart: 0,
+				OldLines: 0,
+				NewStart: 1,
+				NewLines: len(lines),
+				Header:   fmt.Sprintf("@@ -0,0 +1,%d @@", len(lines)),
+				Lines:    hunkLines,
+				Stats: ctypes.HunkStats{
+					Added:   len(lines),
+					Deleted: 0,
+				},
+			},
+		},
+	}, nil
+}
+
+// GetDiffNames returns a diff summary (file metadata only, no hunks) between a base commit and a target.
 // base is a commit SHA, target is either "current" for working directory or a commit SHA.
-// This is more efficient than GetDiffBetween when you only need to know which files changed.
-func GetDiffNamesBetween(base, target string) (*ctypes.Diff, error) {
-	// Validate base commit
-	// if !validCommitHash.MatchString(base) {
-	// 	base = ResolveRef(base)
-	// }
-	// if !validCommitHash.MatchString(base) {
-	// 	return nil, fmt.Errorf("invalid base commit SHA: %s", base)
-	// }
+// This is more efficient than GetDiff when you only need to know which files changed.
+// Also includes untracked files (new files not yet added to git).
+func GetDiffNames(base string, paths []string) ([]*ctypes.FileDiff, error) {
+	for _, path := range paths {
+		preconditions.Check(len(path) > 0, "Path cannot be empty")
+	}
 
 	// Build git diff --name-status command
 	var args []string
-	if target == "current" {
-		// Compare base to working directory
-		args = []string{"diff", "--name-status", base}
-	} else {
-		// Validate target commit
-		if !validCommitHash.MatchString(target) {
-			return nil, fmt.Errorf("invalid target commit SHA: %s", target)
-		}
-		// Compare base to target commit
-		args = []string{"diff", "--name-status", base + ".." + target}
-	}
+
+	// Compare base to working directory
+	args = []string{"diff", "--merge-base", base, "--name-status"}
 	args = append(args, diffWhitespaceOpts...)
 
-	output := must.Exec("git", args...)
+	output := git(args...)
 
 	// Parse the name-status output
-	diff, err := ParseDiffNameStatus(string(output))
+	files, err := ParseDiffNameStatus(string(output))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse diff name-status: %w", err)
 	}
 
-	return diff, nil
+	// Get untracked files and add them as untracked
+	untrackedDiffs := getUntrackedDiffs()
+	files = append(files, untrackedDiffs...)
+
+	return files, nil
+}
+
+func getUntrackedDiffs() []*ctypes.FileDiff {
+	output := git("ls-files", "--others", "--exclude-standard")
+	files := lo.Filter(
+		strings.Split(strings.TrimSpace(string(output)), "\n"),
+		func(path string, _ int) bool { return path != "" },
+	)
+	return lo.Map(files, func(path string, _ int) *ctypes.FileDiff {
+		return &ctypes.FileDiff{
+			OldPath:    "",
+			NewPath:    path,
+			FileStatus: ctypes.FileStatusUntracked,
+		}
+	})
 }

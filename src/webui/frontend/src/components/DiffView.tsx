@@ -3,7 +3,8 @@ import hljs from 'highlight.js'
 import { FileDiff, FileStatus, Line, LineType } from '../gen/critic_pb'
 import InlineCommentEditor, { CommentLineInfo } from './CommentEditor'
 import CommentDisplay from './CommentDisplay'
-import { getConversations, CommentConversation } from '../api/client'
+import { getConversations, CommentConversation, ServerConfig } from '../api/client'
+import LinkToSource from './LinkToSource'
 
 const ALT_JUMP_SIZE = 25
 
@@ -19,6 +20,8 @@ interface DiffViewProps {
   onResetContext?: () => void
   onSelectionChange?: (lineNoNew: number, lineNoOld: number) => void
   restoreLineNo?: { lineNoNew: number; lineNoOld: number } | null
+  showOnlyConversations?: boolean
+  serverConfig?: ServerConfig | null
 }
 
 function getFileExtension(path: string): string {
@@ -289,9 +292,11 @@ interface UnifiedLineProps {
   isLastSelected?: boolean
   lineRef?: React.RefObject<HTMLTableRowElement>
   onClick?: () => void
+  serverConfig?: ServerConfig | null
+  filePath?: string
 }
 
-function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef, onClick }: UnifiedLineProps) {
+function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef, onClick, serverConfig, filePath }: UnifiedLineProps) {
   const lineClass =
     line.type === LineType.ADDED
       ? 'diff-line-added'
@@ -319,7 +324,9 @@ function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelect
         {line.type !== LineType.ADDED && line.lineNoOld > 0 ? line.lineNoOld : ''}
       </td>
       <td className="diff-line-number diff-line-number-new">
-        {line.type !== LineType.DELETED && line.lineNoNew > 0 ? line.lineNoNew : ''}
+        {line.type !== LineType.DELETED && line.lineNoNew > 0 ? (
+          <LinkToSource lineNo={line.lineNoNew} filePath={filePath || ''} serverConfig={serverConfig} />
+        ) : ''}
       </td>
       <td className="diff-line-prefix">{prefix}</td>
       <td
@@ -336,7 +343,7 @@ interface SelectionRange {
   end: number
 }
 
-function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo }: DiffViewProps) {
+function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo, showOnlyConversations = false, serverConfig }: DiffViewProps) {
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
   const [editorOpen, setEditorOpen] = useState(false)
   const [comments, setComments] = useState<CommentConversation[]>([])
@@ -365,25 +372,57 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
     fetchComments()
   }, [fetchComments])
 
+  // Filter hunks to only show those with conversations when in conversations mode
+  const filteredHunks = useMemo(() => {
+    if (!showOnlyConversations || comments.length === 0) {
+      return fileDiff.hunks
+    }
+
+    // Build a set of line numbers that have conversations
+    const conversationLineNumbers = new Set(comments.map(c => c.lineNumber))
+
+    // Filter hunks to only include those with at least one line that has a conversation
+    return fileDiff.hunks.filter(hunk => {
+      return hunk.lines.some(line => {
+        // Check both old and new line numbers
+        return conversationLineNumbers.has(line.lineNoNew) || conversationLineNumbers.has(line.lineNoOld)
+      })
+    })
+  }, [fileDiff.hunks, showOnlyConversations, comments])
+
+  // Build a set of line numbers that exist in the new file (added or context lines)
+  // Used to avoid showing comments twice on both deleted and non-deleted lines
+  const newFileLineNumbers = useMemo(() => {
+    const lineNos = new Set<number>()
+    for (const hunk of filteredHunks) {
+      for (const line of hunk.lines) {
+        if (line.type !== LineType.DELETED && line.lineNoNew > 0) {
+          lineNos.add(line.lineNoNew)
+        }
+      }
+    }
+    return lineNos
+  }, [filteredHunks])
+
   // Count total navigable lines (all diff lines, excluding hunk headers)
   const totalLines = useMemo(() => {
     let count = 0
-    for (const hunk of fileDiff.hunks) {
+    for (const hunk of filteredHunks) {
       count += hunk.lines.length
     }
     return count
-  }, [fileDiff.hunks])
+  }, [filteredHunks])
 
   // Build a flat array of all lines for easy indexing
   const allLines = useMemo(() => {
     const lines: { line: Line; hunkIdx: number; lineIdx: number }[] = []
-    fileDiff.hunks.forEach((hunk, hunkIdx) => {
+    filteredHunks.forEach((hunk, hunkIdx) => {
       hunk.lines.forEach((line, lineIdx) => {
         lines.push({ line, hunkIdx, lineIdx })
       })
     })
     return lines
-  }, [fileDiff.hunks])
+  }, [filteredHunks])
 
   // Get line info for the current selection (use the last selected line for positioning)
   const getSelectionLineInfo = useCallback((): CommentLineInfo | null => {
@@ -575,21 +614,9 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
             setSelection({ start: totalLines - 1, end: totalLines - 1 })
           }
           break
-        case 'c':
-          if (!editorOpen && onIncreaseContext) {
-            e.preventDefault()
-            onIncreaseContext()
-          }
-          break
-        case 'C':
-          if (!editorOpen && onDecreaseContext) {
-            e.preventDefault()
-            onDecreaseContext()
-          }
-          break
       }
     },
-    [isFocused, selection, totalLines, onNavigatePrevFile, onNavigateNextFile, editorOpen, onIncreaseContext, onDecreaseContext]
+    [isFocused, selection, totalLines, onNavigatePrevFile, onNavigateNextFile, editorOpen]
   )
 
   useEffect(() => {
@@ -657,14 +684,14 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
       </div>
 
       <div className="diff-content" ref={containerRef}>
-        {fileDiff.hunks.length === 0 ? (
-          <div className="diff-empty-notice">No changes in this file</div>
+        {filteredHunks.length === 0 ? (
+          <div className="diff-empty-notice">{showOnlyConversations ? 'No conversations in this file (you probably have outdated conversation data, this will be fixed automatically.)' : 'No changes in this file'}</div>
         ) : (
           <table className="diff-table diff-table-unified">
             <tbody>
               {(() => {
                 let globalLineIndex = 0
-                return fileDiff.hunks.map((hunk, hunkIdx) => (
+                return filteredHunks.map((hunk, hunkIdx) => (
                   <Fragment key={hunkIdx}>
                     <tr className="diff-hunk-header-row">
                       <td colSpan={4} className="diff-hunk-header">
@@ -681,13 +708,14 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                       // Show editor after the last selected line
                       const showEditorAfterLine = isLastSelected && editorOpen && selectionLineInfo
                       // Get comments for this line
-                      // For deleted lines: use lineNoOld, but skip if next line is ADDED (modified line - show on added instead)
+                      // For deleted lines: use lineNoOld, but skip comments that will be shown on an added line
                       // For added/context lines: use lineNoNew
-                      const isDeletedFollowedByAdded = line.type === LineType.DELETED &&
-                        lineIdx + 1 < hunk.lines.length &&
-                        hunk.lines[lineIdx + 1].type === LineType.ADDED
                       const lineNo = line.type === LineType.DELETED ? line.lineNoOld : line.lineNoNew
-                      const lineComments = isDeletedFollowedByAdded ? [] : getCommentsForLine(lineNo)
+                      let lineComments = getCommentsForLine(lineNo)
+                      // For deleted lines, filter out comments that will be shown on a non-deleted line (to avoid duplicates)
+                      if (line.type === LineType.DELETED) {
+                        lineComments = lineComments.filter(c => !newFileLineNumbers.has(c.lineNumber))
+                      }
                       const hasComments = lineComments.length > 0
 
                       return (
@@ -703,6 +731,8 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                               setSelection({ start: currentIndex, end: currentIndex })
                               onFocus?.()
                             }}
+                            serverConfig={serverConfig}
+                            filePath={path}
                           />
                           {hasComments && (
                             <tr className="diff-comment-row">

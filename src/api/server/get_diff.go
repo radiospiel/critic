@@ -42,22 +42,12 @@ func convertFileDiff(f *types.FileDiff) *api.FileDiff {
 		hunks[i] = convertHunk(h)
 	}
 
-	status := api.FileStatus_FILE_STATUS_MODIFIED
-	switch {
-	case f.IsNew:
-		status = api.FileStatus_FILE_STATUS_NEW
-	case f.IsDeleted:
-		status = api.FileStatus_FILE_STATUS_DELETED
-	case f.IsRenamed:
-		status = api.FileStatus_FILE_STATUS_RENAMED
-	}
-
 	return &api.FileDiff{
 		OldPath:     f.OldPath,
 		NewPath:     f.NewPath,
 		FileModeOld: f.OldMode,
 		FileModeNew: f.NewMode,
-		Status:      status,
+		Status:      convertFileStatus(f.FileStatus),
 		IsBinary:    f.IsBinary,
 		Hunks:       hunks,
 	}

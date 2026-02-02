@@ -10,9 +10,9 @@ import (
 	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
 
-// TestDeletedLinesContent verifies that deleted lines show the correct content
-// in "Last Commit" mode. This test reproduces the bug where deleted lines were
-// showing content from the new version instead of the old version.
+// TestDeletedLinesContent verifies that deleted lines show the correct content.
+// This test reproduces the bug where deleted lines were showing content from
+// the new version instead of the old version.
 func TestDeletedLinesContent(t *testing.T) {
 	SetupGitRepo(t)
 
@@ -50,17 +50,11 @@ func TestParseDiff_Empty(t *testing.T) {
 }
 `
 	must.WriteFile("parser_test.go", modifiedContent)
-	CommitFile(t, "parser_test.go")
 
-	// Get diff for last commit
-	diff, err := git.GetDiff([]string{}, git.DiffToLastCommit)
+	// Get diff from HEAD (which has the original content) to working directory
+	headSHA := git.ResolveRef("HEAD")
+	file, err := git.GetDiff(headSHA, "parser_test.go", 3)
 	assert.NoError(t, err)
-
-	// Find parser_test.go in the diff
-	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
-		return f.NewPath == "parser_test.go"
-	})
-	assert.True(t, found, "Expected parser_test.go in diff")
 	assert.NotNil(t, file, "Expected parser_test.go in diff")
 
 	// Should have hunks with deleted lines

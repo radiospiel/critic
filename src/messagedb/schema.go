@@ -163,7 +163,7 @@ func (db *DB) migrateSchema(fromVersion string) error {
 		}
 
 		if mig == nil {
-			return fmt.Errorf("schema version mismatch: database is at version %s, expected %s. Please delete .critic.db to start fresh", currentVersion, currentSchemaVersion)
+			return fmt.Errorf("schema version mismatch: database is at version %s, expected %s. Please delete .critic/critic.db to start fresh", currentVersion, currentSchemaVersion)
 		}
 
 		// Run migration in a transaction
