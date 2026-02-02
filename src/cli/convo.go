@@ -1,9 +1,9 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 
+	"github.com/radiospiel/critic/simple-go/json"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
@@ -140,12 +140,7 @@ Examples:
 			}
 
 			// Output as JSON array of objects
-			output, err := json.MarshalIndent(summaries, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to marshal output: %w", err)
-			}
-
-			fmt.Println(string(output))
+			fmt.Println(json.ToPrettyJson(summaries))
 			return nil
 		},
 	}
@@ -207,12 +202,7 @@ Example:
 				Messages:    messages,
 			}
 
-			output, err := json.MarshalIndent(response, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to marshal response: %w", err)
-			}
-
-			fmt.Println(string(output))
+			fmt.Println(json.ToPrettyJson(response))
 			return nil
 		},
 	}
@@ -269,12 +259,7 @@ Examples:
 				CreatedAt: reply.CreatedAt.Format("2006-01-02 15:04:05"),
 			}
 
-			output, err := json.MarshalIndent(response, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to marshal response: %w", err)
-			}
-
-			fmt.Println(string(output))
+			fmt.Println(json.ToPrettyJson(response))
 			return nil
 		},
 	}

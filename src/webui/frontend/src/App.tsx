@@ -268,6 +268,7 @@ function AppContent() {
           </div>
         </div>
         <FileList
+          files={files}
           selectedFile={selectedFile}
           onSelectFile={handleSelectFile}
           isFocused={focusedPanel === 'fileList'}

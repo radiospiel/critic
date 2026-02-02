@@ -57,7 +57,6 @@ type Observable struct {
 	data          any
 	subscriptions map[Subscription]*subscription
 	nextSubID     Subscription
-	schemas       map[string]*schemaEntry
 	mu            sync.RWMutex
 }
 
@@ -368,11 +367,6 @@ func (tx *Txn) SetValueAtKey(key string, value any) error {
 	if tx.err != nil {
 		return ErrTransactionAborted
 	}
-	// Validate against schema before recording the change
-	if errMsg := tx.obs.validateAgainstSchema(key, value); errMsg != "" {
-		tx.err = &SchemaValidationError{Key: key, Message: errMsg}
-		return tx.err
-	}
 	tx.changes = append(tx.changes, change{key: key, value: value})
 	return nil
 }
@@ -486,13 +480,6 @@ func (o *Observable) setValuesAtKeys(changes []change) error {
 	o.mu.Lock()
 	for _, c := range changes {
 		o.setValue(c.key, c.value)
-	}
-
-	// Validate all schemas against the final state
-	// This catches cross-field constraint violations
-	if errMsg := o.validateAllSchemas(); errMsg != "" {
-		o.mu.Unlock()
-		return &SchemaValidationError{Message: errMsg}
 	}
 
 	subs := slices.Collect(maps.Values(o.subscriptions))

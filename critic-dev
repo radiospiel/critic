@@ -10,7 +10,7 @@ make build
 #   critic api --cpuprofile=critic.prof
 # Use "go tool pprof critic.prof" to analyze the results.
 
-if [[ "${1:-}" =~ ^(mcp|convo|httpd)$ ]]; then
+if [[ "${1:-}" =~ ^(mcp|convo|httpd|test)$ ]]; then
     # Other subcommands: pass through as-is
     exec ./critic "$@"
 else
