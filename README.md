@@ -52,6 +52,22 @@ critic convo
 critic log
 ```
 
+### MCP Server Integration
+
+To enable AI-assisted code review with Claude Code:
+
+```bash
+# Add critic as an MCP server
+claude mcp add critic -- /path/to/critic mcp
+```
+
+This gives AI assistants access to:
+- `get_critic_conversations` - List pending review conversations
+- `get_full_critic_conversation` - Read conversation details
+- `reply_to_critic_conversation` - Respond to reviewer feedback
+
+See [docs/installation.md](docs/installation.md) for detailed setup and HITL workflow configuration.
+
 ## Keyboard Shortcuts (Web UI)
 
 - `?`: Toggle help overlay

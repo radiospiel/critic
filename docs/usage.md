@@ -35,8 +35,33 @@ When running as an MCP server (`critic mcp`), the following tools are available 
 
 ### Example MCP Workflow
 
-1. Human reviewer adds inline comment in Critic TUI
-2. AI assistant calls `get_critic_conversations` to discover new comments
-3. AI calls `get_full_critic_conversation` to read the comment content
-4. AI calls `reply_to_critic_conversation` to respond
-5. Human sees AI response in Critic and can continue the conversation
+1. Human reviewer opens `critic webui` and adds inline comments on the diff
+2. AI assistant calls `get_critic_conversations(status: "unresolved")` to discover new comments
+3. AI calls `get_full_critic_conversation(uuid)` to read the full conversation
+4. AI addresses the feedback and calls `reply_to_critic_conversation(uuid, message)` to respond
+5. Human sees AI response in the Web UI (auto-refreshes via WebSocket)
+6. Conversation continues until human marks it resolved
+
+### Tool Parameters
+
+**get_critic_conversations**
+```json
+{
+  "status": "unresolved"  // Optional: "unresolved", "resolved", or omit for all
+}
+```
+
+**get_full_critic_conversation**
+```json
+{
+  "uuid": "conversation-uuid-here"
+}
+```
+
+**reply_to_critic_conversation**
+```json
+{
+  "uuid": "conversation-uuid-here",
+  "message": "Your response text here"
+}
+```

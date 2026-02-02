@@ -22,13 +22,75 @@ go install ./src/cmd/
 
 ## MCP Server Configuration
 
-To integrate Critic with Claude Code for AI-assisted code review:
+Critic can run as an MCP (Model Context Protocol) server, enabling AI coding assistants like Claude Code to participate in human-in-the-loop code review workflows.
+
+### Installing as an MCP Server
+
+**For Claude Code:**
 
 ```bash
+# Add critic as an MCP server (use absolute path to the binary)
 claude mcp add critic -- /path/to/critic mcp
+
+# Or if critic is in your PATH
+claude mcp add critic -- critic mcp
 ```
 
-This enables Claude to read and respond to code review comments.
+**For other MCP clients**, add to your MCP configuration file:
+
+```json
+{
+  "mcpServers": {
+    "critic": {
+      "command": "/path/to/critic",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### Verifying Installation
+
+After installation, the AI assistant will have access to these tools:
+
+| Tool | Description |
+|------|-------------|
+| `get_critic_conversations` | List conversation UUIDs (filter by `unresolved`/`resolved`) |
+| `get_full_critic_conversation` | Get full conversation thread by UUID |
+| `reply_to_critic_conversation` | Add a reply to a conversation |
+
+## Configuring AI Agents for HITL Workflow
+
+To enable human-in-the-loop code review, configure your AI coding agent to check for and respond to critic feedback. Add the following to your project's `CLAUDE.md` or `AGENTS.md`:
+
+### Example CLAUDE.md Configuration
+
+```markdown
+### Human-in-the-Loop Code Review
+
+Before committing significant code changes, check for reviewer feedback:
+
+1. Call `get_critic_conversations(status: "unresolved")` to check for pending feedback
+2. For each conversation, call `get_full_critic_conversation(uuid)` to read the feedback
+3. Address the feedback in your code changes
+4. Call `reply_to_critic_conversation(uuid, message)` to acknowledge or discuss
+5. Wait for reviewer approval before proceeding
+
+If the critic MCP server is available:
+- Proactively check for feedback after completing implementation tasks
+- Always respond to reviewer comments before marking work as complete
+- Request explicit approval for significant architectural decisions
+```
+
+### Workflow Example
+
+1. **Developer starts AI coding session** with critic MCP server configured
+2. **AI implements feature**, then checks `get_critic_conversations`
+3. **Human reviewer** opens `critic webui` and adds inline comments on the diff
+4. **AI detects new conversations** and reads the feedback
+5. **AI addresses feedback** and replies to acknowledge changes
+6. **Human approves** or continues the conversation
+7. **AI commits** once approved
 
 ## Database
 
