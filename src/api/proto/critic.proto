@@ -30,6 +30,8 @@ service CriticService {
   rpc SetDiffBase(SetDiffBaseRequest) returns (SetDiffBaseResponse);
   // WatchFile tells the server to watch a specific file for changes.
   rpc WatchFile(WatchFileRequest) returns (WatchFileResponse);
+  // GetConfig returns server configuration for the frontend.
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
 }
 
 // ErrorCode represents the type of RPC error.
@@ -119,6 +121,7 @@ enum FileStatus {
   FILE_STATUS_NEW = 2;
   FILE_STATUS_DELETED = 3;
   FILE_STATUS_RENAMED = 4;
+  FILE_STATUS_UNTRACKED = 5;
 }
 
 // FileDiff represents changes to a single file.
@@ -351,6 +354,19 @@ message WatchFileRequest {
 
 // WatchFileResponse confirms the file watch was set up.
 message WatchFileResponse {
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// GetConfigRequest is an empty request for GetConfig.
+message GetConfigRequest {}
+
+// GetConfigResponse contains server configuration for the frontend.
+message GetConfigResponse {
+  // git_root is the absolute path to the git repository root.
+  string git_root = 1;
+  // dev_mode indicates whether the server is running in development mode.
+  bool dev_mode = 2;
   // error contains error details if the request failed.
   RpcError error = 15;
 }

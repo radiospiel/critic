@@ -76,6 +76,9 @@ type logMessage struct {
 // logChannel is a buffered channel for log messages
 var logChannel = make(chan logMessage, 1000)
 
+// done signals the background goroutine to exit
+var done = make(chan struct{})
+
 var wd = (func() string { dir, _ := os.Getwd(); return dir })()
 
 // transformArgs converts any Inspect-implementing values to their string representation
@@ -106,25 +109,52 @@ func truncate(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
+// processLogEntry formats and writes a log entry
+func processLogEntry(entry logMessage) {
+	args := transformArgs(entry.args)
+	msg := fmt.Sprintf(entry.format, args...)
+	if entry.topic != "" {
+		msg = "[" + entry.topic + "]: " + msg
+	}
+	if entry.file != "" && entry.line != 0 {
+		file := entry.file
+		if strings.HasPrefix(file, wd+"/") {
+			file = file[len(wd)+1:]
+		}
+		msg = fmt.Sprintf("%s(%d): ", file, entry.line) + msg
+	}
+	fileLogger.Println(msg)
+}
+
 func init() {
 	// Start background writer goroutine
 	go func() {
-		for entry := range logChannel {
-			args := transformArgs(entry.args)
-			msg := fmt.Sprintf(entry.format, args...)
-			if entry.topic != "" {
-				msg = "[" + entry.topic + "]: " + msg
-			}
-			if entry.file != "" && entry.line != 0 {
-				file := entry.file
-				if strings.HasPrefix(file, wd+"/") {
-					file = file[len(wd)+1:]
+		for {
+			select {
+			case entry, ok := <-logChannel:
+				if !ok {
+					return
 				}
-				msg = fmt.Sprintf("%s(%d): ", file, entry.line) + msg
+				processLogEntry(entry)
+			case <-done:
+				// Drain remaining messages before exiting
+				for {
+					select {
+					case entry := <-logChannel:
+						processLogEntry(entry)
+					default:
+						return
+					}
+				}
 			}
-			fileLogger.Println(msg)
 		}
 	}()
+}
+
+// Close shuts down the logger goroutine. Should be called before program exit
+// if you want to ensure all log messages are flushed.
+func Close() {
+	close(done)
 }
 
 func Runtime[T any](msg string, fun func() T) T {

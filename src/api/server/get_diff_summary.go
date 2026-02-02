@@ -54,6 +54,8 @@ func convertFileSummary(f *types.FileDiff) *api.FileSummary {
 
 	status := api.FileStatus_FILE_STATUS_MODIFIED
 	switch {
+	case f.IsUntracked:
+		status = api.FileStatus_FILE_STATUS_UNTRACKED
 	case f.IsNew:
 		status = api.FileStatus_FILE_STATUS_NEW
 	case f.IsDeleted:

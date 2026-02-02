@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { criticClient, getConversationsSummary, ConversationSummary } from '../api/client'
 import { FileSummary, FileStatus } from '../gen/critic_pb'
 
-export type FilterType = 'conversations' | 'files' | 'tests' | 'hidden'
+export type FilterType = 'automatic' | 'conversations' | 'files' | 'tests' | 'hidden'
 
 interface FileListProps {
   selectedFile: string | null
@@ -24,6 +24,8 @@ function getStatusLabel(status: FileStatus): string {
       return 'D'
     case FileStatus.RENAMED:
       return 'R'
+    case FileStatus.UNTRACKED:
+      return '?'
     case FileStatus.MODIFIED:
     default:
       return 'M'
@@ -90,12 +92,12 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
   const [error, setError] = useState<string | null>(null)
   const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
   const [testPatterns, setTestPatterns] = useState<string[]>([])
-  const [filter, setFilter] = useState<FilterType>('conversations')
+  const [filter, setFilter] = useState<FilterType>('automatic')
   const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
   const selectedItemRef = useRef<HTMLLIElement>(null)
 
-  // Notify parent when filter changes
-  const handleFilterChange = (newFilter: FilterType) => {
+  // Handle user clicking a filter button
+  const handleUserFilterChange = (newFilter: FilterType) => {
     setFilter(newFilter)
     onFilterChange?.(newFilter)
   }
@@ -145,7 +147,7 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
     }
   }, [selectedFile, isFocused])
 
-  // Compute visible, test, and hidden files based on patterns
+  // Compute visible, test, and hidden files based on patterns, sorted by path
   const { regularFiles, testFiles, hiddenFiles } = (() => {
     const regular: FileSummary[] = []
     const tests: FileSummary[] = []
@@ -160,18 +162,27 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
         regular.push(file)
       }
     }
-    return { regularFiles: regular, testFiles: tests, hiddenFiles: hidden }
+    // Sort each category by path
+    const sortByPath = (a: FileSummary, b: FileSummary) =>
+      getFilePath(a).localeCompare(getFilePath(b))
+    return {
+      regularFiles: regular.sort(sortByPath),
+      testFiles: tests.sort(sortByPath),
+      hiddenFiles: hidden.sort(sortByPath),
+    }
   })()
 
   // All visible files (regular + tests) for conversations filter
   const visibleFiles = [...regularFiles, ...testFiles]
 
-  // Files with conversations (from visible files only)
-  const filesWithConversations = visibleFiles.filter((file) => {
-    const path = getFilePath(file)
-    const summary = conversationSummaries.get(path)
-    return summary && summary.totalCount > 0
-  })
+  // Files with conversations (from visible files only), sorted by path
+  const filesWithConversations = visibleFiles
+    .filter((file) => {
+      const path = getFilePath(file)
+      const summary = conversationSummaries.get(path)
+      return summary && summary.totalCount > 0
+    })
+    .sort((a, b) => getFilePath(a).localeCompare(getFilePath(b)))
 
   // Total conversation count (from visible files only)
   const totalConversations = filesWithConversations.reduce((sum, file) => {
@@ -180,9 +191,14 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
     return sum + (summary?.totalCount || 0)
   }, 0)
 
+  // Compute effective filter: automatic means 'conversations' if any exist, otherwise 'files'
+  const effectiveFilter = filter === 'automatic'
+    ? (filesWithConversations.length > 0 ? 'conversations' : 'files')
+    : filter
+
   // Determine displayed files based on filter
   const displayedFiles = (() => {
-    switch (filter) {
+    switch (effectiveFilter) {
       case 'conversations':
         return filesWithConversations
       case 'tests':
@@ -269,26 +285,26 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
     <div className={`file-list-container${isFocused ? ' focused' : ''}`}>
       <div className="file-list-filters">
         <button
-          className={`file-list-filter-btn${filter === 'conversations' ? ' active' : ''}`}
-          onClick={() => handleFilterChange(filter === 'conversations' ? 'files' : 'conversations')}
+          className={`file-list-filter-btn${effectiveFilter === 'conversations' ? ' active' : ''}`}
+          onClick={() => handleUserFilterChange('conversations')}
         >
           {totalConversations} Conversations
         </button>
         <button
-          className={`file-list-filter-btn${filter === 'files' ? ' active' : ''}`}
-          onClick={() => handleFilterChange('files')}
+          className={`file-list-filter-btn${effectiveFilter === 'files' ? ' active' : ''}`}
+          onClick={() => handleUserFilterChange('files')}
         >
           {regularFiles.length} Files
         </button>
         <button
-          className={`file-list-filter-btn${filter === 'tests' ? ' active' : ''}`}
-          onClick={() => handleFilterChange(filter === 'tests' ? 'files' : 'tests')}
+          className={`file-list-filter-btn${effectiveFilter === 'tests' ? ' active' : ''}`}
+          onClick={() => handleUserFilterChange('tests')}
         >
           {testFiles.length} Tests
         </button>
         <button
           className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
-          onClick={() => handleFilterChange(filter === 'hidden' ? 'files' : 'hidden')}
+          onClick={() => handleUserFilterChange('hidden')}
         >
           {hiddenFiles.length} Hidden
         </button>
@@ -298,8 +314,6 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
           const path = getFilePath(file)
           const isSelected = selectedFile === path
           const summary = conversationSummaries.get(path)
-          const hasConversations = summary && summary.totalCount > 0
-          const hasUnresolved = summary && summary.unresolvedCount > 0
           return (
             <li
               key={path}
@@ -315,12 +329,20 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
                 {getStatusLabel(file.status)}
               </span>
               <span className="file-path">{path}</span>
-              {hasConversations && (
+              {summary && summary.unresolvedCount > 0 && (
                 <span
-                  className={`conversation-icon${hasUnresolved ? ' unresolved' : ''}`}
-                  title={`${summary.totalCount} conversation${summary.totalCount > 1 ? 's' : ''} (${summary.unresolvedCount} unresolved)`}
+                  className="conversation-icon unresolved"
+                  title={`${summary.unresolvedCount} unresolved`}
                 >
-                  {summary.totalCount}
+                  {summary.unresolvedCount}
+                </span>
+              )}
+              {summary && summary.resolvedCount > 0 && (
+                <span
+                  className="conversation-icon resolved"
+                  title={`${summary.resolvedCount} resolved`}
+                >
+                  {summary.resolvedCount}
                 </span>
               )}
             </li>

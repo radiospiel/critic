@@ -24,12 +24,10 @@ func TestGitWorkflow_UnstagedChanges(t *testing.T) {
 
 	// Get diff from HEAD to working directory
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "test.go", 3)
 	assert.NoError(t, err)
-	assert.NotNil(t, diff)
-	assert.Equals(t, len(diff.Files), 1)
+	assert.NotNil(t, file)
 
-	file := diff.Files[0]
 	assert.Equals(t, file.NewPath, "test.go")
 	assert.True(t, len(file.Hunks) > 0, "Expected at least one hunk")
 
@@ -53,9 +51,9 @@ func TestGitWorkflow_EmptyDiff(t *testing.T) {
 
 	// Get diff (should be empty since no changes)
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "test.go", 3)
 	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 0)
+	assert.Nil(t, file, "Expected no diff for unchanged file")
 }
 
 func TestGitWorkflow_NewFile(t *testing.T) {
@@ -71,15 +69,9 @@ func TestGitWorkflow_NewFile(t *testing.T) {
 
 	// Get diff from HEAD to working directory (includes staged changes)
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "new.go", 3)
 	assert.NoError(t, err)
-
-	// Should show the staged new file
-	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
-		return f.NewPath == "new.go"
-	})
-
-	assert.True(t, found, "Expected new.go in diff")
+	assert.NotNil(t, file, "Expected new.go in diff")
 	assert.True(t, file.IsNew, "Expected new.go to be marked as new file")
 }
 
@@ -96,9 +88,9 @@ func TestGitWorkflow_MultipleFiles(t *testing.T) {
 	must.WriteFile("file1.go", "package main\n\nimport \"fmt\"\n")
 	must.WriteFile("file2.go", "package test\n\nimport \"testing\"\n")
 
-	// Get diff
+	// Get diff names
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	diff, err := git.GetDiffNames(headSHA, []string{})
 	assert.NoError(t, err)
 	assert.Equals(t, len(diff.Files), 2, "Expected 2 files in diff")
 
@@ -159,10 +151,10 @@ func TestGitWorkflow_PathFiltering(t *testing.T) {
 
 	// Get diff for only file1.go
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{"file1.go"}, 3)
+	file, err := git.GetDiff(headSHA, "file1.go", 3)
 	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
-	assert.Equals(t, diff.Files[0].NewPath, "file1.go")
+	assert.NotNil(t, file, "Expected diff for file1.go")
+	assert.Equals(t, file.NewPath, "file1.go")
 }
 
 func TestGitWorkflow_FeatureBranch(t *testing.T) {
@@ -191,7 +183,7 @@ func TestGitWorkflow_FeatureBranch(t *testing.T) {
 
 	// Get diff from HEAD to working directory
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "feature.go", 3)
 	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
+	assert.NotNil(t, file, "Expected diff for feature.go")
 }

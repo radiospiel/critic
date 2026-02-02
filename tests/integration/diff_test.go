@@ -23,12 +23,10 @@ func TestGetDiff_Basic(t *testing.T) {
 
 	// Get diff from HEAD to working directory
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "test.go", 3)
 	assert.NoError(t, err)
-	assert.NotNil(t, diff)
-	assert.Equals(t, len(diff.Files), 1, "expected 1 file in diff")
+	assert.NotNil(t, file)
 
-	file := diff.Files[0]
 	assert.Equals(t, file.NewPath, "test.go")
 	assert.True(t, len(file.Hunks) > 0, "Expected at least one hunk")
 
@@ -52,9 +50,9 @@ func TestGetDiff_EmptyDiff(t *testing.T) {
 
 	// Get diff (should be empty since no changes)
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "test.go", 3)
 	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 0, "Expected no files in diff")
+	assert.Nil(t, file, "Expected no diff for unchanged file")
 }
 
 func TestGetDiff_PathFiltering(t *testing.T) {
@@ -75,13 +73,13 @@ func TestGetDiff_PathFiltering(t *testing.T) {
 
 	// Get diff for only file1.go
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{"file1.go"}, 3)
+	file, err := git.GetDiff(headSHA, "file1.go", 3)
 	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
-	assert.Equals(t, diff.Files[0].NewPath, "file1.go")
+	assert.NotNil(t, file, "Expected diff for file1.go")
+	assert.Equals(t, file.NewPath, "file1.go")
 }
 
-func TestGetDiff_MultipleFiles(t *testing.T) {
+func TestGetDiffNames_MultipleFiles(t *testing.T) {
 	SetupGitRepo(t)
 
 	// Create and commit initial files
@@ -94,9 +92,9 @@ func TestGetDiff_MultipleFiles(t *testing.T) {
 	must.WriteFile("file1.go", "package main\n\nimport \"fmt\"\n")
 	must.WriteFile("file2.go", "package test\n\nimport \"testing\"\n")
 
-	// Get diff
+	// Get diff names
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	diff, err := git.GetDiffNames(headSHA, []string{})
 	assert.NoError(t, err)
 	assert.Equals(t, len(diff.Files), 2, "Expected 2 files in diff")
 
@@ -119,21 +117,15 @@ func TestGetDiff_NewFile(t *testing.T) {
 	must.WriteFile("existing.go", "package main\n")
 	CommitFile(t, "existing.go")
 
-	// Add a new file (not staged yet, just in working directory)
+	// Add a new file (staged)
 	must.WriteFile("new.go", "package new\n\nfunc New() {}\n")
 	must.Exec("git", "add", "new.go")
 
-	// Get diff
+	// Get diff for the new file
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "new.go", 3)
 	assert.NoError(t, err)
-
-	// Should show the new file
-	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
-		return f.NewPath == "new.go"
-	})
-
-	assert.True(t, found, "Expected new.go in diff")
+	assert.NotNil(t, file, "Expected new.go in diff")
 	assert.True(t, file.IsNew, "Expected new.go to be marked as new file")
 }
 
@@ -149,9 +141,9 @@ func TestGetDiff_DeletedFile(t *testing.T) {
 	// Delete one file
 	must.Remove("delete.go")
 
-	// Get diff
+	// Get diff names to find deleted file
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	diff, err := git.GetDiffNames(headSHA, []string{})
 	assert.NoError(t, err)
 
 	// Should show the deleted file
@@ -180,39 +172,10 @@ func TestGetDiff_FileInSubdirectory(t *testing.T) {
 
 	// Get diff
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "src/pkg/module.go", 3)
 	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
-	assert.Equals(t, diff.Files[0].NewPath, "src/pkg/module.go")
-}
-
-func TestGetDiff_MultiplePathsFilter(t *testing.T) {
-	SetupGitRepo(t)
-
-	// Create and commit multiple files
-	must.WriteFile("file1.go", "package main\n")
-	CommitFile(t, "file1.go")
-	must.WriteFile("file2.go", "package test\n")
-	CommitFile(t, "file2.go")
-	must.WriteFile("file3.go", "package other\n")
-	CommitFile(t, "file3.go")
-
-	// Modify all files
-	must.WriteFile("file1.go", "package main\n\n// Modified\n")
-	must.WriteFile("file2.go", "package test\n\n// Modified\n")
-	must.WriteFile("file3.go", "package other\n\n// Modified\n")
-
-	// Get diff for file1.go and file2.go only
-	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{"file1.go", "file2.go"}, 3)
-	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 2, "Expected 2 files in diff")
-
-	// Verify file3.go is not included
-	hasFile3 := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
-		return f.NewPath == "file3.go"
-	})
-	assert.False(t, hasFile3, "file3.go should not be in filtered diff")
+	assert.NotNil(t, file, "Expected diff for src/pkg/module.go")
+	assert.Equals(t, file.NewPath, "src/pkg/module.go")
 }
 
 func TestGetDiff_LargeFile(t *testing.T) {
@@ -239,10 +202,10 @@ func TestGetDiff_LargeFile(t *testing.T) {
 
 	// Get diff
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "large.go", 3)
 	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
-	assert.True(t, len(diff.Files[0].Hunks) > 0, "Expected hunks in large file diff")
+	assert.NotNil(t, file, "Expected diff for large.go")
+	assert.True(t, len(file.Hunks) > 0, "Expected hunks in large file diff")
 }
 
 func TestGetDiff_WithContextLines(t *testing.T) {
@@ -259,11 +222,11 @@ func TestGetDiff_WithContextLines(t *testing.T) {
 
 	// Get diff
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "context.txt", 3)
 	assert.NoError(t, err)
-	assert.Equals(t, len(diff.Files), 1, "Expected 1 file in diff")
+	assert.NotNil(t, file, "Expected diff for context.txt")
 
-	hunk := diff.Files[0].Hunks[0]
+	hunk := file.Hunks[0]
 
 	// Should have context lines, deleted line, and added line
 	hasContext := lo.SomeBy(hunk.Lines, func(line *ctypes.Line) bool {
@@ -293,14 +256,11 @@ func TestGetDiff_AmbiguousFilename(t *testing.T) {
 
 	// Get diff for the specific file
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{"HEAD"}, 3)
+	file, err := git.GetDiff(headSHA, "HEAD", 3)
 	assert.NoError(t, err)
-	assert.True(t, len(diff.Files) > 0, "Expected diff for file 'HEAD', got empty diff")
+	assert.NotNil(t, file, "Expected diff for file 'HEAD'")
 
 	// Verify the diff is for the file "HEAD", not a git reference
-	foundFile := lo.ContainsBy(diff.Files, func(f *ctypes.FileDiff) bool {
-		return f.NewPath == "HEAD" || f.OldPath == "HEAD"
-	})
-
-	assert.True(t, foundFile, "Expected diff to contain file 'HEAD'")
+	assert.True(t, file.NewPath == "HEAD" || file.OldPath == "HEAD",
+		"Expected diff to be for file 'HEAD'")
 }
