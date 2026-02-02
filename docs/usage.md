@@ -2,21 +2,6 @@
 
 ## Command Line
 
-### Basic Usage
-
-```bash
-critic                               # View changes against merge-base
-critic main..current                 # Compare against specific base
-critic merge-base,origin/main..current  # Multiple bases (cycle with 'b')
-```
-
-### Filtering
-
-```bash
-critic --extensions=go,rs            # Filter by file extension
-critic main..current -- src/ tests/  # Filter by path
-```
-
 ### Web UI
 
 ```bash
@@ -24,20 +9,19 @@ critic webui                         # Start web UI on default port
 critic webui --port=8080             # Start on specific port
 ```
 
-## TUI Keyboard Shortcuts
+### MCP Server
+
+```bash
+critic mcp                           # Start MCP server (JSON-RPC over stdin/stdout)
+```
+
+## Web UI Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `b` | Cycle through base references |
-| `Tab` | Switch focus between file list and diff view |
-| `j` / `k` | Navigate down/up |
-| `Up` / `Down` | Navigate up/down |
-| `Space` | Page down |
-| `Shift+Space` | Page up |
-| `Enter` | Open comment editor on current line |
-| `r` | Resolve comment |
-| `?` | Show help |
-| `q` | Quit |
+| `?` | Toggle help overlay |
+| `j` / `k` | Navigate in file list |
+| `Tab` | Switch focus between panes |
 
 ## MCP Tools
 

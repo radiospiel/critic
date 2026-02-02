@@ -38,15 +38,6 @@ Note that timestamps **must always** have the time of day! It is important to al
 
 **Why obstacles matter:** Documenting obstacles helps identify recurring issues, improves future estimates, and provides context if the task is handed off or revisited.
 
-### TUI: test changes with an explicit run
-
-Before completing any significant code changes affecting the TUI, run a manual test by inspecting the rendering. Run this in the fixtures repo, as follows:
-
-	cd tests/integration
-	make fixtures
-	cd  fixtures/repo
-	<<run critic>> 
-
 ### Ask for human reviewer approval
 
 If the "critic" or "critic2" MCP server is available, but not on claude code for web:

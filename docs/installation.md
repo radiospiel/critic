@@ -4,20 +4,20 @@
 
 - Go 1.24 or later
 - Git
-- Terminal with ANSI color support (iTerm2, Alacritty, Kitty, Windows Terminal)
+- Node.js (for frontend development)
 
 ## Building from Source
 
 ```bash
 git clone git@git.15b.it:eno/critic.git
 cd critic
-go build -o critic ./cmd/critic
+go build -o critic ./src/cmd/
 ```
 
 To install globally:
 
 ```bash
-go install ./cmd/critic
+go install ./src/cmd/
 ```
 
 ## MCP Server Configuration

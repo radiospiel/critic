@@ -2,18 +2,15 @@
 
 ## Completed
 
-- Phase 1: Basic diff viewer with syntax highlighting
-- Phase 2: Code review comments with SQLite storage
-- Phase 3: MCP server integration for AI assistants
-- Web UI with htmx and WebSocket updates
+- Basic diff viewer with syntax highlighting
+- Code review comments with SQLite storage
+- MCP server integration for AI assistants
+- Web UI with React frontend
+- Real-time updates via WebSocket
+- Git watcher for automatic refresh on git changes
+- DB watcher for cross-process change detection
 
 ## Planned Features
-
-### File System Event Handling
-
-1. **Phase 1:** Integrate file watcher into app for automatic refresh on file changes
-2. **Phase 2:** Watch `.git/` directory for ref changes (HEAD, branches, tags)
-3. **Phase 3:** Optimized refresh - reload only changed files, not entire diff
 
 ### Web UI Improvements
 
@@ -22,12 +19,6 @@
 - Search functionality across files and comments
 - Comment threading UI improvements
 - Mobile-responsive design
-
-### TUI Improvements
-
-- Configurable color schemes
-- Custom keybinding support
-- Inline diff folding
 
 ## Contributing
 
