@@ -4,13 +4,15 @@ Critic is a mcp and web server which offers a git diff viewer and integrates cod
 
 **Note that critic is designed as a single-user experience.** A typical scenario runs the critic mcp and http servers on the same machine that also runs the coding agent, and only listens on localhost. It is important to not deploy critic in an unsecured environment, since the web client has access to the entire tree of source files.
 
+Remote installations on, for example, Claude Code for Web should be possible using ngrok or a similar reverse proxy with websocket support; this, however, has not been tested yet.
+ 
 ## Documentation
 
-- [Installation](installation.md) - How to build and install Critic
-- [Usage](usage.md) - Command-line options and keyboard shortcuts
-- [Design](design.md) - System architecture and communication patterns
-- [Hacking](hacking.md) - Testing and development guide
-- [Plans](plans.md) - Roadmap and planned features
+- [Installation](/docs/installation.md) - How to build and install Critic
+- [Usage](/docs/usage.md) - Command-line options and keyboard shortcuts
+- [Design](/docs/design.md) - System architecture and communication patterns
+- [Hacking](/docs/hacking.md) - Testing and development guide
+- [Plans](/docs/plans.md) - Roadmap and planned features
 
 ## Quick Start
 
@@ -20,17 +22,25 @@ git clone https://github.com/radiospiel/critic.git
 cd critic
 make build
 
+# Register critic as an MCP server
+# (use absolute path to the binary)
+claude mcp add critic -- /path/to/critic mcp
+
+# Or if critic is in your PATH
+claude mcp add critic -- critic mcp
+
 # Start web UI
 ./critic webui --port=8080
-
-# Start MCP server (for AI integration)
-./critic mcp
 ```
 
-## Features
+Now you can open critic on http://localhost:8080.
 
-- Web-based diff viewer with syntax highlighting
-- Inline code review comments stored in SQLite
-- Real-time updates via WebSocket
-- MCP server for AI assistant integration
-- Git and database watchers for automatic refresh
+Note that this quick start guide does not instruct the coding agent to use critic; an example prompt on how to use that is in [Installation](/docs/installation.md). This project also uses the critic mcp server, and has this section in its [CLAUDE.md](/CLAUDE.md) file:
+
+```
+## Ask for human reviewer approval
+
+If the "critic" or "critic2" MCP server is available, but not on claude code for web:
+
+Before committing any significant code changes, call the get_review_feedback tool with a summary of what you've done, if a critic or critic2 MCP server is available. Wait for reviewer approval before proceeding. Address any feedback in subsequent iterations.
+```
