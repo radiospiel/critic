@@ -7,7 +7,6 @@ import (
 
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/simple-go/preconditions"
-	"github.com/radiospiel/critic/simple-go/utils"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/pkg/types"
 )
@@ -55,14 +54,8 @@ type Session struct {
 	mu        sync.RWMutex
 
 	// Diff state
-	diffArgs      DiffArgs
-	resolvedBases map[string]string
-	fileDiffs     []*types.FileDiff
-
-	// TUI state
-	selectedFilePath string
-	focusedPane      string
-	filterMode       FilterMode
+	diffArgs  DiffArgs
+	fileDiffs []*types.FileDiff
 
 	// Watchers
 	dbWatcher  *DBWatcher
@@ -77,13 +70,9 @@ func NewSession(gitRoot string, messaging critic.Messaging, args DiffArgs) (*Ses
 	logger.Warn("*** NewSession: created session w/gitRoot: %v", gitRoot)
 
 	s := &Session{
-		messaging:        messaging,
-		gitRoot:          gitRoot,
-		diffArgs:         DiffArgs{},
-		resolvedBases:    make(map[string]string),
-		focusedPane:      "fileList",
-		filterMode:       FilterModeNone,
-		selectedFilePath: "",
+		messaging: messaging,
+		gitRoot:   gitRoot,
+		diffArgs:  DiffArgs{},
 	}
 
 	// Create watchers
@@ -163,27 +152,6 @@ func (s *Session) CycleBase() int {
 	return newIndex
 }
 
-// --- Resolved Bases ---
-
-// SetResolvedBases sets the resolved base refs
-func (s *Session) SetResolvedBases(resolved map[string]string) {
-	s.mu.Lock()
-	s.resolvedBases = resolved
-	s.mu.Unlock()
-}
-
-// GetResolvedBase returns the resolved SHA for a base ref
-func (s *Session) GetResolvedBase(baseRef string) (string, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.resolvedBases == nil {
-		return "", false
-	}
-	sha, ok := s.resolvedBases[baseRef]
-	return sha, ok
-}
-
 // --- Diff Data ---
 
 // SetDiff sets the fileDiffs data
@@ -205,45 +173,6 @@ func (s *Session) GetFileCount() int {
 	return len(s.GetDiff())
 }
 
-// --- Selection ---
-
-// SetSelectedFile sets the selected file by index
-func (s *Session) SetSelectedFile(filePath string) {
-	s.SetSelectedFilePath(filePath)
-}
-
-// SetSelectedFilePath sets the selected file by path
-func (s *Session) SetSelectedFilePath(path string) {
-	files := s.GetDiff()
-	if files == nil {
-		return
-	}
-
-	for _, file := range files {
-		if file.GetPath() == path {
-			s.mu.Lock()
-			s.selectedFilePath = path
-			s.mu.Unlock()
-			return
-		}
-	}
-}
-
-// GetSelectedFilePath returns the path of the selected file
-func (s *Session) GetSelectedFilePath() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.selectedFilePath
-}
-
-// GetSelectedFile returns the selected file fileDiffs
-func (s *Session) GetSelectedFile() *types.FileDiff {
-	s.mu.RLock()
-	filePath := s.selectedFilePath
-	s.mu.RUnlock()
-	return s.GetFileFromDiff(filePath)
-}
-
 func (s *Session) GetFileFromDiff(filePath string) *types.FileDiff {
 	files := s.GetDiff()
 	if files == nil {
@@ -257,105 +186,6 @@ func (s *Session) GetFileFromDiff(filePath string) *types.FileDiff {
 	}
 
 	return nil
-}
-
-func (s *Session) getSelectedFilePath() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.selectedFilePath
-}
-
-// GetSelectedFileIndex returns the index of the selected file (-1 if no selection)
-func getSelectedFileIndex(s *Session) int {
-	files := s.GetDiff()
-	if files == nil {
-		return -1
-	}
-
-	filePath := s.getSelectedFilePath()
-	for index, file := range files {
-		if file.GetPath() == filePath {
-			return index
-		}
-	}
-
-	return -1
-}
-
-func (s *Session) moveFileSelection(offset int) bool {
-	files := s.GetDiff()
-	if files == nil {
-		return false
-	}
-
-	oldIndex := getSelectedFileIndex(s)
-	newIndex := oldIndex + offset
-	newIndex = utils.Clamp(newIndex, 0, s.GetFileCount()-1)
-
-	if newIndex == oldIndex {
-		return false
-	}
-
-	s.SetSelectedFilePath(files[newIndex].GetPath())
-	return true
-}
-
-// SelectNextFile selects the next file
-func (s *Session) SelectNextFile() bool {
-	return s.moveFileSelection(1)
-}
-
-// SelectPrevFile selects the previous file
-func (s *Session) SelectPrevFile() bool {
-	return s.moveFileSelection(-1)
-}
-
-// --- Focus ---
-
-// SetFocusedPane sets the focused pane ("fileList" or "diffView")
-func (s *Session) SetFocusedPane(pane string) {
-	s.mu.Lock()
-	s.focusedPane = pane
-	s.mu.Unlock()
-}
-
-// GetFocusedPane returns the focused pane
-func (s *Session) GetFocusedPane() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.focusedPane
-}
-
-// ToggleFocus toggles focus between file list and fileDiffs view
-func (s *Session) ToggleFocus() {
-	if s.GetFocusedPane() == "fileList" {
-		s.SetFocusedPane("diffView")
-	} else {
-		s.SetFocusedPane("fileList")
-	}
-}
-
-// --- Filter ---
-
-// SetFilterMode sets the filter mode
-func (s *Session) SetFilterMode(mode FilterMode) {
-	s.mu.Lock()
-	s.filterMode = mode
-	s.mu.Unlock()
-}
-
-// GetFilterMode returns the current filter mode
-func (s *Session) GetFilterMode() FilterMode {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.filterMode
-}
-
-// CycleFilterMode cycles through filter modes
-func (s *Session) CycleFilterMode() FilterMode {
-	mode := (s.GetFilterMode() + 1) % 3
-	s.SetFilterMode(mode)
-	return mode
 }
 
 // --- Conversations ---
