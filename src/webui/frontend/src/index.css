@@ -1450,6 +1450,11 @@ html, body, #root {
   animation: pulse 2s ease-in-out infinite;
 }
 
+.conversation-icon.resolved {
+  background-color: var(--status-untracked-bg);
+  color: var(--status-untracked-text);
+}
+
 @keyframes pulse {
   0%, 100% {
     opacity: 1;

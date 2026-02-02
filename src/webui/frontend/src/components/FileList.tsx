@@ -314,8 +314,6 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
           const path = getFilePath(file)
           const isSelected = selectedFile === path
           const summary = conversationSummaries.get(path)
-          const hasConversations = summary && summary.totalCount > 0
-          const hasUnresolved = summary && summary.unresolvedCount > 0
           return (
             <li
               key={path}
@@ -331,12 +329,20 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
                 {getStatusLabel(file.status)}
               </span>
               <span className="file-path">{path}</span>
-              {hasConversations && (
+              {summary && summary.unresolvedCount > 0 && (
                 <span
-                  className={`conversation-icon${hasUnresolved ? ' unresolved' : ''}`}
-                  title={`${summary.totalCount} conversation${summary.totalCount > 1 ? 's' : ''} (${summary.unresolvedCount} unresolved)`}
+                  className="conversation-icon unresolved"
+                  title={`${summary.unresolvedCount} unresolved`}
                 >
-                  {summary.totalCount}
+                  {summary.unresolvedCount}
+                </span>
+              )}
+              {summary && summary.resolvedCount > 0 && (
+                <span
+                  className="conversation-icon resolved"
+                  title={`${summary.resolvedCount} resolved`}
+                >
+                  {summary.resolvedCount}
                 </span>
               )}
             </li>
