@@ -95,6 +95,14 @@ func (dw *DBWatcher) checkMtime() {
 
 		logger.Info("DBWatcher: Messages mtime changed from %d to %d", lastMtime, currentMtime)
 
+		// Checkpoint WAL to flush pending writes to main database
+		if err := dw.db.WalCheckpoint(); err != nil {
+			logger.Error("DBWatcher: WAL checkpoint failed: %v", err)
+		}
+
+		// Additional delay to ensure other connections see the changes
+		time.Sleep(100 * time.Millisecond)
+
 		select {
 		case dw.changesChan <- struct{}{}:
 			logger.Info("DBWatcher: Change notification sent")

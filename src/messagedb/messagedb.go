@@ -592,3 +592,10 @@ func (db *DB) GetMessagesMtime() (int64, error) {
 	}
 	return mtime, nil
 }
+
+// WalCheckpoint performs a passive WAL checkpoint to flush pending writes
+// to the main database file, making them visible to other connections.
+func (db *DB) WalCheckpoint() error {
+	_, err := db.db.Exec("PRAGMA wal_checkpoint(PASSIVE)")
+	return err
+}
