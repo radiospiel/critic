@@ -53,14 +53,8 @@ func TestParseDiff_Empty(t *testing.T) {
 
 	// Get diff from HEAD (which has the original content) to working directory
 	headSHA := git.ResolveRef("HEAD")
-	diff, err := git.GetDiff(headSHA, []string{}, 3)
+	file, err := git.GetDiff(headSHA, "parser_test.go", 3)
 	assert.NoError(t, err)
-
-	// Find parser_test.go in the diff
-	file, found := lo.Find(diff.Files, func(f *ctypes.FileDiff) bool {
-		return f.NewPath == "parser_test.go"
-	})
-	assert.True(t, found, "Expected parser_test.go in diff")
 	assert.NotNil(t, file, "Expected parser_test.go in diff")
 
 	// Should have hunks with deleted lines
