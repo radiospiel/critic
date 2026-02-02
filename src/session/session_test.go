@@ -30,7 +30,6 @@ func TestNewSession(t *testing.T) {
 	session, err := NewSession(tempDir, &critic.DummyMessaging{}, DiffArgs{})
 	assert.NoError(t, err, "should create session")
 	assert.NotNil(t, session, "session should not be nil")
-	assert.NotNil(t, session.Observable, "embedded observable should not be nil")
 }
 
 func TestDiffArgs(t *testing.T) {
@@ -225,60 +224,6 @@ func TestConversations(t *testing.T) {
 	assert.True(t, summary.HasUnresolvedComments, "should have unresolved comments")
 }
 
-func TestOnKeyChange(t *testing.T) {
-	session := createTestSession(t, nil)
-
-	// Test subscription to Keys.Files changes
-	filesChangeCalled := false
-	var changedKey string
-	subs := session.OnKeyChange(Keys.Files, func(key string) {
-		filesChangeCalled = true
-		changedKey = key
-	})
-	defer session.ClearSubscriptions(subs)
-
-	diff := []*types.FileDiff{
-		{NewPath: "test1.go"},
-		{NewPath: "test2.go"},
-	}
-	session.SetDiff(diff)
-	assert.True(t, filesChangeCalled, "OnKeyChange callback should be called")
-	assert.Equals(t, changedKey, Keys.Files, "changed key should be Keys.Files")
-
-	// Test subscription to selection changes
-	selectionChangeCalled := false
-	selSubs := session.OnKeyChange(Keys.SelectedFilePath, func(key string) {
-		selectionChangeCalled = true
-	})
-	defer session.ClearSubscriptions(selSubs)
-
-	// Select file at index 1 (different from initial empty)
-	session.SetSelectedFile("test2.go")
-	assert.True(t, selectionChangeCalled, "Selection change callback should be called")
-}
-
-func TestSubscriptions(t *testing.T) {
-	session := createTestSession(t, nil)
-
-	// Subscribe to filter mode changes using OnKeyChange
-	filterChangeCalled := false
-	var changedKey string
-	subs := session.OnKeyChange(Keys.FilterMode, func(key string) {
-		filterChangeCalled = true
-		changedKey = key
-	})
-
-	session.SetFilterMode(FilterModeWithComments)
-	assert.True(t, filterChangeCalled, "filter change callback should be called")
-	assert.Equals(t, changedKey, Keys.FilterMode, "changed key should match")
-
-	// Unsubscribe using ClearSubscriptions
-	filterChangeCalled = false
-	session.ClearSubscriptions(subs)
-
-	session.SetFilterMode(FilterModeWithUnresolved)
-	assert.False(t, filterChangeCalled, "callback should not be called after unsubscribe")
-}
 
 func TestDeletedFileSelection(t *testing.T) {
 	session := createTestSession(t, nil)
@@ -442,45 +387,3 @@ func TestStartWatchers(t *testing.T) {
 	session.Close()
 }
 
-func TestDiffArgsSchemaValidation(t *testing.T) {
-	session := createTestSession(t, nil)
-
-	// Valid fileDiffs args should work
-	args := DiffArgs{
-		Bases:       []string{"main", "HEAD"},
-		CurrentBase: 0,
-		Paths:       []string{"internal/"},
-		Extensions:  []string{"go"},
-	}
-	session.SetDiffArgs(args)
-
-	retrieved := session.GetDiffArgs()
-	assert.Equals(t, len(retrieved.Bases), 2, "should have 2 bases")
-	assert.Equals(t, retrieved.CurrentBase, 0, "current base should be 0")
-}
-
-func TestDiffArgsSchemaRejectsInvalidCurrentBase(t *testing.T) {
-	session := createTestSession(t, nil)
-
-	// Attempting to set invalid currentBase type should return error
-	err := session.SetValueAtKey(Keys.DiffArgs, map[string]any{
-		"bases":       []any{"main"},
-		"currentBase": "not-a-number", // invalid: should be integer
-		"paths":       []any{},
-		"extensions":  []any{},
-	})
-	assert.NotNil(t, err, "should return error when setting invalid currentBase type")
-}
-
-func TestDiffArgsSchemaRejectsInvalidBasesType(t *testing.T) {
-	session := createTestSession(t, nil)
-
-	// Attempting to set invalid bases type should return error
-	err := session.SetValueAtKey(Keys.DiffArgs, map[string]any{
-		"bases":       []any{123}, // invalid: items should be strings
-		"currentBase": 0,
-		"paths":       []any{},
-		"extensions":  []any{},
-	})
-	assert.NotNil(t, err, "should return error when setting invalid bases type")
-}
