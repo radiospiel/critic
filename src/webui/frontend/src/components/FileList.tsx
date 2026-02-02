@@ -90,14 +90,24 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
   const [error, setError] = useState<string | null>(null)
   const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
   const [testPatterns, setTestPatterns] = useState<string[]>([])
-  const [filter, setFilter] = useState<FilterType>('conversations')
+  const [filter, setFilter] = useState<FilterType>('files')
   const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
   const selectedItemRef = useRef<HTMLLIElement>(null)
+  const userSelectedFilter = useRef(false)
 
-  // Notify parent when filter changes
-  const handleFilterChange = (newFilter: FilterType) => {
+  // Handle user clicking a filter button
+  const handleUserFilterChange = (newFilter: FilterType) => {
+    userSelectedFilter.current = true
     setFilter(newFilter)
     onFilterChange?.(newFilter)
+  }
+
+  // Set filter programmatically (only if user hasn't selected one)
+  const setAutoFilter = (newFilter: FilterType) => {
+    if (!userSelectedFilter.current) {
+      setFilter(newFilter)
+      onFilterChange?.(newFilter)
+    }
   }
 
   useEffect(() => {
@@ -126,10 +136,16 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
         }
         // Build a map of file path to conversation summary for quick lookup
         const summaryMap = new Map<string, ConversationSummary>()
+        let hasConversations = false
         for (const summary of summaryResponse.summaries) {
           summaryMap.set(summary.filePath, summary)
+          if (summary.totalCount > 0) {
+            hasConversations = true
+          }
         }
         setConversationSummaries(summaryMap)
+        // Auto-select filter: 'conversations' if there are any, 'files' otherwise
+        setAutoFilter(hasConversations ? 'conversations' : 'files')
         setLoading(false)
       })
       .catch((err) => {
@@ -270,25 +286,25 @@ function FileList({ selectedFile, onSelectFile, isFocused, onFocus, onFilterChan
       <div className="file-list-filters">
         <button
           className={`file-list-filter-btn${filter === 'conversations' ? ' active' : ''}`}
-          onClick={() => handleFilterChange(filter === 'conversations' ? 'files' : 'conversations')}
+          onClick={() => handleUserFilterChange(filter === 'conversations' ? 'files' : 'conversations')}
         >
           {totalConversations} Conversations
         </button>
         <button
           className={`file-list-filter-btn${filter === 'files' ? ' active' : ''}`}
-          onClick={() => handleFilterChange('files')}
+          onClick={() => handleUserFilterChange('files')}
         >
           {regularFiles.length} Files
         </button>
         <button
           className={`file-list-filter-btn${filter === 'tests' ? ' active' : ''}`}
-          onClick={() => handleFilterChange(filter === 'tests' ? 'files' : 'tests')}
+          onClick={() => handleUserFilterChange(filter === 'tests' ? 'files' : 'tests')}
         >
           {testFiles.length} Tests
         </button>
         <button
           className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
-          onClick={() => handleFilterChange(filter === 'hidden' ? 'files' : 'hidden')}
+          onClick={() => handleUserFilterChange(filter === 'hidden' ? 'files' : 'hidden')}
         >
           {hiddenFiles.length} Hidden
         </button>

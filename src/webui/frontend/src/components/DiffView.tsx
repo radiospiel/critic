@@ -3,7 +3,7 @@ import hljs from 'highlight.js'
 import { FileDiff, FileStatus, Line, LineType } from '../gen/critic_pb'
 import InlineCommentEditor, { CommentLineInfo } from './CommentEditor'
 import CommentDisplay from './CommentDisplay'
-import { getConversations, CommentConversation } from '../api/client'
+import { getConversations, CommentConversation, ServerConfig } from '../api/client'
 
 const ALT_JUMP_SIZE = 25
 
@@ -20,6 +20,12 @@ interface DiffViewProps {
   onSelectionChange?: (lineNoNew: number, lineNoOld: number) => void
   restoreLineNo?: { lineNoNew: number; lineNoOld: number } | null
   showOnlyConversations?: boolean
+  serverConfig?: ServerConfig | null
+}
+
+// Check if we're on localhost
+function isLocalhost(): boolean {
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 }
 
 function getFileExtension(path: string): string {
@@ -290,9 +296,11 @@ interface UnifiedLineProps {
   isLastSelected?: boolean
   lineRef?: React.RefObject<HTMLTableRowElement>
   onClick?: () => void
+  serverConfig?: ServerConfig | null
+  filePath?: string
 }
 
-function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef, onClick }: UnifiedLineProps) {
+function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelected, lineRef, onClick, serverConfig, filePath }: UnifiedLineProps) {
   const lineClass =
     line.type === LineType.ADDED
       ? 'diff-line-added'
@@ -320,7 +328,20 @@ function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelect
         {line.type !== LineType.ADDED && line.lineNoOld > 0 ? line.lineNoOld : ''}
       </td>
       <td className="diff-line-number diff-line-number-new">
-        {line.type !== LineType.DELETED && line.lineNoNew > 0 ? line.lineNoNew : ''}
+        {line.type !== LineType.DELETED && line.lineNoNew > 0 ? (
+          serverConfig?.devMode && isLocalhost() && filePath ? (
+            <a
+              href={`goland://open?file=${serverConfig.gitRoot}/${filePath}&line=${line.lineNoNew}`}
+              onClick={(e) => e.stopPropagation()}
+              title="Open in GoLand"
+              className="line-number-link"
+            >
+              {line.lineNoNew}
+            </a>
+          ) : (
+            line.lineNoNew
+          )
+        ) : ''}
       </td>
       <td className="diff-line-prefix">{prefix}</td>
       <td
@@ -337,7 +358,7 @@ interface SelectionRange {
   end: number
 }
 
-function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo, showOnlyConversations = false }: DiffViewProps) {
+function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo, showOnlyConversations = false, serverConfig }: DiffViewProps) {
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
   const [editorOpen, setEditorOpen] = useState(false)
   const [comments, setComments] = useState<CommentConversation[]>([])
@@ -725,6 +746,8 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                               setSelection({ start: currentIndex, end: currentIndex })
                               onFocus?.()
                             }}
+                            serverConfig={serverConfig}
+                            filePath={path}
                           />
                           {hasComments && (
                             <tr className="diff-comment-row">

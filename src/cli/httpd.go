@@ -44,6 +44,11 @@ Examples:
 				}
 			}()
 
+			// Set default bases if none provided (deferred to avoid git calls during help)
+			if len(diffBases) == 0 {
+				diffBases = getDefaultBases()
+			}
+
 			// Start CPU profiling if requested
 			if cpuProfile != "" {
 				f, err := os.Create(cpuProfile)
@@ -86,7 +91,7 @@ Examples:
 
 	cmd.Flags().IntVar(&port, "port", 65432, "Port to run the API server on")
 	cmd.Flags().BoolVar(&dev, "dev", false, "Development mode: proxy to Vite dev server for hot reload")
-	cmd.Flags().StringSliceVar(&diffBases, "b", getDefaultBases(), "Diff base commits")
+	cmd.Flags().StringSliceVar(&diffBases, "b", nil, "Diff base commits (defaults to main/master/origin/<branch>/HEAD)")
 	cmd.Flags().StringVar(&cpuProfile, "cpuprofile", "", "Write CPU profile to file (use 'go tool pprof' to analyze)")
 
 	return cmd

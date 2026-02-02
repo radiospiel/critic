@@ -259,3 +259,38 @@ export async function resolveConversation(conversationId: string): Promise<Resol
     }
   }
 }
+
+// Types for server config
+export interface ServerConfig {
+  gitRoot: string
+  devMode: boolean
+}
+
+export interface GetConfigResult {
+  config: ServerConfig | null
+  error?: string
+}
+
+// Fetch server configuration
+export async function getConfig(): Promise<GetConfigResult> {
+  try {
+    const response = await criticClient.getConfig({})
+    if (response.error) {
+      return {
+        config: null,
+        error: response.error.message,
+      }
+    }
+    return {
+      config: {
+        gitRoot: response.gitRoot,
+        devMode: response.devMode,
+      },
+    }
+  } catch (err) {
+    return {
+      config: null,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}

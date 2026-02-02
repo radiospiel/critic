@@ -1973,3 +1973,93 @@ export class WatchFileResponse extends Message$1<WatchFileResponse> {
   }
 }
 
+/**
+ * GetConfigRequest is an empty request for GetConfig.
+ *
+ * @generated from message critic.v1.GetConfigRequest
+ */
+export class GetConfigRequest extends Message$1<GetConfigRequest> {
+  constructor(data?: PartialMessage<GetConfigRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetConfigRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetConfigRequest {
+    return new GetConfigRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetConfigRequest {
+    return new GetConfigRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetConfigRequest {
+    return new GetConfigRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetConfigRequest | PlainMessage<GetConfigRequest> | undefined, b: GetConfigRequest | PlainMessage<GetConfigRequest> | undefined): boolean {
+    return proto3.util.equals(GetConfigRequest, a, b);
+  }
+}
+
+/**
+ * GetConfigResponse contains server configuration for the frontend.
+ *
+ * @generated from message critic.v1.GetConfigResponse
+ */
+export class GetConfigResponse extends Message$1<GetConfigResponse> {
+  /**
+   * git_root is the absolute path to the git repository root.
+   *
+   * @generated from field: string git_root = 1;
+   */
+  gitRoot = "";
+
+  /**
+   * dev_mode indicates whether the server is running in development mode.
+   *
+   * @generated from field: bool dev_mode = 2;
+   */
+  devMode = false;
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<GetConfigResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetConfigResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "git_root", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "dev_mode", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetConfigResponse {
+    return new GetConfigResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetConfigResponse {
+    return new GetConfigResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetConfigResponse {
+    return new GetConfigResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetConfigResponse | PlainMessage<GetConfigResponse> | undefined, b: GetConfigResponse | PlainMessage<GetConfigResponse> | undefined): boolean {
+    return proto3.util.equals(GetConfigResponse, a, b);
+  }
+}
+

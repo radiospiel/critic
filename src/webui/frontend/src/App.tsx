@@ -4,7 +4,7 @@ import FileList, { FilterType } from './components/FileList'
 import DiffView from './components/DiffView'
 import DiffBaseSelector from './components/DiffBaseSelector'
 import HelpModal from './components/HelpModal'
-import { criticClient } from './api/client'
+import { criticClient, getConfig, ServerConfig } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
 import { useWebSocket } from './hooks/useWebSocket'
 
@@ -25,9 +25,19 @@ function AppContent() {
   const [currentLineNo, setCurrentLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [restoreLineNo, setRestoreLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [secondsSinceLoad, setSecondsSinceLoad] = useState(0)
-  const [fileListFilter, setFileListFilter] = useState<FilterType>('conversations')
+  const [fileListFilter, setFileListFilter] = useState<FilterType>('files')
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null)
   const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
+
+  // Load server config on mount
+  useEffect(() => {
+    getConfig().then((result) => {
+      if (result.config) {
+        setServerConfig(result.config)
+      }
+    })
+  }, [])
 
   // Timer to update seconds since last reload
   useEffect(() => {
@@ -284,6 +294,7 @@ function AppContent() {
             onSelectionChange={handleSelectionChange}
             restoreLineNo={restoreLineNo}
             showOnlyConversations={fileListFilter === 'conversations'}
+            serverConfig={serverConfig}
           />
         ) : (
           <div className="empty-state">
