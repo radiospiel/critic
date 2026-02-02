@@ -47,17 +47,16 @@ func watchFileImpl(server *Server, req *api.WatchFileRequest) (*api.WatchFileRes
 
 	server.session.SetFileWatcher(watcher)
 
-	// Start listening for changes
-	go handleFileChanges(server, watcher)
+	// Start listening for changes (pass relative path for WebSocket messages)
+	go handleFileChanges(server, watcher, path)
 
 	logger.Info("WatchFile: Now watching %s", path)
 	return &api.WatchFileResponse{}, nil
 }
 
 // handleFileChanges listens for file changes and broadcasts file-changed messages.
-func handleFileChanges(server *Server, watcher *utils.FileWatcher) {
-	path := watcher.Path()
-
+// relativePath is the original path passed by the frontend for consistent comparison.
+func handleFileChanges(server *Server, watcher *utils.FileWatcher, relativePath string) {
 	for range watcher.Changes() {
 		// Check if this is still the active watcher
 		currentWatcher := server.session.GetFileWatcher()
@@ -65,10 +64,10 @@ func handleFileChanges(server *Server, watcher *utils.FileWatcher) {
 			return
 		}
 
-		logger.Info("File change detected: %s, broadcasting file-changed", path)
+		logger.Info("File change detected: %s, broadcasting file-changed", relativePath)
 
 		// Broadcast file-changed message to all connected clients
-		msg := fmt.Sprintf(`{"type":"file-changed","path":"%s"}`, path)
+		msg := fmt.Sprintf(`{"type":"file-changed","path":"%s"}`, relativePath)
 		server.wsHub.Broadcast([]byte(msg))
 	}
 }
