@@ -4,21 +4,31 @@
 
 - Go 1.24 or later
 - Git
-- Node.js (for frontend development)
+- Node.js (for frontend)
+- protoc (Protocol Buffers compiler)
 
 ## Building from Source
 
 ```bash
-git clone git@git.15b.it:eno/critic.git
+git clone https://github.com/radiospiel/critic.git
 cd critic
-go build -o critic ./src/cmd/
+make build
 ```
 
-To install globally:
+To install system-wide (to `/usr/local/bin`):
 
 ```bash
-go install ./src/cmd/
+make install
 ```
+
+### Make Targets
+
+| Target | Description |
+|--------|-------------|
+| `make build` | Build everything (deps, proto, server, frontend) |
+| `make install` | Build and install to /usr/local/bin |
+| `make tests` | Run unit and integration tests |
+| `make clean` | Remove build artifacts |
 
 ## MCP Server Configuration
 

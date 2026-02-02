@@ -13,14 +13,16 @@ Critic is a git diff viewer with integrated code review comments. It enables hum
 ## Quick Start
 
 ```bash
-# Build and install
-go install ./src/cmd/
+# Clone and build
+git clone https://github.com/radiospiel/critic.git
+cd critic
+make build
 
 # Start web UI
-critic webui --port=8080
+./critic webui --port=8080
 
 # Start MCP server (for AI integration)
-critic mcp
+./critic mcp
 ```
 
 ## Features

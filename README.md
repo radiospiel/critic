@@ -16,8 +16,12 @@ A code review tool for Git repositories with Web and MCP interfaces, enabling hu
 ## Installation
 
 ```bash
-go build -o critic ./src/cmd/
+git clone https://github.com/radiospiel/critic.git
+cd critic
+make build
 ```
+
+To install system-wide: `make install`
 
 ## Usage
 
@@ -92,14 +96,12 @@ go test -v ./...
 The e2e tests verify the web UI functionality using Puppeteer.
 
 ```bash
-# First, build the critic binary
-go build -o critic ./src/cmd/
+# Build critic first
+make build
 
-# Install test dependencies
+# Run e2e tests
 cd tests/e2e
 npm install
-
-# Run the tests
 npm test
 ```
 
