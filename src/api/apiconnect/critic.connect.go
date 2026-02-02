@@ -39,8 +39,8 @@ const (
 	// CriticServiceGetDiffSummaryProcedure is the fully-qualified name of the CriticService's
 	// GetDiffSummary RPC.
 	CriticServiceGetDiffSummaryProcedure = "/critic.v1.CriticService/GetDiffSummary"
-	// CriticServiceGetDiffProcedure is the fully-qualified name of the CriticService's GetDiff RPC.
-	CriticServiceGetDiffProcedure = "/critic.v1.CriticService/GetDiff"
+	// CriticServiceGetDiffProcedure is the fully-qualified name of the CriticService's GetFileDiffs RPC.
+	CriticServiceGetDiffProcedure = "/critic.v1.CriticService/GetFileDiffs"
 	// CriticServiceGetFileProcedure is the fully-qualified name of the CriticService's GetFile RPC.
 	CriticServiceGetFileProcedure = "/critic.v1.CriticService/GetFile"
 	// CriticServiceCreateConversationProcedure is the fully-qualified name of the CriticService's
@@ -126,7 +126,7 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 		getDiff: connect.NewClient[api.GetDiffRequest, api.GetDiffResponse](
 			httpClient,
 			baseURL+CriticServiceGetDiffProcedure,
-			connect.WithSchema(criticServiceMethods.ByName("GetDiff")),
+			connect.WithSchema(criticServiceMethods.ByName("GetFileDiffs")),
 			connect.WithClientOptions(opts...),
 		),
 		getFile: connect.NewClient[api.GetFileRequest, api.GetFileResponse](
@@ -219,7 +219,7 @@ func (c *criticServiceClient) GetDiffSummary(ctx context.Context, req *connect.R
 	return c.getDiffSummary.CallUnary(ctx, req)
 }
 
-// GetDiff calls critic.v1.CriticService.GetDiff.
+// GetDiff calls critic.v1.CriticService.GetFileDiffs.
 func (c *criticServiceClient) GetDiff(ctx context.Context, req *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error) {
 	return c.getDiff.CallUnary(ctx, req)
 }
@@ -326,7 +326,7 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 	criticServiceGetDiffHandler := connect.NewUnaryHandler(
 		CriticServiceGetDiffProcedure,
 		svc.GetDiff,
-		connect.WithSchema(criticServiceMethods.ByName("GetDiff")),
+		connect.WithSchema(criticServiceMethods.ByName("GetFileDiffs")),
 		connect.WithHandlerOptions(opts...),
 	)
 	criticServiceGetFileHandler := connect.NewUnaryHandler(
@@ -435,7 +435,7 @@ func (UnimplementedCriticServiceHandler) GetDiffSummary(context.Context, *connec
 }
 
 func (UnimplementedCriticServiceHandler) GetDiff(context.Context, *connect.Request[api.GetDiffRequest]) (*connect.Response[api.GetDiffResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetDiff is not implemented"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetFileDiffs is not implemented"))
 }
 
 func (UnimplementedCriticServiceHandler) GetFile(context.Context, *connect.Request[api.GetFileRequest]) (*connect.Response[api.GetFileResponse], error) {

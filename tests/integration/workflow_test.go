@@ -72,7 +72,7 @@ func TestGitWorkflow_NewFile(t *testing.T) {
 	file, err := git.GetDiff(headSHA, "new.go", 3)
 	assert.NoError(t, err)
 	assert.NotNil(t, file, "Expected new.go in diff")
-	assert.True(t, file.IsNew, "Expected new.go to be marked as new file")
+	assert.Equals(t, file.FileStatus, ctypes.FileStatusNew, "Expected new.go to be marked as new file")
 }
 
 func TestGitWorkflow_MultipleFiles(t *testing.T) {

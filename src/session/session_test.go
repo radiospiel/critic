@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/radiospiel/critic/simple-go/assert"
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/pkg/types"
-	"github.com/radiospiel/critic/simple-go/assert"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // createTestSession creates a Session for testing with a temp directory.
@@ -36,7 +36,7 @@ func TestNewSession(t *testing.T) {
 func TestDiffArgs(t *testing.T) {
 	session := createTestSession(t, nil)
 
-	// Set diff args
+	// Set fileDiffs args
 	args := DiffArgs{
 		Bases:       []string{"main", "origin/main", "HEAD"},
 		CurrentBase: 1,
@@ -45,7 +45,7 @@ func TestDiffArgs(t *testing.T) {
 	}
 	session.SetDiffArgs(args)
 
-	// Get diff args
+	// Get fileDiffs args
 	retrieved := session.GetDiffArgs()
 	assert.Equals(t, len(retrieved.Bases), 3, "should have 3 bases")
 	assert.Equals(t, retrieved.CurrentBase, 1, "current base should be 1")
@@ -102,28 +102,24 @@ func TestDiff(t *testing.T) {
 	session := createTestSession(t, nil)
 
 	// Initially nil
-	assert.Nil(t, session.GetDiff(), "initial diff should be nil")
+	assert.Nil(t, session.GetFileDiffs(), "initial fileDiffs should be nil")
 	assert.Equals(t, session.GetFileCount(), 0, "initial file count should be 0")
 
-	// Set diff
+	// Set fileDiffs
 	diff := []*types.FileDiff{
 		{NewPath: "file1.go", OldPath: "file1.go"},
 		{NewPath: "file2.go", OldPath: "file2.go"},
 	}
 	session.SetDiff(diff)
 
-	assert.NotNil(t, session.GetDiff(), "diff should be set")
+	assert.NotNil(t, session.GetFileDiffs(), "fileDiffs should be set")
 	assert.Equals(t, session.GetFileCount(), 2, "file count should be 2")
-
-	files := session.GetFiles()
-	assert.Equals(t, len(files), 2, "should have 2 files")
-	assert.Equals(t, files[0].NewPath, "file1.go", "first file should be file1.go")
 }
 
 func TestSelection(t *testing.T) {
 	session := createTestSession(t, nil)
 
-	// Set diff first
+	// Set fileDiffs first
 	diff := []*types.FileDiff{
 		{NewPath: "file1.go", OldPath: "file1.go"},
 		{NewPath: "file2.go", OldPath: "file2.go"},
@@ -287,10 +283,10 @@ func TestSubscriptions(t *testing.T) {
 func TestDeletedFileSelection(t *testing.T) {
 	session := createTestSession(t, nil)
 
-	// Set diff with a deleted file
+	// Set fileDiffs with a deleted file
 	diff := []*types.FileDiff{
 		{NewPath: "file1.go", OldPath: "file1.go"},
-		{NewPath: "", OldPath: "deleted.go", IsDeleted: true},
+		{NewPath: "", OldPath: "deleted.go", FileStatus: types.FileStatusDeleted},
 	}
 	session.SetDiff(diff)
 
@@ -449,7 +445,7 @@ func TestStartWatchers(t *testing.T) {
 func TestDiffArgsSchemaValidation(t *testing.T) {
 	session := createTestSession(t, nil)
 
-	// Valid diff args should work
+	// Valid fileDiffs args should work
 	args := DiffArgs{
 		Bases:       []string{"main", "HEAD"},
 		CurrentBase: 0,

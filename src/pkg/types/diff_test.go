@@ -48,13 +48,13 @@ func TestStructCreation(t *testing.T) {
 
 	// Test FileDiff creation
 	fileDiff := &FileDiff{
-		OldPath:   "old.go",
-		NewPath:   "new.go",
-		IsRenamed: true,
-		Hunks:     []*Hunk{},
+		OldPath:    "old.go",
+		NewPath:    "new.go",
+		FileStatus: FileStatusRenamed,
+		Hunks:      []*Hunk{},
 	}
 	assert.Equals(t, fileDiff.OldPath, "old.go")
-	assert.True(t, fileDiff.IsRenamed, "FileDiff.IsRenamed should be true")
+	assert.Equals(t, fileDiff.FileStatus, FileStatusRenamed, "FileDiff.FileStatus should be FileStatusRenamed")
 
 	// Test Hunk creation
 	hunk := &Hunk{

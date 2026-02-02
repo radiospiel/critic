@@ -18,7 +18,7 @@ var requestSchemaStrings = map[string]string{
 		"type": "object",
 		"properties": {}
 	}`,
-	"/critic.v1.CriticService/GetDiff": `{
+	"/critic.v1.CriticService/GetFileDiffs": `{
 		"type": "object",
 		"properties": {
 			"path": {"type": "string", "minLength": 1}

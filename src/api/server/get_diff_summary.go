@@ -52,24 +52,30 @@ func convertFileSummary(f *types.FileDiff) *api.FileSummary {
 		return nil
 	}
 
-	status := api.FileStatus_FILE_STATUS_MODIFIED
-	switch {
-	case f.IsUntracked:
-		status = api.FileStatus_FILE_STATUS_UNTRACKED
-	case f.IsNew:
-		status = api.FileStatus_FILE_STATUS_NEW
-	case f.IsDeleted:
-		status = api.FileStatus_FILE_STATUS_DELETED
-	case f.IsRenamed:
-		status = api.FileStatus_FILE_STATUS_RENAMED
-	}
-
 	return &api.FileSummary{
 		OldPath:     f.OldPath,
 		NewPath:     f.NewPath,
 		FileModeOld: f.OldMode,
 		FileModeNew: f.NewMode,
-		Status:      status,
+		Status:      convertFileStatus(f.FileStatus),
 		IsBinary:    f.IsBinary,
+	}
+}
+
+// convertFileStatus converts types.FileStatus to api.FileStatus
+func convertFileStatus(s types.FileStatus) api.FileStatus {
+	switch s {
+	case types.FileStatusNew:
+		return api.FileStatus_FILE_STATUS_NEW
+	case types.FileStatusDeleted:
+		return api.FileStatus_FILE_STATUS_DELETED
+	case types.FileStatusRenamed:
+		return api.FileStatus_FILE_STATUS_RENAMED
+	case types.FileStatusUntracked:
+		return api.FileStatus_FILE_STATUS_UNTRACKED
+	case types.FileStatusModified:
+		return api.FileStatus_FILE_STATUS_MODIFIED
+	default:
+		return api.FileStatus_FILE_STATUS_UNSPECIFIED
 	}
 }

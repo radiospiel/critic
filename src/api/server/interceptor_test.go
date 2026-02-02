@@ -8,7 +8,7 @@ import (
 )
 
 func TestValidateRequest_GetDiff_MissingPath(t *testing.T) {
-	procedure := "/critic.v1.CriticService/GetDiff"
+	procedure := "/critic.v1.CriticService/GetFileDiffs"
 	req := &api.GetDiffRequest{}
 
 	err := validateRequest(procedure, req)
@@ -17,7 +17,7 @@ func TestValidateRequest_GetDiff_MissingPath(t *testing.T) {
 }
 
 func TestValidateRequest_GetDiff_EmptyPath(t *testing.T) {
-	procedure := "/critic.v1.CriticService/GetDiff"
+	procedure := "/critic.v1.CriticService/GetFileDiffs"
 	req := &api.GetDiffRequest{Path: ""}
 
 	err := validateRequest(procedure, req)
@@ -25,7 +25,7 @@ func TestValidateRequest_GetDiff_EmptyPath(t *testing.T) {
 }
 
 func TestValidateRequest_GetDiff_ValidPath(t *testing.T) {
-	procedure := "/critic.v1.CriticService/GetDiff"
+	procedure := "/critic.v1.CriticService/GetFileDiffs"
 	req := &api.GetDiffRequest{Path: "src/main.go"}
 
 	err := validateRequest(procedure, req)

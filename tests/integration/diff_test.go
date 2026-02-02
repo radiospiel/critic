@@ -126,7 +126,7 @@ func TestGetDiff_NewFile(t *testing.T) {
 	file, err := git.GetDiff(headSHA, "new.go", 3)
 	assert.NoError(t, err)
 	assert.NotNil(t, file, "Expected new.go in diff")
-	assert.True(t, file.IsNew, "Expected new.go to be marked as new file")
+	assert.Equals(t, file.FileStatus, ctypes.FileStatusNew, "Expected new.go to be marked as new file")
 }
 
 func TestGetDiff_DeletedFile(t *testing.T) {
@@ -152,7 +152,7 @@ func TestGetDiff_DeletedFile(t *testing.T) {
 	})
 
 	assert.True(t, found, "Expected delete.go in diff")
-	assert.True(t, file.IsDeleted, "Expected delete.go to be marked as deleted")
+	assert.Equals(t, file.FileStatus, ctypes.FileStatusDeleted, "Expected delete.go to be marked as deleted")
 }
 
 func TestGetDiff_FileInSubdirectory(t *testing.T) {

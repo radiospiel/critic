@@ -8,7 +8,7 @@ import (
 	"github.com/radiospiel/critic/src/git"
 )
 
-// GitWatcher watches for changes to git references and kicks off diff reloading
+// GitWatcher watches for changes to git references and kicks off fileDiffs reloading
 type GitWatcher struct {
 	state         *Session
 	bases         []string          // Base refs to watch (e.g., ["main", "origin/main", "HEAD"])
@@ -21,7 +21,7 @@ type GitWatcher struct {
 
 	// Callbacks
 	onBasesChanged func()
-	onDiffNeeded   func(baseRef string, baseSHA string) // Called when diff needs to be reloaded
+	onDiffNeeded   func(baseRef string, baseSHA string) // Called when fileDiffs needs to be reloaded
 }
 
 // NewGitWatcher creates a new git watcher
@@ -55,7 +55,7 @@ func (w *GitWatcher) OnBasesChanged(callback func()) {
 	w.onBasesChanged = callback
 }
 
-// OnDiffNeeded sets the callback for when diff needs reloading
+// OnDiffNeeded sets the callback for when fileDiffs needs reloading
 func (w *GitWatcher) OnDiffNeeded(callback func(baseRef string, baseSHA string)) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

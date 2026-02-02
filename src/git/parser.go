@@ -107,13 +107,13 @@ func ParseDiff(diffText string) ([]*ctypes.FileDiff, error) {
 
 		// Check for file mode changes
 		if matches := newFileMode.FindStringSubmatch(line); matches != nil {
-			currentFile.IsNew = true
+			currentFile.FileStatus = ctypes.FileStatusNew
 			currentFile.NewMode = matches[1]
 			continue
 		}
 
 		if matches := deletedFileMode.FindStringSubmatch(line); matches != nil {
-			currentFile.IsDeleted = true
+			currentFile.FileStatus = ctypes.FileStatusDeleted
 			currentFile.OldMode = matches[1]
 			continue
 		}
@@ -129,13 +129,13 @@ func ParseDiff(diffText string) ([]*ctypes.FileDiff, error) {
 		}
 
 		if matches := renameFromRegex.FindStringSubmatch(line); matches != nil {
-			currentFile.IsRenamed = true
+			currentFile.FileStatus = ctypes.FileStatusRenamed
 			currentFile.OldPath = matches[1]
 			continue
 		}
 
 		if matches := renameToRegex.FindStringSubmatch(line); matches != nil {
-			currentFile.IsRenamed = true
+			currentFile.FileStatus = ctypes.FileStatusRenamed
 			currentFile.NewPath = matches[1]
 			continue
 		}
@@ -281,7 +281,9 @@ func ParseDiffNameStatus(output string) ([]*ctypes.FileDiff, error) {
 		if len(status) > 0 && (status[0] == 'R' || status[0] == 'C') {
 			// Rename or Copy: has old path and new path
 			if len(parts) >= 3 {
-				fileDiff.IsRenamed = status[0] == 'R'
+				if status[0] == 'R' {
+					fileDiff.FileStatus = ctypes.FileStatusRenamed
+				}
 				fileDiff.OldPath = parts[1]
 				fileDiff.NewPath = parts[2]
 			}
@@ -291,11 +293,11 @@ func ParseDiffNameStatus(output string) ([]*ctypes.FileDiff, error) {
 
 			switch status {
 			case "A":
-				fileDiff.IsNew = true
+				fileDiff.FileStatus = ctypes.FileStatusNew
 			case "D":
-				fileDiff.IsDeleted = true
+				fileDiff.FileStatus = ctypes.FileStatusDeleted
 			case "M", "T":
-				// Modified or Type change - default state
+				// Modified or Type change - default state (FileStatusModified)
 			}
 		}
 

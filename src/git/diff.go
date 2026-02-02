@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/samber/lo"
+
 	"github.com/radiospiel/critic/simple-go/preconditions"
 	ctypes "github.com/radiospiel/critic/src/pkg/types"
 )
@@ -112,9 +114,9 @@ func readUntrackedFile(path string) (*ctypes.FileDiff, error) {
 	}
 
 	return &ctypes.FileDiff{
-		OldPath:     "",
-		NewPath:     path,
-		IsUntracked: true,
+		OldPath:    "",
+		NewPath:    path,
+		FileStatus: ctypes.FileStatusUntracked,
 		Hunks: []*ctypes.Hunk{
 			{
 				OldStart: 0,
@@ -157,18 +159,23 @@ func GetDiffNames(base string, paths []string) ([]*ctypes.FileDiff, error) {
 	}
 
 	// Get untracked files and add them as untracked
-	untrackedOutput := git("ls-files", "--others", "--exclude-standard")
-	untrackedFiles := strings.Split(strings.TrimSpace(string(untrackedOutput)), "\n")
-	for _, path := range untrackedFiles {
-		if path == "" {
-			continue
-		}
-		files = append(files, &ctypes.FileDiff{
-			OldPath:     "",
-			NewPath:     path,
-			IsUntracked: true,
-		})
-	}
+	untrackedDiffs := getUntrackedDiffs()
+	files = append(files, untrackedDiffs...)
 
 	return files, nil
+}
+
+func getUntrackedDiffs() []*ctypes.FileDiff {
+	output := git("ls-files", "--others", "--exclude-standard")
+	files := lo.Filter(
+		strings.Split(strings.TrimSpace(string(output)), "\n"),
+		func(path string, _ int) bool { return path != "" },
+	)
+	return lo.Map(files, func(path string, _ int) *ctypes.FileDiff {
+		return &ctypes.FileDiff{
+			OldPath:    "",
+			NewPath:    path,
+			FileStatus: ctypes.FileStatusUntracked,
+		}
+	})
 }

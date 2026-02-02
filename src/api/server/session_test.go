@@ -68,8 +68,8 @@ func TestFilterDiffByExtensions(t *testing.T) {
 func TestFilterDiffByExtensionsWithDeletedFiles(t *testing.T) {
 	files := []*types.FileDiff{
 		{NewPath: "file1.go", OldPath: "file1.go"},
-		{NewPath: "", OldPath: "deleted.go", IsDeleted: true},
-		{NewPath: "", OldPath: "deleted.ts", IsDeleted: true},
+		{NewPath: "", OldPath: "deleted.go", FileStatus: types.FileStatusDeleted},
+		{NewPath: "", OldPath: "deleted.ts", FileStatus: types.FileStatusDeleted},
 	}
 
 	// Filter for .go files - should include deleted .go file

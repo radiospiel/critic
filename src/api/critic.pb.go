@@ -2685,7 +2685,7 @@ var file_critic_proto_depIdxs = []int32{
 	4,  // 27: critic.v1.GetConfigResponse.error:type_name -> critic.v1.RpcError
 	5,  // 28: critic.v1.CriticService.GetLastChange:input_type -> critic.v1.GetLastChangeRequest
 	7,  // 29: critic.v1.CriticService.GetDiffSummary:input_type -> critic.v1.GetDiffSummaryRequest
-	9,  // 30: critic.v1.CriticService.GetDiff:input_type -> critic.v1.GetDiffRequest
+	9,  // 30: critic.v1.CriticService.GetFileDiffs:input_type -> critic.v1.GetDiffRequest
 	18, // 31: critic.v1.CriticService.GetFile:input_type -> critic.v1.GetFileRequest
 	20, // 32: critic.v1.CriticService.CreateConversation:input_type -> critic.v1.CreateConversationRequest
 	22, // 33: critic.v1.CriticService.GetConversations:input_type -> critic.v1.GetConversationsRequest
@@ -2698,7 +2698,7 @@ var file_critic_proto_depIdxs = []int32{
 	39, // 40: critic.v1.CriticService.GetConfig:input_type -> critic.v1.GetConfigRequest
 	6,  // 41: critic.v1.CriticService.GetLastChange:output_type -> critic.v1.GetLastChangeResponse
 	8,  // 42: critic.v1.CriticService.GetDiffSummary:output_type -> critic.v1.GetDiffSummaryResponse
-	10, // 43: critic.v1.CriticService.GetDiff:output_type -> critic.v1.GetDiffResponse
+	10, // 43: critic.v1.CriticService.GetFileDiffs:output_type -> critic.v1.GetDiffResponse
 	19, // 44: critic.v1.CriticService.GetFile:output_type -> critic.v1.GetFileResponse
 	21, // 45: critic.v1.CriticService.CreateConversation:output_type -> critic.v1.CreateConversationResponse
 	23, // 46: critic.v1.CriticService.GetConversations:output_type -> critic.v1.GetConversationsResponse

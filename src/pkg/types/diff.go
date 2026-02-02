@@ -2,26 +2,35 @@ package types
 
 import (
 	"encoding/json"
+)
 
-	"github.com/radiospiel/critic/simple-go/utils"
+// FileStatus represents the status of a file in a diff
+type FileStatus int
+
+const (
+	FileStatusModified  FileStatus = iota // Default: file was modified
+	FileStatusNew                         // New file
+	FileStatusDeleted                     // Deleted file
+	FileStatusRenamed                     // Renamed file
+	FileStatusUntracked                   // Untracked file
 )
 
 // FileDiff represents changes to a single file
 type FileDiff struct {
-	OldPath     string  `json:"old_path"`
-	NewPath     string  `json:"new_path"`
-	OldMode     string  `json:"old_mode,omitempty"`
-	NewMode     string  `json:"new_mode,omitempty"`
-	IsNew       bool    `json:"is_new,omitempty"`
-	IsDeleted   bool    `json:"is_deleted,omitempty"`
-	IsRenamed   bool    `json:"is_renamed,omitempty"`
-	IsBinary    bool    `json:"is_binary,omitempty"`
-	IsUntracked bool    `json:"is_untracked,omitempty"`
-	Hunks       []*Hunk `json:"hunks"`
+	OldPath    string     `json:"old_path"`
+	NewPath    string     `json:"new_path"`
+	OldMode    string     `json:"old_mode,omitempty"`
+	NewMode    string     `json:"new_mode,omitempty"`
+	FileStatus FileStatus `json:"file_status"`
+	IsBinary   bool       `json:"is_binary,omitempty"`
+	Hunks      []*Hunk    `json:"hunks"`
 }
 
 func (d FileDiff) GetPath() string {
-	return utils.IfElse(d.IsDeleted, d.OldPath, d.NewPath)
+	if d.FileStatus == FileStatusDeleted {
+		return d.OldPath
+	}
+	return d.NewPath
 }
 
 // HunkStats holds line statistics for a hunk

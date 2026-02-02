@@ -22,9 +22,9 @@ func TestConvertDiffSummary(t *testing.T) {
 	// Test diff with files
 	files = []*types.FileDiff{
 		{
-			OldPath:   "old.go",
-			NewPath:   "new.go",
-			IsRenamed: true,
+			OldPath:    "old.go",
+			NewPath:    "new.go",
+			FileStatus: types.FileStatusRenamed,
 			Hunks: []*types.Hunk{
 				{
 					OldStart: 1,
@@ -58,14 +58,12 @@ func TestConvertFileSummary(t *testing.T) {
 
 	// Test file diff with all fields - renamed file
 	fd := &types.FileDiff{
-		OldPath:   "path/to/old.go",
-		NewPath:   "path/to/new.go",
-		OldMode:   "100644",
-		NewMode:   "100755",
-		IsNew:     false,
-		IsDeleted: false,
-		IsRenamed: true,
-		IsBinary:  false,
+		OldPath:    "path/to/old.go",
+		NewPath:    "path/to/new.go",
+		OldMode:    "100644",
+		NewMode:    "100755",
+		FileStatus: types.FileStatusRenamed,
+		IsBinary:   false,
 		Hunks: []*types.Hunk{
 			{OldStart: 1, OldLines: 5},
 		},
@@ -81,12 +79,12 @@ func TestConvertFileSummary(t *testing.T) {
 	assert.Equals(t, result.IsBinary, false, "is_binary should be false")
 
 	// Test new file
-	fd = &types.FileDiff{IsNew: true}
+	fd = &types.FileDiff{FileStatus: types.FileStatusNew}
 	result = convertFileSummary(fd)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_NEW, "status should be NEW")
 
 	// Test deleted file
-	fd = &types.FileDiff{IsDeleted: true}
+	fd = &types.FileDiff{FileStatus: types.FileStatusDeleted}
 	result = convertFileSummary(fd)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_DELETED, "status should be DELETED")
 
