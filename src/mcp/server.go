@@ -305,7 +305,7 @@ func (s *Server) handleGetFullCriticConversation(req Request, params CallToolPar
 	}
 
 	// Mark the conversation as read by AI
-	if err := s.messaging.MarkAsReadByAI(uuid); err != nil {
+	if err := s.messaging.MarkConversationAs(uuid, critic.ConversationReadByAI); err != nil {
 		s.logToStderr("Failed to mark conversation as read by AI: %v", err)
 		// Don't fail the request, just log the error
 	}

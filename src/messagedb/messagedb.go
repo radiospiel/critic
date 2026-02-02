@@ -7,10 +7,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/radiospiel/critic/simple-go/logger"
-	"github.com/radiospiel/critic/simple-go/preconditions"
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/preconditions"
+	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/samber/lo"
 )
 
@@ -397,52 +398,50 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 	return messages, nil
 }
 
-// MarkAsResolved marks all messages in a conversation as resolved
-func (db *DB) MarkAsResolved(conversationID string) error {
+// MarkConversationAs applies an update to a conversation (resolved, unresolved, read_by_ai)
+func (db *DB) MarkConversationAs(conversationID string, update critic.ConversationUpdate) error {
 	preconditions.Check(conversationID != "", "conversationID must not be empty")
 
-	// Update all messages in the conversation
-	query := `
-		UPDATE messages
-		SET status = ?, updated_at = ?
-		WHERE conversation_id = ?
-	`
+	var query string
+	var args []interface{}
 
-	result, err := db.db.Exec(query, string(StatusResolved), time.Now(), conversationID)
+	switch update {
+	case critic.ConversationResolved:
+		query = `UPDATE messages SET status = ?, updated_at = ? WHERE conversation_id = ?`
+		args = []interface{}{string(StatusResolved), time.Now(), conversationID}
+	case critic.ConversationUnresolved:
+		query = `UPDATE messages SET status = ?, updated_at = ? WHERE conversation_id = ?`
+		args = []interface{}{string(StatusNew), time.Now(), conversationID}
+	case critic.ConversationReadByAI:
+		query = `UPDATE messages SET read_by_ai = 1, updated_at = ? WHERE conversation_id = ?`
+		args = []interface{}{time.Now(), conversationID}
+	default:
+		return fmt.Errorf("unknown conversation update: %s", update)
+	}
+
+	result, err := db.db.Exec(query, args...)
 	if err != nil {
-		return fmt.Errorf("failed to mark as resolved: %w", err)
+		return fmt.Errorf("failed to mark conversation as %s: %w", update, err)
 	}
 
 	affected, _ := result.RowsAffected()
-	logger.Info("Marked conversation %s (%d messages) as resolved", conversationID, affected)
+	logger.Info("Marked conversation %s (%d messages) as %s", conversationID, affected, update)
 	return nil
 }
 
-// MarkAsUnresolved marks all messages in a conversation as unresolved
-func (db *DB) MarkAsUnresolved(conversationID string) error {
-	preconditions.Check(conversationID != "", "conversationID must not be empty")
+// MarkMessageAs marks a message with a given read status
+func (db *DB) MarkMessageAs(messageID string, status critic.MessageReadStatus) error {
+	preconditions.Check(messageID != "", "messageID must not be empty")
 
-	// Update all messages in the conversation
-	// StatusNew is used for unresolved state in the database
-	query := `
-		UPDATE messages
-		SET status = ?, updated_at = ?
-		WHERE conversation_id = ?
-	`
-
-	result, err := db.db.Exec(query, string(StatusNew), time.Now(), conversationID)
-	if err != nil {
-		return fmt.Errorf("failed to mark as unresolved: %w", err)
+	var dbStatus string
+	switch status {
+	case critic.MessageRead:
+		dbStatus = string(ReadStatusRead)
+	case critic.MessageUnread:
+		dbStatus = string(ReadStatusUnread)
+	default:
+		return fmt.Errorf("unknown message read status: %s", status)
 	}
-
-	affected, _ := result.RowsAffected()
-	logger.Info("Marked conversation %s (%d messages) as unresolved", conversationID, affected)
-	return nil
-}
-
-// MarkAsRead marks an AI message as read
-func (db *DB) MarkAsRead(id string) error {
-	preconditions.Check(id != "", "id must not be empty")
 
 	query := `
 		UPDATE messages
@@ -450,32 +449,12 @@ func (db *DB) MarkAsRead(id string) error {
 		WHERE id = ? AND author = ?
 	`
 
-	_, err := db.db.Exec(query, string(ReadStatusRead), time.Now(), id, string(AuthorAI))
+	_, err := db.db.Exec(query, dbStatus, time.Now(), messageID, string(AuthorAI))
 	if err != nil {
-		return fmt.Errorf("failed to mark as read: %w", err)
+		return fmt.Errorf("failed to mark message as %s: %w", status, err)
 	}
 
-	logger.Debug("Marked AI message %s as read", id)
-	return nil
-}
-
-// MarkAsReadByAI marks a conversation as having been read by the AI
-func (db *DB) MarkAsReadByAI(conversationID string) error {
-	preconditions.Check(conversationID != "", "conversationID must not be empty")
-
-	query := `
-		UPDATE messages
-		SET read_by_ai = 1, updated_at = ?
-		WHERE conversation_id = ?
-	`
-
-	result, err := db.db.Exec(query, time.Now(), conversationID)
-	if err != nil {
-		return fmt.Errorf("failed to mark as read by AI: %w", err)
-	}
-
-	affected, _ := result.RowsAffected()
-	logger.Info("Marked conversation %s (%d messages) as read by AI", conversationID, affected)
+	logger.Debug("Marked AI message %s as %s", messageID, status)
 	return nil
 }
 
