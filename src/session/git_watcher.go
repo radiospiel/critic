@@ -10,7 +10,6 @@ import (
 
 // GitWatcher watches for changes to git references and kicks off fileDiffs reloading
 type GitWatcher struct {
-	state         *Session
 	bases         []string          // Base refs to watch (e.g., ["main", "origin/main", "HEAD"])
 	resolvedBases map[string]string // Current resolved SHAs
 	mu            sync.RWMutex
@@ -25,9 +24,8 @@ type GitWatcher struct {
 }
 
 // NewGitWatcher creates a new git watcher
-func NewGitWatcher(state *Session) *GitWatcher {
+func NewGitWatcher() *GitWatcher {
 	return &GitWatcher{
-		state:         state,
 		resolvedBases: make(map[string]string),
 		pollInterval:  10 * time.Second,
 		stopChan:      make(chan struct{}),
@@ -127,11 +125,6 @@ func (w *GitWatcher) resolveAll() {
 		sha := git.ResolveRef(base)
 		w.resolvedBases[base] = sha
 	}
-
-	// Update state with resolved bases
-	if w.state != nil {
-		w.state.SetResolvedBases(w.resolvedBases)
-	}
 }
 
 // checkForChanges checks if any bases have changed
@@ -149,10 +142,6 @@ func (w *GitWatcher) checkForChanges() bool {
 			w.resolvedBases[base] = sha
 			changed = true
 		}
-	}
-
-	if changed && w.state != nil {
-		w.state.SetResolvedBases(w.resolvedBases)
 	}
 
 	return changed
