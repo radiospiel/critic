@@ -579,3 +579,16 @@ func (db *DB) UpsertMessage(author Author, message, filePath string, lineno int,
 	// Create new message
 	return db.CreateMessage(author, message, filePath, lineno, commit, context)
 }
+
+// GetMessagesMtime returns the mtime_msec for the messages table from _db_mtime.
+// Returns 0 if the table doesn't exist or has no entry.
+func (db *DB) GetMessagesMtime() (int64, error) {
+	var mtime int64
+	query := `SELECT mtime_msec FROM _db_mtime WHERE tablename = 'messages'`
+	err := db.db.QueryRow(query).Scan(&mtime)
+	if err != nil {
+		// Table might not exist or no entry - return 0
+		return 0, nil
+	}
+	return mtime, nil
+}
