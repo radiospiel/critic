@@ -241,7 +241,7 @@ func (db *DB) ReplyToConversation(conversationID string, message string, author 
 		IsUnread:  reply.ReadStatus == ReadStatusUnread,
 	}
 
-	logger.Info("Created reply %s to conversation %s", reply.ID, conversationID)
+	logger.Info("Created %s reply %s to conversation %s", critic.Author(reply.Author), reply.ID, conversationID)
 	return criticMsg, nil
 }
 

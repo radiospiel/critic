@@ -324,7 +324,7 @@ function UnifiedLine({ line, language, isSelected, isFirstSelected, isLastSelect
         {line.type !== LineType.ADDED && line.lineNoOld > 0 ? line.lineNoOld : ''}
       </td>
       <td className="diff-line-number diff-line-number-new">
-        N {line.type !== LineType.DELETED && line.lineNoNew > 0 ? (
+        {line.type !== LineType.DELETED && line.lineNoNew > 0 ? (
           <LinkToSource lineNo={line.lineNoNew} filePath={filePath || ''} serverConfig={serverConfig} />
         ) : ''}
       </td>

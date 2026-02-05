@@ -4,7 +4,7 @@ package critic.v1;
 
 option go_package = "github.com/radiospiel/critic/src/api;api";
 
-// CriticService provides API methods for the critic code review tool.
+// CriticService provides API methods for the critic code review and MCP server tool.
 service CriticService {
   // GetLastChange returns the timestamp of the last change.
   rpc GetLastChange(GetLastChangeRequest) returns (GetLastChangeResponse);

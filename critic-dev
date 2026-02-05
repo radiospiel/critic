@@ -3,17 +3,43 @@ set -eu -o pipefail
 
 echo "Running critic in development mode" >&2
 
+get_script_dir()
+{
+    local SOURCE_PATH="${BASH_SOURCE[0]}"
+    local SYMLINK_DIR
+    local SCRIPT_DIR
+    # Resolve symlinks recursively
+    while [ -L "$SOURCE_PATH" ]; do
+        # Get symlink directory
+        SYMLINK_DIR="$( cd -P "$( dirname "$SOURCE_PATH" )" >/dev/null 2>&1 && pwd )"
+        # Resolve symlink target (relative or absolute)
+        SOURCE_PATH="$(readlink "$SOURCE_PATH")"
+        # Check if candidate path is relative or absolute
+        if [[ $SOURCE_PATH != /* ]]; then
+            # Candidate path is relative, resolve to full path
+            SOURCE_PATH=$SYMLINK_DIR/$SOURCE_PATH
+        fi
+    done
+    # Get final script directory path from fully resolved source path
+    SCRIPT_DIR="$(cd -P "$( dirname "$SOURCE_PATH" )" >/dev/null 2>&1 && pwd)"
+    echo "$SCRIPT_DIR"
+}
+
+SCRIPT_DIR=$(get_script_dir)
+
 # Build the critic binary
-make build
+(cd $SCRIPT_DIR && make dbuild)
 
 # CPU profiling is now supported via the --cpuprofile flag:
 #   critic api --cpuprofile=critic.prof
 # Use "go tool pprof critic.prof" to analyze the results.
 
+DBINARY=$SCRIPT_DIR/bin/debug/critic
+
 if [[ "${1:-}" =~ ^(mcp|convo|httpd|test)$ ]]; then
     # Other subcommands: pass through as-is
-    exec ./critic "$@"
+    exec $DBINARY --dev "$@"
 else
     # No subcommand or unknown arg: default to tui with cpuprofile
-    exec ./critic httpd "$@"
+    exec $DBINARY httpd --dev "$@"
 fi

@@ -1,6 +1,7 @@
-BINARY := critic
 PREFIX := /usr/local
 BINDIR := $(PREFIX)/bin
+RBINARY := bin/critic
+DBINARY := bin/debug/critic
 
 # Proto source and generated files
 PROTO_DIR := src/api/proto
@@ -12,23 +13,30 @@ PROTO_GEN_CONNECT := $(PROTO_FILES:$(PROTO_DIR)/%.proto=src/api/apiconnect/%.con
 FRONTEND_DIR := src/webui/frontend
 FRONTEND_DIST := src/webui/dist
 
-.PHONY: all build test unit-tests integration install uninstall clean install-deps proto proto-ts frontend
+.PHONY: all build dbuild rbuild test unit-tests integration install uninstall clean install-deps proto proto-ts frontend
 
-all: tests
+all: build tests
 
-build: install-deps proto build-server frontend
+build: install-deps dbuild rbuild
 
-build-server: $(BINARY)
+dbuild: $(DBINARY)
+rbuild: frontend $(RBINARY)
 
-$(BINARY): proto
-	go build -o $(BINARY) ./src/cmd
-	
+GO_FILES := $(shell find src -name '*.go' -not -name '*_test.go')
+
+$(RBINARY): $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES)
+	go build -o $(RBINARY) ./src/cmd
+
+$(DBINARY): $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES)
+	go build -gcflags='all=-N -l' -o $(DBINARY) ./src/cmd
+
 # Build frontend (React app)
+FRONTEND_SRC := $(shell find $(FRONTEND_DIR)/src -type f 2>/dev/null)
 
-frontend: proto $(FRONTEND_DIST)/index.html
-
-$(FRONTEND_DIST)/index.html: $(FRONTEND_DIR)/package.json $(shell find $(FRONTEND_DIR)/src -type f 2>/dev/null)
+$(FRONTEND_DIST)/index.html: $(FRONTEND_DIR)/package.json $(PROTO_GEN_TS) $(PROTO_GEN_TS_CONNECT) $(FRONTEND_SRC)
 	cd $(FRONTEND_DIR) && npm install && npm run build
+
+frontend: $(FRONTEND_DIST)/index.html
 
 # building the frontend is required because the server embeds the frontend
 tests: frontend unit-tests integration-tests
@@ -42,7 +50,7 @@ integration-tests:
 # Installation
 install: build
 	install -d $(BINDIR)
-	install -m 755 $(BINARY) $(BINDIR)/$(BINARY)
+	install -m 755 $(BINARY) $(BINDIR)/critic
 
 uninstall:
 	rm -f $(BINDIR)/$(BINARY)
@@ -58,18 +66,24 @@ install-deps: .install-deps.mtime
 	./scripts/install-deps
 	@touch $@
 
+# Proto: generated TypeScript files
+PROTO_GEN_TS := $(PROTO_FILES:$(PROTO_DIR)/%.proto=$(FRONTEND_DIR)/src/gen/%_pb.ts)
+PROTO_GEN_TS_CONNECT := $(PROTO_FILES:$(PROTO_DIR)/%.proto=$(FRONTEND_DIR)/src/gen/%_connect.ts)
+
 # Generate .pb.go and .connect.go from .proto files
-# Supports both protoc and buf (buf is preferred when available)
 src/api/%.pb.go src/api/apiconnect/%.connect.go: $(PROTO_DIR)/%.proto
-	echo "Using protoc to generate protobuf code..."; \
 	protoc -I $(PROTO_DIR) \
 		--go_out=src/api --go_opt=paths=source_relative \
 		--connect-go_out=src/api --connect-go_opt=paths=source_relative \
-		$<; \
+		$<
 
-# Convenience target to regenerate all proto files
-proto: $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT)
+# Generate TypeScript types from .proto files
+$(FRONTEND_DIR)/src/gen/%_pb.ts $(FRONTEND_DIR)/src/gen/%_connect.ts: $(PROTO_DIR)/%.proto
+	cd $(FRONTEND_DIR) && npx buf generate ../../api/proto
 
-# Generate TypeScript types for frontend using buf
-proto-ts:
-	cd $(FRONTEND_DIR) && npm install && npx buf generate ../../api/proto
+# Regenerate all proto files (Go + TypeScript)
+proto: $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(PROTO_GEN_TS) $(PROTO_GEN_TS_CONNECT)
+
+# Convenience aliases
+proto-go: $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT)
+proto-ts: $(PROTO_GEN_TS) $(PROTO_GEN_TS_CONNECT)

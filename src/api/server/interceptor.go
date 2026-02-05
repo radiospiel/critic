@@ -27,9 +27,9 @@ func loggingInterceptor() connect.UnaryInterceptorFunc {
 			// Log response as JSON
 			duration := formatDuration(start)
 			if err != nil {
-				logger.Info("RPC response: %s err=%q duration=%s", procedure, err.Error(), duration)
+				logger.Info("RPC response: %s duration=%s err=%q", procedure, duration, err.Error())
 			} else {
-				logger.Info("RPC response: %s resp=%s duration=%s", procedure, resp.Any(), duration)
+				logger.Info("RPC response: %s duration=%s resp=%s", procedure, duration, resp.Any())
 			}
 
 			return resp, err

@@ -31,3 +31,4 @@ src/webui/dist/
 src/webui/frontend/.vite/
 .DS_Store
 .idea
+/bin/

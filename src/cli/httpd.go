@@ -2,8 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"runtime/pprof"
 
 	"github.com/radiospiel/critic/src/api/server"
 	"github.com/radiospiel/critic/src/git"
@@ -48,20 +46,6 @@ Examples:
 				diffBases = getDefaultBases()
 			}
 
-			// Start CPU profiling if requested
-			if cpuProfile != "" {
-				f, err := os.Create(cpuProfile)
-				if err != nil {
-					return fmt.Errorf("could not create CPU profile: %w", err)
-				}
-				defer f.Close()
-				if err := pprof.StartCPUProfile(f); err != nil {
-					return fmt.Errorf("could not start CPU profile: %w", err)
-				}
-				defer pprof.StopCPUProfile()
-				fmt.Fprintf(cmd.ErrOrStderr(), "CPU profiling enabled, writing to %s\n", cpuProfile)
-			}
-
 			// Get git root directory
 			gitRoot := git.GetGitRoot()
 
@@ -73,11 +57,12 @@ Examples:
 			defer mdb.Close()
 
 			config := server.Config{
-				Port:      port,
-				Dev:       dev,
-				DiffBases: diffBases,
-				GitRoot:   gitRoot,
-				Messaging: mdb,
+				Port:       port,
+				Dev:        dev,
+				DiffBases:  diffBases,
+				GitRoot:    gitRoot,
+				Messaging:  mdb,
+				CPUProfile: cpuProfile,
 			}
 
 			srv := server.NewServer(config)

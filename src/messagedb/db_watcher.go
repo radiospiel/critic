@@ -5,12 +5,13 @@ import (
 	"time"
 
 	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/must"
 )
 
 // DBWatcher watches the critic database for changes by polling the _db_mtime table.
 // It opens a fresh connection for each poll to ensure it sees the latest data.
 type DBWatcher struct {
-	gitRoot     string
+	gitRoot      string
 	pollInterval time.Duration
 
 	lastMtime   int64
@@ -18,43 +19,35 @@ type DBWatcher struct {
 
 	changesChan chan struct{}
 	stopChan    chan struct{}
+
+	db *DB
 }
+
+const MTIME_UNINITIALIZED int64 = -1
 
 // NewDBWatcher creates a watcher that polls the database for message changes.
 // pollIntervalMs specifies how often to check for changes (in milliseconds).
 func NewDBWatcher(gitRoot string, pollIntervalMs int) (*DBWatcher, error) {
 	logger.Info("NewDBWatcher: Creating polling watcher for %s with interval=%dms", gitRoot, pollIntervalMs)
 
-	// Get initial mtime with a fresh connection
-	initialMtime, err := getMtimeWithFreshConnection(gitRoot)
-	if err != nil {
-		return nil, err
-	}
+	db := must.Must2(New(gitRoot))
 
 	dw := &DBWatcher{
 		gitRoot:      gitRoot,
 		pollInterval: time.Duration(pollIntervalMs) * time.Millisecond,
-		lastMtime:    initialMtime,
 		changesChan:  make(chan struct{}, 10),
 		stopChan:     make(chan struct{}),
+		lastMtime:    MTIME_UNINITIALIZED,
+		db:           db,
 	}
+
+	dw.checkMtime()
 
 	// Start the polling loop
 	go dw.pollLoop()
 
-	logger.Info("NewDBWatcher: Started polling database, initial mtime=%d", initialMtime)
+	logger.Info("NewDBWatcher: Started polling database, initial mtime=%d", dw.lastMtime)
 	return dw, nil
-}
-
-// getMtimeWithFreshConnection opens a new connection, queries mtime, and closes it
-func getMtimeWithFreshConnection(gitRoot string) (int64, error) {
-	db, err := New(gitRoot)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-
-	return db.GetMessagesMtime()
 }
 
 // pollLoop periodically checks the mtime using fresh connections
@@ -75,28 +68,27 @@ func (dw *DBWatcher) pollLoop() {
 
 // checkMtime queries the current mtime with a fresh connection and sends notification if changed
 func (dw *DBWatcher) checkMtime() {
-	currentMtime, err := getMtimeWithFreshConnection(dw.gitRoot)
+	// currentMtime, err := getMtimeWithFreshConnection(dw.gitRoot)
+	currentMtime, err := dw.db.GetMessagesMtime()
+
 	if err != nil {
 		logger.Error("DBWatcher: Failed to get mtime: %v", err)
 		return
 	}
 
 	dw.lastMtimeMu.Lock()
-	lastMtime := dw.lastMtime
-	if currentMtime != lastMtime {
-		dw.lastMtime = currentMtime
-		dw.lastMtimeMu.Unlock()
+	prevMtime := dw.lastMtime
+	dw.lastMtime = currentMtime
+	dw.lastMtimeMu.Unlock()
 
-		logger.Info("DBWatcher: Messages mtime changed from %d to %d", lastMtime, currentMtime)
-
+	if prevMtime != currentMtime && prevMtime != MTIME_UNINITIALIZED {
+		logger.Info("DBWatcher: Messages mtime changed from %d to %d", prevMtime, currentMtime)
 		select {
 		case dw.changesChan <- struct{}{}:
-			logger.Info("DBWatcher: Change notification sent")
+			logger.Debug("DBWatcher: Change notification sent")
 		default:
-			logger.Debug("DBWatcher: Notification channel full, dropping")
+			logger.Warn("DBWatcher: Notification channel full, dropping")
 		}
-	} else {
-		dw.lastMtimeMu.Unlock()
 	}
 }
 

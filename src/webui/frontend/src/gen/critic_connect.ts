@@ -7,7 +7,7 @@ import { CreateConversationRequest, CreateConversationResponse, GetConfigRequest
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
- * CriticService provides API methods for the critic code review tool.
+ * CriticService provides API methods for the critic code review and MCP server tool.
  *
  * @generated from service critic.v1.CriticService
  */
