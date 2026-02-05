@@ -87,7 +87,8 @@ Examples:
 
 	cmd.Flags().IntVar(&port, "port", 65432, "Port to run the API server on")
 	cmd.Flags().BoolVar(&dev, "dev", false, "Development mode: proxy to Vite dev server for hot reload")
-	cmd.Flags().StringSliceVar(&diffBases, "b", nil, "Diff base commits (defaults to main/master/origin/<branch>/HEAD)")
+	cmd.Flags().StringSliceVar(&diffBases, "base-commits", nil, "Diff base commits (defaults to main/master/origin/<branch>/HEAD)")
+	cmd.Flags().Lookup("base-commits").Shorthand = "b"
 	cmd.Flags().StringVar(&cpuProfile, "cpuprofile", "", "Write CPU profile to file (use 'go tool pprof' to analyze)")
 
 	return cmd
