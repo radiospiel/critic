@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime/pprof"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -58,13 +57,12 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 // Config holds the configuration for the API server.
 type Config struct {
-	Port       int
-	GitRoot    string
-	Messaging  critic.Messaging
-	Dev        bool // Development mode: proxy to Vite dev server instead of serving embedded files
-	DiffBases  []string
-	Paths      []string
-	CPUProfile string // If set, write CPU profile to this file
+	Port      int
+	GitRoot   string
+	Messaging critic.Messaging
+	Dev       bool // Development mode: proxy to Vite dev server instead of serving embedded files
+	DiffBases []string
+	Paths     []string
 }
 
 // Server implements the CriticService API.
@@ -145,19 +143,6 @@ func (s *Server) handleDBChanges() {
 
 // Start starts the API server and blocks until it receives an error.
 func (s *Server) Start() error {
-	if s.config.CPUProfile != "" {
-		f, err := os.Create(s.config.CPUProfile)
-		if err != nil {
-			return fmt.Errorf("could not create CPU profile: %w", err)
-		}
-		defer f.Close()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			return fmt.Errorf("could not start CPU profile: %w", err)
-		}
-		defer pprof.StopCPUProfile()
-		logger.Info("CPU profiling enabled, writing to %s", s.config.CPUProfile)
-	}
-
 	// Start WebSocket hub
 	go s.wsHub.Run()
 
