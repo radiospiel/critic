@@ -1,176 +1,46 @@
-# Critic
+# Critic Documentation
 
-A code review tool for Git repositories with both TUI and Web interfaces.
+Critic is a mcp and web server which offers a git diff viewer and integrates code review comments. It enables human-in-the-loop code review workflows with AI assistants through MCP (Model Context Protocol) integration. It allows humans to review code changes made by the agent, and to ask for adjustments, without going through a github. This allows for a faster turn-around between changes and review, allowing the agent to actively employ a human-in-the-loop review process.
 
-## Features
+**Note that critic is designed as a single-user experience.** A typical scenario runs the critic mcp and http servers on the same machine that also runs the coding agent, and only listens on localhost. It is important to not deploy critic in an unsecured environment, since the web client has access to the entire tree of source files.
 
-- **TUI Interface**: Terminal-based diff viewer with syntax highlighting
-- **Web Interface**: Browser-based diff viewer using htmx
-- Side-by-side diff comparison
-- Inline code review comments
-- Real-time updates via WebSocket
-- Multiple base comparison (main, origin/branch, HEAD)
-- File filtering by extension
-- Dark/light theme support
+Remote installations on, for example, Claude Code for Web should be possible using ngrok or a similar reverse proxy with websocket support; this, however, has not been tested yet.
+ 
+## Documentation
 
-## Installation
+- [Installation](/docs/installation.md) - How to build and install Critic
+- [Usage](/docs/usage.md) - Command-line options and keyboard shortcuts
+- [Design](/docs/design.md) - System architecture and communication patterns
+- [Hacking](/docs/hacking.md) - Testing and development guide
+- [Plans](/docs/plans.md) - Roadmap and planned features
 
-```bash
-go build -o critic ./cmd/critic
-```
-
-## Usage
-
-### Terminal UI (TUI)
+## Quick Start
 
 ```bash
-# Start TUI with default bases (main/master, origin/branch, HEAD)
-critic tui
+# Clone and build
+git clone https://github.com/radiospiel/critic.git
+cd critic
+make build
 
-# Compare against specific base
-critic tui main
+# Register critic as an MCP server
+# (use absolute path to the binary)
+claude mcp add critic -- /path/to/critic mcp
 
-# Compare against multiple bases
-critic tui main,develop
+# Or if critic is in your PATH
+claude mcp add critic -- critic mcp
 
-# Only show specific directories
-critic tui -- src tests
-
-# Filter by file extension
-critic tui --extensions=go,rs
-
-# Disable animations
-critic tui --no-animation
+# Start web UI
+./critic webui --port=8080
 ```
 
-### Web UI
+Now you can open critic on http://localhost:8080.
 
-```bash
-# Start web interface on default port 8080
-critic webui
-
-# Start on custom port
-critic webui --port=3000
-
-# Compare against specific base
-critic webui main
-
-# Only show specific paths
-critic webui -- src tests
-```
-
-Then open http://localhost:8080 in your browser.
-
-### Other Commands
-
-```bash
-# Start MCP server
-critic mcp
-
-# Manage conversations
-critic convo
-
-# View logs
-critic log
-```
-
-## Keyboard Shortcuts
-
-### TUI
-- `Tab`: Switch between file list and diff panes
-- `↑/↓` or `k/j`: Navigate up/down
-- `Shift+↑/↓`: Move 10 lines
-- `Space` / `Shift+Space`: Page down/up in diff
-- `[` / `]`: Previous/next hunk
-- `n` / `p`: Next/previous file
-- `b` / `B`: Switch base
-- `f` / `F`: Cycle filter mode (All / With Comments / Unresolved Only)
-- `Enter`: Add comment on current line
-- `?`: Show help
-- `q`: Quit
-
-### Web UI
-- `?`: Toggle help overlay
-- `j` / `k`: Navigate in file list
-- `Tab`: Switch focus between panes
-- Theme toggle button in header for dark/light mode
-
-## Testing
-
-### Go Tests
-
-```bash
-# Run all Go tests
-go test ./...
-
-# Run with verbose output
-go test -v ./...
-```
-
-### End-to-End Tests (Puppeteer)
-
-The e2e tests verify the web UI functionality using Puppeteer.
-
-```bash
-# First, build the critic binary
-go build -o critic ./cmd/critic
-
-# Install test dependencies
-cd tests/e2e
-npm install
-
-# Run the tests
-npm test
-```
-
-The e2e tests cover:
-- Page load and structure
-- File list rendering
-- Diff display
-- Theme toggle functionality
-- Keyboard navigation
-- API endpoints
-- WebSocket connection
-
-## Architecture
-
-See [docs/architecture.md](docs/architecture.md) for the overall architecture.
-
-See [docs/webui-architecture.md](docs/webui-architecture.md) for web UI specific details.
-
-## Development
-
-### Project Structure
+Note that this quick start guide does not instruct the coding agent to use critic; an example prompt on how to use that is in [Installation](/docs/installation.md). This project also uses the critic mcp server, and has this section in its [CLAUDE.md](/CLAUDE.md) file:
 
 ```
-critic/
-├── cmd/critic/          # Main entry point
-├── internal/
-│   ├── app/             # Application logic
-│   ├── cli/             # CLI command definitions
-│   ├── tui/             # Terminal UI components
-│   ├── webui/           # Web UI server and handlers
-│   │   ├── static/      # CSS, JS assets
-│   │   └── templates/   # HTML templates
-│   ├── git/             # Git operations
-│   ├── highlight/       # Syntax highlighting
-│   └── messagedb/       # Comment storage
-├── pkg/
-│   ├── critic/          # Core types and interfaces
-│   └── types/           # Shared types
-├── tests/
-│   ├── e2e/             # Puppeteer e2e tests
-│   └── integration/     # Integration tests
-└── docs/                # Documentation
+## Ask for human reviewer approval
+
+If the "critic" MCP server is available, but not on claude code for web:
+
+- Before committing any significant code changes, call the get_review_feedback tool. Wait for reviewer approval before proceeding. Address any feedback in subsequent iterations.
 ```
-
-### Adding New Features
-
-1. For TUI changes, modify files in `internal/tui/`
-2. For Web UI changes, modify files in `internal/webui/`
-3. Update tests accordingly
-4. Run `go build` and test both interfaces
-
-## License
-
-See LICENSE file.

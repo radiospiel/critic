@@ -6,6 +6,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api"
+	"github.com/radiospiel/critic/src/pkg/critic"
 )
 
 // ResolveConversation marks a conversation as resolved.
@@ -22,7 +23,7 @@ func (s *Server) ResolveConversation(
 func resolveConversationImpl(server *Server, req *api.ResolveConversationRequest) (*api.ResolveConversationResponse, error) {
 	logger.Info("ResolveConversation: conversation_id=%s", req.GetConversationId())
 
-	err := server.config.Messaging.MarkAsResolved(req.GetConversationId())
+	err := server.config.Messaging.MarkConversationAs(req.GetConversationId(), critic.ConversationResolved)
 	if err != nil {
 		return nil, err
 	}

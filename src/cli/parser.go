@@ -25,6 +25,7 @@ func Execute() error {
 	rootCmd.AddCommand(newHTTPDCmd())
 	rootCmd.AddCommand(newMCPCmd())
 	rootCmd.AddCommand(newConvoCmd())
+	rootCmd.AddCommand(newTestCmd())
 
 	return rootCmd.Execute()
 }

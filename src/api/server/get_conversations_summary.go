@@ -22,7 +22,7 @@ func (s *Server) GetConversationsSummary(
 
 func getConversationsSummaryImpl(server *Server, req *api.GetConversationsSummaryRequest) (*api.GetConversationsSummaryResponse, error) {
 	m := server.config.Messaging
-	criticSummaries, err := m.GetAllFileConversationSummaries()
+	criticSummaries, err := m.GetConversationsSummary()
 	if err != nil {
 		return nil, err
 	}

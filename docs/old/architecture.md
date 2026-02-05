@@ -133,9 +133,8 @@ type Messaging interface {
     ReplyToConversation(uuid, message string, author Author) (*Message, error)
     CreateConversation(author Author, message, filePath string,
                        lineNumber int, codeVersion, context string) (*Conversation, error)
-    MarkAsResolved(conversationUUID string) error
-    MarkAsUnresolved(conversationUUID string) error
-    MarkAsRead(messageUUID string) error
+    MarkConversationAs(conversationUUID string, update ConversationUpdate) error
+    MarkMessageAs(messageUUID string, status MessageReadStatus) error
     Close() error
 }
 ```

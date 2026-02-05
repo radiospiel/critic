@@ -4,47 +4,43 @@
 
 ```
 critic/
-├── cmd/critic/       # Entry point
-├── internal/         # Core application code
-│   ├── app/          # Application state machine
+├── src/
+│   ├── cmd/          # Entry point
 │   ├── cli/          # CLI parsing (Cobra)
-│   ├── git/          # Git operations, file watcher, base resolver
-│   ├── highlight/    # Syntax highlighting (Chroma)
+│   ├── api/          # API server (Connect/gRPC)
+│   ├── git/          # Git operations, file watcher
 │   ├── mcp/          # MCP server (JSON-RPC 2.0)
-│   ├── messagedb/    # SQLite message storage
-│   ├── tui/          # TUI components (Bubble Tea)
-│   └── webui/        # Web UI (htmx + WebSocket)
-├── pkg/              # Public packages (types, interfaces)
+│   ├── messagedb/    # SQLite message storage, db watcher
+│   ├── webui/        # Web UI frontend (React)
+│   ├── config/       # Configuration
+│   └── pkg/          # Core types and interfaces
 ├── simple-go/        # Utility packages (assert, logger, must)
-├── teapot/           # Custom UI framework
+├── agents/           # AI agent configuration and logs
 └── tests/            # Integration and E2E tests
 ```
 
 ## Architecture
 
-### UI Framework (teapot/)
+See [design.md](design.md) for a detailed description of how components communicate.
 
-Custom widget system built on Bubble Tea with AnimationLayer for layered rendering. Widgets are composable and manage their own state.
+### Git Watcher (`src/git/git_watcher.go`)
 
-### File Watcher
+Uses fsnotify to monitor the `.git/` directory for changes. Implements debouncing (100ms default) to prevent notification spam from rapid file changes.
 
-Three-stage pipeline for handling filesystem events:
+### DB Watcher (`src/messagedb/db_watcher.go`)
 
-```
-fsnotify → eventLoop → filterLoop → debounceLoop
-```
+Polls the `_db_mtime` table to detect database changes made by external processes (like the MCP server). Uses fresh connections to ensure cross-process visibility.
 
-- `eventLoop`: Receives raw fsnotify events
-- `filterLoop`: Filters out irrelevant events
-- `debounceLoop`: Debounces rapid events into single updates
+### API Server (`src/api/server/`)
 
-### Base Resolver
+Connect/gRPC server providing:
+- HTTP API for the web frontend
+- WebSocket hub for real-time updates
+- Integration with git and database watchers
 
-Polls git refs every 10 seconds to detect changes to branches and tags. Supports multiple base references that users can cycle through.
+### Web UI (`src/webui/`)
 
-### Web UI
-
-Go HTTP server serving htmx-powered pages with WebSocket connections for real-time updates. When files or comments change, the server notifies connected clients via WebSocket.
+React frontend that connects to the API server. Receives real-time updates via WebSocket when files or comments change.
 
 ## Testing
 
@@ -55,7 +51,6 @@ Go HTTP server serving htmx-powered pages with WebSocket connections for real-ti
 | Unit Tests | `*_test.go` | Test individual functions |
 | Integration Tests | `tests/integration/` | Component interactions |
 | E2E Tests | `tests/e2e/` | Web UI via Puppeteer |
-| Profile Tests | `tests/pprof/` | Rendering performance |
 
 ### Running Tests
 
@@ -85,17 +80,6 @@ assert.Contains(t, conversations, conv1.ID, "expected %v in conversations", conv
 if !contains(conversations, conv1.ID) {
     t.Error("expected conv1 in conversations")
 }
-```
-
-### Manual TUI Testing
-
-Before completing significant TUI changes, test manually in the fixtures repo:
-
-```bash
-cd tests/integration
-make fixtures
-cd fixtures/repo
-# Run critic and inspect rendering
 ```
 
 ## Code Review Process

@@ -18,6 +18,7 @@ import (
 	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/api/apiconnect"
 	"github.com/radiospiel/critic/src/git"
+	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/webui"
 	"google.golang.org/protobuf/proto"
@@ -71,6 +72,7 @@ type Server struct {
 	wsHub          *webui.Hub
 	devServer      *webui.DevServer
 	gitWatcher     *git.GitWatcher
+	dbWatcher      *messagedb.DBWatcher
 	lastChangeTime atomic.Int64 // Unix milliseconds of last detected change
 }
 
@@ -123,6 +125,22 @@ func (s *Server) handleGitChanges() {
 	}
 }
 
+// handleDBChanges listens for database changes and broadcasts reload messages.
+func (s *Server) handleDBChanges() {
+	if s.dbWatcher == nil {
+		return
+	}
+
+	for range s.dbWatcher.Changes() {
+		// Update last change time
+		s.SetLastChangeTime(s.dbWatcher.LastChangeTime())
+		logger.Info("Database change detected, broadcasting reload")
+
+		// Broadcast reload message to all connected clients
+		s.wsHub.Broadcast([]byte(`{"type":"reload"}`))
+	}
+}
+
 // Start starts the API server and blocks until it receives an error.
 func (s *Server) Start() error {
 	// Start WebSocket hub
@@ -140,6 +158,18 @@ func (s *Server) Start() error {
 			s.SetLastChangeTime(watcher.LastChangeTime())
 			// Listen for changes
 			go s.handleGitChanges()
+		}
+	}
+
+	// Start database watcher for conversation changes
+	if s.config.GitRoot != "" {
+		dbWatcher, err := messagedb.NewDBWatcher(s.config.GitRoot, 1000) // 1 second polling
+		if err != nil {
+			logger.Error("Failed to start database watcher: %v", err)
+		} else {
+			s.dbWatcher = dbWatcher
+			// Listen for changes
+			go s.handleDBChanges()
 		}
 	}
 
@@ -239,6 +269,11 @@ func (s *Server) Start() error {
 	// Stop git watcher if running
 	if s.gitWatcher != nil {
 		s.gitWatcher.Close()
+	}
+
+	// Stop database watcher if running
+	if s.dbWatcher != nil {
+		s.dbWatcher.Close()
 	}
 
 	// Stop file watcher if running
