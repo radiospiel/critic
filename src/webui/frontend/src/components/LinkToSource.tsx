@@ -13,7 +13,11 @@ interface LinkToSourceProps {
 }
 
 function LinkToSource({ lineNo, filePath, serverConfig }: LinkToSourceProps) {
-  if (!serverConfig?.devMode || !isLocalhost()) {
+  if (!isLocalhost()) {
+    return <>{lineNo}</>
+  }
+
+  if (!serverConfig) {
     return <>{lineNo}</>
   }
 
