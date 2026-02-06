@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CreateConversationRequest, CreateConversationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, ReplyToConversationRequest, ReplyToConversationResponse, ResolveConversationRequest, ResolveConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
+import { CreateConversationRequest, CreateConversationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, GetRootConversationRequest, GetRootConversationResponse, ReplyToConversationRequest, ReplyToConversationResponse, ResolveConversationRequest, ResolveConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -155,6 +155,17 @@ export const CriticService = {
       name: "GetConfig",
       I: GetConfigRequest,
       O: GetConfigResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * GetRootConversation returns the root conversation (global announcements).
+     *
+     * @generated from rpc critic.v1.CriticService.GetRootConversation
+     */
+    getRootConversation: {
+      name: "GetRootConversation",
+      I: GetRootConversationRequest,
+      O: GetRootConversationResponse,
       kind: MethodKind.Unary,
     },
   }

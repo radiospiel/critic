@@ -32,6 +32,8 @@ service CriticService {
   rpc WatchFile(WatchFileRequest) returns (WatchFileResponse);
   // GetConfig returns server configuration for the frontend.
   rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  // GetRootConversation returns the root conversation (global announcements).
+  rpc GetRootConversation(GetRootConversationRequest) returns (GetRootConversationResponse);
 }
 
 // ErrorCode represents the type of RPC error.
@@ -354,6 +356,17 @@ message WatchFileRequest {
 
 // WatchFileResponse confirms the file watch was set up.
 message WatchFileResponse {
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// GetRootConversationRequest is an empty request for GetRootConversation.
+message GetRootConversationRequest {}
+
+// GetRootConversationResponse contains the root conversation if it exists and is unresolved.
+message GetRootConversationResponse {
+  // conversation is the root conversation, if it exists and is unresolved.
+  Conversation conversation = 1;
   // error contains error details if the request failed.
   RpcError error = 15;
 }

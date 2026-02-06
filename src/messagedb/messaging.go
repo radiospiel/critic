@@ -2,7 +2,9 @@ package messagedb
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/simple-go/preconditions"
 	"github.com/radiospiel/critic/src/pkg/critic"
@@ -214,8 +216,18 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 	return summaries, nil
 }
 
-// ReplyToConversation adds a reply to an existing conversation
+// ReplyToConversation adds a reply to an existing conversation.
+// If conversationID is empty, it replies to the root conversation.
 func (db *DB) ReplyToConversation(conversationID string, message string, author critic.Author) (*critic.Message, error) {
+	// If conversationID is empty, use the root conversation
+	if conversationID == "" {
+		rootConv, err := db.LoadRootConversation()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load root conversation: %w", err)
+		}
+		conversationID = rootConv.UUID
+	}
+
 	// Verify conversation exists
 	rootMsg, err := db.GetMessage(conversationID)
 	if err != nil {
@@ -276,6 +288,42 @@ func (db *DB) CreateConversation(author critic.Author, message, filePath string,
 
 	logger.Info("Created conversation %s at %s:%d", conversation.UUID, filePath, lineNumber)
 	return conversation, nil
+}
+
+// LoadRootConversation returns the root conversation (filePath="", lineNumber=0).
+// If it doesn't exist, it creates one.
+func (db *DB) LoadRootConversation() (*critic.Conversation, error) {
+	// Query for a conversation with file_path="" AND lineno=0 AND id=conversation_id (root message)
+	query := `
+		SELECT id FROM messages
+		WHERE file_path = '' AND lineno = 0 AND id = conversation_id
+		LIMIT 1
+	`
+	var id string
+	err := db.db.QueryRow(query).Scan(&id)
+	if err != nil {
+		// Not found — insert a sentinel root message.
+		id = uuid.Must(uuid.NewV7()).String()
+		now := time.Now()
+		msg := &Message{
+			ID:             id,
+			Author:         AuthorAI,
+			Status:         StatusNew,
+			ReadStatus:     ReadStatusRead,
+			Message:        "",
+			FilePath:       "",
+			Lineno:         0,
+			ConversationID: id,
+			CreatedAt:      now,
+			UpdatedAt:      now,
+		}
+		err := db.insertMessage(msg)
+		preconditions.Check(err == nil, "failed to create root conversation: %w", err)
+
+		logger.Info("Created root conversation w/id %s", id)
+	}
+
+	return db.GetFullConversation(id)
 }
 
 // convertToCriticStatus converts messagedb.Status to critic.ConversationStatus

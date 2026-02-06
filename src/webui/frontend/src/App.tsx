@@ -4,7 +4,7 @@ import FileList, { FilterType } from './components/FileList'
 import DiffView from './components/DiffView'
 import DiffBaseSelector from './components/DiffBaseSelector'
 import HelpModal from './components/HelpModal'
-import { criticClient, getConfig, ServerConfig } from './api/client'
+import { criticClient, getConfig, getRootConversation, resolveConversation, ServerConfig, CommentConversation } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
 import { useWebSocket } from './hooks/useWebSocket'
 
@@ -27,6 +27,7 @@ function AppContent() {
   const [secondsSinceLoad, setSecondsSinceLoad] = useState(0)
   const [fileListFilter, setFileListFilter] = useState<FilterType>('files')
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null)
+  const [rootConversation, setRootConversation] = useState<CommentConversation | null>(null)
   const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
 
@@ -38,6 +39,17 @@ function AppContent() {
       }
     })
   }, [])
+
+  // Load root conversation (announcements)
+  const loadRootConversation = useCallback(() => {
+    getRootConversation().then((result) => {
+      setRootConversation(result.conversation)
+    })
+  }, [])
+
+  useEffect(() => {
+    loadRootConversation()
+  }, [loadRootConversation])
 
   // Timer to update seconds since last reload
   useEffect(() => {
@@ -97,6 +109,8 @@ function AppContent() {
       setSecondsSinceLoad(0)
       // Reload the file list
       loadFileList()
+      // Reload root conversation
+      loadRootConversation()
       // Reload the current file diff if one is selected
       if (selectedFile) {
         loadFileDiff(selectedFile, contextLines, true)
@@ -111,7 +125,7 @@ function AppContent() {
         loadFileDiff(selectedFile, contextLines, true)
       }
     }
-  }, [loadFileList, loadFileDiff, selectedFile, contextLines])
+  }, [loadFileList, loadFileDiff, loadRootConversation, selectedFile, contextLines])
 
   useWebSocket(handleWebSocketMessage)
 
@@ -201,6 +215,13 @@ function AppContent() {
     setCurrentLineNo({ lineNoNew, lineNoOld })
   }, [])
 
+  const handleResolveAnnouncement = useCallback(() => {
+    if (!rootConversation) return
+    resolveConversation(rootConversation.id).then(() => {
+      setRootConversation(null)
+    })
+  }, [rootConversation])
+
   // Global keyboard handler for Tab, ?, and context line keys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -267,6 +288,23 @@ function AppContent() {
             </button>
           </div>
         </div>
+        {rootConversation && rootConversation.messages.length > 0 && (
+          <div className="announcement-banner">
+            <div className="announcement-messages">
+              {rootConversation.messages
+                .filter((m) => m.content !== '')
+                .slice(-3)
+                .map((msg) => (
+                  <div key={msg.id} className="announcement-message">
+                    {msg.content}
+                  </div>
+                ))}
+            </div>
+            <button className="announcement-resolve" onClick={handleResolveAnnouncement}>
+              Dismiss
+            </button>
+          </div>
+        )}
         <FileList
           files={files}
           selectedFile={selectedFile}

@@ -292,6 +292,47 @@ html, body, #root {
   font-weight: bold;
 }
 
+/* Announcement banner */
+.announcement-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 16px;
+  background-color: var(--status-modified-bg);
+  color: var(--status-modified-text);
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.announcement-messages {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.announcement-message {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.announcement-resolve {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+  background: none;
+  border: 1px solid var(--status-modified-text);
+  border-radius: 4px;
+  color: var(--status-modified-text);
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.announcement-resolve:hover {
+  opacity: 1;
+}
+
 /* File list */
 .file-list-container {
   display: flex;

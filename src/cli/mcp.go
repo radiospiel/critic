@@ -17,20 +17,13 @@ The server communicates with Claude Code via stdio (JSON-RPC) and retrieves
 feedback from the message database.
 
 Tools provided:
-  - get_review_feedback: Retrieve unresolved feedback from the database
 
-Example Claude Code config (.claude/settings.json):
-  {
-    "mcpServers": {
-      "critic": {
-        "command": "critic",
-        "args": ["mcp"]
-      }
-    }
-  }
+	- get_critic_conversations: Get a list of conversation UUIDs. Optionally filter by status ('unresolved' or 'resolved'). Use this to check for reviewer feedback.
+	- get_full_critic_conversation: Get the complete conversation including all messages and replies. Returns conversation metadata and all messages ordered chronologically.
+	- reply_to_critic_conversation: Add a reply to an existing conversation. Use this to respond to reviewer feedback.
+	- critic_announce: Post an announcement visible in the Critic UI. Creates a message on the root conversation and marks it as unresolved.
 
-Reviewers can add comments using the TUI:
-  critic diff
+Claude Code registration via "claude mcp add critic -- /path/to/critic mcp"
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,

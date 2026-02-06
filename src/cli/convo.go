@@ -60,15 +60,17 @@ func newConvoCmd() *cobra.Command {
 		Long: `Commands for managing and viewing critic conversations.
 
 Available subcommands:
-  list   List conversations with details
-  show   Show a complete conversation
-  reply  Reply to a conversation
+  list      List conversations with details
+  show      Show a complete conversation
+  reply     Reply to a conversation
+  announce  Post an announcement
 `,
 	}
 
 	cmd.AddCommand(newConvoListCmd())
 	cmd.AddCommand(newConvoShowCmd())
 	cmd.AddCommand(newConvoReplyCmd())
+	cmd.AddCommand(newConvoAnnounceCmd())
 
 	return cmd
 }
@@ -265,6 +267,62 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&author, "author", "human", "Author of the reply: 'human' or 'ai'")
+
+	return cmd
+}
+
+// newConvoAnnounceCmd creates the convo announce command
+func newConvoAnnounceCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "announce <message>",
+		Short: "Post an announcement visible in the Critic UI",
+		Long: `Post an announcement that appears as a banner in the Critic UI.
+Creates a message on the root conversation and marks it as unresolved.
+
+Examples:
+  critic convo announce "Please review the auth changes before merging"
+  critic convo announce "Build is broken, do not merge"
+`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			message := args[0]
+
+			gitRoot := git.GetGitRoot()
+
+			mdb, err := messagedb.New(gitRoot)
+			if err != nil {
+				return fmt.Errorf("failed to initialize message database: %w", err)
+			}
+			defer mdb.Close()
+
+			// Get or create the root conversation
+			rootConv, err := mdb.LoadRootConversation()
+			if err != nil {
+				return fmt.Errorf("failed to load root conversation: %w", err)
+			}
+
+			// Add the announcement as a reply
+			reply, err := mdb.ReplyToConversation(rootConv.UUID, message, critic.AuthorAI)
+			if err != nil {
+				return fmt.Errorf("failed to create announcement: %w", err)
+			}
+
+			// Mark as unresolved so it shows in the UI
+			if err := mdb.MarkConversationAs(rootConv.UUID, critic.ConversationUnresolved); err != nil {
+				return fmt.Errorf("failed to mark announcement as unresolved: %w", err)
+			}
+
+			response := ReplyResponse{
+				UUID:      reply.UUID,
+				Author:    string(reply.Author),
+				Message:   reply.Message,
+				CreatedAt: reply.CreatedAt.Format("2006-01-02 15:04:05"),
+			}
+
+			fmt.Println(json.ToPrettyJson(response))
+			return nil
+		},
+	}
 
 	return cmd
 }

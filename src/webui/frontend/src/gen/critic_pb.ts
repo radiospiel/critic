@@ -1980,6 +1980,88 @@ export class WatchFileResponse extends Message$1<WatchFileResponse> {
 }
 
 /**
+ * GetRootConversationRequest is an empty request for GetRootConversation.
+ *
+ * @generated from message critic.v1.GetRootConversationRequest
+ */
+export class GetRootConversationRequest extends Message$1<GetRootConversationRequest> {
+  constructor(data?: PartialMessage<GetRootConversationRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetRootConversationRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetRootConversationRequest {
+    return new GetRootConversationRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetRootConversationRequest {
+    return new GetRootConversationRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetRootConversationRequest {
+    return new GetRootConversationRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetRootConversationRequest | PlainMessage<GetRootConversationRequest> | undefined, b: GetRootConversationRequest | PlainMessage<GetRootConversationRequest> | undefined): boolean {
+    return proto3.util.equals(GetRootConversationRequest, a, b);
+  }
+}
+
+/**
+ * GetRootConversationResponse contains the root conversation if it exists and is unresolved.
+ *
+ * @generated from message critic.v1.GetRootConversationResponse
+ */
+export class GetRootConversationResponse extends Message$1<GetRootConversationResponse> {
+  /**
+   * conversation is the root conversation, if it exists and is unresolved.
+   *
+   * @generated from field: critic.v1.Conversation conversation = 1;
+   */
+  conversation?: Conversation;
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<GetRootConversationResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetRootConversationResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "conversation", kind: "message", T: Conversation },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetRootConversationResponse {
+    return new GetRootConversationResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetRootConversationResponse {
+    return new GetRootConversationResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetRootConversationResponse {
+    return new GetRootConversationResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetRootConversationResponse | PlainMessage<GetRootConversationResponse> | undefined, b: GetRootConversationResponse | PlainMessage<GetRootConversationResponse> | undefined): boolean {
+    return proto3.util.equals(GetRootConversationResponse, a, b);
+  }
+}
+
+/**
  * GetConfigRequest is an empty request for GetConfig.
  *
  * @generated from message critic.v1.GetConfigRequest

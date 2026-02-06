@@ -38,7 +38,7 @@ DBINARY=$SCRIPT_DIR/bin/debug/critic
 
 if [[ "${1:-}" =~ ^(mcp|convo|httpd|test)$ ]]; then
     # Other subcommands: pass through as-is
-    exec $DBINARY --dev "$@"
+    exec $DBINARY "$@"
 else
     # No subcommand or unknown arg: default to tui with cpuprofile
     exec $DBINARY httpd --dev "$@"

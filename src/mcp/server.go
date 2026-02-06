@@ -7,10 +7,10 @@ import (
 	"io"
 	"os"
 
+	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
-	"github.com/radiospiel/critic/simple-go/logger"
 )
 
 const (
@@ -46,11 +46,6 @@ func NewServer() *Server {
 		writer:    os.Stdout,
 		messaging: mdb,
 	}
-}
-
-// SetMessaging sets the messaging interface
-func (s *Server) SetMessaging(messaging critic.Messaging) {
-	s.messaging = messaging
 }
 
 // Run starts the MCP server and processes messages
@@ -173,6 +168,20 @@ func (s *Server) handleToolsList(req Request) error {
 				Required: []string{"uuid", "message"},
 			},
 		},
+		{
+			Name:        "critic_announce",
+			Description: "Post an announcement visible in the Critic UI. Creates a message on the root conversation and marks it as unresolved.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]Property{
+					"message": {
+						Type:        "string",
+						Description: "The announcement message",
+					},
+				},
+				Required: []string{"message"},
+			},
+		},
 	}
 
 	return s.sendResult(req.ID, ToolsListResult{Tools: tools})
@@ -200,6 +209,8 @@ func (s *Server) handleToolsCall(req Request) error {
 		return s.handleGetFullCriticConversation(req, params)
 	case "reply_to_critic_conversation":
 		return s.handleReplyToCriticConversation(req, params)
+	case "critic_announce":
+		return s.handleCriticAnnounce(req, params)
 	default:
 		return s.sendToolError(req.ID, fmt.Sprintf("Unknown tool: %s", params.Name))
 	}
@@ -381,6 +392,56 @@ func (s *Server) handleReplyToCriticConversation(req Request, params CallToolPar
 	}
 
 	s.logToStderr("Created reply: %s", reply.UUID)
+	return s.sendToolResult(req.ID, string(result))
+}
+
+// handleCriticAnnounce handles the critic_announce tool
+func (s *Server) handleCriticAnnounce(req Request, params CallToolParams) error {
+	if s.messaging == nil {
+		s.logToStderr("Messaging not initialized")
+		return s.sendToolError(req.ID, "Messaging not initialized")
+	}
+
+	message, ok := params.Arguments["message"].(string)
+	if !ok || message == "" {
+		return s.sendToolError(req.ID, "message is required")
+	}
+
+	s.logToStderr("Creating announcement: %s", message)
+
+	// Get or create the root conversation
+	rootConv, err := s.messaging.LoadRootConversation()
+	if err != nil {
+		s.logToStderr("Failed to load root conversation: %v", err)
+		return s.sendToolError(req.ID, fmt.Sprintf("Error loading root conversation: %v", err))
+	}
+
+	// Add the announcement message as a reply
+	reply, err := s.messaging.ReplyToConversation(rootConv.UUID, message, critic.AuthorAI)
+	if err != nil {
+		s.logToStderr("Failed to create announcement: %v", err)
+		return s.sendToolError(req.ID, fmt.Sprintf("Error creating announcement: %v", err))
+	}
+
+	// Ensure the root conversation is marked as unresolved
+	if err := s.messaging.MarkConversationAs(rootConv.UUID, critic.ConversationUnresolved); err != nil {
+		s.logToStderr("Failed to mark root conversation as unresolved: %v", err)
+		// Don't fail the request, the message was already created
+	}
+
+	response := ReplyResponse{
+		Success:   true,
+		UUID:      reply.UUID,
+		Author:    string(reply.Author),
+		CreatedAt: reply.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	result, err := json.Marshal(response)
+	if err != nil {
+		return s.sendToolError(req.ID, fmt.Sprintf("Error encoding result: %v", err))
+	}
+
+	s.logToStderr("Created announcement: %s", reply.UUID)
 	return s.sendToolResult(req.ID, string(result))
 }
 

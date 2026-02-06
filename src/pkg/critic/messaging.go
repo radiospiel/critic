@@ -105,6 +105,10 @@ type Messaging interface {
 	// MarkMessageAs marks a message with a given read status
 	MarkMessageAs(messageUUID string, status MessageReadStatus) error
 
+	// LoadRootConversation returns the root conversation (filePath="", lineNumber=0).
+	// If it doesn't exist, it creates one.
+	LoadRootConversation() (*Conversation, error)
+
 	// Close closes the messaging system and releases resources
 	Close() error
 }
@@ -169,4 +173,7 @@ func (m *DummyMessaging) MarkConversationAs(conversationUUID string, update Conv
 func (m *DummyMessaging) MarkMessageAs(messageUUID string, status MessageReadStatus) error {
 	return nil
 }
-func (m *DummyMessaging) Close() error                                   { return nil }
+func (m *DummyMessaging) LoadRootConversation() (*Conversation, error) {
+	return &Conversation{UUID: "root-conv"}, nil
+}
+func (m *DummyMessaging) Close() error { return nil }

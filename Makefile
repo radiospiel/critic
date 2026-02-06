@@ -48,15 +48,16 @@ integration-tests:
 	LOG_FILE=/tmp/critic.test make -C tests/integration/
 
 # Installation
-install: build
+install: $(RBINARY)
 	install -d $(BINDIR)
-	install -m 755 $(BINARY) $(BINDIR)/critic
+	install -m 755 $(RBINARY) $(BINDIR)/critic
 
 uninstall:
-	rm -f $(BINDIR)/$(BINARY)
+	rm -f $(BINDIR)/critic
 
 clean:
-	rm -f $(BINARY)
+	rm -f $(RBINARY)
+	rm -f $(DBINARY)
 	rm -f .install-deps.mtime
 	rm -rf $(FRONTEND_DIST)
 

@@ -104,7 +104,7 @@ func TestServerToolsList(t *testing.T) {
 
 	tools, ok := result["tools"].([]interface{})
 	assert.True(t, ok, "Expected tools array, got %T", result["tools"])
-	assert.Equals(t, len(tools), 3, "Expected 3 tools")
+	assert.Equals(t, len(tools), 4, "Expected 4 tools")
 
 	// Check tool names
 	toolNames := make(map[string]bool)
@@ -117,6 +117,7 @@ func TestServerToolsList(t *testing.T) {
 		"get_critic_conversations",
 		"get_full_critic_conversation",
 		"reply_to_critic_conversation",
+		"critic_announce",
 	}
 
 	for _, name := range expectedTools {

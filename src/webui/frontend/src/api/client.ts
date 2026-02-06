@@ -260,6 +260,33 @@ export async function resolveConversation(conversationId: string): Promise<Resol
   }
 }
 
+// Types for root conversation
+export interface GetRootConversationResult {
+  conversation: CommentConversation | null
+  error?: string
+}
+
+// Fetch the root conversation (global announcements)
+export async function getRootConversation(): Promise<GetRootConversationResult> {
+  try {
+    const response = await criticClient.getRootConversation({})
+    if (response.error) {
+      return {
+        conversation: null,
+        error: response.error.message,
+      }
+    }
+    return {
+      conversation: response.conversation ? convertConversation(response.conversation) : null,
+    }
+  } catch (err) {
+    return {
+      conversation: null,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
 // Types for server config
 export interface ServerConfig {
   gitRoot: string

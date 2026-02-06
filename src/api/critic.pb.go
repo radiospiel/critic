@@ -2315,6 +2315,98 @@ func (x *WatchFileResponse) GetError() *RpcError {
 	return nil
 }
 
+// GetRootConversationRequest is an empty request for GetRootConversation.
+type GetRootConversationRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRootConversationRequest) Reset() {
+	*x = GetRootConversationRequest{}
+	mi := &file_critic_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRootConversationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRootConversationRequest) ProtoMessage() {}
+
+func (x *GetRootConversationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_critic_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRootConversationRequest.ProtoReflect.Descriptor instead.
+func (*GetRootConversationRequest) Descriptor() ([]byte, []int) {
+	return file_critic_proto_rawDescGZIP(), []int{35}
+}
+
+// GetRootConversationResponse contains the root conversation if it exists and is unresolved.
+type GetRootConversationResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// conversation is the root conversation, if it exists and is unresolved.
+	Conversation *Conversation `protobuf:"bytes,1,opt,name=conversation,proto3" json:"conversation,omitempty"`
+	// error contains error details if the request failed.
+	Error         *RpcError `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetRootConversationResponse) Reset() {
+	*x = GetRootConversationResponse{}
+	mi := &file_critic_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetRootConversationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetRootConversationResponse) ProtoMessage() {}
+
+func (x *GetRootConversationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_critic_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetRootConversationResponse.ProtoReflect.Descriptor instead.
+func (*GetRootConversationResponse) Descriptor() ([]byte, []int) {
+	return file_critic_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *GetRootConversationResponse) GetConversation() *Conversation {
+	if x != nil {
+		return x.Conversation
+	}
+	return nil
+}
+
+func (x *GetRootConversationResponse) GetError() *RpcError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
 // GetConfigRequest is an empty request for GetConfig.
 type GetConfigRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2324,7 +2416,7 @@ type GetConfigRequest struct {
 
 func (x *GetConfigRequest) Reset() {
 	*x = GetConfigRequest{}
-	mi := &file_critic_proto_msgTypes[35]
+	mi := &file_critic_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2336,7 +2428,7 @@ func (x *GetConfigRequest) String() string {
 func (*GetConfigRequest) ProtoMessage() {}
 
 func (x *GetConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_critic_proto_msgTypes[35]
+	mi := &file_critic_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2349,7 +2441,7 @@ func (x *GetConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConfigRequest.ProtoReflect.Descriptor instead.
 func (*GetConfigRequest) Descriptor() ([]byte, []int) {
-	return file_critic_proto_rawDescGZIP(), []int{35}
+	return file_critic_proto_rawDescGZIP(), []int{37}
 }
 
 // GetConfigResponse contains server configuration for the frontend.
@@ -2367,7 +2459,7 @@ type GetConfigResponse struct {
 
 func (x *GetConfigResponse) Reset() {
 	*x = GetConfigResponse{}
-	mi := &file_critic_proto_msgTypes[36]
+	mi := &file_critic_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2379,7 +2471,7 @@ func (x *GetConfigResponse) String() string {
 func (*GetConfigResponse) ProtoMessage() {}
 
 func (x *GetConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_critic_proto_msgTypes[36]
+	mi := &file_critic_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2392,7 +2484,7 @@ func (x *GetConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConfigResponse.ProtoReflect.Descriptor instead.
 func (*GetConfigResponse) Descriptor() ([]byte, []int) {
-	return file_critic_proto_rawDescGZIP(), []int{36}
+	return file_critic_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *GetConfigResponse) GetGitRoot() string {
@@ -2551,6 +2643,10 @@ const file_critic_proto_rawDesc = "" +
 	"\x10WatchFileRequest\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\">\n" +
 	"\x11WatchFileResponse\x12)\n" +
+	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error\"\x1c\n" +
+	"\x1aGetRootConversationRequest\"\x85\x01\n" +
+	"\x1bGetRootConversationResponse\x12;\n" +
+	"\fconversation\x18\x01 \x01(\v2\x17.critic.v1.ConversationR\fconversation\x12)\n" +
 	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error\"\x12\n" +
 	"\x10GetConfigRequest\"t\n" +
 	"\x11GetConfigResponse\x12\x19\n" +
@@ -2581,7 +2677,7 @@ const file_critic_proto_rawDesc = "" +
 	"\x1cCONVERSATION_STATUS_RESOLVED\x10\x01\x12\"\n" +
 	"\x1eCONVERSATION_STATUS_UNRESOLVED\x10\x02\x12\x1e\n" +
 	"\x1aCONVERSATION_STATUS_ACTIVE\x10\x03\x12,\n" +
-	"(CONVERSATION_STATUS_WAITING_FOR_RESPONSE\x10\x042\xeb\b\n" +
+	"(CONVERSATION_STATUS_WAITING_FOR_RESPONSE\x10\x042\xd1\t\n" +
 	"\rCriticService\x12R\n" +
 	"\rGetLastChange\x12\x1f.critic.v1.GetLastChangeRequest\x1a .critic.v1.GetLastChangeResponse\x12U\n" +
 	"\x0eGetDiffSummary\x12 .critic.v1.GetDiffSummaryRequest\x1a!.critic.v1.GetDiffSummaryResponse\x12@\n" +
@@ -2595,7 +2691,8 @@ const file_critic_proto_rawDesc = "" +
 	"\fGetDiffBases\x12\x1e.critic.v1.GetDiffBasesRequest\x1a\x1f.critic.v1.GetDiffBasesResponse\x12L\n" +
 	"\vSetDiffBase\x12\x1d.critic.v1.SetDiffBaseRequest\x1a\x1e.critic.v1.SetDiffBaseResponse\x12F\n" +
 	"\tWatchFile\x12\x1b.critic.v1.WatchFileRequest\x1a\x1c.critic.v1.WatchFileResponse\x12F\n" +
-	"\tGetConfig\x12\x1b.critic.v1.GetConfigRequest\x1a\x1c.critic.v1.GetConfigResponseB*Z(github.com/radiospiel/critic/src/api;apib\x06proto3"
+	"\tGetConfig\x12\x1b.critic.v1.GetConfigRequest\x1a\x1c.critic.v1.GetConfigResponse\x12d\n" +
+	"\x13GetRootConversation\x12%.critic.v1.GetRootConversationRequest\x1a&.critic.v1.GetRootConversationResponseB*Z(github.com/radiospiel/critic/src/api;apib\x06proto3"
 
 var (
 	file_critic_proto_rawDescOnce sync.Once
@@ -2610,7 +2707,7 @@ func file_critic_proto_rawDescGZIP() []byte {
 }
 
 var file_critic_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_critic_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_critic_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_critic_proto_goTypes = []any{
 	(ErrorCode)(0),                          // 0: critic.v1.ErrorCode
 	(FileStatus)(0),                         // 1: critic.v1.FileStatus
@@ -2651,8 +2748,10 @@ var file_critic_proto_goTypes = []any{
 	(*ResolveConversationResponse)(nil),     // 36: critic.v1.ResolveConversationResponse
 	(*WatchFileRequest)(nil),                // 37: critic.v1.WatchFileRequest
 	(*WatchFileResponse)(nil),               // 38: critic.v1.WatchFileResponse
-	(*GetConfigRequest)(nil),                // 39: critic.v1.GetConfigRequest
-	(*GetConfigResponse)(nil),               // 40: critic.v1.GetConfigResponse
+	(*GetRootConversationRequest)(nil),      // 39: critic.v1.GetRootConversationRequest
+	(*GetRootConversationResponse)(nil),     // 40: critic.v1.GetRootConversationResponse
+	(*GetConfigRequest)(nil),                // 41: critic.v1.GetConfigRequest
+	(*GetConfigResponse)(nil),               // 42: critic.v1.GetConfigResponse
 }
 var file_critic_proto_depIdxs = []int32{
 	0,  // 0: critic.v1.RpcError.code:type_name -> critic.v1.ErrorCode
@@ -2682,38 +2781,42 @@ var file_critic_proto_depIdxs = []int32{
 	4,  // 24: critic.v1.ReplyToConversationResponse.error:type_name -> critic.v1.RpcError
 	4,  // 25: critic.v1.ResolveConversationResponse.error:type_name -> critic.v1.RpcError
 	4,  // 26: critic.v1.WatchFileResponse.error:type_name -> critic.v1.RpcError
-	4,  // 27: critic.v1.GetConfigResponse.error:type_name -> critic.v1.RpcError
-	5,  // 28: critic.v1.CriticService.GetLastChange:input_type -> critic.v1.GetLastChangeRequest
-	7,  // 29: critic.v1.CriticService.GetDiffSummary:input_type -> critic.v1.GetDiffSummaryRequest
-	9,  // 30: critic.v1.CriticService.GetDiff:input_type -> critic.v1.GetDiffRequest
-	18, // 31: critic.v1.CriticService.GetFile:input_type -> critic.v1.GetFileRequest
-	20, // 32: critic.v1.CriticService.CreateConversation:input_type -> critic.v1.CreateConversationRequest
-	22, // 33: critic.v1.CriticService.GetConversations:input_type -> critic.v1.GetConversationsRequest
-	24, // 34: critic.v1.CriticService.GetConversationsSummary:input_type -> critic.v1.GetConversationsSummaryRequest
-	33, // 35: critic.v1.CriticService.ReplyToConversation:input_type -> critic.v1.ReplyToConversationRequest
-	35, // 36: critic.v1.CriticService.ResolveConversation:input_type -> critic.v1.ResolveConversationRequest
-	29, // 37: critic.v1.CriticService.GetDiffBases:input_type -> critic.v1.GetDiffBasesRequest
-	31, // 38: critic.v1.CriticService.SetDiffBase:input_type -> critic.v1.SetDiffBaseRequest
-	37, // 39: critic.v1.CriticService.WatchFile:input_type -> critic.v1.WatchFileRequest
-	39, // 40: critic.v1.CriticService.GetConfig:input_type -> critic.v1.GetConfigRequest
-	6,  // 41: critic.v1.CriticService.GetLastChange:output_type -> critic.v1.GetLastChangeResponse
-	8,  // 42: critic.v1.CriticService.GetDiffSummary:output_type -> critic.v1.GetDiffSummaryResponse
-	10, // 43: critic.v1.CriticService.GetDiff:output_type -> critic.v1.GetDiffResponse
-	19, // 44: critic.v1.CriticService.GetFile:output_type -> critic.v1.GetFileResponse
-	21, // 45: critic.v1.CriticService.CreateConversation:output_type -> critic.v1.CreateConversationResponse
-	23, // 46: critic.v1.CriticService.GetConversations:output_type -> critic.v1.GetConversationsResponse
-	25, // 47: critic.v1.CriticService.GetConversationsSummary:output_type -> critic.v1.GetConversationsSummaryResponse
-	34, // 48: critic.v1.CriticService.ReplyToConversation:output_type -> critic.v1.ReplyToConversationResponse
-	36, // 49: critic.v1.CriticService.ResolveConversation:output_type -> critic.v1.ResolveConversationResponse
-	30, // 50: critic.v1.CriticService.GetDiffBases:output_type -> critic.v1.GetDiffBasesResponse
-	32, // 51: critic.v1.CriticService.SetDiffBase:output_type -> critic.v1.SetDiffBaseResponse
-	38, // 52: critic.v1.CriticService.WatchFile:output_type -> critic.v1.WatchFileResponse
-	40, // 53: critic.v1.CriticService.GetConfig:output_type -> critic.v1.GetConfigResponse
-	41, // [41:54] is the sub-list for method output_type
-	28, // [28:41] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	27, // 27: critic.v1.GetRootConversationResponse.conversation:type_name -> critic.v1.Conversation
+	4,  // 28: critic.v1.GetRootConversationResponse.error:type_name -> critic.v1.RpcError
+	4,  // 29: critic.v1.GetConfigResponse.error:type_name -> critic.v1.RpcError
+	5,  // 30: critic.v1.CriticService.GetLastChange:input_type -> critic.v1.GetLastChangeRequest
+	7,  // 31: critic.v1.CriticService.GetDiffSummary:input_type -> critic.v1.GetDiffSummaryRequest
+	9,  // 32: critic.v1.CriticService.GetDiff:input_type -> critic.v1.GetDiffRequest
+	18, // 33: critic.v1.CriticService.GetFile:input_type -> critic.v1.GetFileRequest
+	20, // 34: critic.v1.CriticService.CreateConversation:input_type -> critic.v1.CreateConversationRequest
+	22, // 35: critic.v1.CriticService.GetConversations:input_type -> critic.v1.GetConversationsRequest
+	24, // 36: critic.v1.CriticService.GetConversationsSummary:input_type -> critic.v1.GetConversationsSummaryRequest
+	33, // 37: critic.v1.CriticService.ReplyToConversation:input_type -> critic.v1.ReplyToConversationRequest
+	35, // 38: critic.v1.CriticService.ResolveConversation:input_type -> critic.v1.ResolveConversationRequest
+	29, // 39: critic.v1.CriticService.GetDiffBases:input_type -> critic.v1.GetDiffBasesRequest
+	31, // 40: critic.v1.CriticService.SetDiffBase:input_type -> critic.v1.SetDiffBaseRequest
+	37, // 41: critic.v1.CriticService.WatchFile:input_type -> critic.v1.WatchFileRequest
+	41, // 42: critic.v1.CriticService.GetConfig:input_type -> critic.v1.GetConfigRequest
+	39, // 43: critic.v1.CriticService.GetRootConversation:input_type -> critic.v1.GetRootConversationRequest
+	6,  // 44: critic.v1.CriticService.GetLastChange:output_type -> critic.v1.GetLastChangeResponse
+	8,  // 45: critic.v1.CriticService.GetDiffSummary:output_type -> critic.v1.GetDiffSummaryResponse
+	10, // 46: critic.v1.CriticService.GetDiff:output_type -> critic.v1.GetDiffResponse
+	19, // 47: critic.v1.CriticService.GetFile:output_type -> critic.v1.GetFileResponse
+	21, // 48: critic.v1.CriticService.CreateConversation:output_type -> critic.v1.CreateConversationResponse
+	23, // 49: critic.v1.CriticService.GetConversations:output_type -> critic.v1.GetConversationsResponse
+	25, // 50: critic.v1.CriticService.GetConversationsSummary:output_type -> critic.v1.GetConversationsSummaryResponse
+	34, // 51: critic.v1.CriticService.ReplyToConversation:output_type -> critic.v1.ReplyToConversationResponse
+	36, // 52: critic.v1.CriticService.ResolveConversation:output_type -> critic.v1.ResolveConversationResponse
+	30, // 53: critic.v1.CriticService.GetDiffBases:output_type -> critic.v1.GetDiffBasesResponse
+	32, // 54: critic.v1.CriticService.SetDiffBase:output_type -> critic.v1.SetDiffBaseResponse
+	38, // 55: critic.v1.CriticService.WatchFile:output_type -> critic.v1.WatchFileResponse
+	42, // 56: critic.v1.CriticService.GetConfig:output_type -> critic.v1.GetConfigResponse
+	40, // 57: critic.v1.CriticService.GetRootConversation:output_type -> critic.v1.GetRootConversationResponse
+	44, // [44:58] is the sub-list for method output_type
+	30, // [30:44] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_critic_proto_init() }
@@ -2727,7 +2830,7 @@ func file_critic_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_critic_proto_rawDesc), len(file_critic_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   37,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
