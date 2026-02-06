@@ -1,7 +1,6 @@
-PREFIX := /usr/local
-BINDIR := $(PREFIX)/bin
-RBINARY := bin/critic
-DBINARY := bin/debug/critic
+BINDIR := $(shell go env GOPATH)/bin
+RBINARY := $(BINDIR)/critic
+DBINARY := $(BINDIR)/dcritic
 
 # Proto source and generated files
 PROTO_DIR := src/api/proto
@@ -47,17 +46,13 @@ unit-tests:
 integration-tests:
 	LOG_FILE=/tmp/critic.test make -C tests/integration/
 
-# Installation
-install: $(RBINARY)
-	install -d $(BINDIR)
-	install -m 755 $(RBINARY) $(BINDIR)/critic
+# Installation (binaries are already built into BINDIR, so install is just build)
+install: build
 
 uninstall:
-	rm -f $(BINDIR)/critic
+	rm -f $(RBINARY) $(DBINARY)
 
-clean:
-	rm -f $(RBINARY)
-	rm -f $(DBINARY)
+clean: uninstall
 	rm -f .install-deps.mtime
 	rm -rf $(FRONTEND_DIST)
 
