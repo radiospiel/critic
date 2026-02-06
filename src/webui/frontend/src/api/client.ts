@@ -291,6 +291,7 @@ export async function getRootConversation(): Promise<GetRootConversationResult> 
 export interface ServerConfig {
   gitRoot: string
   devMode: boolean
+  editorUrl: string
 }
 
 export interface GetConfigResult {
@@ -298,20 +299,24 @@ export interface GetConfigResult {
   error?: string
 }
 
-// Fetch server configuration
+// Fetch server configuration (merges server config + project config editor URL)
 export async function getConfig(): Promise<GetConfigResult> {
   try {
-    const response = await criticClient.getConfig({})
-    if (response.error) {
+    const [configResponse, projectResponse] = await Promise.all([
+      criticClient.getConfig({}),
+      criticClient.getProjectConfig({}).catch(() => null),
+    ])
+    if (configResponse.error) {
       return {
         config: null,
-        error: response.error.message,
+        error: configResponse.error.message,
       }
     }
     return {
       config: {
-        gitRoot: response.gitRoot,
-        devMode: response.devMode,
+        gitRoot: configResponse.gitRoot,
+        devMode: configResponse.devMode,
+        editorUrl: projectResponse?.editor?.url || '',
       },
     }
   } catch (err) {

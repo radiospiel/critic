@@ -5,7 +5,7 @@ function isLocalhost(): boolean {
   return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 }
 
-// Link to open source file in IDE (only in dev mode on localhost)
+// Link to open source file in IDE (only on localhost, when editor URL is configured)
 interface LinkToSourceProps {
   lineNo: number
   filePath: string
@@ -13,19 +13,19 @@ interface LinkToSourceProps {
 }
 
 function LinkToSource({ lineNo, filePath, serverConfig }: LinkToSourceProps) {
-  if (!isLocalhost()) {
+  if (!isLocalhost() || !serverConfig?.editorUrl) {
     return <>{lineNo}</>
   }
 
-  if (!serverConfig) {
-    return <>{lineNo}</>
-  }
+  const href = serverConfig.editorUrl
+    .replace('{file}', `${serverConfig.gitRoot}/${filePath}`)
+    .replace('{line}', String(lineNo))
 
   return (
     <a
-      href={`goland://open?file=${serverConfig.gitRoot}/${filePath}&line=${lineNo}`}
+      href={href}
       onClick={(e) => e.stopPropagation()}
-      title="Open in GoLand"
+      title="Open in editor"
       className="line-number-link"
     >
       {lineNo}

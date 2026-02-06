@@ -25,4 +25,4 @@ categories:
     - "src/api/critic.pb.go"
 
 editor:
-  url: "vscode://file/{file}:{line}"
+  url: "goland://open?file={file}&line={line}"
