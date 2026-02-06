@@ -501,7 +501,7 @@ func (s *Server) handlePromptsGet(req Request) error {
 			Messages: []PromptMessage{
 				{
 					Role:    "user",
-					Content: TextContent("Get unresolved critic conversations via the get_critic_conversations MCP tool. Address critical feedback, reply or make adjustments as necessary."),
+					Content: TextContent("Get unresolved critic conversations via the get_critic_conversations MCP tool. Address critical feedback, reply or make adjustments as necessary. After each tool call, re-check for new unresolved messages and address any new feedback before continuing."),
 				},
 			},
 		})
@@ -511,7 +511,7 @@ func (s *Server) handlePromptsGet(req Request) error {
 			Messages: []PromptMessage{
 				{
 					Role:    "user",
-					Content: TextContent("Repeat /critic:step until all critic conversations are resolved."),
+					Content: TextContent("Resolve all unresolved critic conversations. After each tool call, check for new unresolved messages using get_critic_conversations. Address any new feedback before continuing. Repeat until all conversations are resolved."),
 				},
 			},
 		})
