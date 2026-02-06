@@ -18,12 +18,12 @@ all: build tests
 
 build: install-deps debug release
 
-debug: $(DBINARY)
-release: $(RBINARY)
+debug: frontend $(DBINARY)
+release: frontend $(RBINARY)
 
-GO_FILES := $(shell find src -name '*.go' -not -name '*_test.go')
+GO_FILES := $(shell find src simple-go -name '*.go' -not -name '*_test.go')
 
-$(RBINARY): frontend $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES)
+$(RBINARY): $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES)
 	go build -o $(RBINARY) ./src/cmd
 
 $(DBINARY): $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES)
