@@ -318,7 +318,7 @@ func (db *DB) LoadRootConversation() (*critic.Conversation, error) {
 			UpdatedAt:      now,
 		}
 		err := db.insertMessage(msg)
-		preconditions.Check(err == nil, "failed to create root conversation: %w", err)
+		preconditions.Check(err == nil, "failed to create root conversation: %v", err)
 
 		logger.Info("Created root conversation w/id %s", id)
 	}

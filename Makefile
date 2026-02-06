@@ -16,14 +16,14 @@ FRONTEND_DIST := src/webui/dist
 
 all: build tests
 
-build: install-deps dbuild rbuild
+build: install-deps debug release
 
-dbuild: $(DBINARY)
-rbuild: frontend $(RBINARY)
+debug: $(DBINARY)
+release: $(RBINARY)
 
 GO_FILES := $(shell find src -name '*.go' -not -name '*_test.go')
 
-$(RBINARY): $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES)
+$(RBINARY): frontend $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES)
 	go build -o $(RBINARY) ./src/cmd
 
 $(DBINARY): $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES)
