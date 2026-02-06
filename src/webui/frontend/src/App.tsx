@@ -335,6 +335,11 @@ function AppContent() {
           <div className="empty-state usage-guide">
             <h2>Getting Started with Critic</h2>
             <section>
+              <h3>Installing Critic</h3>
+              <p>Critic is tested to work on macOS. It needs recent go and npm installations.</p>
+              <pre><code>git clone radiospiel/critic{'\n'}make install</code></pre>
+            </section>
+            <section>
               <h3>Review Changes</h3>
               <p>Select a file from the sidebar to view its diff. Press <kbd>Enter</kbd> on any source line to start a conversation.</p>
             </section>
@@ -342,8 +347,8 @@ function AppContent() {
               <h3>Connect Claude Code</h3>
               <p>Register the Critic MCP server so Claude can read and reply to your review comments:</p>
               <pre><code>claude mcp add critic -- critic mcp</code></pre>
-              <p>Then instruct Claude to check for feedback:</p>
-              <pre><code>check the critic mcp tools for open conversations, and reply when necessary</code></pre>
+              <p>Then use the slash commands:</p>
+              <pre><code>/critic:summarize  — summarize changes and post via critic_announce{'\n'}/critic:step       — address unresolved feedback{'\n'}/critic:loop       — repeat step until all conversations are resolved</code></pre>
             </section>
             <section>
               <h3>Keyboard Shortcuts</h3>

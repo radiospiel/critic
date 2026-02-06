@@ -96,6 +96,10 @@ func (s *Server) handleMessage(data []byte) error {
 		return s.handleToolsList(req)
 	case "tools/call":
 		return s.handleToolsCall(req)
+	case "prompts/list":
+		return s.handlePromptsList(req)
+	case "prompts/get":
+		return s.handlePromptsGet(req)
 	case "ping":
 		return s.sendResult(req.ID, map[string]interface{}{})
 	default:
@@ -108,7 +112,8 @@ func (s *Server) handleInitialize(req Request) error {
 	result := InitializeResult{
 		ProtocolVersion: ProtocolVersion,
 		Capabilities: Capabilities{
-			Tools: &ToolsCapability{},
+			Tools:   &ToolsCapability{},
+			Prompts: &PromptsCapability{},
 		},
 		ServerInfo: ServerInfo{
 			Name:    ServerName,
@@ -443,6 +448,76 @@ func (s *Server) handleCriticAnnounce(req Request, params CallToolParams) error 
 
 	s.logToStderr("Created announcement: %s", reply.UUID)
 	return s.sendToolResult(req.ID, string(result))
+}
+
+// handlePromptsList returns the list of available prompts
+func (s *Server) handlePromptsList(req Request) error {
+	prompts := []Prompt{
+		{
+			Name:        "summarize",
+			Description: "Summarize all uncommitted changes and post via the critic_announce tool",
+		},
+		{
+			Name:        "step",
+			Description: "Get unresolved critic conversations, address critical feedback, reply or make adjustments as necessary",
+		},
+		{
+			Name:        "loop",
+			Description: "Repeat /critic:step until all critic conversations are resolved",
+		},
+	}
+
+	return s.sendResult(req.ID, PromptsListResult{Prompts: prompts})
+}
+
+// handlePromptsGet returns the prompt messages for a given prompt
+func (s *Server) handlePromptsGet(req Request) error {
+	paramsJSON, err := json.Marshal(req.Params)
+	if err != nil {
+		return s.sendError(req.ID, InvalidParams, "Invalid params", nil)
+	}
+
+	var params GetPromptParams
+	if err := json.Unmarshal(paramsJSON, &params); err != nil {
+		return s.sendError(req.ID, InvalidParams, "Invalid params", nil)
+	}
+
+	s.logToStderr("Prompt get: %s", params.Name)
+
+	switch params.Name {
+	case "summarize":
+		return s.sendResult(req.ID, GetPromptResult{
+			Description: "Summarize all uncommitted changes and post via critic_announce",
+			Messages: []PromptMessage{
+				{
+					Role:    "user",
+					Content: TextContent("Summarize all uncommitted changes, and post these via the critic_announce MCP tool."),
+				},
+			},
+		})
+	case "step":
+		return s.sendResult(req.ID, GetPromptResult{
+			Description: "Address unresolved critic feedback",
+			Messages: []PromptMessage{
+				{
+					Role:    "user",
+					Content: TextContent("Get unresolved critic conversations via the get_critic_conversations MCP tool. Address critical feedback, reply or make adjustments as necessary."),
+				},
+			},
+		})
+	case "loop":
+		return s.sendResult(req.ID, GetPromptResult{
+			Description: "Resolve all critic conversations iteratively",
+			Messages: []PromptMessage{
+				{
+					Role:    "user",
+					Content: TextContent("Repeat /critic:step until all critic conversations are resolved."),
+				},
+			},
+		})
+	default:
+		return s.sendError(req.ID, InvalidParams, fmt.Sprintf("Unknown prompt: %s", params.Name), nil)
+	}
 }
 
 // sendResult sends a successful result response

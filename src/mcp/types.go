@@ -121,6 +121,43 @@ type ToolsListResult struct {
 	Tools []Tool `json:"tools"`
 }
 
+// Prompt represents an MCP prompt definition
+type Prompt struct {
+	Name        string           `json:"name"`
+	Description string           `json:"description,omitempty"`
+	Arguments   []PromptArgument `json:"arguments,omitempty"`
+}
+
+// PromptArgument represents a prompt argument
+type PromptArgument struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+}
+
+// PromptsListResult represents the result of prompts/list
+type PromptsListResult struct {
+	Prompts []Prompt `json:"prompts"`
+}
+
+// GetPromptParams represents the params for prompts/get
+type GetPromptParams struct {
+	Name      string                 `json:"name"`
+	Arguments map[string]interface{} `json:"arguments,omitempty"`
+}
+
+// GetPromptResult represents the result of prompts/get
+type GetPromptResult struct {
+	Description string         `json:"description,omitempty"`
+	Messages    []PromptMessage `json:"messages"`
+}
+
+// PromptMessage represents a message in a prompt result
+type PromptMessage struct {
+	Role    string       `json:"role"`
+	Content ContentBlock `json:"content"`
+}
+
 // CallToolParams represents the params for tools/call
 type CallToolParams struct {
 	Name      string                 `json:"name"`
