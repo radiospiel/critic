@@ -17,6 +17,7 @@ import (
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/api/apiconnect"
+	"github.com/radiospiel/critic/src/config"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
@@ -57,12 +58,12 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 // Config holds the configuration for the API server.
 type Config struct {
-	Port      int
-	GitRoot   string
-	Messaging critic.Messaging
-	Dev       bool // Development mode: proxy to Vite dev server instead of serving embedded files
-	DiffBases []string
-	Paths     []string
+	Port          int
+	GitRoot       string
+	Messaging     critic.Messaging
+	Dev           bool // Development mode: proxy to Vite dev server instead of serving embedded files
+	DiffBases     []string
+	ProjectConfig *config.ProjectConfig
 }
 
 // Server implements the CriticService API.
@@ -79,7 +80,11 @@ type Server struct {
 // NewServer creates a new API server with the given configuration.
 // It initializes a default session with the provided configuration values.
 func NewServer(config Config) *Server {
-	session := NewSession(config.GitRoot, config.Messaging, config.Paths, config.DiffBases)
+	paths := []string{}
+	if config.ProjectConfig != nil {
+		paths = config.ProjectConfig.Paths
+	}
+	session := NewSession(config.GitRoot, config.Messaging, paths, config.DiffBases)
 	return &Server{
 		config:  config,
 		session: session,

@@ -2151,3 +2151,192 @@ export class GetConfigResponse extends Message$1<GetConfigResponse> {
   }
 }
 
+/**
+ * GetProjectConfigRequest is an empty request for GetProjectConfig.
+ *
+ * @generated from message critic.v1.GetProjectConfigRequest
+ */
+export class GetProjectConfigRequest extends Message$1<GetProjectConfigRequest> {
+  constructor(data?: PartialMessage<GetProjectConfigRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetProjectConfigRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetProjectConfigRequest {
+    return new GetProjectConfigRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetProjectConfigRequest {
+    return new GetProjectConfigRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetProjectConfigRequest {
+    return new GetProjectConfigRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetProjectConfigRequest | PlainMessage<GetProjectConfigRequest> | undefined, b: GetProjectConfigRequest | PlainMessage<GetProjectConfigRequest> | undefined): boolean {
+    return proto3.util.equals(GetProjectConfigRequest, a, b);
+  }
+}
+
+/**
+ * GetProjectConfigResponse contains the parsed project.critic configuration.
+ *
+ * @generated from message critic.v1.GetProjectConfigResponse
+ */
+export class GetProjectConfigResponse extends Message$1<GetProjectConfigResponse> {
+  /**
+   * project_name is the name of the project.
+   *
+   * @generated from field: string project_name = 1;
+   */
+  projectName = "";
+
+  /**
+   * categories is the list of file categories with their glob patterns.
+   *
+   * @generated from field: repeated critic.v1.FileCategory categories = 2;
+   */
+  categories: FileCategory[] = [];
+
+  /**
+   * editor contains editor integration settings.
+   *
+   * @generated from field: critic.v1.EditorConfig editor = 3;
+   */
+  editor?: EditorConfig;
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<GetProjectConfigResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.GetProjectConfigResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "project_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "categories", kind: "message", T: FileCategory, repeated: true },
+    { no: 3, name: "editor", kind: "message", T: EditorConfig },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetProjectConfigResponse {
+    return new GetProjectConfigResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): GetProjectConfigResponse {
+    return new GetProjectConfigResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): GetProjectConfigResponse {
+    return new GetProjectConfigResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: GetProjectConfigResponse | PlainMessage<GetProjectConfigResponse> | undefined, b: GetProjectConfigResponse | PlainMessage<GetProjectConfigResponse> | undefined): boolean {
+    return proto3.util.equals(GetProjectConfigResponse, a, b);
+  }
+}
+
+/**
+ * FileCategory represents a named file category with glob patterns.
+ *
+ * @generated from message critic.v1.FileCategory
+ */
+export class FileCategory extends Message$1<FileCategory> {
+  /**
+   * name is the category name (e.g., "test", "hidden", "docs").
+   *
+   * @generated from field: string name = 1;
+   */
+  name = "";
+
+  /**
+   * patterns is the list of gitignore-style glob patterns for this category.
+   *
+   * @generated from field: repeated string patterns = 2;
+   */
+  patterns: string[] = [];
+
+  constructor(data?: PartialMessage<FileCategory>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.FileCategory";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "patterns", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileCategory {
+    return new FileCategory().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): FileCategory {
+    return new FileCategory().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): FileCategory {
+    return new FileCategory().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: FileCategory | PlainMessage<FileCategory> | undefined, b: FileCategory | PlainMessage<FileCategory> | undefined): boolean {
+    return proto3.util.equals(FileCategory, a, b);
+  }
+}
+
+/**
+ * EditorConfig holds editor integration settings.
+ *
+ * @generated from message critic.v1.EditorConfig
+ */
+export class EditorConfig extends Message$1<EditorConfig> {
+  /**
+   * url is a template for opening files in an editor.
+   * Supports placeholders: {file} for the file path, {line} for the line number.
+   *
+   * @generated from field: string url = 1;
+   */
+  url = "";
+
+  constructor(data?: PartialMessage<EditorConfig>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.EditorConfig";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "url", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): EditorConfig {
+    return new EditorConfig().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): EditorConfig {
+    return new EditorConfig().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): EditorConfig {
+    return new EditorConfig().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: EditorConfig | PlainMessage<EditorConfig> | undefined, b: EditorConfig | PlainMessage<EditorConfig> | undefined): boolean {
+    return proto3.util.equals(EditorConfig, a, b);
+  }
+}
+

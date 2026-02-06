@@ -34,6 +34,8 @@ service CriticService {
   rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
   // GetRootConversation returns the root conversation (global announcements).
   rpc GetRootConversation(GetRootConversationRequest) returns (GetRootConversationResponse);
+  // GetProjectConfig returns the parsed project.critic configuration.
+  rpc GetProjectConfig(GetProjectConfigRequest) returns (GetProjectConfigResponse);
 }
 
 // ErrorCode represents the type of RPC error.
@@ -382,4 +384,34 @@ message GetConfigResponse {
   bool dev_mode = 2;
   // error contains error details if the request failed.
   RpcError error = 15;
+}
+
+// GetProjectConfigRequest is an empty request for GetProjectConfig.
+message GetProjectConfigRequest {}
+
+// GetProjectConfigResponse contains the parsed project.critic configuration.
+message GetProjectConfigResponse {
+  // project_name is the name of the project.
+  string project_name = 1;
+  // categories is the list of file categories with their glob patterns.
+  repeated FileCategory categories = 2;
+  // editor contains editor integration settings.
+  EditorConfig editor = 3;
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// FileCategory represents a named file category with glob patterns.
+message FileCategory {
+  // name is the category name (e.g., "test", "hidden", "docs").
+  string name = 1;
+  // patterns is the list of gitignore-style glob patterns for this category.
+  repeated string patterns = 2;
+}
+
+// EditorConfig holds editor integration settings.
+message EditorConfig {
+  // url is a template for opening files in an editor.
+  // Supports placeholders: {file} for the file path, {line} for the line number.
+  string url = 1;
 }

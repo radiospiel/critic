@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { criticClient, getConversationsSummary, getConversations, resolveConversation, ConversationSummary, CommentConversation } from '../api/client'
-import { FileSummary, FileStatus } from '../gen/critic_pb'
+import { FileSummary, FileStatus, FileCategory } from '../gen/critic_pb'
 import { pluralize } from './Pluralize'
 
 function formatTimestamp(dateStr: string): string {
@@ -52,42 +52,82 @@ function getStatusLabel(status: FileStatus): string {
   }
 }
 
-// Convert a gitignore-style pattern to a regex
+// Convert a git pathspec glob pattern to a regex.
+// Implements git's pathspec pattern matching rules:
+// https://git-scm.com/docs/gitignore#_pattern_format
+//
+// Key rules:
+//   - "*" matches anything except "/"
+//   - "**" matches anything including "/"
+//   - "?" matches a single character except "/"
+//   - A leading "/" anchors the match to the repository root
+//   - A pattern WITHOUT a "/" matches against the basename at any depth
+//   - A pattern WITH a "/" matches against the full path from root
+//   - "**/" matches in all directories
+//   - "/**" matches everything inside a directory
+//   - "/**/" matches zero or more directories
 function patternToRegex(pattern: string): RegExp {
-  // Remove leading slash (makes pattern relative to root)
+  // Handle leading / (anchored to root)
   const isRooted = pattern.startsWith('/')
   if (isRooted) {
     pattern = pattern.slice(1)
   }
 
-  // Escape special regex characters except * and ?
-  let regex = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    // Convert ** to match any path
-    .replace(/\*\*/g, '.*')
-    // Convert * to match anything except /
-    .replace(/\*/g, '[^/]*')
-    // Convert ? to match single char except /
-    .replace(/\?/g, '[^/]')
+  // Check if pattern has a slash (other than leading).
+  // If so, it matches against the full path from root.
+  const trimmedForSlashCheck = pattern.replace(/\/$/, '')
+  const hasSlash = trimmedForSlashCheck.includes('/')
 
-  // If pattern doesn't contain /, it matches anywhere in the path
-  if (!pattern.includes('/')) {
-    regex = '(^|/)' + regex + '$'
-  } else if (isRooted) {
-    regex = '^' + regex + '$'
-  } else {
-    regex = '(^|/)' + regex + '$'
+  // Convert pattern to regex string
+  let regex = ''
+  let i = 0
+  while (i < pattern.length) {
+    const c = pattern[i]
+    if (c === '*') {
+      if (i + 1 < pattern.length && pattern[i + 1] === '*') {
+        // ** pattern
+        if (i + 2 < pattern.length && pattern[i + 2] === '/') {
+          // **/ - match zero or more directories
+          regex += '(?:.*/)?'
+          i += 3
+          continue
+        }
+        // ** at end or without trailing / - match everything
+        regex += '.*'
+        i += 2
+        continue
+      }
+      // Single * - match anything except /
+      regex += '[^/]*'
+    } else if (c === '?') {
+      // ? - match single character except /
+      regex += '[^/]'
+    } else if (c === '\\') {
+      // Escape next character
+      if (i + 1 < pattern.length) {
+        i++
+        regex += pattern[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      }
+    } else {
+      // Escape regex metacharacters
+      regex += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    }
+    i++
   }
 
-  return new RegExp(regex)
+  // Build the full regex with appropriate anchoring
+  if (!isRooted && !hasSlash) {
+    // No slash in pattern: match against the basename at any depth
+    return new RegExp('^(?:.*/)?'+ regex + '$')
+  }
+  // Has slash or is rooted: match from the root
+  return new RegExp('^' + regex + '$')
 }
 
 // Check if a file path matches any of the given patterns
-function matchesPattern(path: string, patterns: string[]): boolean {
+function matchesAnyPattern(path: string, patterns: string[]): boolean {
   for (const pattern of patterns) {
-    // Skip empty lines and comments
-    if (!pattern || pattern.startsWith('#')) continue
-
+    if (!pattern) continue
     const regex = patternToRegex(pattern)
     if (regex.test(path)) {
       return true
@@ -96,14 +136,16 @@ function matchesPattern(path: string, patterns: string[]): boolean {
   return false
 }
 
-// Check if a file path matches any of the ignore patterns
-function isIgnored(path: string, patterns: string[]): boolean {
-  return matchesPattern(path, patterns)
-}
-
-// Check if a file path matches any of the test patterns
-function isTestFile(path: string, patterns: string[]): boolean {
-  return matchesPattern(path, patterns)
+// Categorize a file based on project config categories.
+// Categories are checked in order: the first matching category wins.
+// Returns "source" if no category matches.
+function categorizeFile(path: string, categories: FileCategory[]): string {
+  for (const category of categories) {
+    if (matchesAnyPattern(path, category.patterns)) {
+      return category.name
+    }
+  }
+  return 'source'
 }
 
 // Truncate text to maxLen characters, adding ellipsis if needed
@@ -145,8 +187,7 @@ function MessagePreviews({ messages }: { messages: CommentMessage[] }) {
 function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, onFilterChange, rootConversation, isRootConversationSelected, onConversationsChanged }: FileListProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
-  const [testPatterns, setTestPatterns] = useState<string[]>([])
+  const [categories, setCategories] = useState<FileCategory[]>([])
   const [filter, setFilter] = useState<FilterType>('automatic')
   const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
   const [fileConversations, setFileConversations] = useState<Map<string, CommentConversation[]>>(new Map())
@@ -173,26 +214,14 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
     }
   }
 
-  // Fetch .criticignore and .critictest patterns once on mount
+  // Fetch project config (categories) once on mount
   useEffect(() => {
-    Promise.all([
-      criticClient.getFile({ path: '.criticignore' }).catch(() => null),
-      criticClient.getFile({ path: '.critictest' }).catch(() => null),
-    ])
-      .then(([ignoreFileResponse, testFileResponse]) => {
-        if (ignoreFileResponse?.content) {
-          const patterns = ignoreFileResponse.content
-            .split('\n')
-            .map((line) => line.trim())
-            .filter((line) => line && !line.startsWith('#'))
-          setIgnorePatterns(patterns)
-        }
-        if (testFileResponse?.content) {
-          const patterns = testFileResponse.content
-            .split('\n')
-            .map((line) => line.trim())
-            .filter((line) => line && !line.startsWith('#'))
-          setTestPatterns(patterns)
+    criticClient.getProjectConfig({})
+      .then((response) => {
+        if (response.error) {
+          console.error('Failed to fetch project config:', response.error.message)
+        } else {
+          setCategories(response.categories)
         }
         setLoading(false)
       })
@@ -246,16 +275,17 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
     }
   }, [selectedFile, isFocused])
 
-  // Compute visible, test, and hidden files based on patterns, sorted by path
+  // Compute visible, test, and hidden files based on project config categories, sorted by path
   const { regularFiles, testFiles, hiddenFiles } = (() => {
     const regular: FileSummary[] = []
     const tests: FileSummary[] = []
     const hidden: FileSummary[] = []
     for (const file of files) {
       const path = getFilePath(file)
-      if (isIgnored(path, ignorePatterns)) {
+      const category = categorizeFile(path, categories)
+      if (category === 'hidden') {
         hidden.push(file)
-      } else if (isTestFile(path, testPatterns)) {
+      } else if (category === 'test') {
         tests.push(file)
       } else {
         regular.push(file)
@@ -586,9 +616,9 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
                 {filter === 'conversations'
                   ? 'No files with conversations'
                   : filter === 'tests'
-                    ? 'No test files (configure via .critictest)'
+                    ? 'No test files (configure via project.critic)'
                     : filter === 'hidden'
-                      ? 'Files can be hidden per .criticignore'
+                      ? 'Files can be hidden via project.critic'
                       : 'No files found'}
               </li>
             )}
