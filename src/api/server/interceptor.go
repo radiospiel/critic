@@ -8,41 +8,80 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/preconditions"
 	"github.com/radiospiel/critic/src/api"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // loggingInterceptor logs gRPC requests and responses using JSON format
 func loggingInterceptor() connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
-		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+		return func(ctx context.Context, request connect.AnyRequest) (connect.AnyResponse, error) {
 			start := time.Now()
-			procedure := req.Spec().Procedure
-
-			// Log request
-			if !logger.Debug("RPC request: %s req=%s", procedure, req.Any()) {
-				logger.Info("RPC request: %s", procedure)
-			}
 
 			// Call the handler
-			resp, err := next(ctx, req)
+			response, err := next(ctx, request)
 
-			// Log response as JSON
-			duration := formatDuration(start)
+			duration := time.Since(start)
+
 			if err != nil {
-				logger.Info("RPC response: %s duration=%s err=%q", procedure, duration, err.Error())
+				logGrpcError(duration, request, err)
 			} else {
-				if !logger.Debug("RPC response: %s duration=%s resp=%s", procedure, duration, resp.Any()) {
-					logger.Info("RPC response: %s duration=%s", procedure, duration)
-				}
+				logGrpcResponse(duration, request, response)
 			}
 
-			return resp, err
+			return response, err
 		}
 	}
 }
 
-func formatDuration(start time.Time) string {
-	duration := time.Since(start)
+func logGrpcError(duration time.Duration, req connect.AnyRequest, err error) bool {
+	// marshall request into a single line
+	reqMsg, ok := req.Any().(proto.Message)
+	reqMsgJSON, _ := protojson.MarshalOptions{}.Marshal(reqMsg)
+	preconditions.Check(ok, "This must always be a proto.Message")
+
+	return logger.Info(
+		"GRPC %s duration=%s req=%s err=%q",
+		req.Spec().Procedure,
+		formatDuration(duration),
+		reqMsgJSON,
+		err.Error(),
+	)
+}
+
+func logGrpcResponse(duration time.Duration, req connect.AnyRequest, resp connect.AnyResponse) {
+	// marshall request into a single line
+	reqMsg, ok := req.Any().(proto.Message)
+	reqMsgJSON, _ := protojson.MarshalOptions{}.Marshal(reqMsg)
+	preconditions.Check(ok, "This must always be a proto.Message")
+
+	respMsg, ok := resp.Any().(proto.Message)
+	preconditions.Check(ok, "This must always be a proto.Message")
+
+	// Log response, but include the result only in DEBUG level.
+	if logger.Level() > logger.DEBUG {
+		logger.Info(
+			"GRPC %s duration=%s (%d bytes) %s",
+			req.Spec().Procedure,
+			formatDuration(duration),
+			proto.Size(respMsg),
+			reqMsgJSON,
+		)
+	} else {
+		logger.Debug(
+			"GRPC %s duration=%s (%d bytes) %s resp=%s",
+			req.Spec().Procedure,
+			formatDuration(duration),
+			proto.Size(respMsg),
+			reqMsgJSON,
+			respMsg,
+		)
+	}
+}
+
+func formatDuration(duration time.Duration) string {
 	if duration >= time.Millisecond {
 		return fmt.Sprintf("%.3fms", float64(duration/time.Millisecond))
 	} else {

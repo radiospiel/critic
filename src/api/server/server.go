@@ -51,8 +51,11 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(rw, r)
-		duration := time.Since(start)
-		logger.Info("%s %s %d %v", r.Method, r.URL.Path, rw.statusCode, duration)
+
+		if rw.statusCode != 200 || r.Method != "POST" || r.URL.Path[:25] != "/critic.v1.CriticService/" {
+			duration := time.Since(start)
+			logger.Info("%s %s %d %v", r.Method, r.URL.Path, rw.statusCode, duration)
+		}
 	})
 }
 
