@@ -2,44 +2,83 @@ package logger
 
 import (
 	"fmt"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	"log"
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/term"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
-// Level represents a log minLogLevel
-type Level int
+// LevelT represents a log level
+type LevelT int
 
 const (
-	DEBUG Level = iota
+	DEBUG LevelT = iota
 	INFO
 	WARN
 	ERROR
 	FATAL
 )
 
-// SimpleLogger is a logger with support for topics, and filenames
-type SimpleLogger struct {
-	topic string
-	file  string
-	line  int
-	level Level
+var levelNames = [...]string{
+	DEBUG: "DEBUG",
+	INFO:  "INFO",
+	WARN:  "WARN",
+	ERROR: "ERROR",
+	FATAL: "FATAL",
 }
 
-var defaultLogger = SimpleLogger{
-	topic: "",
-	file:  "",
-	line:  0,
+func (l LevelT) String() string {
+	return levelNames[l]
+}
+
+var levelColors = [...]string{
+	DEBUG: "\033[36m", // cyan
+	INFO:  "",
+	WARN:  "\033[33m", // yellow
+	ERROR: "\033[31m", // red
+	FATAL: "\033[35m", // magenta
+}
+
+const colorReset = "\033[0m"
+
+// SimpleLogger is a logger with support for topics, and filenames
+// Note that most calls will call directly to the sharedInstance, but a caller
+// might build a customized logger via logger.WithPrefix("prefix"). ... and
+// that returns a temporary instance
+
+type logDestination struct {
+	mu           sync.Mutex
+	logger       *log.Logger
+	enableColors bool
+}
+
+type SimpleLogger struct {
+	dest  *logDestination
+	topic string
+	file  string // file set explicitely via WithCaller
+	line  int    // line set explicitely via WithCaller
+	level LevelT
+}
+
+var sharedDest = &logDestination{}
+
+var sharedInstance = SimpleLogger{
+	dest:  sharedDest,
 	level: INFO,
 }
+
+func Level() LevelT { return sharedInstance.level }
 
 // WithCaller returns a logger that uses the provided caller info
 func (sl *SimpleLogger) deepCopy(fun func(copy *SimpleLogger)) *SimpleLogger {
 	copy := &SimpleLogger{
+		dest:  sl.dest,
 		topic: sl.topic,
 		file:  sl.file,
 		line:  sl.line,
@@ -50,24 +89,19 @@ func (sl *SimpleLogger) deepCopy(fun func(copy *SimpleLogger)) *SimpleLogger {
 	return copy
 }
 
-// stores the path to the current log file
-var logFilePath = findLogFileName()
-
-func findLogFileName() string {
+func init() {
 	logFile := os.Getenv("LOG_FILE")
-	if logFile != "" {
-		return logFile
+	if logFile == "" {
+		logFile = "/dev/stderr"
 	}
-	return "/dev/stderr"
+	SetLogFile(logFile)
 }
-
-var fileLogger = newFileLogger(logFilePath)
 
 // logMessage holds the data for a log entry
 type logMessage struct {
-	file string
-	line int
-
+	level  LevelT
+	file   string
+	line   int
 	topic  string
 	format string
 	args   []any
@@ -121,9 +155,18 @@ func processLogEntry(entry logMessage) {
 		if strings.HasPrefix(file, wd+"/") {
 			file = file[len(wd)+1:]
 		}
-		msg = fmt.Sprintf("%s(%d): ", file, entry.line) + msg
+		msg = fmt.Sprintf("%s:%d ", file, entry.line) + msg
 	}
-	fileLogger.Println(msg)
+	msg = entry.level.String() + ": " + msg
+
+	// apply color
+	if sharedDest.enableColors {
+		color := levelColors[entry.level]
+		if color != "" {
+			msg = color + msg + colorReset
+		}
+	}
+	sharedDest.logger.Println(msg)
 }
 
 func init() {
@@ -166,60 +209,52 @@ func Runtime[T any](msg string, fun func() T) T {
 	return r
 }
 
-// LogFilePath returns the full path to the current log file
-func LogFilePath() string {
-	return logFilePath
-}
-
-// newFileLogger creates a new file-based logger
-func newFileLogger(path string) *log.Logger {
+// SetLogFile opens the given path and configures the package-level fileLogger
+func SetLogFile(path string) {
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(fmt.Sprintf("OpenFile(%s) failed: %s", path, err))
 	}
 
-	return log.New(f, "", log.LstdFlags|log.Lmicroseconds)
-}
-
-// newNullLogger creates a logger that discards all output
-func newNullLogger() *log.Logger {
-	return newFileLogger("/dev/null")
-}
-
-// SetLogFile sets the logger to write to a file
-func SetLogFile(path string) {
-	logFilePath = path
-	fileLogger = newFileLogger(path)
+	sharedDest.mu.Lock()
+	defer sharedDest.mu.Unlock()
+	sharedDest.enableColors = term.IsTerminal(int(f.Fd()))
+	sharedDest.logger = log.New(f, "", log.LstdFlags|log.Lmicroseconds)
 }
 
 // SetNullLog sets the logger to discard all output
 func SetNullLog() {
-	fileLogger = newNullLogger()
+	SetLogFile("/dev/null")
 }
 
 // SetLevel sets the minimum log level
-func SetLevel(l Level) {
-	defaultLogger.level = l
+func SetLevel(l LevelT) {
+	sharedInstance.level = l
+}
+
+// WithLevel returns a SimpleLogger that uses the provided log level
+func WithLevel(level LevelT) *SimpleLogger {
+	return sharedInstance.WithLevel(level)
 }
 
 // WithTopic returns a SimpleLogger that prepends [topic] to all log messages
 func WithTopic(topic string) *SimpleLogger {
-	return defaultLogger.WithTopic(topic)
+	return sharedInstance.WithTopic(topic)
 }
 
 // WithCaller returns a logger that uses the provided caller info
 func WithCaller(file string, line int) *SimpleLogger {
-	return defaultLogger.WithCaller(file, line)
+	return sharedInstance.WithCaller(file, line)
 }
 
-// WithCaller returns a logger that uses the provided caller info
-func (sl *SimpleLogger) WithLevel(level Level) *SimpleLogger {
+// WithLevel returns a logger that uses the provided log level. This method allows chaining of WithXXX() calls.
+func (sl *SimpleLogger) WithLevel(level LevelT) *SimpleLogger {
 	return sl.deepCopy(func(copy *SimpleLogger) {
 		copy.level = level
 	})
 }
 
-// WithCaller returns a logger that uses the provided caller info
+// WithCaller returns a logger that uses the provided caller info. This method allows chaining of WithXXX() calls.
 func (sl *SimpleLogger) WithCaller(file string, line int) *SimpleLogger {
 	return sl.deepCopy(func(copy *SimpleLogger) {
 		copy.file = file
@@ -227,7 +262,7 @@ func (sl *SimpleLogger) WithCaller(file string, line int) *SimpleLogger {
 	})
 }
 
-// WithCaller returns a logger that uses the provided caller info
+// WithTopic returns a SimpleLogger that prepends [topic] to all log messages. This method allows chaining of WithXXX() calls.
 func (sl *SimpleLogger) WithTopic(topic string) *SimpleLogger {
 	return sl.deepCopy(func(copy *SimpleLogger) {
 		copy.topic = topic
@@ -235,12 +270,14 @@ func (sl *SimpleLogger) WithTopic(topic string) *SimpleLogger {
 }
 
 // printf writes a log message with optional topic prefix
-func (t *SimpleLogger) printf(format string, v ...any) {
+func (t *SimpleLogger) printf(level LevelT, format string, v ...any) {
+	// determine caller unless set explicitly
 	file, line := t.file, t.line
 	if file == "" {
 		_, file, line, _ = runtime.Caller(3)
 	}
 	logChannel <- logMessage{
+		level:  level,
 		file:   file,
 		line:   line,
 		topic:  t.topic,
@@ -251,7 +288,7 @@ func (t *SimpleLogger) printf(format string, v ...any) {
 
 // Fatal writes a fatal error log message with topic prefix and exits
 func (t *SimpleLogger) Fatal(format string, v ...any) {
-	t.printf("FATAL: "+format, v...)
+	t.printf(FATAL, format, v...)
 	os.Exit(1)
 }
 
@@ -260,7 +297,7 @@ func (t *SimpleLogger) Error(format string, v ...any) bool {
 	if t.level > ERROR {
 		return false
 	}
-	t.printf("ERROR: "+format, v...)
+	t.printf(ERROR, format, v...)
 	return true
 }
 
@@ -269,7 +306,7 @@ func (t *SimpleLogger) Warn(format string, v ...any) bool {
 	if t.level > WARN {
 		return false
 	}
-	t.printf("WARN: "+format, v...)
+	t.printf(WARN, format, v...)
 	return true
 }
 
@@ -278,7 +315,7 @@ func (t *SimpleLogger) Info(format string, v ...any) bool {
 	if t.level > INFO {
 		return false
 	}
-	t.printf("INFO: "+format, v...)
+	t.printf(INFO, format, v...)
 	return true
 }
 
@@ -287,31 +324,26 @@ func (t *SimpleLogger) Debug(format string, v ...any) bool {
 	if t.level > DEBUG {
 		return false
 	}
-	t.printf("DEBUG: "+format, v...)
+	t.printf(DEBUG, format, v...)
 	return true
 }
 
-// Fatal writes a fatal error log message and exits
 func Fatal(format string, v ...any) {
-	defaultLogger.Fatal(format, v...)
+	sharedInstance.Fatal(format, v...)
 }
 
-// Error writes an error log message
 func Error(format string, v ...any) bool {
-	return defaultLogger.Error(format, v...)
+	return sharedInstance.Error(format, v...)
 }
 
-// Warn writes a warning log message
 func Warn(format string, v ...any) bool {
-	return defaultLogger.Warn(format, v...)
+	return sharedInstance.Warn(format, v...)
 }
 
-// Info writes an info log message
 func Info(format string, v ...any) bool {
-	return defaultLogger.Info(format, v...)
+	return sharedInstance.Info(format, v...)
 }
 
-// Debug writes a debug log message
 func Debug(format string, v ...any) bool {
-	return defaultLogger.Debug(format, v...)
+	return sharedInstance.Debug(format, v...)
 }

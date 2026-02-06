@@ -2,6 +2,7 @@ package preconditions
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/radiospiel/critic/simple-go/logger"
 )
@@ -19,13 +20,15 @@ import (
 func Check(condition bool, format string, args ...interface{}) {
 	if !condition {
 		msg := fmt.Sprintf(format, args...)
-		logger.Error("Precondition failed: %s", msg)
+		_, file, line, _ := runtime.Caller(1)
+		logger.WithCaller(file, line).Error("Precondition failed: %s", msg)
 		panic(msg)
 	}
 }
 
 func Fail(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	logger.Error("Precondition failed: %s", msg)
+	_, file, line, _ := runtime.Caller(1)
+	logger.WithCaller(file, line).Error("Precondition failed: %s", msg)
 	panic(msg)
 }
