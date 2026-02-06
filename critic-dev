@@ -28,7 +28,7 @@ get_script_dir()
 SCRIPT_DIR=$(get_script_dir)
 
 # Build the critic binary
-(cd $SCRIPT_DIR && make dbuild)
+(cd $SCRIPT_DIR && make debug)
 
 # CPU profiling is now supported via the --cpuprofile flag:
 #   critic api --cpuprofile=critic.prof
