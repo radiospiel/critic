@@ -76,6 +76,28 @@ function HelpModal({ onClose }: HelpModalProps) {
           </section>
 
           <section className="shortcut-section">
+            <h3>File List Sections</h3>
+            <div className="shortcut-list">
+              <div className="shortcut-item">
+                <kbd>Ctrl</kbd> + <kbd>1</kbd>
+                <span>Conversations</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>Ctrl</kbd> + <kbd>2</kbd>
+                <span>Files</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>Ctrl</kbd> + <kbd>3</kbd>
+                <span>Tests</span>
+              </div>
+              <div className="shortcut-item">
+                <kbd>Ctrl</kbd> + <kbd>4</kbd>
+                <span>Hidden</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="shortcut-section">
             <h3>General</h3>
             <div className="shortcut-list">
               <div className="shortcut-item">

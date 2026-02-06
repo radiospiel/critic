@@ -3,8 +3,8 @@ import { ThemeProvider, useTheme } from './context/ThemeContext'
 import FileList, { FilterType } from './components/FileList'
 import DiffView from './components/DiffView'
 import DiffBaseSelector from './components/DiffBaseSelector'
-import HelpModal from './components/HelpModal'
-import { criticClient, getConfig, getRootConversation, resolveConversation, ServerConfig, CommentConversation } from './api/client'
+import CommentDisplay from './components/CommentDisplay'
+import { criticClient, getConfig, getRootConversation, ServerConfig, CommentConversation } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
 import { useWebSocket } from './hooks/useWebSocket'
 
@@ -20,7 +20,6 @@ function AppContent() {
   const [loading, setLoading] = useState(false)
   const [files, setFiles] = useState<FileSummary[]>([])
   const [focusedPanel, setFocusedPanel] = useState<FocusedPanel>('fileList')
-  const [showHelp, setShowHelp] = useState(false)
   const [contextLines, setContextLines] = useState(3)
   const [currentLineNo, setCurrentLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [restoreLineNo, setRestoreLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
@@ -28,6 +27,7 @@ function AppContent() {
   const [fileListFilter, setFileListFilter] = useState<FilterType>('files')
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null)
   const [rootConversation, setRootConversation] = useState<CommentConversation | null>(null)
+  const [showRootConversation, setShowRootConversation] = useState(false)
   const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
 
@@ -77,6 +77,7 @@ function AppContent() {
 
   const loadFileDiff = useCallback((file: string, ctxLines?: number, preserveSelection?: boolean) => {
     setSelectedFile(file)
+    setShowRootConversation(false)
     // Only show loading indicator when changing files, not when changing context
     if (!preserveSelection) {
       setLoading(true)
@@ -168,6 +169,12 @@ function AppContent() {
     loadFileDiff(file)
   }, [loadFileDiff])
 
+  const handleSelectRootConversation = useCallback(() => {
+    setSelectedFile(null)
+    setSelectedFileDiff(null)
+    setShowRootConversation(true)
+  }, [])
+
   const handleNavigatePrevFile = useCallback(() => {
     if (files.length === 0 || !selectedFile) return
     const currentIndex = files.findIndex((f) => getFilePath(f) === selectedFile)
@@ -215,13 +222,6 @@ function AppContent() {
     setCurrentLineNo({ lineNoNew, lineNoOld })
   }, [])
 
-  const handleResolveAnnouncement = useCallback(() => {
-    if (!rootConversation) return
-    resolveConversation(rootConversation.id).then(() => {
-      setRootConversation(null)
-    })
-  }, [rootConversation])
-
   // Global keyboard handler for Tab, ?, and context line keys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -239,10 +239,9 @@ function AppContent() {
         setFocusedPanel((prev) => (prev === 'fileList' ? 'diffView' : 'fileList'))
       } else if (e.key === '?' || (e.shiftKey && e.key === '/')) {
         e.preventDefault()
-        setShowHelp((prev) => !prev)
-      } else if (e.key === 'Escape' && showHelp) {
-        e.preventDefault()
-        setShowHelp(false)
+        setSelectedFile(null)
+        setSelectedFileDiff(null)
+        setShowRootConversation(false)
       } else if (e.key === 'c') {
         e.preventDefault()
         handleIncreaseContext()
@@ -254,7 +253,7 @@ function AppContent() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [showHelp, handleIncreaseContext, handleDecreaseContext])
+  }, [handleIncreaseContext, handleDecreaseContext])
 
   return (
     <div className="app">
@@ -264,7 +263,7 @@ function AppContent() {
           <span className="render-timestamp">{secondsSinceLoad}s</span>
           <div className="header-buttons">
             <DiffBaseSelector onBaseChange={handleBaseChange} />
-            <button className="help-button" onClick={() => setShowHelp(true)} title="Keyboard shortcuts">
+            <button className="help-button" onClick={() => { setSelectedFile(null); setSelectedFileDiff(null); setShowRootConversation(false) }} title="Keyboard shortcuts">
               ?
             </button>
             <button className="theme-toggle" onClick={toggleTheme} title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>
@@ -288,36 +287,33 @@ function AppContent() {
             </button>
           </div>
         </div>
-        {rootConversation && rootConversation.messages.length > 0 && (
-          <div className="announcement-banner">
-            <div className="announcement-messages">
-              {rootConversation.messages
-                .filter((m) => m.content !== '')
-                .slice(-3)
-                .map((msg) => (
-                  <div key={msg.id} className="announcement-message">
-                    {msg.content}
-                  </div>
-                ))}
-            </div>
-            <button className="announcement-resolve" onClick={handleResolveAnnouncement}>
-              Dismiss
-            </button>
-          </div>
-        )}
         <FileList
           files={files}
           selectedFile={selectedFile}
           onSelectFile={handleSelectFile}
+          onSelectRootConversation={handleSelectRootConversation}
           isFocused={focusedPanel === 'fileList'}
           onFocus={() => setFocusedPanel('fileList')}
           onFilterChange={setFileListFilter}
+          rootConversation={rootConversation}
+          isRootConversationSelected={showRootConversation}
+          onConversationsChanged={() => { loadFileList(); loadRootConversation() }}
         />
       </aside>
       <main className="main-content">
         {loading ? (
           <div className="empty-state">
             <span>Loading...</span>
+          </div>
+        ) : showRootConversation && rootConversation ? (
+          <div className="root-conversation-view">
+            <CommentDisplay
+              conversations={[rootConversation]}
+              lineNumber={rootConversation.lineNumber}
+              onReplyAdded={loadRootConversation}
+              scrollToBottom
+              alwaysShowEditor
+            />
           </div>
         ) : selectedFileDiff ? (
           <DiffView
@@ -336,18 +332,42 @@ function AppContent() {
             serverConfig={serverConfig}
           />
         ) : (
-          <div className="empty-state">
-            <span>
-              {fileListFilter === 'conversations'
-                ? 'To start a conversation in a changed source file, press Return on a source line and start writing your review message.'
-                : fileListFilter === 'hidden'
-                  ? 'Files can be hidden per .criticignore'
-                  : 'Select a file to view changes'}
-            </span>
+          <div className="empty-state usage-guide">
+            <h2>Getting Started with Critic</h2>
+            <section>
+              <h3>Review Changes</h3>
+              <p>Select a file from the sidebar to view its diff. Press <kbd>Enter</kbd> on any source line to start a conversation.</p>
+            </section>
+            <section>
+              <h3>Connect Claude Code</h3>
+              <p>Register the Critic MCP server so Claude can read and reply to your review comments:</p>
+              <pre><code>claude mcp add critic -- critic mcp</code></pre>
+              <p>Then instruct Claude to check for feedback:</p>
+              <pre><code>check the critic mcp tools for open conversations, and reply when necessary</code></pre>
+            </section>
+            <section>
+              <h3>Keyboard Shortcuts</h3>
+              <table className="shortcut-table">
+                <tbody>
+                  <tr><td colSpan={4} className="shortcut-table-heading">General</td></tr>
+                  <tr><td><kbd>?</kbd></td><td>Show this help</td><td><kbd>g</kbd> / <kbd>G</kbd></td><td>Go to top / bottom</td></tr>
+                  <tr><td><kbd>Tab</kbd></td><td>Switch file list / diff focus</td><td><kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd></td><td>Jump 25 lines</td></tr>
+                  <tr><td><kbd>↑</kbd> / <kbd>k</kbd></td><td>Move selection up</td><td><kbd>Shift</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd></td><td>Expand selection</td></tr>
+                  <tr><td><kbd>↓</kbd> / <kbd>j</kbd></td><td>Move selection down</td><td><kbd>b</kbd></td><td>Toggle diff base selector</td></tr>
+
+                  <tr><td colSpan={4} className="shortcut-table-heading">File List Sections</td></tr>
+                  <tr><td><kbd>Ctrl</kbd> + <kbd>1</kbd></td><td>Conversations</td><td><kbd>Ctrl</kbd> + <kbd>3</kbd></td><td>Tests</td></tr>
+                  <tr><td><kbd>Ctrl</kbd> + <kbd>2</kbd></td><td>Files</td><td><kbd>Ctrl</kbd> + <kbd>4</kbd></td><td>Hidden</td></tr>
+
+                  <tr><td colSpan={4} className="shortcut-table-heading">Diffs</td></tr>
+                  <tr><td><kbd>Enter</kbd></td><td>Open comment editor</td><td><kbd>⌥</kbd> + <kbd>↵</kbd></td><td>Save comment</td></tr>
+                  <tr><td><kbd>Esc</kbd></td><td>Close comment editor</td><td><kbd>c</kbd> / <kbd>C</kbd></td><td>Context lines +/-</td></tr>
+                </tbody>
+              </table>
+            </section>
           </div>
         )}
       </main>
-      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Markdown from 'react-markdown'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -9,6 +9,8 @@ interface CommentDisplayProps {
   conversations: CommentConversation[]
   lineNumber: number
   onReplyAdded?: () => void
+  scrollToBottom?: boolean
+  alwaysShowEditor?: boolean
 }
 
 function formatDate(dateString: string): string {
@@ -20,7 +22,7 @@ function MessageItem({ message }: { message: CommentMessage }) {
   return (
     <div className={`comment-message comment-message-${message.author}`}>
       <div className="comment-message-header">
-        <span className="comment-message-author">{message.author}</span>
+        <span className="comment-message-author">{message.author === 'ai' ? 'Bot' : message.author}</span>
         <span className="comment-message-time">{formatDate(message.createdAt)}</span>
         {message.isUnread && <span className="comment-message-unread">New</span>}
       </div>
@@ -108,14 +110,15 @@ function ReplyEditor({ conversationId, onReplySaved, onCancel }: ReplyEditorProp
 interface ConversationItemProps {
   conversation: CommentConversation
   onReplyAdded?: () => void
+  alwaysShowEditor?: boolean
 }
 
-function ConversationItem({ conversation, onReplyAdded }: ConversationItemProps) {
-  const [showEditor, setShowEditor] = useState(false)
+function ConversationItem({ conversation, onReplyAdded, alwaysShowEditor }: ConversationItemProps) {
+  const [showEditor, setShowEditor] = useState(!!alwaysShowEditor)
   const [resolving, setResolving] = useState(false)
 
   const handleReplySaved = () => {
-    setShowEditor(false)
+    if (!alwaysShowEditor) setShowEditor(false)
     onReplyAdded?.()
   }
 
@@ -149,7 +152,7 @@ function ConversationItem({ conversation, onReplyAdded }: ConversationItemProps)
         <ReplyEditor
           conversationId={conversation.id}
           onReplySaved={handleReplySaved}
-          onCancel={() => setShowEditor(false)}
+          onCancel={() => { if (!alwaysShowEditor) setShowEditor(false) }}
         />
       ) : (
         <div className="reply-button-container">
@@ -171,11 +174,24 @@ function ConversationItem({ conversation, onReplyAdded }: ConversationItemProps)
   )
 }
 
-function CommentDisplay({ conversations, lineNumber, onReplyAdded }: CommentDisplayProps) {
+function CommentDisplay({ conversations, lineNumber, onReplyAdded, scrollToBottom, alwaysShowEditor }: CommentDisplayProps) {
+  const bottomRef = useRef<HTMLDivElement>(null)
+
   // Filter conversations for this specific line
   const lineConversations = conversations.filter(
     (conv) => conv.lineNumber === lineNumber
   )
+
+  const messageCount = lineConversations.reduce((sum, c) => sum + c.messages.length, 0)
+
+  useEffect(() => {
+    if (!scrollToBottom) return
+    // Delay to allow async editors (TipTap) to fully render
+    const timer = setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [scrollToBottom, messageCount])
 
   if (lineConversations.length === 0) {
     return null
@@ -188,8 +204,10 @@ function CommentDisplay({ conversations, lineNumber, onReplyAdded }: CommentDisp
           key={conversation.id}
           conversation={conversation}
           onReplyAdded={onReplyAdded}
+          alwaysShowEditor={alwaysShowEditor}
         />
       ))}
+      <div ref={bottomRef} />
     </div>
   )
 }

@@ -1,6 +1,21 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { criticClient, getConversationsSummary, ConversationSummary } from '../api/client'
+import { criticClient, getConversationsSummary, getConversations, resolveConversation, ConversationSummary, CommentConversation } from '../api/client'
 import { FileSummary, FileStatus } from '../gen/critic_pb'
+import { pluralize } from './Pluralize'
+
+function formatTimestamp(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString()
+}
 
 export type FilterType = 'automatic' | 'conversations' | 'files' | 'tests' | 'hidden'
 
@@ -8,9 +23,13 @@ interface FileListProps {
   files: FileSummary[]
   selectedFile: string | null
   onSelectFile: (file: string, fileSummary: FileSummary) => void
+  onSelectRootConversation?: () => void
   isFocused?: boolean
   onFocus?: () => void
   onFilterChange?: (filter: FilterType) => void
+  rootConversation?: CommentConversation | null
+  isRootConversationSelected?: boolean
+  onConversationsChanged?: () => void
 }
 
 function getFilePath(file: FileSummary): string {
@@ -87,19 +106,71 @@ function isTestFile(path: string, patterns: string[]): boolean {
   return matchesPattern(path, patterns)
 }
 
-function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFilterChange }: FileListProps) {
+// Truncate text to maxLen characters, adding ellipsis if needed
+function truncateText(text: string, maxLen: number): string {
+  // Strip markdown/HTML and collapse whitespace
+  const plain = text.replace(/[#*_`~\[\]()>]/g, '').replace(/\s+/g, ' ').trim()
+  if (plain.length <= maxLen) return plain
+  return plain.slice(0, maxLen) + '...'
+}
+
+interface CommentMessage {
+  id?: string
+  author: string
+  content: string
+  createdAt: string
+}
+
+function MessagePreviews({ messages }: { messages: CommentMessage[] }) {
+  if (messages.length === 0) return null
+  const total = messages.length
+  const tail = messages.slice(-2)
+  return (
+    <>
+      {total > 2 && (
+        <span className="conversation-entry-ellipsis">
+          ({pluralize(total - 2, 'earlier message')})
+        </span>
+      )}
+      {tail.map((msg, i) => (
+        <span key={i} className="conversation-entry-preview">
+          <span className="conversation-entry-preview-author">{msg.author === 'human' ? 'Human' : 'Bot'}:</span>{' '}
+          {truncateText(msg.content, 150)}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, onFilterChange, rootConversation, isRootConversationSelected, onConversationsChanged }: FileListProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
   const [testPatterns, setTestPatterns] = useState<string[]>([])
   const [filter, setFilter] = useState<FilterType>('automatic')
   const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
+  const [fileConversations, setFileConversations] = useState<Map<string, CommentConversation[]>>(new Map())
+  const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set())
   const selectedItemRef = useRef<HTMLLIElement>(null)
 
   // Handle user clicking a filter button
   const handleUserFilterChange = (newFilter: FilterType) => {
     setFilter(newFilter)
     onFilterChange?.(newFilter)
+  }
+
+  const handleResolve = async (e: React.MouseEvent, conversationId: string) => {
+    e.stopPropagation()
+    setResolvingIds((prev) => new Set(prev).add(conversationId))
+    const result = await resolveConversation(conversationId)
+    setResolvingIds((prev) => {
+      const next = new Set(prev)
+      next.delete(conversationId)
+      return next
+    })
+    if (result.success) {
+      onConversationsChanged?.()
+    }
   }
 
   // Fetch .criticignore and .critictest patterns once on mount
@@ -146,6 +217,28 @@ function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFil
       })
   }, [files])
 
+  // Fetch full conversations for files that have them (for conversations view)
+  useEffect(() => {
+    if (conversationSummaries.size === 0) return
+    const filePaths = Array.from(conversationSummaries.entries())
+      .filter(([, s]) => s.totalCount > 0)
+      .map(([path]) => path)
+    if (filePaths.length === 0) {
+      setFileConversations(new Map())
+      return
+    }
+    Promise.all(filePaths.map((path) => getConversations(path).then((r) => [path, r.conversations] as const)))
+      .then((results) => {
+        const map = new Map<string, CommentConversation[]>()
+        for (const [path, convos] of results) {
+          if (convos.length > 0) {
+            map.set(path, convos)
+          }
+        }
+        setFileConversations(map)
+      })
+  }, [conversationSummaries])
+
   // Scroll selected item into view
   useEffect(() => {
     if (selectedItemRef.current && isFocused) {
@@ -190,16 +283,17 @@ function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFil
     })
     .sort((a, b) => getFilePath(a).localeCompare(getFilePath(b)))
 
-  // Total conversation count (from visible files only)
+  // Total conversation count (from visible files only, plus root conversation if present)
+  const hasRootConversation = rootConversation && rootConversation.messages.length > 0 ? 1 : 0
   const totalConversations = filesWithConversations.reduce((sum, file) => {
     const path = getFilePath(file)
     const summary = conversationSummaries.get(path)
     return sum + (summary?.totalCount || 0)
-  }, 0)
+  }, hasRootConversation)
 
   // Compute effective filter: automatic means 'conversations' if any exist, otherwise 'files'
   const effectiveFilter = filter === 'automatic'
-    ? (filesWithConversations.length > 0 ? 'conversations' : 'files')
+    ? (totalConversations > 0 ? 'conversations' : 'files')
     : filter
 
   // Determine displayed files based on filter
@@ -218,9 +312,11 @@ function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFil
   })()
 
   // Keyboard navigation when focused
+  const showRootInList = effectiveFilter === 'conversations' && hasRootConversation > 0
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (!isFocused || displayedFiles.length === 0) return
+      if (!isFocused) return
 
       // Don't handle if in input field
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -230,30 +326,56 @@ function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFil
       const currentIndex = selectedFile
         ? displayedFiles.findIndex((f) => getFilePath(f) === selectedFile)
         : -1
+      const onRoot = isRootConversationSelected
+
+      // Ctrl+1..4 to switch filter sections
+      if (e.ctrlKey && e.key >= '1' && e.key <= '4') {
+        e.preventDefault()
+        const filters: FilterType[] = ['conversations', 'files', 'tests', 'hidden']
+        handleUserFilterChange(filters[parseInt(e.key) - 1])
+        return
+      }
 
       switch (e.key) {
         case 'ArrowUp':
         case 'k':
           e.preventDefault()
-          if (currentIndex > 0) {
+          if (onRoot) {
+            // Already at the top, do nothing
+          } else if (currentIndex === 0 && showRootInList) {
+            // At first file, go up to root conversation
+            onSelectRootConversation?.()
+          } else if (currentIndex > 0) {
             const prevFile = displayedFiles[currentIndex - 1]
             onSelectFile(getFilePath(prevFile), prevFile)
-          } else if (currentIndex === -1 && displayedFiles.length > 0) {
+          } else if (currentIndex === -1 && !onRoot) {
             // No selection, select last file
-            const lastFile = displayedFiles[displayedFiles.length - 1]
-            onSelectFile(getFilePath(lastFile), lastFile)
+            if (displayedFiles.length > 0) {
+              const lastFile = displayedFiles[displayedFiles.length - 1]
+              onSelectFile(getFilePath(lastFile), lastFile)
+            } else if (showRootInList) {
+              onSelectRootConversation?.()
+            }
           }
           break
         case 'ArrowDown':
         case 'j':
           e.preventDefault()
-          if (currentIndex < displayedFiles.length - 1) {
-            const nextFile = displayedFiles[currentIndex + 1]
-            onSelectFile(getFilePath(nextFile), nextFile)
-          } else if (currentIndex === -1 && displayedFiles.length > 0) {
-            // No selection, select first file
+          if (onRoot && displayedFiles.length > 0) {
+            // On root, go down to first file
             const firstFile = displayedFiles[0]
             onSelectFile(getFilePath(firstFile), firstFile)
+          } else if (currentIndex < displayedFiles.length - 1) {
+            const nextFile = displayedFiles[currentIndex + 1]
+            onSelectFile(getFilePath(nextFile), nextFile)
+          } else if (currentIndex === -1 && !onRoot) {
+            // No selection, select root or first file
+            if (showRootInList) {
+              onSelectRootConversation?.()
+            } else if (displayedFiles.length > 0) {
+              const firstFile = displayedFiles[0]
+              onSelectFile(getFilePath(firstFile), firstFile)
+            }
           }
           break
         case 'Enter':
@@ -261,7 +383,7 @@ function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFil
           break
       }
     },
-    [isFocused, displayedFiles, selectedFile, onSelectFile]
+    [isFocused, displayedFiles, selectedFile, onSelectFile, isRootConversationSelected, showRootInList, onSelectRootConversation, handleUserFilterChange]
   )
 
   useEffect(() => {
@@ -294,19 +416,19 @@ function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFil
           className={`file-list-filter-btn${effectiveFilter === 'conversations' ? ' active' : ''}`}
           onClick={() => handleUserFilterChange('conversations')}
         >
-          {totalConversations} Conversations
+          {pluralize(totalConversations, 'Conversation')}
         </button>
         <button
           className={`file-list-filter-btn${effectiveFilter === 'files' ? ' active' : ''}`}
           onClick={() => handleUserFilterChange('files')}
         >
-          {regularFiles.length} Files
+          {pluralize(regularFiles.length, 'File')}
         </button>
         <button
           className={`file-list-filter-btn${effectiveFilter === 'tests' ? ' active' : ''}`}
           onClick={() => handleUserFilterChange('tests')}
         >
-          {testFiles.length} Tests
+          {pluralize(testFiles.length, 'Test')}
         </button>
         <button
           className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
@@ -316,54 +438,161 @@ function FileList({ files, selectedFile, onSelectFile, isFocused, onFocus, onFil
         </button>
       </div>
       <ul className="file-list">
-        {displayedFiles.map((file) => {
-          const path = getFilePath(file)
-          const isSelected = selectedFile === path
-          const summary = conversationSummaries.get(path)
-          return (
-            <li
-              key={path}
-              ref={isSelected ? selectedItemRef : undefined}
-              className={`file-item${isSelected ? ' selected' : ''}`}
-              onClick={() => {
-                onSelectFile(path, file)
-                onFocus?.()
-              }}
-              title={path}
-            >
-              <span className={`file-status status-${getStatusLabel(file.status).toLowerCase()}`}>
-                {getStatusLabel(file.status)}
-              </span>
-              <span className="file-path">{path}</span>
-              {summary && summary.unresolvedCount > 0 && (
-                <span
-                  className="conversation-icon unresolved"
-                  title={`${summary.unresolvedCount} unresolved`}
+        {effectiveFilter === 'conversations' ? (
+          <>
+            {rootConversation && rootConversation.messages.length > 0 && (() => {
+              const lastMsg = rootConversation.messages[rootConversation.messages.length - 1]
+              const isUnresolved = rootConversation.status !== 'resolved'
+              return (
+                <li
+                  className={`conversation-entry root${isUnresolved ? ' unresolved' : ''}${isRootConversationSelected ? ' selected' : ''}`}
+                  onClick={() => {
+                    onSelectRootConversation?.()
+                    onFocus?.()
+                  }}
                 >
-                  {summary.unresolvedCount}
-                </span>
-              )}
-              {summary && summary.resolvedCount > 0 && (
-                <span
-                  className="conversation-icon resolved"
-                  title={`${summary.resolvedCount} resolved`}
+                  <span className="conversation-entry-info">
+                    <span className={`conversation-entry-status${isUnresolved ? ' unresolved' : ''}`}>
+                      {isUnresolved ? 'open' : 'resolved'}
+                    </span>
+                    <span className="conversation-entry-author">{lastMsg.author === 'human' ? 'Human' : 'Bot'}</span>
+                    <span className="conversation-entry-messages">
+                      {pluralize(rootConversation.messages.length, 'message')}
+                    </span>
+                    <span className="conversation-entry-timestamp">{formatTimestamp(lastMsg.createdAt)}</span>
+                    {isUnresolved && (
+                      <button
+                        className="conversation-resolve-btn"
+                        disabled={resolvingIds.has(rootConversation.id)}
+                        onClick={(e) => handleResolve(e, rootConversation.id)}
+                      >
+                        {resolvingIds.has(rootConversation.id) ? 'Resolving...' : 'Resolve'}
+                      </button>
+                    )}
+                  </span>
+                  <MessagePreviews messages={rootConversation.messages} />
+                </li>
+              )
+            })()}
+            {filesWithConversations.map((file) => {
+              const path = getFilePath(file)
+              const conversations = fileConversations.get(path) || []
+              const isSelected = selectedFile === path
+              const summary = conversationSummaries.get(path)
+              const hasUnresolved = summary ? summary.unresolvedCount > 0 : false
+              return (
+                <li
+                  key={path}
+                  ref={isSelected ? selectedItemRef : undefined}
+                  className="conversation-group"
                 >
-                  {summary.resolvedCount}
-                </span>
-              )}
-            </li>
-          )
-        })}
-        {displayedFiles.length === 0 && (
-          <li className="file-list-message">
-            {filter === 'conversations'
-              ? 'No files with conversations'
-              : filter === 'tests'
-                ? 'No test files (configure via .critictest)'
-                : filter === 'hidden'
-                  ? 'Files can be hidden per .criticignore'
-                  : 'No files found'}
-          </li>
+                  <div
+                    className={`conversation-group-header${isSelected ? ' selected' : ''}${hasUnresolved ? ' unresolved' : ''}`}
+                    onClick={() => {
+                      onSelectFile(path, file)
+                      onFocus?.()
+                    }}
+                    title={path}
+                  >
+                    <span className={`file-status status-${getStatusLabel(file.status).toLowerCase()}`}>
+                      {getStatusLabel(file.status)}
+                    </span>
+                    <span className="file-path">{path}</span>
+                  </div>
+                  {conversations.map((conv) => {
+                    const lastMsg = conv.messages[conv.messages.length - 1]
+                    const isUnresolved = conv.status !== 'resolved'
+                    return (
+                      <div
+                        key={conv.id}
+                        className={`conversation-entry${isUnresolved ? ' unresolved' : ''}`}
+                        onClick={() => {
+                          onSelectFile(path, file)
+                          onFocus?.()
+                        }}
+                      >
+                        <span className="conversation-entry-info">
+                          <span className={`conversation-entry-status${isUnresolved ? ' unresolved' : ''}`}>
+                            {isUnresolved ? 'open' : 'resolved'}
+                          </span>
+                          {lastMsg && <span className="conversation-entry-author">{lastMsg.author === 'human' ? 'Human' : 'Bot'}</span>}
+                          <span className="conversation-entry-messages">
+                            {pluralize(conv.messages.length, 'message')}
+                          </span>
+                          {lastMsg && <span className="conversation-entry-timestamp">{formatTimestamp(lastMsg.createdAt)}</span>}
+                          {isUnresolved && (
+                            <button
+                              className="conversation-resolve-btn"
+                              disabled={resolvingIds.has(conv.id)}
+                              onClick={(e) => handleResolve(e, conv.id)}
+                            >
+                              {resolvingIds.has(conv.id) ? 'Resolving...' : 'Resolve'}
+                            </button>
+                          )}
+                        </span>
+                        <MessagePreviews messages={conv.messages} />
+                      </div>
+                    )
+                  })}
+                </li>
+              )
+            })}
+            {filesWithConversations.length === 0 && (!rootConversation || rootConversation.messages.length === 0) && (
+              <li className="file-list-message">No conversations yet</li>
+            )}
+          </>
+        ) : (
+          <>
+            {displayedFiles.map((file) => {
+              const path = getFilePath(file)
+              const isSelected = selectedFile === path
+              const summary = conversationSummaries.get(path)
+              return (
+                <li
+                  key={path}
+                  ref={isSelected ? selectedItemRef : undefined}
+                  className={`file-item${isSelected ? ' selected' : ''}`}
+                  onClick={() => {
+                    onSelectFile(path, file)
+                    onFocus?.()
+                  }}
+                  title={path}
+                >
+                  <span className={`file-status status-${getStatusLabel(file.status).toLowerCase()}`}>
+                    {getStatusLabel(file.status)}
+                  </span>
+                  <span className="file-path">{path}</span>
+                  {summary && summary.unresolvedCount > 0 && (
+                    <span
+                      className="conversation-icon unresolved"
+                      title={`${summary.unresolvedCount} open`}
+                    >
+                      {summary.unresolvedCount}
+                    </span>
+                  )}
+                  {summary && summary.resolvedCount > 0 && (
+                    <span
+                      className="conversation-icon resolved"
+                      title={`${summary.resolvedCount} resolved`}
+                    >
+                      {summary.resolvedCount}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+            {displayedFiles.length === 0 && (
+              <li className="file-list-message">
+                {filter === 'conversations'
+                  ? 'No files with conversations'
+                  : filter === 'tests'
+                    ? 'No test files (configure via .critictest)'
+                    : filter === 'hidden'
+                      ? 'Files can be hidden per .criticignore'
+                      : 'No files found'}
+              </li>
+            )}
+          </>
         )}
       </ul>
     </div>
