@@ -256,35 +256,39 @@ func (t *SimpleLogger) Fatal(format string, v ...any) {
 }
 
 // Error writes an error log message with topic prefix
-func (t *SimpleLogger) Error(format string, v ...any) {
+func (t *SimpleLogger) Error(format string, v ...any) bool {
 	if t.level > ERROR {
-		return
+		return false
 	}
 	t.printf("ERROR: "+format, v...)
+	return true
 }
 
 // Warn writes a warning log message with topic prefix
-func (t *SimpleLogger) Warn(format string, v ...any) {
+func (t *SimpleLogger) Warn(format string, v ...any) bool {
 	if t.level > WARN {
-		return
+		return false
 	}
 	t.printf("WARN: "+format, v...)
+	return true
 }
 
 // Info writes an info log message with topic prefix
-func (t *SimpleLogger) Info(format string, v ...any) {
+func (t *SimpleLogger) Info(format string, v ...any) bool {
 	if t.level > INFO {
-		return
+		return false
 	}
 	t.printf("INFO: "+format, v...)
+	return true
 }
 
 // Debug writes a debug log message with topic prefix
-func (t *SimpleLogger) Debug(format string, v ...any) {
+func (t *SimpleLogger) Debug(format string, v ...any) bool {
 	if t.level > DEBUG {
-		return
+		return false
 	}
 	t.printf("DEBUG: "+format, v...)
+	return true
 }
 
 // Fatal writes a fatal error log message and exits
@@ -293,21 +297,21 @@ func Fatal(format string, v ...any) {
 }
 
 // Error writes an error log message
-func Error(format string, v ...any) {
-	defaultLogger.Error(format, v...)
+func Error(format string, v ...any) bool {
+	return defaultLogger.Error(format, v...)
 }
 
 // Warn writes a warning log message
-func Warn(format string, v ...any) {
-	defaultLogger.Warn(format, v...)
+func Warn(format string, v ...any) bool {
+	return defaultLogger.Warn(format, v...)
 }
 
 // Info writes an info log message
-func Info(format string, v ...any) {
-	defaultLogger.Info(format, v...)
+func Info(format string, v ...any) bool {
+	return defaultLogger.Info(format, v...)
 }
 
 // Debug writes a debug log message
-func Debug(format string, v ...any) {
-	defaultLogger.Debug(format, v...)
+func Debug(format string, v ...any) bool {
+	return defaultLogger.Debug(format, v...)
 }

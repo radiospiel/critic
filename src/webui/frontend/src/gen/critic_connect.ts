@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CreateConversationRequest, CreateConversationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, GetRootConversationRequest, GetRootConversationResponse, ReplyToConversationRequest, ReplyToConversationResponse, ResolveConversationRequest, ResolveConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
+import { CreateConversationRequest, CreateConversationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, GetProjectConfigRequest, GetProjectConfigResponse, GetRootConversationRequest, GetRootConversationResponse, ReplyToConversationRequest, ReplyToConversationResponse, ResolveConversationRequest, ResolveConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -166,6 +166,17 @@ export const CriticService = {
       name: "GetRootConversation",
       I: GetRootConversationRequest,
       O: GetRootConversationResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * GetProjectConfig returns the parsed project.critic configuration.
+     *
+     * @generated from rpc critic.v1.CriticService.GetProjectConfig
+     */
+    getProjectConfig: {
+      name: "GetProjectConfig",
+      I: GetProjectConfigRequest,
+      O: GetProjectConfigResponse,
       kind: MethodKind.Unary,
     },
   }

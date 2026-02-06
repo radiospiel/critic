@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { criticClient, getConversationsSummary, getConversations, resolveConversation, ConversationSummary, CommentConversation } from '../api/client'
-import { FileSummary, FileStatus } from '../gen/critic_pb'
+import { FileSummary, FileStatus, FileCategory } from '../gen/critic_pb'
 import { pluralize } from './Pluralize'
+import { matchesAnyPattern } from '../utils/glob'
 
 function formatTimestamp(dateStr: string): string {
   const date = new Date(dateStr)
@@ -26,7 +27,8 @@ interface FileListProps {
   onSelectRootConversation?: () => void
   isFocused?: boolean
   onFocus?: () => void
-  onFilterChange?: (filter: FilterType) => void
+  filter: FilterType
+  onFilterChange: (filter: FilterType) => void
   rootConversation?: CommentConversation | null
   isRootConversationSelected?: boolean
   onConversationsChanged?: () => void
@@ -52,58 +54,17 @@ function getStatusLabel(status: FileStatus): string {
   }
 }
 
-// Convert a gitignore-style pattern to a regex
-function patternToRegex(pattern: string): RegExp {
-  // Remove leading slash (makes pattern relative to root)
-  const isRooted = pattern.startsWith('/')
-  if (isRooted) {
-    pattern = pattern.slice(1)
-  }
-
-  // Escape special regex characters except * and ?
-  let regex = pattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    // Convert ** to match any path
-    .replace(/\*\*/g, '.*')
-    // Convert * to match anything except /
-    .replace(/\*/g, '[^/]*')
-    // Convert ? to match single char except /
-    .replace(/\?/g, '[^/]')
-
-  // If pattern doesn't contain /, it matches anywhere in the path
-  if (!pattern.includes('/')) {
-    regex = '(^|/)' + regex + '$'
-  } else if (isRooted) {
-    regex = '^' + regex + '$'
-  } else {
-    regex = '(^|/)' + regex + '$'
-  }
-
-  return new RegExp(regex)
-}
-
-// Check if a file path matches any of the given patterns
-function matchesPattern(path: string, patterns: string[]): boolean {
-  for (const pattern of patterns) {
-    // Skip empty lines and comments
-    if (!pattern || pattern.startsWith('#')) continue
-
-    const regex = patternToRegex(pattern)
-    if (regex.test(path)) {
-      return true
+// Convert a git pathspec glob pattern to a regex.
+// Categorize a file based on project config categories.
+// Categories are checked in order: the first matching category wins.
+// Returns "source" if no category matches.
+function categorizeFile(path: string, categories: FileCategory[]): string {
+  for (const category of categories) {
+    if (matchesAnyPattern(path, category.patterns)) {
+      return category.name
     }
   }
-  return false
-}
-
-// Check if a file path matches any of the ignore patterns
-function isIgnored(path: string, patterns: string[]): boolean {
-  return matchesPattern(path, patterns)
-}
-
-// Check if a file path matches any of the test patterns
-function isTestFile(path: string, patterns: string[]): boolean {
-  return matchesPattern(path, patterns)
+  return 'source'
 }
 
 // Truncate text to maxLen characters, adding ellipsis if needed
@@ -142,22 +103,14 @@ function MessagePreviews({ messages }: { messages: CommentMessage[] }) {
   )
 }
 
-function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, onFilterChange, rootConversation, isRootConversationSelected, onConversationsChanged }: FileListProps) {
+function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, filter, onFilterChange, rootConversation, isRootConversationSelected, onConversationsChanged }: FileListProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [ignorePatterns, setIgnorePatterns] = useState<string[]>([])
-  const [testPatterns, setTestPatterns] = useState<string[]>([])
-  const [filter, setFilter] = useState<FilterType>('automatic')
+  const [categories, setCategories] = useState<FileCategory[]>([])
   const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
   const [fileConversations, setFileConversations] = useState<Map<string, CommentConversation[]>>(new Map())
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set())
   const selectedItemRef = useRef<HTMLLIElement>(null)
-
-  // Handle user clicking a filter button
-  const handleUserFilterChange = (newFilter: FilterType) => {
-    setFilter(newFilter)
-    onFilterChange?.(newFilter)
-  }
 
   const handleResolve = async (e: React.MouseEvent, conversationId: string) => {
     e.stopPropagation()
@@ -173,26 +126,14 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
     }
   }
 
-  // Fetch .criticignore and .critictest patterns once on mount
+  // Fetch project config (categories) once on mount
   useEffect(() => {
-    Promise.all([
-      criticClient.getFile({ path: '.criticignore' }).catch(() => null),
-      criticClient.getFile({ path: '.critictest' }).catch(() => null),
-    ])
-      .then(([ignoreFileResponse, testFileResponse]) => {
-        if (ignoreFileResponse?.content) {
-          const patterns = ignoreFileResponse.content
-            .split('\n')
-            .map((line) => line.trim())
-            .filter((line) => line && !line.startsWith('#'))
-          setIgnorePatterns(patterns)
-        }
-        if (testFileResponse?.content) {
-          const patterns = testFileResponse.content
-            .split('\n')
-            .map((line) => line.trim())
-            .filter((line) => line && !line.startsWith('#'))
-          setTestPatterns(patterns)
+    criticClient.getProjectConfig({})
+      .then((response) => {
+        if (response.error) {
+          console.error('Failed to fetch project config:', response.error.message)
+        } else {
+          setCategories(response.categories)
         }
         setLoading(false)
       })
@@ -246,16 +187,17 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
     }
   }, [selectedFile, isFocused])
 
-  // Compute visible, test, and hidden files based on patterns, sorted by path
+  // Compute visible, test, and hidden files based on project config categories, sorted by path
   const { regularFiles, testFiles, hiddenFiles } = (() => {
     const regular: FileSummary[] = []
     const tests: FileSummary[] = []
     const hidden: FileSummary[] = []
     for (const file of files) {
       const path = getFilePath(file)
-      if (isIgnored(path, ignorePatterns)) {
+      const category = categorizeFile(path, categories)
+      if (category === 'hidden') {
         hidden.push(file)
-      } else if (isTestFile(path, testPatterns)) {
+      } else if (category === 'test') {
         tests.push(file)
       } else {
         regular.push(file)
@@ -328,14 +270,6 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
         : -1
       const onRoot = isRootConversationSelected
 
-      // Ctrl+1..4 to switch filter sections
-      if (e.ctrlKey && e.key >= '1' && e.key <= '4') {
-        e.preventDefault()
-        const filters: FilterType[] = ['conversations', 'files', 'tests', 'hidden']
-        handleUserFilterChange(filters[parseInt(e.key) - 1])
-        return
-      }
-
       switch (e.key) {
         case 'ArrowUp':
         case 'k':
@@ -383,7 +317,7 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
           break
       }
     },
-    [isFocused, displayedFiles, selectedFile, onSelectFile, isRootConversationSelected, showRootInList, onSelectRootConversation, handleUserFilterChange]
+    [isFocused, displayedFiles, selectedFile, onSelectFile, isRootConversationSelected, showRootInList, onSelectRootConversation]
   )
 
   useEffect(() => {
@@ -414,25 +348,25 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
       <div className="file-list-filters">
         <button
           className={`file-list-filter-btn${effectiveFilter === 'conversations' ? ' active' : ''}`}
-          onClick={() => handleUserFilterChange('conversations')}
+          onClick={() => onFilterChange('conversations')}
         >
           {pluralize(totalConversations, 'Conversation')}
         </button>
         <button
           className={`file-list-filter-btn${effectiveFilter === 'files' ? ' active' : ''}`}
-          onClick={() => handleUserFilterChange('files')}
+          onClick={() => onFilterChange('files')}
         >
           {pluralize(regularFiles.length, 'File')}
         </button>
         <button
           className={`file-list-filter-btn${effectiveFilter === 'tests' ? ' active' : ''}`}
-          onClick={() => handleUserFilterChange('tests')}
+          onClick={() => onFilterChange('tests')}
         >
           {pluralize(testFiles.length, 'Test')}
         </button>
         <button
           className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
-          onClick={() => handleUserFilterChange('hidden')}
+          onClick={() => onFilterChange('hidden')}
         >
           {hiddenFiles.length} Hidden
         </button>
@@ -586,9 +520,9 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
                 {filter === 'conversations'
                   ? 'No files with conversations'
                   : filter === 'tests'
-                    ? 'No test files (configure via .critictest)'
+                    ? 'No test files (configure via project.critic)'
                     : filter === 'hidden'
-                      ? 'Files can be hidden per .criticignore'
+                      ? 'Files can be hidden via project.critic'
                       : 'No files found'}
               </li>
             )}

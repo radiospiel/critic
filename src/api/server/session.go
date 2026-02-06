@@ -182,16 +182,13 @@ func (s *Session) TriggerDiff() <-chan struct{} {
 	s.state = StateInitialising
 	s.mu.Unlock()
 
-	// Start background task to load diff summary
+	// Start background task to load diff summary.
+	// Paths are passed directly to git commands as pathspec arguments,
+	// which filters at the source for better performance.
 	task, err := tasks.RunExclusively("api-session-diff", func() diffResult {
-		files, err := git.GetDiffNames(currentBase, []string{})
+		files, err := git.GetDiffNames(currentBase, s.paths)
 		if err != nil {
 			return diffResult{err: err}
-		}
-
-		// Filter by paths if specified
-		if len(s.paths) > 0 {
-			files = filterDiffByPaths(files, s.paths)
 		}
 
 		return diffResult{files: files}

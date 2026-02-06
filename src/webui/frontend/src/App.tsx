@@ -24,7 +24,7 @@ function AppContent() {
   const [currentLineNo, setCurrentLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [restoreLineNo, setRestoreLineNo] = useState<{ lineNoNew: number; lineNoOld: number } | null>(null)
   const [secondsSinceLoad, setSecondsSinceLoad] = useState(0)
-  const [fileListFilter, setFileListFilter] = useState<FilterType>('files')
+  const [fileListFilter, setFileListFilter] = useState<FilterType>('automatic')
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null)
   const [rootConversation, setRootConversation] = useState<CommentConversation | null>(null)
   const [showRootConversation, setShowRootConversation] = useState(false)
@@ -234,6 +234,14 @@ function AppContent() {
         return
       }
 
+      // Ctrl+1..4 to switch filter sections
+      if (e.ctrlKey && e.key >= '1' && e.key <= '4') {
+        e.preventDefault()
+        const filters: FilterType[] = ['conversations', 'files', 'tests', 'hidden']
+        setFileListFilter(filters[parseInt(e.key) - 1])
+        return
+      }
+
       if (e.key === 'Tab') {
         e.preventDefault()
         setFocusedPanel((prev) => (prev === 'fileList' ? 'diffView' : 'fileList'))
@@ -294,6 +302,7 @@ function AppContent() {
           onSelectRootConversation={handleSelectRootConversation}
           isFocused={focusedPanel === 'fileList'}
           onFocus={() => setFocusedPanel('fileList')}
+          filter={fileListFilter}
           onFilterChange={setFileListFilter}
           rootConversation={rootConversation}
           isRootConversationSelected={showRootConversation}

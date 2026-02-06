@@ -138,17 +138,24 @@ func readUntrackedFile(path string) (*ctypes.FileDiff, error) {
 // base is a commit SHA, target is either "current" for working directory or a commit SHA.
 // This is more efficient than GetDiff when you only need to know which files changed.
 // Also includes untracked files (new files not yet added to git).
+//
+// When paths is non-empty, only files under those paths are included. The paths are
+// passed directly to git as pathspec arguments (after --) to filter at the source,
+// avoiding the overhead of listing all changed files and filtering afterwards.
 func GetDiffNames(base string, paths []string) ([]*ctypes.FileDiff, error) {
 	for _, path := range paths {
 		preconditions.Check(len(path) > 0, "Path cannot be empty")
 	}
 
 	// Build git diff --name-status command
-	var args []string
-
-	// Compare base to working directory
-	args = []string{"diff", "--merge-base", base, "--name-status"}
+	args := []string{"diff", "--merge-base", base, "--name-status"}
 	args = append(args, diffWhitespaceOpts...)
+
+	// Pass paths as pathspec arguments after -- to let git filter at the source
+	if len(paths) > 0 {
+		args = append(args, "--")
+		args = append(args, paths...)
+	}
 
 	output := git(args...)
 
@@ -159,14 +166,24 @@ func GetDiffNames(base string, paths []string) ([]*ctypes.FileDiff, error) {
 	}
 
 	// Get untracked files and add them as untracked
-	untrackedDiffs := getUntrackedDiffs()
+	untrackedDiffs := getUntrackedDiffs(paths)
 	files = append(files, untrackedDiffs...)
 
 	return files, nil
 }
 
-func getUntrackedDiffs() []*ctypes.FileDiff {
-	output := git("ls-files", "--others", "--exclude-standard")
+// getUntrackedDiffs returns untracked files as FileDiff entries.
+// When paths is non-empty, only untracked files under those paths are included.
+func getUntrackedDiffs(paths []string) []*ctypes.FileDiff {
+	args := []string{"ls-files", "--others", "--exclude-standard"}
+
+	// Pass paths as pathspec arguments after -- to let git filter at the source
+	if len(paths) > 0 {
+		args = append(args, "--")
+		args = append(args, paths...)
+	}
+
+	output := git(args...)
 	files := lo.Filter(
 		strings.Split(strings.TrimSpace(string(output)), "\n"),
 		func(path string, _ int) bool { return path != "" },

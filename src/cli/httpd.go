@@ -5,7 +5,9 @@ import (
 	"os"
 	"runtime/pprof"
 
+	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api/server"
+	"github.com/radiospiel/critic/src/config"
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/spf13/cobra"
@@ -17,6 +19,7 @@ func newHTTPDCmd() *cobra.Command {
 	var dev bool
 	var diffBases []string
 	var cpuProfile string
+	var projectFile string
 
 	cmd := &cobra.Command{
 		Use:   "httpd [flags]",
@@ -33,6 +36,7 @@ Examples:
   critic httpd --port=8000        # Start on custom port
   critic httpd --dev              # Development mode with Vite hot reload
   critic httpd --cpuprofile=cpu.prof  # Enable CPU profiling
+  critic httpd --project=my.critic   # Use custom project config file
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -65,6 +69,23 @@ Examples:
 			// Get git root directory
 			gitRoot := git.GetGitRoot()
 
+			// Load project config (optional)
+			var projectConfig *config.ProjectConfig
+			if projectFile != "" {
+				pc, err := config.LoadProjectConfigFromFile(projectFile)
+				if err != nil {
+					return fmt.Errorf("failed to load project config from %s: %w", projectFile, err)
+				}
+				projectConfig = pc
+			} else {
+				pc, err := config.LoadProjectConfig(gitRoot)
+				if err != nil {
+					logger.Error("failed to load project.critic: %v", err)
+				} else {
+					projectConfig = pc
+				}
+			}
+
 			// Initialize the message database
 			mdb, err := messagedb.New(gitRoot)
 			if err != nil {
@@ -73,11 +94,12 @@ Examples:
 			defer mdb.Close()
 
 			config := server.Config{
-				Port:      port,
-				Dev:       dev,
-				DiffBases: diffBases,
-				GitRoot:   gitRoot,
-				Messaging: mdb,
+				Port:          port,
+				Dev:           dev,
+				DiffBases:     diffBases,
+				GitRoot:       gitRoot,
+				Messaging:     mdb,
+				ProjectConfig: projectConfig,
 			}
 
 			srv := server.NewServer(config)
@@ -90,6 +112,7 @@ Examples:
 	cmd.Flags().StringSliceVar(&diffBases, "base-commits", nil, "Diff base commits (defaults to main/master/origin/<branch>/HEAD)")
 	cmd.Flags().Lookup("base-commits").Shorthand = "b"
 	cmd.Flags().StringVar(&cpuProfile, "cpuprofile", "", "Write CPU profile to file (use 'go tool pprof' to analyze)")
+	cmd.Flags().StringVar(&projectFile, "project", "", "Path to project.critic config file (default: auto-detect in git root)")
 
 	return cmd
 }

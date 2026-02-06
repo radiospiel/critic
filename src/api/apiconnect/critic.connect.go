@@ -71,6 +71,9 @@ const (
 	// CriticServiceGetRootConversationProcedure is the fully-qualified name of the CriticService's
 	// GetRootConversation RPC.
 	CriticServiceGetRootConversationProcedure = "/critic.v1.CriticService/GetRootConversation"
+	// CriticServiceGetProjectConfigProcedure is the fully-qualified name of the CriticService's
+	// GetProjectConfig RPC.
+	CriticServiceGetProjectConfigProcedure = "/critic.v1.CriticService/GetProjectConfig"
 )
 
 // CriticServiceClient is a client for the critic.v1.CriticService service.
@@ -103,6 +106,8 @@ type CriticServiceClient interface {
 	GetConfig(context.Context, *connect.Request[api.GetConfigRequest]) (*connect.Response[api.GetConfigResponse], error)
 	// GetRootConversation returns the root conversation (global announcements).
 	GetRootConversation(context.Context, *connect.Request[api.GetRootConversationRequest]) (*connect.Response[api.GetRootConversationResponse], error)
+	// GetProjectConfig returns the parsed project.critic configuration.
+	GetProjectConfig(context.Context, *connect.Request[api.GetProjectConfigRequest]) (*connect.Response[api.GetProjectConfigResponse], error)
 }
 
 // NewCriticServiceClient constructs a client for the critic.v1.CriticService service. By default,
@@ -200,6 +205,12 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(criticServiceMethods.ByName("GetRootConversation")),
 			connect.WithClientOptions(opts...),
 		),
+		getProjectConfig: connect.NewClient[api.GetProjectConfigRequest, api.GetProjectConfigResponse](
+			httpClient,
+			baseURL+CriticServiceGetProjectConfigProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("GetProjectConfig")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -219,6 +230,7 @@ type criticServiceClient struct {
 	watchFile               *connect.Client[api.WatchFileRequest, api.WatchFileResponse]
 	getConfig               *connect.Client[api.GetConfigRequest, api.GetConfigResponse]
 	getRootConversation     *connect.Client[api.GetRootConversationRequest, api.GetRootConversationResponse]
+	getProjectConfig        *connect.Client[api.GetProjectConfigRequest, api.GetProjectConfigResponse]
 }
 
 // GetLastChange calls critic.v1.CriticService.GetLastChange.
@@ -291,6 +303,11 @@ func (c *criticServiceClient) GetRootConversation(ctx context.Context, req *conn
 	return c.getRootConversation.CallUnary(ctx, req)
 }
 
+// GetProjectConfig calls critic.v1.CriticService.GetProjectConfig.
+func (c *criticServiceClient) GetProjectConfig(ctx context.Context, req *connect.Request[api.GetProjectConfigRequest]) (*connect.Response[api.GetProjectConfigResponse], error) {
+	return c.getProjectConfig.CallUnary(ctx, req)
+}
+
 // CriticServiceHandler is an implementation of the critic.v1.CriticService service.
 type CriticServiceHandler interface {
 	// GetLastChange returns the timestamp of the last change.
@@ -321,6 +338,8 @@ type CriticServiceHandler interface {
 	GetConfig(context.Context, *connect.Request[api.GetConfigRequest]) (*connect.Response[api.GetConfigResponse], error)
 	// GetRootConversation returns the root conversation (global announcements).
 	GetRootConversation(context.Context, *connect.Request[api.GetRootConversationRequest]) (*connect.Response[api.GetRootConversationResponse], error)
+	// GetProjectConfig returns the parsed project.critic configuration.
+	GetProjectConfig(context.Context, *connect.Request[api.GetProjectConfigRequest]) (*connect.Response[api.GetProjectConfigResponse], error)
 }
 
 // NewCriticServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -414,6 +433,12 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(criticServiceMethods.ByName("GetRootConversation")),
 		connect.WithHandlerOptions(opts...),
 	)
+	criticServiceGetProjectConfigHandler := connect.NewUnaryHandler(
+		CriticServiceGetProjectConfigProcedure,
+		svc.GetProjectConfig,
+		connect.WithSchema(criticServiceMethods.ByName("GetProjectConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/critic.v1.CriticService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CriticServiceGetLastChangeProcedure:
@@ -444,6 +469,8 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 			criticServiceGetConfigHandler.ServeHTTP(w, r)
 		case CriticServiceGetRootConversationProcedure:
 			criticServiceGetRootConversationHandler.ServeHTTP(w, r)
+		case CriticServiceGetProjectConfigProcedure:
+			criticServiceGetProjectConfigHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -507,4 +534,8 @@ func (UnimplementedCriticServiceHandler) GetConfig(context.Context, *connect.Req
 
 func (UnimplementedCriticServiceHandler) GetRootConversation(context.Context, *connect.Request[api.GetRootConversationRequest]) (*connect.Response[api.GetRootConversationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetRootConversation is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) GetProjectConfig(context.Context, *connect.Request[api.GetProjectConfigRequest]) (*connect.Response[api.GetProjectConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetProjectConfig is not implemented"))
 }
