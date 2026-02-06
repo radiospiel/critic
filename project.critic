@@ -1,8 +1,10 @@
 project:
   name: "critic"
 
-paths:
-  - src/go
+# paths:
+#   - src
+#   - simple-go
+#   - docs
 
 # File categories for the diff view.
 # Patterns follow git's glob matching rules:

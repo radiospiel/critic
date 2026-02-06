@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { criticClient, getConversationsSummary, getConversations, resolveConversation, ConversationSummary, CommentConversation } from '../api/client'
 import { FileSummary, FileStatus, FileCategory } from '../gen/critic_pb'
 import { pluralize } from './Pluralize'
+import { matchesAnyPattern } from '../utils/glob'
 
 function formatTimestamp(dateStr: string): string {
   const date = new Date(dateStr)
@@ -26,7 +27,8 @@ interface FileListProps {
   onSelectRootConversation?: () => void
   isFocused?: boolean
   onFocus?: () => void
-  onFilterChange?: (filter: FilterType) => void
+  filter: FilterType
+  onFilterChange: (filter: FilterType) => void
   rootConversation?: CommentConversation | null
   isRootConversationSelected?: boolean
   onConversationsChanged?: () => void
@@ -53,89 +55,6 @@ function getStatusLabel(status: FileStatus): string {
 }
 
 // Convert a git pathspec glob pattern to a regex.
-// Implements git's pathspec pattern matching rules:
-// https://git-scm.com/docs/gitignore#_pattern_format
-//
-// Key rules:
-//   - "*" matches anything except "/"
-//   - "**" matches anything including "/"
-//   - "?" matches a single character except "/"
-//   - A leading "/" anchors the match to the repository root
-//   - A pattern WITHOUT a "/" matches against the basename at any depth
-//   - A pattern WITH a "/" matches against the full path from root
-//   - "**/" matches in all directories
-//   - "/**" matches everything inside a directory
-//   - "/**/" matches zero or more directories
-function patternToRegex(pattern: string): RegExp {
-  // Handle leading / (anchored to root)
-  const isRooted = pattern.startsWith('/')
-  if (isRooted) {
-    pattern = pattern.slice(1)
-  }
-
-  // Check if pattern has a slash (other than leading).
-  // If so, it matches against the full path from root.
-  const trimmedForSlashCheck = pattern.replace(/\/$/, '')
-  const hasSlash = trimmedForSlashCheck.includes('/')
-
-  // Convert pattern to regex string
-  let regex = ''
-  let i = 0
-  while (i < pattern.length) {
-    const c = pattern[i]
-    if (c === '*') {
-      if (i + 1 < pattern.length && pattern[i + 1] === '*') {
-        // ** pattern
-        if (i + 2 < pattern.length && pattern[i + 2] === '/') {
-          // **/ - match zero or more directories
-          regex += '(?:.*/)?'
-          i += 3
-          continue
-        }
-        // ** at end or without trailing / - match everything
-        regex += '.*'
-        i += 2
-        continue
-      }
-      // Single * - match anything except /
-      regex += '[^/]*'
-    } else if (c === '?') {
-      // ? - match single character except /
-      regex += '[^/]'
-    } else if (c === '\\') {
-      // Escape next character
-      if (i + 1 < pattern.length) {
-        i++
-        regex += pattern[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      }
-    } else {
-      // Escape regex metacharacters
-      regex += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    }
-    i++
-  }
-
-  // Build the full regex with appropriate anchoring
-  if (!isRooted && !hasSlash) {
-    // No slash in pattern: match against the basename at any depth
-    return new RegExp('^(?:.*/)?'+ regex + '$')
-  }
-  // Has slash or is rooted: match from the root
-  return new RegExp('^' + regex + '$')
-}
-
-// Check if a file path matches any of the given patterns
-function matchesAnyPattern(path: string, patterns: string[]): boolean {
-  for (const pattern of patterns) {
-    if (!pattern) continue
-    const regex = patternToRegex(pattern)
-    if (regex.test(path)) {
-      return true
-    }
-  }
-  return false
-}
-
 // Categorize a file based on project config categories.
 // Categories are checked in order: the first matching category wins.
 // Returns "source" if no category matches.
@@ -184,21 +103,14 @@ function MessagePreviews({ messages }: { messages: CommentMessage[] }) {
   )
 }
 
-function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, onFilterChange, rootConversation, isRootConversationSelected, onConversationsChanged }: FileListProps) {
+function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, filter, onFilterChange, rootConversation, isRootConversationSelected, onConversationsChanged }: FileListProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [categories, setCategories] = useState<FileCategory[]>([])
-  const [filter, setFilter] = useState<FilterType>('automatic')
   const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
   const [fileConversations, setFileConversations] = useState<Map<string, CommentConversation[]>>(new Map())
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set())
   const selectedItemRef = useRef<HTMLLIElement>(null)
-
-  // Handle user clicking a filter button
-  const handleUserFilterChange = (newFilter: FilterType) => {
-    setFilter(newFilter)
-    onFilterChange?.(newFilter)
-  }
 
   const handleResolve = async (e: React.MouseEvent, conversationId: string) => {
     e.stopPropagation()
@@ -358,14 +270,6 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
         : -1
       const onRoot = isRootConversationSelected
 
-      // Ctrl+1..4 to switch filter sections
-      if (e.ctrlKey && e.key >= '1' && e.key <= '4') {
-        e.preventDefault()
-        const filters: FilterType[] = ['conversations', 'files', 'tests', 'hidden']
-        handleUserFilterChange(filters[parseInt(e.key) - 1])
-        return
-      }
-
       switch (e.key) {
         case 'ArrowUp':
         case 'k':
@@ -413,7 +317,7 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
           break
       }
     },
-    [isFocused, displayedFiles, selectedFile, onSelectFile, isRootConversationSelected, showRootInList, onSelectRootConversation, handleUserFilterChange]
+    [isFocused, displayedFiles, selectedFile, onSelectFile, isRootConversationSelected, showRootInList, onSelectRootConversation]
   )
 
   useEffect(() => {
@@ -444,25 +348,25 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
       <div className="file-list-filters">
         <button
           className={`file-list-filter-btn${effectiveFilter === 'conversations' ? ' active' : ''}`}
-          onClick={() => handleUserFilterChange('conversations')}
+          onClick={() => onFilterChange('conversations')}
         >
           {pluralize(totalConversations, 'Conversation')}
         </button>
         <button
           className={`file-list-filter-btn${effectiveFilter === 'files' ? ' active' : ''}`}
-          onClick={() => handleUserFilterChange('files')}
+          onClick={() => onFilterChange('files')}
         >
           {pluralize(regularFiles.length, 'File')}
         </button>
         <button
           className={`file-list-filter-btn${effectiveFilter === 'tests' ? ' active' : ''}`}
-          onClick={() => handleUserFilterChange('tests')}
+          onClick={() => onFilterChange('tests')}
         >
           {pluralize(testFiles.length, 'Test')}
         </button>
         <button
           className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
-          onClick={() => handleUserFilterChange('hidden')}
+          onClick={() => onFilterChange('hidden')}
         >
           {hiddenFiles.length} Hidden
         </button>
