@@ -18,10 +18,9 @@ func loggingInterceptor() connect.UnaryInterceptorFunc {
 			start := time.Now()
 			procedure := req.Spec().Procedure
 
-			// Log request as JSON
-			if !logger.Debug("RPC request: %s req=%s", procedure, req.Any()){
-				logger.Info("RPC request: %s", procedure)
-			}
+			// Log request
+			logger.Debug("RPC request: %s req=%s", procedure, req.Any())
+			logger.Info("RPC request: %s", procedure)
 
 			// Call the handler
 			resp, err := next(ctx, req)
@@ -31,9 +30,8 @@ func loggingInterceptor() connect.UnaryInterceptorFunc {
 			if err != nil {
 				logger.Info("RPC response: %s duration=%s err=%q", procedure, duration, err.Error())
 			} else {
-				if !logger.Debug("RPC response: %s duration=%s resp=%s", procedure, duration, resp.Any()) {
-					logger.Info("RPC response: %s duration=%s", procedure, duration)
-				}
+				logger.Debug("RPC response: %s duration=%s resp=%s", procedure, duration, resp.Any())
+				logger.Info("RPC response: %s duration=%s", procedure, duration)
 			}
 
 			return resp, err

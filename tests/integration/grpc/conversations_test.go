@@ -167,7 +167,10 @@ func (m *TestMessaging) MarkConversationAs(conversationUUID string, update criti
 func (m *TestMessaging) MarkMessageAs(messageUUID string, status critic.MessageReadStatus) error {
 	return nil
 }
-func (m *TestMessaging) Close() error                                 { return nil }
+func (m *TestMessaging) LoadRootConversation() (*critic.Conversation, error) {
+	return &critic.Conversation{UUID: "root-conv"}, nil
+}
+func (m *TestMessaging) Close() error { return nil }
 
 // TestConversationsScenario runs through all conversation-related GRPC endpoints
 // in a realistic scenario: create a conversation, retrieve it, get summaries,
