@@ -227,15 +227,19 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
 
   // Total conversation count (from visible files only, plus root conversation if present)
   const hasRootConversation = rootConversation && rootConversation.messages.length > 0 ? 1 : 0
-  const totalConversations = filesWithConversations.reduce((sum, file) => {
+  const { totalConversations, totalExplanations } = filesWithConversations.reduce((acc, file) => {
     const path = getFilePath(file)
     const summary = conversationSummaries.get(path)
-    return sum + (summary?.totalCount || 0)
-  }, hasRootConversation)
+    const explanations = summary?.explanationCount || 0
+    return {
+      totalConversations: acc.totalConversations + (summary?.totalCount || 0) - explanations,
+      totalExplanations: acc.totalExplanations + explanations,
+    }
+  }, { totalConversations: hasRootConversation, totalExplanations: 0 })
 
   // Compute effective filter: automatic means 'conversations' if any exist, otherwise 'files'
   const effectiveFilter = filter === 'automatic'
-    ? (totalConversations > 0 ? 'conversations' : 'files')
+    ? ((totalConversations + totalExplanations) > 0 ? 'conversations' : 'files')
     : filter
 
   // Determine displayed files based on filter
@@ -351,6 +355,7 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
           onClick={() => onFilterChange('conversations')}
         >
           {pluralize(totalConversations, 'Conversation')}
+          {totalExplanations > 0 && ` + ${pluralize(totalExplanations, 'Explanation')}`}
         </button>
         <button
           className={`file-list-filter-btn${effectiveFilter === 'files' ? ' active' : ''}`}
@@ -435,19 +440,25 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
                   </div>
                   {conversations.map((conv) => {
                     const lastMsg = conv.messages[conv.messages.length - 1]
-                    const isUnresolved = conv.status !== 'resolved'
+                    const isUnresolved = conv.status !== 'resolved' && conv.status !== 'informal'
+                    const isExplanation = conv.conversationType === 'explanation'
                     return (
                       <div
                         key={conv.id}
-                        className={`conversation-entry${isUnresolved ? ' unresolved' : ''}`}
+                        className={`conversation-entry${isUnresolved ? ' unresolved' : ''}${isExplanation ? ' explanation' : ''}`}
                         onClick={() => {
                           onSelectFile(path, file)
                           onFocus?.()
                         }}
                       >
                         <span className="conversation-entry-info">
+                          {isExplanation && (
+                            <svg className="explanation-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                              <path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863.5 8 .5s5.5 1.81 5.5 4.75c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"/>
+                            </svg>
+                          )}
                           <span className={`conversation-entry-status${isUnresolved ? ' unresolved' : ''}`}>
-                            {isUnresolved ? 'open' : 'resolved'}
+                            {isExplanation ? 'explain' : isUnresolved ? 'open' : 'resolved'}
                           </span>
                           {lastMsg && <span className="conversation-entry-author">{lastMsg.author === 'human' ? 'Human' : 'Bot'}</span>}
                           <span className="conversation-entry-messages">

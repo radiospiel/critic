@@ -30,6 +30,15 @@ const (
 	StatusNew       Status = "new"
 	StatusDelivered Status = "delivered"
 	StatusResolved  Status = "resolved"
+	StatusInformal  Status = "informal"
+)
+
+// ConversationType represents the type of a conversation
+type ConversationType string
+
+const (
+	ConversationTypeConversation ConversationType = "conversation"
+	ConversationTypeExplanation  ConversationType = "explanation"
 )
 
 // ReadStatus represents whether an AI message has been shown to the user
@@ -42,19 +51,20 @@ const (
 
 // Message represents a comment/reply in the system
 type Message struct {
-	ID             string
-	Author         Author
-	Status         Status
-	ReadStatus     ReadStatus
-	ReadByAI       bool   // Whether the AI has read this conversation via MCP
-	Message        string
-	FilePath       string // File this message is attached to (git-relative path)
-	Lineno         int    // Line number in the file
-	ConversationID string // ID of the root message in the conversation
-	Commit         string // Git commit SHA1
-	Context        string // Code context around the commented line
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID               string
+	Author           Author
+	Status           Status
+	ReadStatus       ReadStatus
+	ReadByAI         bool             // Whether the AI has read this conversation via MCP
+	Message          string
+	FilePath         string           // File this message is attached to (git-relative path)
+	Lineno           int              // Line number in the file
+	ConversationID   string           // ID of the root message in the conversation
+	Commit           string           // Git commit SHA1
+	Context          string           // Code context around the commented line
+	ConversationType ConversationType // Type of conversation (conversation or explanation)
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // DB manages the SQLite database for messages
@@ -113,6 +123,11 @@ func (db *DB) Close() error {
 
 // CreateMessage creates a new root message (not a reply)
 func (db *DB) CreateMessage(author Author, message, filePath string, lineno int, commit string, context string) (*Message, error) {
+	return db.CreateMessageWithType(author, message, filePath, lineno, commit, context, ConversationTypeConversation)
+}
+
+// CreateMessageWithType creates a new root message with an explicit conversation type
+func (db *DB) CreateMessageWithType(author Author, message, filePath string, lineno int, commit string, context string, convType ConversationType) (*Message, error) {
 	preconditions.Check(author == AuthorHuman || author == AuthorAI, "invalid author: %s", author)
 	preconditions.Check(message != "", "message must not be empty")
 	preconditions.Check(filePath != "", "filePath must not be empty")
@@ -120,18 +135,19 @@ func (db *DB) CreateMessage(author Author, message, filePath string, lineno int,
 
 	id := uuid.Must(uuid.NewV7()).String()
 	msg := &Message{
-		ID:             id,
-		Author:         author,
-		Status:         StatusNew,
-		ReadStatus:     lo.Ternary(author == AuthorAI, ReadStatusUnread, ReadStatusRead),
-		Message:        message,
-		FilePath:       filePath,
-		Lineno:         lineno,
-		ConversationID: id, // Root message points to itself
-		Commit:         commit,
-		Context:        context,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:               id,
+		Author:           author,
+		Status:           StatusNew,
+		ReadStatus:       lo.Ternary(author == AuthorAI, ReadStatusUnread, ReadStatusRead),
+		Message:          message,
+		FilePath:         filePath,
+		Lineno:           lineno,
+		ConversationID:   id, // Root message points to itself
+		Commit:           commit,
+		Context:          context,
+		ConversationType: convType,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 
 	err := db.insertMessage(msg)
@@ -187,8 +203,8 @@ func (db *DB) insertMessage(msg *Message) error {
 	query := `
 		INSERT INTO messages (
 			id, author, status, read_status, read_by_ai, message, file_path, lineno,
-			conversation_id, sha1, context, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			conversation_id, sha1, context, conversation_type, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := db.db.Exec(query,
@@ -203,6 +219,7 @@ func (db *DB) insertMessage(msg *Message) error {
 		msg.ConversationID,
 		msg.Commit,
 		msg.Context,
+		string(msg.ConversationType),
 		msg.CreatedAt,
 		msg.UpdatedAt,
 	)
@@ -216,7 +233,7 @@ func (db *DB) GetMessage(id string) (*Message, error) {
 
 	query := `
 		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
-		       conversation_id, sha1, context, created_at, updated_at
+		       conversation_id, sha1, context, conversation_type, created_at, updated_at
 		FROM messages
 		WHERE id = ?
 	`
@@ -236,6 +253,7 @@ func (db *DB) GetMessage(id string) (*Message, error) {
 		&msg.ConversationID,
 		&msg.Commit,
 		&msg.Context,
+		&msg.ConversationType,
 		&msg.CreatedAt,
 		&msg.UpdatedAt,
 	)
@@ -258,7 +276,7 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 	// Get all messages with the same conversation_id
 	query := `
 		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
-		       conversation_id, sha1, context, created_at, updated_at
+		       conversation_id, sha1, context, conversation_type, created_at, updated_at
 		FROM messages
 		WHERE conversation_id = ?
 		ORDER BY created_at ASC
@@ -287,6 +305,7 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 			&msg.ConversationID,
 			&msg.Commit,
 			&msg.Context,
+			&msg.ConversationType,
 			&msg.CreatedAt,
 			&msg.UpdatedAt,
 		)
@@ -305,7 +324,7 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
 	query := `
 		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
-		       conversation_id, sha1, context, created_at, updated_at
+		       conversation_id, sha1, context, conversation_type, created_at, updated_at
 		FROM messages
 		WHERE status != ? AND id = conversation_id
 		ORDER BY file_path, lineno, created_at ASC
@@ -334,6 +353,7 @@ func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
 			&msg.ConversationID,
 			&msg.Commit,
 			&msg.Context,
+			&msg.ConversationType,
 			&msg.CreatedAt,
 			&msg.UpdatedAt,
 		)
@@ -355,7 +375,7 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 
 	query := `
 		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
-		       conversation_id, sha1, context, created_at, updated_at
+		       conversation_id, sha1, context, conversation_type, created_at, updated_at
 		FROM messages
 		WHERE file_path = ? AND id = conversation_id
 		ORDER BY lineno, created_at ASC
@@ -384,6 +404,7 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 			&msg.ConversationID,
 			&msg.Commit,
 			&msg.Context,
+			&msg.ConversationType,
 			&msg.CreatedAt,
 			&msg.UpdatedAt,
 		)

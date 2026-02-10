@@ -20,6 +20,15 @@ const (
 	StatusResolved           ConversationStatus = "resolved"
 	StatusActive             ConversationStatus = "active"
 	StatusWaitingForResponse ConversationStatus = "waiting_for_response"
+	StatusInformal           ConversationStatus = "informal"
+)
+
+// ConversationType represents the type of a conversation
+type ConversationType string
+
+const (
+	TypeConversation ConversationType = "conversation"
+	TypeExplanation  ConversationType = "explanation"
 )
 
 // ConversationUpdate represents an update to apply to a conversation
@@ -51,16 +60,17 @@ type Message struct {
 
 // Conversation represents a conversation with its location and all messages
 type Conversation struct {
-	UUID        string // UUID of the root message
-	Status      ConversationStatus
-	FilePath    string    // Git-relative path to the file
-	LineNumber  int       // Line number in the file
-	CodeVersion string    // Git commit or version identifier
-	Context     string    // Code context around the commented line
-	Messages    []Message // Root message + all replies, ordered by created_at
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	ReadByAI    bool // Whether the AI has read this conversation via MCP
+	UUID             string // UUID of the root message
+	Status           ConversationStatus
+	ConversationType ConversationType
+	FilePath         string    // Git-relative path to the file
+	LineNumber       int       // Line number in the file
+	CodeVersion      string    // Git commit or version identifier
+	Context          string    // Code context around the commented line
+	Messages         []Message // Root message + all replies, ordered by created_at
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	ReadByAI         bool // Whether the AI has read this conversation via MCP
 }
 
 // FileConversationSummary contains information about Conversations for a specific file
@@ -69,6 +79,7 @@ type FileConversationSummary struct {
 	TotalCount            int
 	UnresolvedCount       int
 	ResolvedCount         int
+	ExplanationCount      int
 	HasUnresolvedComments bool
 	HasResolvedComments   bool
 	HasUnreadAIMessages   bool
@@ -98,6 +109,9 @@ type Messaging interface {
 
 	// CreateConversation creates a new conversation (root message)
 	CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error)
+
+	// CreateExplanation creates a new explanation (informal annotation on a code line)
+	CreateExplanation(author Author, comment, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error)
 
 	// MarkConversationAs applies an update to a conversation (resolved, unresolved, read_by_ai)
 	MarkConversationAs(conversationUUID string, update ConversationUpdate) error
@@ -165,6 +179,10 @@ func (m *DummyMessaging) ReplyToConversation(conversationUUID string, message st
 
 func (m *DummyMessaging) CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error) {
 	return &Conversation{UUID: "conv-1"}, nil
+}
+
+func (m *DummyMessaging) CreateExplanation(author Author, comment, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error) {
+	return &Conversation{UUID: "expl-1", ConversationType: TypeExplanation, Status: StatusInformal}, nil
 }
 
 func (m *DummyMessaging) MarkConversationAs(conversationUUID string, update ConversationUpdate) error {

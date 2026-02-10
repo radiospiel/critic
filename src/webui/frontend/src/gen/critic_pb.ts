@@ -156,6 +156,11 @@ export enum ConversationStatus {
    * @generated from enum value: CONVERSATION_STATUS_WAITING_FOR_RESPONSE = 4;
    */
   WAITING_FOR_RESPONSE = 4,
+
+  /**
+   * @generated from enum value: CONVERSATION_STATUS_INFORMAL = 5;
+   */
+  INFORMAL = 5,
 }
 // Retrieve enum metadata with: proto3.getEnumType(ConversationStatus)
 proto3.util.setEnumType(ConversationStatus, "critic.v1.ConversationStatus", [
@@ -164,6 +169,35 @@ proto3.util.setEnumType(ConversationStatus, "critic.v1.ConversationStatus", [
   { no: 2, name: "CONVERSATION_STATUS_UNRESOLVED" },
   { no: 3, name: "CONVERSATION_STATUS_ACTIVE" },
   { no: 4, name: "CONVERSATION_STATUS_WAITING_FOR_RESPONSE" },
+  { no: 5, name: "CONVERSATION_STATUS_INFORMAL" },
+]);
+
+/**
+ * ConversationType represents the type of a conversation.
+ *
+ * @generated from enum critic.v1.ConversationType
+ */
+export enum ConversationType {
+  /**
+   * @generated from enum value: CONVERSATION_TYPE_INVALID = 0;
+   */
+  INVALID = 0,
+
+  /**
+   * @generated from enum value: CONVERSATION_TYPE_CONVERSATION = 1;
+   */
+  CONVERSATION = 1,
+
+  /**
+   * @generated from enum value: CONVERSATION_TYPE_EXPLANATION = 2;
+   */
+  EXPLANATION = 2,
+}
+// Retrieve enum metadata with: proto3.getEnumType(ConversationType)
+proto3.util.setEnumType(ConversationType, "critic.v1.ConversationType", [
+  { no: 0, name: "CONVERSATION_TYPE_INVALID" },
+  { no: 1, name: "CONVERSATION_TYPE_CONVERSATION" },
+  { no: 2, name: "CONVERSATION_TYPE_EXPLANATION" },
 ]);
 
 /**
@@ -1318,6 +1352,13 @@ export class FileConversationSummary extends Message$1<FileConversationSummary> 
    */
   hasUnreadAiMessages = false;
 
+  /**
+   * explanation_count is the number of explanation (informal annotation) conversations.
+   *
+   * @generated from field: int32 explanation_count = 6;
+   */
+  explanationCount = 0;
+
   constructor(data?: PartialMessage<FileConversationSummary>) {
     super();
     proto3.util.initPartial(data, this);
@@ -1331,6 +1372,7 @@ export class FileConversationSummary extends Message$1<FileConversationSummary> 
     { no: 3, name: "unresolved_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 4, name: "resolved_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "has_unread_ai_messages", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 6, name: "explanation_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileConversationSummary {
@@ -1419,6 +1461,13 @@ export class Conversation extends Message$1<Conversation> {
    */
   updatedAt = "";
 
+  /**
+   * conversation_type is the type of this conversation (conversation or explanation).
+   *
+   * @generated from field: critic.v1.ConversationType conversation_type = 10;
+   */
+  conversationType = ConversationType.INVALID;
+
   constructor(data?: PartialMessage<Conversation>) {
     super();
     proto3.util.initPartial(data, this);
@@ -1436,6 +1485,7 @@ export class Conversation extends Message$1<Conversation> {
     { no: 7, name: "messages", kind: "message", T: Message, repeated: true },
     { no: 8, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 10, name: "conversation_type", kind: "enum", T: proto3.getEnumType(ConversationType) },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Conversation {
@@ -2337,6 +2387,112 @@ export class EditorConfig extends Message$1<EditorConfig> {
 
   static equals(a: EditorConfig | PlainMessage<EditorConfig> | undefined, b: EditorConfig | PlainMessage<EditorConfig> | undefined): boolean {
     return proto3.util.equals(EditorConfig, a, b);
+  }
+}
+
+/**
+ * CreateExplanationRequest contains the data for creating a new explanation.
+ *
+ * @generated from message critic.v1.CreateExplanationRequest
+ */
+export class CreateExplanationRequest extends Message$1<CreateExplanationRequest> {
+  /**
+   * file is the path to the file being annotated.
+   *
+   * @generated from field: string file = 1;
+   */
+  file = "";
+
+  /**
+   * line is the line number in the file.
+   *
+   * @generated from field: int32 line = 2;
+   */
+  line = 0;
+
+  /**
+   * comment is the explanation text.
+   *
+   * @generated from field: string comment = 3;
+   */
+  comment = "";
+
+  constructor(data?: PartialMessage<CreateExplanationRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.CreateExplanationRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 3, name: "comment", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateExplanationRequest {
+    return new CreateExplanationRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateExplanationRequest {
+    return new CreateExplanationRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateExplanationRequest {
+    return new CreateExplanationRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: CreateExplanationRequest | PlainMessage<CreateExplanationRequest> | undefined, b: CreateExplanationRequest | PlainMessage<CreateExplanationRequest> | undefined): boolean {
+    return proto3.util.equals(CreateExplanationRequest, a, b);
+  }
+}
+
+/**
+ * CreateExplanationResponse contains the result of creating an explanation.
+ *
+ * @generated from message critic.v1.CreateExplanationResponse
+ */
+export class CreateExplanationResponse extends Message$1<CreateExplanationResponse> {
+  /**
+   * success indicates whether the explanation was created successfully.
+   *
+   * @generated from field: bool success = 1;
+   */
+  success = false;
+
+  /**
+   * error contains error details if the request failed.
+   *
+   * @generated from field: critic.v1.RpcError error = 15;
+   */
+  error?: RpcError;
+
+  constructor(data?: PartialMessage<CreateExplanationResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "critic.v1.CreateExplanationResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 15, name: "error", kind: "message", T: RpcError },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateExplanationResponse {
+    return new CreateExplanationResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CreateExplanationResponse {
+    return new CreateExplanationResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CreateExplanationResponse {
+    return new CreateExplanationResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: CreateExplanationResponse | PlainMessage<CreateExplanationResponse> | undefined, b: CreateExplanationResponse | PlainMessage<CreateExplanationResponse> | undefined): boolean {
+    return proto3.util.equals(CreateExplanationResponse, a, b);
   }
 }
 

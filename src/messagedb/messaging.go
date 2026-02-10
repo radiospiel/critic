@@ -23,7 +23,7 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	if status == "" {
 		// Get all root messages (conversations)
 		query = `
-			SELECT id, status, file_path, lineno, sha1, context, created_at, updated_at
+			SELECT id, status, file_path, lineno, sha1, context, conversation_type, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id
 			ORDER BY file_path, lineno, created_at ASC
@@ -31,7 +31,7 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	} else if status == string(critic.StatusUnresolved) {
 		// Get unresolved conversations
 		query = `
-			SELECT id, status, file_path, lineno, sha1, context, created_at, updated_at
+			SELECT id, status, file_path, lineno, sha1, context, conversation_type, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id AND status != ?
 			ORDER BY file_path, lineno, created_at ASC
@@ -40,7 +40,7 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	} else if status == string(critic.StatusResolved) {
 		// Get resolved conversations
 		query = `
-			SELECT id, status, file_path, lineno, sha1, context, created_at, updated_at
+			SELECT id, status, file_path, lineno, sha1, context, conversation_type, created_at, updated_at
 			FROM messages
 			WHERE id = conversation_id AND status = ?
 			ORDER BY file_path, lineno, created_at ASC
@@ -60,11 +60,13 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	for rows.Next() {
 		var conv critic.Conversation
 		var status string
+		var convType string
 		var context *string
-		if err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &context, &conv.CreatedAt, &conv.UpdatedAt); err != nil {
+		if err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &context, &convType, &conv.CreatedAt, &conv.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan conversation: %w", err)
 		}
 		conv.Status = convertToCriticStatus(Status(status))
+		conv.ConversationType = convertToCriticType(ConversationType(convType))
 		if context != nil {
 			conv.Context = *context
 		}
@@ -105,16 +107,17 @@ func (db *DB) GetFullConversation(conversationID string) (*critic.Conversation, 
 	}
 
 	conversation := &critic.Conversation{
-		UUID:        rootMsg.ID,
-		Status:      convertToCriticStatus(rootMsg.Status),
-		FilePath:    rootMsg.FilePath,
-		LineNumber:  rootMsg.Lineno,
-		CodeVersion: rootMsg.Commit,
-		Context:     rootMsg.Context,
-		Messages:    criticMessages,
-		CreatedAt:   rootMsg.CreatedAt,
-		UpdatedAt:   rootMsg.UpdatedAt,
-		ReadByAI:    rootMsg.ReadByAI,
+		UUID:             rootMsg.ID,
+		Status:           convertToCriticStatus(rootMsg.Status),
+		ConversationType: convertToCriticType(rootMsg.ConversationType),
+		FilePath:         rootMsg.FilePath,
+		LineNumber:       rootMsg.Lineno,
+		CodeVersion:      rootMsg.Commit,
+		Context:          rootMsg.Context,
+		Messages:         criticMessages,
+		CreatedAt:        rootMsg.CreatedAt,
+		UpdatedAt:        rootMsg.UpdatedAt,
+		ReadByAI:         rootMsg.ReadByAI,
 	}
 
 	logger.Debug("Retrieved conversation %s with %d messages", conversationID, len(criticMessages))
@@ -150,8 +153,9 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 	query := `
 		SELECT
 			file_path,
-			SUM(CASE WHEN status != 'resolved' THEN 1 ELSE 0 END) as unresolved_count,
+			SUM(CASE WHEN status NOT IN ('resolved', 'informal') THEN 1 ELSE 0 END) as unresolved_count,
 			SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved_count,
+			SUM(CASE WHEN conversation_type = 'explanation' THEN 1 ELSE 0 END) as explanation_count,
 			COUNT(*) as total_count
 		FROM messages
 		WHERE id = conversation_id
@@ -168,8 +172,8 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 	summaryMap := make(map[string]*critic.FileConversationSummary)
 	for rows.Next() {
 		var filePath string
-		var unresolvedCount, resolvedCount, totalCount int
-		if err := rows.Scan(&filePath, &unresolvedCount, &resolvedCount, &totalCount); err != nil {
+		var unresolvedCount, resolvedCount, explanationCount, totalCount int
+		if err := rows.Scan(&filePath, &unresolvedCount, &resolvedCount, &explanationCount, &totalCount); err != nil {
 			return nil, fmt.Errorf("failed to scan file summary: %w", err)
 		}
 		summaryMap[filePath] = &critic.FileConversationSummary{
@@ -177,6 +181,7 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 			TotalCount:            totalCount,
 			UnresolvedCount:       unresolvedCount,
 			ResolvedCount:         resolvedCount,
+			ExplanationCount:      explanationCount,
 			HasUnresolvedComments: unresolvedCount > 0,
 			HasResolvedComments:   resolvedCount > 0,
 		}
@@ -266,12 +271,13 @@ func (db *DB) CreateConversation(author critic.Author, message, filePath string,
 	}
 
 	conversation := &critic.Conversation{
-		UUID:        rootMsg.ID,
-		Status:      convertToCriticStatus(rootMsg.Status),
-		FilePath:    rootMsg.FilePath,
-		LineNumber:  rootMsg.Lineno,
-		CodeVersion: rootMsg.Commit,
-		Context:     rootMsg.Context,
+		UUID:             rootMsg.ID,
+		Status:           convertToCriticStatus(rootMsg.Status),
+		ConversationType: convertToCriticType(rootMsg.ConversationType),
+		FilePath:         rootMsg.FilePath,
+		LineNumber:       rootMsg.Lineno,
+		CodeVersion:      rootMsg.Commit,
+		Context:          rootMsg.Context,
 		Messages: []critic.Message{
 			{
 				UUID:      rootMsg.ID,
@@ -287,6 +293,45 @@ func (db *DB) CreateConversation(author critic.Author, message, filePath string,
 	}
 
 	logger.Info("Created conversation %s at %s:%d", conversation.UUID, filePath, lineNumber)
+	return conversation, nil
+}
+
+// CreateExplanation creates a new explanation (informal annotation on a code line)
+func (db *DB) CreateExplanation(author critic.Author, comment, filePath string, lineNumber int, codeVersion string, context string) (*critic.Conversation, error) {
+	dbAuthor := Author(author)
+	rootMsg, err := db.CreateMessageWithType(dbAuthor, comment, filePath, lineNumber, codeVersion, context, ConversationTypeExplanation)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create explanation: %w", err)
+	}
+
+	// Set the status to informal
+	if err := db.UpdateMessageStatus(rootMsg.ID, StatusInformal); err != nil {
+		return nil, fmt.Errorf("failed to set explanation status: %w", err)
+	}
+
+	conversation := &critic.Conversation{
+		UUID:             rootMsg.ID,
+		Status:           critic.StatusInformal,
+		ConversationType: critic.TypeExplanation,
+		FilePath:         rootMsg.FilePath,
+		LineNumber:       rootMsg.Lineno,
+		CodeVersion:      rootMsg.Commit,
+		Context:          rootMsg.Context,
+		Messages: []critic.Message{
+			{
+				UUID:      rootMsg.ID,
+				Author:    critic.Author(rootMsg.Author),
+				Message:   rootMsg.Message,
+				CreatedAt: rootMsg.CreatedAt,
+				UpdatedAt: rootMsg.UpdatedAt,
+				IsUnread:  rootMsg.ReadStatus == ReadStatusUnread,
+			},
+		},
+		CreatedAt: rootMsg.CreatedAt,
+		UpdatedAt: rootMsg.UpdatedAt,
+	}
+
+	logger.Info("Created explanation %s at %s:%d", conversation.UUID, filePath, lineNumber)
 	return conversation, nil
 }
 
@@ -328,8 +373,22 @@ func (db *DB) LoadRootConversation() (*critic.Conversation, error) {
 
 // convertToCriticStatus converts messagedb.Status to critic.ConversationStatus
 func convertToCriticStatus(status Status) critic.ConversationStatus {
-	if status == StatusResolved {
+	switch status {
+	case StatusResolved:
 		return critic.StatusResolved
+	case StatusInformal:
+		return critic.StatusInformal
+	default:
+		return critic.StatusUnresolved
 	}
-	return critic.StatusUnresolved
+}
+
+// convertToCriticType converts messagedb.ConversationType to critic.ConversationType
+func convertToCriticType(ct ConversationType) critic.ConversationType {
+	switch ct {
+	case ConversationTypeExplanation:
+		return critic.TypeExplanation
+	default:
+		return critic.TypeConversation
+	}
 }

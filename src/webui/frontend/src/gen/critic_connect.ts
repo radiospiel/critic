@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CreateConversationRequest, CreateConversationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, GetProjectConfigRequest, GetProjectConfigResponse, GetRootConversationRequest, GetRootConversationResponse, ReplyToConversationRequest, ReplyToConversationResponse, ResolveConversationRequest, ResolveConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
+import { CreateConversationRequest, CreateConversationResponse, CreateExplanationRequest, CreateExplanationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, GetProjectConfigRequest, GetProjectConfigResponse, GetRootConversationRequest, GetRootConversationResponse, ReplyToConversationRequest, ReplyToConversationResponse, ResolveConversationRequest, ResolveConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -177,6 +177,17 @@ export const CriticService = {
       name: "GetProjectConfig",
       I: GetProjectConfigRequest,
       O: GetProjectConfigResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * CreateExplanation creates a new explanation (informal annotation) on a code line.
+     *
+     * @generated from rpc critic.v1.CriticService.CreateExplanation
+     */
+    createExplanation: {
+      name: "CreateExplanation",
+      I: CreateExplanationRequest,
+      O: CreateExplanationResponse,
       kind: MethodKind.Unary,
     },
   }

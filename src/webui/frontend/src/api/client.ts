@@ -1,7 +1,7 @@
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { createPromiseClient } from '@connectrpc/connect'
 import { CriticService } from '../gen/critic_connect'
-import { Conversation, Message, FileConversationSummary, ConversationStatus } from '../gen/critic_pb'
+import { Conversation, Message, FileConversationSummary, ConversationStatus, ConversationType } from '../gen/critic_pb'
 
 // Create a transport for the Connect protocol
 const transport = createConnectTransport({
@@ -24,6 +24,7 @@ export interface CommentMessage {
 export interface CommentConversation {
   id: string
   status: string
+  conversationType: string
   filePath: string
   lineNumber: number
   codeVersion: string
@@ -61,8 +62,22 @@ function statusToString(status: ConversationStatus): string {
       return 'active'
     case ConversationStatus.WAITING_FOR_RESPONSE:
       return 'waiting_for_response'
+    case ConversationStatus.INFORMAL:
+      return 'informal'
     default:
       return 'invalid'
+  }
+}
+
+// Convert ConversationType enum to string
+function conversationTypeToString(ct: ConversationType): string {
+  switch (ct) {
+    case ConversationType.EXPLANATION:
+      return 'explanation'
+    case ConversationType.CONVERSATION:
+      return 'conversation'
+    default:
+      return 'conversation'
   }
 }
 
@@ -71,6 +86,7 @@ function convertConversation(conv: Conversation): CommentConversation {
   return {
     id: conv.id,
     status: statusToString(conv.status),
+    conversationType: conversationTypeToString(conv.conversationType),
     filePath: conv.filePath,
     lineNumber: conv.lineNumber,
     codeVersion: conv.codeVersion,
@@ -108,6 +124,7 @@ export interface ConversationSummary {
   totalCount: number
   unresolvedCount: number
   resolvedCount: number
+  explanationCount: number
   hasUnreadAiMessages: boolean
 }
 
@@ -123,6 +140,7 @@ function convertSummary(summary: FileConversationSummary): ConversationSummary {
     totalCount: summary.totalCount,
     unresolvedCount: summary.unresolvedCount,
     resolvedCount: summary.resolvedCount,
+    explanationCount: summary.explanationCount,
     hasUnreadAiMessages: summary.hasUnreadAiMessages,
   }
 }

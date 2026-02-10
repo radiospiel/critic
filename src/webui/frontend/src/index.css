@@ -1297,6 +1297,25 @@ html, body, #root {
   color: var(--status-added-text);
 }
 
+.comment-status-informal {
+  background-color: var(--status-renamed-bg);
+  color: var(--status-renamed-text);
+}
+
+/* Explanation conversations */
+.conversation-type-explanation {
+  border-color: var(--status-renamed-text);
+}
+
+.conversation-type-explanation .comment-conversation-header {
+  background-color: var(--status-renamed-bg);
+}
+
+.explanation-icon {
+  color: var(--status-renamed-text);
+  flex-shrink: 0;
+}
+
 .comment-conversation-messages {
   padding: 8px;
 }

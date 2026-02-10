@@ -74,6 +74,9 @@ const (
 	// CriticServiceGetProjectConfigProcedure is the fully-qualified name of the CriticService's
 	// GetProjectConfig RPC.
 	CriticServiceGetProjectConfigProcedure = "/critic.v1.CriticService/GetProjectConfig"
+	// CriticServiceCreateExplanationProcedure is the fully-qualified name of the CriticService's
+	// CreateExplanation RPC.
+	CriticServiceCreateExplanationProcedure = "/critic.v1.CriticService/CreateExplanation"
 )
 
 // CriticServiceClient is a client for the critic.v1.CriticService service.
@@ -108,6 +111,8 @@ type CriticServiceClient interface {
 	GetRootConversation(context.Context, *connect.Request[api.GetRootConversationRequest]) (*connect.Response[api.GetRootConversationResponse], error)
 	// GetProjectConfig returns the parsed project.critic configuration.
 	GetProjectConfig(context.Context, *connect.Request[api.GetProjectConfigRequest]) (*connect.Response[api.GetProjectConfigResponse], error)
+	// CreateExplanation creates a new explanation (informal annotation) on a code line.
+	CreateExplanation(context.Context, *connect.Request[api.CreateExplanationRequest]) (*connect.Response[api.CreateExplanationResponse], error)
 }
 
 // NewCriticServiceClient constructs a client for the critic.v1.CriticService service. By default,
@@ -211,6 +216,12 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(criticServiceMethods.ByName("GetProjectConfig")),
 			connect.WithClientOptions(opts...),
 		),
+		createExplanation: connect.NewClient[api.CreateExplanationRequest, api.CreateExplanationResponse](
+			httpClient,
+			baseURL+CriticServiceCreateExplanationProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("CreateExplanation")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -231,6 +242,7 @@ type criticServiceClient struct {
 	getConfig               *connect.Client[api.GetConfigRequest, api.GetConfigResponse]
 	getRootConversation     *connect.Client[api.GetRootConversationRequest, api.GetRootConversationResponse]
 	getProjectConfig        *connect.Client[api.GetProjectConfigRequest, api.GetProjectConfigResponse]
+	createExplanation       *connect.Client[api.CreateExplanationRequest, api.CreateExplanationResponse]
 }
 
 // GetLastChange calls critic.v1.CriticService.GetLastChange.
@@ -308,6 +320,11 @@ func (c *criticServiceClient) GetProjectConfig(ctx context.Context, req *connect
 	return c.getProjectConfig.CallUnary(ctx, req)
 }
 
+// CreateExplanation calls critic.v1.CriticService.CreateExplanation.
+func (c *criticServiceClient) CreateExplanation(ctx context.Context, req *connect.Request[api.CreateExplanationRequest]) (*connect.Response[api.CreateExplanationResponse], error) {
+	return c.createExplanation.CallUnary(ctx, req)
+}
+
 // CriticServiceHandler is an implementation of the critic.v1.CriticService service.
 type CriticServiceHandler interface {
 	// GetLastChange returns the timestamp of the last change.
@@ -340,6 +357,8 @@ type CriticServiceHandler interface {
 	GetRootConversation(context.Context, *connect.Request[api.GetRootConversationRequest]) (*connect.Response[api.GetRootConversationResponse], error)
 	// GetProjectConfig returns the parsed project.critic configuration.
 	GetProjectConfig(context.Context, *connect.Request[api.GetProjectConfigRequest]) (*connect.Response[api.GetProjectConfigResponse], error)
+	// CreateExplanation creates a new explanation (informal annotation) on a code line.
+	CreateExplanation(context.Context, *connect.Request[api.CreateExplanationRequest]) (*connect.Response[api.CreateExplanationResponse], error)
 }
 
 // NewCriticServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -439,6 +458,12 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(criticServiceMethods.ByName("GetProjectConfig")),
 		connect.WithHandlerOptions(opts...),
 	)
+	criticServiceCreateExplanationHandler := connect.NewUnaryHandler(
+		CriticServiceCreateExplanationProcedure,
+		svc.CreateExplanation,
+		connect.WithSchema(criticServiceMethods.ByName("CreateExplanation")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/critic.v1.CriticService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CriticServiceGetLastChangeProcedure:
@@ -471,6 +496,8 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 			criticServiceGetRootConversationHandler.ServeHTTP(w, r)
 		case CriticServiceGetProjectConfigProcedure:
 			criticServiceGetProjectConfigHandler.ServeHTTP(w, r)
+		case CriticServiceCreateExplanationProcedure:
+			criticServiceCreateExplanationHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -538,4 +565,8 @@ func (UnimplementedCriticServiceHandler) GetRootConversation(context.Context, *c
 
 func (UnimplementedCriticServiceHandler) GetProjectConfig(context.Context, *connect.Request[api.GetProjectConfigRequest]) (*connect.Response[api.GetProjectConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.GetProjectConfig is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) CreateExplanation(context.Context, *connect.Request[api.CreateExplanationRequest]) (*connect.Response[api.CreateExplanationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.CreateExplanation is not implemented"))
 }

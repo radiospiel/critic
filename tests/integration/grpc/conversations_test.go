@@ -170,6 +170,11 @@ func (m *TestMessaging) MarkMessageAs(messageUUID string, status critic.MessageR
 func (m *TestMessaging) LoadRootConversation() (*critic.Conversation, error) {
 	return &critic.Conversation{UUID: "root-conv"}, nil
 }
+
+func (m *TestMessaging) CreateExplanation(author critic.Author, comment, filePath string, lineNumber int, codeVersion string, context string) (*critic.Conversation, error) {
+	return &critic.Conversation{UUID: "expl-1", ConversationType: critic.TypeExplanation, Status: critic.StatusInformal}, nil
+}
+
 func (m *TestMessaging) Close() error { return nil }
 
 // TestConversationsScenario runs through all conversation-related GRPC endpoints

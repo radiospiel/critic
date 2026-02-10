@@ -39,6 +39,7 @@ func criticToApiFileConversationSummary(summary *critic.FileConversationSummary,
 		TotalCount:          int32(summary.TotalCount),
 		UnresolvedCount:     int32(summary.UnresolvedCount),
 		ResolvedCount:       int32(summary.ResolvedCount),
+		ExplanationCount:    int32(summary.ExplanationCount),
 		HasUnreadAiMessages: summary.HasUnreadAIMessages,
 	}
 }
