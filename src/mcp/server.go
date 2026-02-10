@@ -187,6 +187,28 @@ func (s *Server) handleToolsList(req Request) error {
 				Required: []string{"message"},
 			},
 		},
+		{
+			Name:        "critic_explain",
+			Description: "Post an explanation on a specific code line. Explanations are informal annotations shown with a lightbulb icon in the Critic UI.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]Property{
+					"file": {
+						Type:        "string",
+						Description: "The git-relative file path",
+					},
+					"line": {
+						Type:        "number",
+						Description: "The line number in the file",
+					},
+					"comment": {
+						Type:        "string",
+						Description: "The explanation text",
+					},
+				},
+				Required: []string{"file", "line", "comment"},
+			},
+		},
 	}
 
 	return s.sendResult(req.ID, ToolsListResult{Tools: tools})
@@ -216,6 +238,8 @@ func (s *Server) handleToolsCall(req Request) error {
 		return s.handleReplyToCriticConversation(req, params)
 	case "critic_announce":
 		return s.handleCriticAnnounce(req, params)
+	case "critic_explain":
+		return s.handleCriticExplain(req, params)
 	default:
 		return s.sendToolError(req.ID, fmt.Sprintf("Unknown tool: %s", params.Name))
 	}
@@ -450,6 +474,55 @@ func (s *Server) handleCriticAnnounce(req Request, params CallToolParams) error 
 	return s.sendToolResult(req.ID, string(result))
 }
 
+// handleCriticExplain handles the critic_explain tool
+func (s *Server) handleCriticExplain(req Request, params CallToolParams) error {
+	if s.messaging == nil {
+		s.logToStderr("Messaging not initialized")
+		return s.sendToolError(req.ID, "Messaging not initialized")
+	}
+
+	file, ok := params.Arguments["file"].(string)
+	if !ok || file == "" {
+		return s.sendToolError(req.ID, "file is required")
+	}
+
+	lineFloat, ok := params.Arguments["line"].(float64)
+	if !ok || lineFloat <= 0 {
+		return s.sendToolError(req.ID, "line is required and must be a positive number")
+	}
+	line := int(lineFloat)
+
+	comment, ok := params.Arguments["comment"].(string)
+	if !ok || comment == "" {
+		return s.sendToolError(req.ID, "comment is required")
+	}
+
+	s.logToStderr("Creating explanation at %s:%d", file, line)
+
+	codeVersion := git.ResolveRef("HEAD")
+
+	conversation, err := s.messaging.CreateExplanation(critic.AuthorAI, comment, file, line, codeVersion, "")
+	if err != nil {
+		s.logToStderr("Failed to create explanation: %v", err)
+		return s.sendToolError(req.ID, fmt.Sprintf("Error creating explanation: %v", err))
+	}
+
+	response := ReplyResponse{
+		Success:   true,
+		UUID:      conversation.UUID,
+		Author:    string(critic.AuthorAI),
+		CreatedAt: conversation.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	result, err := json.Marshal(response)
+	if err != nil {
+		return s.sendToolError(req.ID, fmt.Sprintf("Error encoding result: %v", err))
+	}
+
+	s.logToStderr("Created explanation: %s", conversation.UUID)
+	return s.sendToolResult(req.ID, string(result))
+}
+
 // handlePromptsList returns the list of available prompts
 func (s *Server) handlePromptsList(req Request) error {
 	prompts := []Prompt{
@@ -464,6 +537,10 @@ func (s *Server) handlePromptsList(req Request) error {
 		{
 			Name:        "loop",
 			Description: "Repeat /critic:step until all critic conversations are resolved",
+		},
+		{
+			Name:        "explain",
+			Description: "Identify the changes and post an explanation on all non-obvious changes",
 		},
 	}
 
@@ -512,6 +589,16 @@ func (s *Server) handlePromptsGet(req Request) error {
 				{
 					Role:    "user",
 					Content: TextContent("Resolve all unresolved critic conversations. After each tool call, check for new unresolved messages using get_critic_conversations. Address any new feedback before continuing. Repeat until all conversations are resolved."),
+				},
+			},
+		})
+	case "explain":
+		return s.sendResult(req.ID, GetPromptResult{
+			Description: "Explain non-obvious code changes",
+			Messages: []PromptMessage{
+				{
+					Role:    "user",
+					Content: TextContent("Review all uncommitted changes in the diff. For each non-obvious change — anything where the intent, reason, or mechanism isn't immediately clear from the code alone — post an explanation using the critic_explain MCP tool. Skip trivial or self-explanatory changes (renames, formatting, obvious bug fixes). Focus on: why a change was made, subtle implications, non-obvious design decisions, and tricky logic."),
 				},
 			},
 		})

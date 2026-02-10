@@ -7,7 +7,7 @@ import (
 	"github.com/radiospiel/critic/simple-go/logger"
 )
 
-const currentSchemaVersion = "4"
+const currentSchemaVersion = "5"
 
 // schema_v2 defines the v2 database schema with renamed columns and context
 var schema_v2 = `
@@ -21,7 +21,7 @@ var schema_v2 = `
 	CREATE TABLE IF NOT EXISTS messages (
 		id TEXT PRIMARY KEY,
 		author TEXT NOT NULL CHECK(author IN ('human', 'ai')),
-		status TEXT NOT NULL CHECK(status IN ('new', 'delivered', 'resolved')),
+		status TEXT NOT NULL CHECK(status IN ('new', 'delivered', 'resolved', 'informal')),
 		read_status TEXT NOT NULL DEFAULT 'read' CHECK(read_status IN ('unread', 'read')),
 		message TEXT NOT NULL,
 		file_path TEXT NOT NULL,
@@ -48,6 +48,48 @@ var schema_v3_migration = `
 	ALTER TABLE messages ADD COLUMN read_by_ai INTEGER NOT NULL DEFAULT 0;
 
 	-- Index for read_by_ai column
+	CREATE INDEX IF NOT EXISTS idx_messages_read_by_ai ON messages(read_by_ai);
+`
+
+// schema_v5 migration adds conversation_type column and updates the status CHECK constraint
+// to allow 'informal'. SQLite doesn't support ALTER CONSTRAINT, so we recreate the table.
+var schema_v5_migration = `
+	-- Back up existing messages
+	CREATE TABLE messages_backup AS SELECT * FROM messages;
+
+	-- Drop the old table and recreate with updated constraints
+	DROP TABLE messages;
+
+	CREATE TABLE messages (
+		id TEXT PRIMARY KEY,
+		author TEXT NOT NULL CHECK(author IN ('human', 'ai')),
+		status TEXT NOT NULL CHECK(status IN ('new', 'delivered', 'resolved', 'informal')),
+		read_status TEXT NOT NULL DEFAULT 'read' CHECK(read_status IN ('unread', 'read')),
+		read_by_ai INTEGER NOT NULL DEFAULT 0,
+		message TEXT NOT NULL,
+		file_path TEXT NOT NULL,
+		lineno INTEGER NOT NULL,
+		conversation_id TEXT NOT NULL,
+		sha1 TEXT NOT NULL,
+		context TEXT,
+		conversation_type TEXT NOT NULL DEFAULT 'conversation',
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL,
+		FOREIGN KEY (conversation_id) REFERENCES messages(id) ON DELETE CASCADE
+	);
+
+	-- Copy data back
+	INSERT INTO messages (id, author, status, read_status, read_by_ai, message, file_path, lineno, conversation_id, sha1, context, created_at, updated_at)
+	SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno, conversation_id, sha1, context, created_at, updated_at
+	FROM messages_backup;
+
+	DROP TABLE messages_backup;
+
+	-- Recreate indexes
+	CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
+	CREATE INDEX IF NOT EXISTS idx_messages_file_path ON messages(file_path);
+	CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+	CREATE INDEX IF NOT EXISTS idx_messages_read_status ON messages(read_status) WHERE author = 'ai';
 	CREATE INDEX IF NOT EXISTS idx_messages_read_by_ai ON messages(read_by_ai);
 `
 
@@ -127,6 +169,12 @@ func (db *DB) createInitialSchema() error {
 		return fmt.Errorf("failed to apply schema v4 migration: %w", err)
 	}
 
+	// Apply v5 migration (adds conversation_type column)
+	_, err = db.db.Exec(schema_v5_migration)
+	if err != nil {
+		return fmt.Errorf("failed to apply schema v5 migration: %w", err)
+	}
+
 	// Set schema version
 	if err := db.setSchemaVersion(currentSchemaVersion); err != nil {
 		return fmt.Errorf("failed to set schema version: %w", err)
@@ -146,6 +194,7 @@ type migration struct {
 var migrations = []migration{
 	{"2", "3", schema_v3_migration},
 	{"3", "4", schema_v4_migration},
+	{"4", "5", schema_v5_migration},
 }
 
 // migrateSchema applies migrations to bring the database up to current version

@@ -36,6 +36,8 @@ service CriticService {
   rpc GetRootConversation(GetRootConversationRequest) returns (GetRootConversationResponse);
   // GetProjectConfig returns the parsed project.critic configuration.
   rpc GetProjectConfig(GetProjectConfigRequest) returns (GetProjectConfigResponse);
+  // CreateExplanation creates a new explanation (informal annotation) on a code line.
+  rpc CreateExplanation(CreateExplanationRequest) returns (CreateExplanationResponse);
 }
 
 // ErrorCode represents the type of RPC error.
@@ -245,6 +247,8 @@ message FileConversationSummary {
   int32 resolved_count = 4;
   // has_unread_ai_messages indicates if there are unread AI messages.
   bool has_unread_ai_messages = 5;
+  // explanation_count is the number of explanation (informal annotation) conversations.
+  int32 explanation_count = 6;
 }
 
 // ConversationStatus represents the status of a conversation.
@@ -254,6 +258,14 @@ enum ConversationStatus {
   CONVERSATION_STATUS_UNRESOLVED = 2;
   CONVERSATION_STATUS_ACTIVE = 3;
   CONVERSATION_STATUS_WAITING_FOR_RESPONSE = 4;
+  CONVERSATION_STATUS_INFORMAL = 5;
+}
+
+// ConversationType represents the type of a conversation.
+enum ConversationType {
+  CONVERSATION_TYPE_INVALID = 0;
+  CONVERSATION_TYPE_CONVERSATION = 1;
+  CONVERSATION_TYPE_EXPLANATION = 2;
 }
 
 // Conversation represents a comment thread at a specific line.
@@ -276,6 +288,8 @@ message Conversation {
   string created_at = 8;
   // updated_at is the timestamp when the conversation was last updated.
   string updated_at = 9;
+  // conversation_type is the type of this conversation (conversation or explanation).
+  ConversationType conversation_type = 10;
 }
 
 // Message represents a single message in a conversation.
@@ -414,4 +428,22 @@ message EditorConfig {
   // url is a template for opening files in an editor.
   // Supports placeholders: {file} for the file path, {line} for the line number.
   string url = 1;
+}
+
+// CreateExplanationRequest contains the data for creating a new explanation.
+message CreateExplanationRequest {
+  // file is the path to the file being annotated.
+  string file = 1;
+  // line is the line number in the file.
+  int32 line = 2;
+  // comment is the explanation text.
+  string comment = 3;
+}
+
+// CreateExplanationResponse contains the result of creating an explanation.
+message CreateExplanationResponse {
+  // success indicates whether the explanation was created successfully.
+  bool success = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
 }
