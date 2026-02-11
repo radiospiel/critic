@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,6 +33,7 @@ const (
 	StatusDelivered Status = "delivered"
 	StatusResolved  Status = "resolved"
 	StatusInformal  Status = "informal"
+	StatusArchived  Status = "archived"
 )
 
 // ConversationType represents the type of a conversation
@@ -55,7 +58,7 @@ type Message struct {
 	Author           Author
 	Status           Status
 	ReadStatus       ReadStatus
-	ReadByAI         bool             // Whether the AI has read this conversation via MCP
+	ReadByAI         bool // Whether the AI has read this conversation via MCP
 	Message          string
 	FilePath         string           // File this message is attached to (git-relative path)
 	Lineno           int              // Line number in the file
@@ -71,6 +74,42 @@ type Message struct {
 type DB struct {
 	db     *sql.DB
 	dbPath string
+}
+
+// sqlLabel returns a compact single-line label from a SQL query string.
+var reWhitespace = regexp.MustCompile(`\s+`)
+
+const enableRuntimeLog = false
+
+func logRuntime[T any](query string, fun func() T) T {
+	if enableRuntimeLog {
+		sqlLabel := strings.TrimSpace(reWhitespace.ReplaceAllString(query, " "))
+		return logger.Runtime(sqlLabel, fun)
+	} else {
+		return fun()
+	}
+}
+
+// exec wraps sql.DB.Exec with timing via logger.Runtime.
+func (d *DB) exec(query string, args ...any) (sql.Result, error) {
+	var result sql.Result
+	err := logRuntime(query, func() error {
+		var e error
+		result, e = d.db.Exec(query, args...)
+		return e
+	})
+	return result, err
+}
+
+// query wraps sql.DB.Query with timing via logger.Runtime.
+func (d *DB) query(query string, args ...any) (*sql.Rows, error) {
+	var rows *sql.Rows
+	err := logRuntime(query, func() error {
+		var e error
+		rows, e = d.db.Query(query, args...)
+		return e
+	})
+	return rows, err
 }
 
 // New creates or opens the message database at the specified git root
@@ -207,7 +246,7 @@ func (db *DB) insertMessage(msg *Message) error {
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := db.db.Exec(query,
+	_, err := db.exec(query,
 		msg.ID,
 		string(msg.Author),
 		string(msg.Status),
@@ -241,22 +280,24 @@ func (db *DB) GetMessage(id string) (*Message, error) {
 	var msg Message
 	var readByAI int
 
-	err := db.db.QueryRow(query, id).Scan(
-		&msg.ID,
-		&msg.Author,
-		&msg.Status,
-		&msg.ReadStatus,
-		&readByAI,
-		&msg.Message,
-		&msg.FilePath,
-		&msg.Lineno,
-		&msg.ConversationID,
-		&msg.Commit,
-		&msg.Context,
-		&msg.ConversationType,
-		&msg.CreatedAt,
-		&msg.UpdatedAt,
-	)
+	err := logRuntime(query, func() error {
+		return db.db.QueryRow(query, id).Scan(
+			&msg.ID,
+			&msg.Author,
+			&msg.Status,
+			&msg.ReadStatus,
+			&readByAI,
+			&msg.Message,
+			&msg.FilePath,
+			&msg.Lineno,
+			&msg.ConversationID,
+			&msg.Commit,
+			&msg.Context,
+			&msg.ConversationType,
+			&msg.CreatedAt,
+			&msg.UpdatedAt,
+		)
+	})
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -282,7 +323,7 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 		ORDER BY created_at ASC
 	`
 
-	rows, err := db.db.Query(query, conversationID)
+	rows, err := db.query(query, conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation messages: %w", err)
 	}
@@ -330,7 +371,7 @@ func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
 		ORDER BY file_path, lineno, created_at ASC
 	`
 
-	rows, err := db.db.Query(query, string(StatusResolved))
+	rows, err := db.query(query, string(StatusResolved))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get unresolved messages: %w", err)
 	}
@@ -381,7 +422,7 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 		ORDER BY lineno, created_at ASC
 	`
 
-	rows, err := db.db.Query(query, filePath)
+	rows, err := db.query(query, filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get messages by file: %w", err)
 	}
@@ -433,6 +474,9 @@ func (db *DB) MarkConversationAs(conversationID string, update critic.Conversati
 	case critic.ConversationUnresolved:
 		query = `UPDATE messages SET status = ?, updated_at = ? WHERE conversation_id = ?`
 		args = []interface{}{string(StatusNew), time.Now(), conversationID}
+	case critic.ConversationArchived:
+		query = `UPDATE messages SET status = ?, updated_at = ? WHERE conversation_id = ?`
+		args = []interface{}{string(StatusArchived), time.Now(), conversationID}
 	case critic.ConversationReadByAI:
 		query = `UPDATE messages SET read_by_ai = 1, updated_at = ? WHERE conversation_id = ?`
 		args = []interface{}{time.Now(), conversationID}
@@ -440,7 +484,7 @@ func (db *DB) MarkConversationAs(conversationID string, update critic.Conversati
 		return fmt.Errorf("unknown conversation update: %s", update)
 	}
 
-	result, err := db.db.Exec(query, args...)
+	result, err := db.exec(query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to mark conversation as %s: %w", update, err)
 	}
@@ -470,7 +514,7 @@ func (db *DB) MarkMessageAs(messageID string, status critic.MessageReadStatus) e
 		WHERE id = ? AND author = ?
 	`
 
-	_, err := db.db.Exec(query, dbStatus, time.Now(), messageID, string(AuthorAI))
+	_, err := db.exec(query, dbStatus, time.Now(), messageID, string(AuthorAI))
 	if err != nil {
 		return fmt.Errorf("failed to mark message as %s: %w", status, err)
 	}
@@ -488,7 +532,7 @@ func (db *DB) GetFilesWithUnreadAIMessages() ([]string, error) {
 		ORDER BY file_path
 	`
 
-	rows, err := db.db.Query(query, string(AuthorAI), string(ReadStatusUnread))
+	rows, err := db.query(query, string(AuthorAI), string(ReadStatusUnread))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get files with unread messages: %w", err)
 	}
@@ -516,7 +560,7 @@ func (db *DB) UpdateMessageStatus(id string, status Status) error {
 		WHERE id = ?
 	`
 
-	_, err := db.db.Exec(query, string(status), time.Now(), id)
+	_, err := db.exec(query, string(status), time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update message status: %w", err)
 	}
@@ -536,7 +580,7 @@ func (db *DB) UpdateMessage(id string, newMessage string) error {
 		WHERE id = ?
 	`
 
-	result, err := db.db.Exec(query, newMessage, time.Now(), id)
+	result, err := db.exec(query, newMessage, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update message: %w", err)
 	}
@@ -585,7 +629,9 @@ func (db *DB) UpsertMessage(author Author, message, filePath string, lineno int,
 func (db *DB) GetMessagesMtime() (int64, error) {
 	var mtime int64
 	query := `SELECT mtime_msec FROM _db_mtime WHERE tablename = 'messages'`
-	err := db.db.QueryRow(query).Scan(&mtime)
+	err := logRuntime(query, func() error {
+		return db.db.QueryRow(query).Scan(&mtime)
+	})
 	if err != nil {
 		// Table might not exist or no entry - return 0
 		return 0, nil
@@ -596,6 +642,6 @@ func (db *DB) GetMessagesMtime() (int64, error) {
 // WalCheckpoint performs a passive WAL checkpoint to flush pending writes
 // to the main database file, making them visible to other connections.
 func (db *DB) WalCheckpoint() error {
-	_, err := db.db.Exec("PRAGMA wal_checkpoint(PASSIVE)")
+	_, err := db.exec("PRAGMA wal_checkpoint(PASSIVE)")
 	return err
 }

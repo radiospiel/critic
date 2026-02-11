@@ -50,7 +50,7 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 		return nil, fmt.Errorf("invalid status: %s", status)
 	}
 
-	rows, err := db.db.Query(query, args...)
+	rows, err := db.query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversations: %w", err)
 	}
@@ -163,7 +163,7 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 		ORDER BY file_path
 	`
 
-	rows, err := db.db.Query(query)
+	rows, err := db.query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query file summaries: %w", err)
 	}
@@ -194,7 +194,7 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 		WHERE author = 'ai' AND read_status = 'unread'
 		GROUP BY file_path
 	`
-	unreadRows, err := db.db.Query(unreadQuery)
+	unreadRows, err := db.query(unreadQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread AI messages: %w", err)
 	}
@@ -345,7 +345,9 @@ func (db *DB) LoadRootConversation() (*critic.Conversation, error) {
 		LIMIT 1
 	`
 	var id string
-	err := db.db.QueryRow(query).Scan(&id)
+	err := logRuntime(query, func() error {
+		return db.db.QueryRow(query).Scan(&id)
+	})
 	if err != nil {
 		// Not found — insert a sentinel root message.
 		id = uuid.Must(uuid.NewV7()).String()
@@ -378,6 +380,8 @@ func convertToCriticStatus(status Status) critic.ConversationStatus {
 		return critic.StatusResolved
 	case StatusInformal:
 		return critic.StatusInformal
+	case StatusArchived:
+		return critic.StatusArchived
 	default:
 		return critic.StatusUnresolved
 	}
