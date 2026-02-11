@@ -1,0 +1,1948 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>server: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/radiospiel/critic/src/api/server/create_conversation.go (80.0%)</option>
+				
+				<option value="file1">github.com/radiospiel/critic/src/api/server/create_explanation.go (0.0%)</option>
+				
+				<option value="file2">github.com/radiospiel/critic/src/api/server/get_config.go (0.0%)</option>
+				
+				<option value="file3">github.com/radiospiel/critic/src/api/server/get_conversations.go (62.7%)</option>
+				
+				<option value="file4">github.com/radiospiel/critic/src/api/server/get_conversations_summary.go (90.0%)</option>
+				
+				<option value="file5">github.com/radiospiel/critic/src/api/server/get_diff.go (0.0%)</option>
+				
+				<option value="file6">github.com/radiospiel/critic/src/api/server/get_diff_bases.go (0.0%)</option>
+				
+				<option value="file7">github.com/radiospiel/critic/src/api/server/get_diff_summary.go (0.0%)</option>
+				
+				<option value="file8">github.com/radiospiel/critic/src/api/server/get_file.go (0.0%)</option>
+				
+				<option value="file9">github.com/radiospiel/critic/src/api/server/get_last_change.go (0.0%)</option>
+				
+				<option value="file10">github.com/radiospiel/critic/src/api/server/get_project_config.go (0.0%)</option>
+				
+				<option value="file11">github.com/radiospiel/critic/src/api/server/get_root_conversation.go (0.0%)</option>
+				
+				<option value="file12">github.com/radiospiel/critic/src/api/server/interceptor.go (0.0%)</option>
+				
+				<option value="file13">github.com/radiospiel/critic/src/api/server/mark_conversation_as.go (0.0%)</option>
+				
+				<option value="file14">github.com/radiospiel/critic/src/api/server/reply_to_conversation.go (88.9%)</option>
+				
+				<option value="file15">github.com/radiospiel/critic/src/api/server/server.go (8.5%)</option>
+				
+				<option value="file16">github.com/radiospiel/critic/src/api/server/session.go (9.6%)</option>
+				
+				<option value="file17">github.com/radiospiel/critic/src/api/server/set_diff_base.go (0.0%)</option>
+				
+				<option value="file18">github.com/radiospiel/critic/src/api/server/watch_file.go (0.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/simple-go/logger"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/pkg/critic"
+)
+
+// CreateConversation creates a new conversation (comment thread) on a diff line.
+func (s *Server) CreateConversation(
+        ctx context.Context,
+        req *connect.Request[api.CreateConversationRequest],
+) (*connect.Response[api.CreateConversationResponse], error) <span class="cov8" title="1">{
+        response := depanic(func() (*api.CreateConversationResponse, error) </span><span class="cov8" title="1">{
+                return createConversationImpl(s, req.Msg)
+        }</span>)
+        <span class="cov8" title="1">return connect.NewResponse(response), nil</span>
+}
+
+func createConversationImpl(server *Server, req *api.CreateConversationRequest) (*api.CreateConversationResponse, error) <span class="cov8" title="1">{
+        logger.Info("CreateConversation: old_file=%s, old_line=%d, new_file=%s, new_line=%d, comment=%q",
+                req.GetOldFile(),
+                req.GetOldLine(),
+                req.GetNewFile(),
+                req.GetNewLine(),
+                req.GetComment(),
+        )
+
+        // Determine file path and line number to use
+        // Prefer new_file/new_line for added/modified lines, fall back to old_file/old_line for deleted lines
+        // Note: Validation (comment required, file paths, line numbers &gt;= 0) is handled by JSON schema
+        filePath := req.GetNewFile()
+        lineNo := int(req.GetNewLine())
+        if filePath == "" || lineNo == 0 </span><span class="cov0" title="0">{
+                filePath = req.GetOldFile()
+                lineNo = int(req.GetOldLine())
+        }</span>
+
+        // Get the current commit SHA from the session
+        <span class="cov8" title="1">codeVersion := server.session.HeadCommit()
+
+        // Create the conversation using the messaging interface
+        conversation, err := server.config.Messaging.CreateConversation(
+                critic.AuthorHuman,
+                req.GetComment(),
+                filePath,
+                lineNo,
+                codeVersion,
+                "", // context - could be enhanced to include surrounding code
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">logger.Info("Created conversation %s at %s:%d", conversation.UUID, filePath, lineNo)
+        return &amp;api.CreateConversationResponse{
+                Success: true,
+        }, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/simple-go/logger"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/pkg/critic"
+)
+
+// CreateExplanation creates a new explanation (informal annotation) on a code line.
+func (s *Server) CreateExplanation(
+        ctx context.Context,
+        req *connect.Request[api.CreateExplanationRequest],
+) (*connect.Response[api.CreateExplanationResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.CreateExplanationResponse, error) </span><span class="cov0" title="0">{
+                return createExplanationImpl(s, req.Msg)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func createExplanationImpl(server *Server, req *api.CreateExplanationRequest) (*api.CreateExplanationResponse, error) <span class="cov0" title="0">{
+        logger.Info("CreateExplanation: file=%s, line=%d, comment=%q",
+                req.GetFile(),
+                req.GetLine(),
+                req.GetComment(),
+        )
+
+        filePath := req.GetFile()
+        lineNo := int(req.GetLine())
+
+        // Get the current commit SHA from the session
+        codeVersion := server.session.HeadCommit()
+
+        // Create the explanation using the messaging interface
+        conversation, err := server.config.Messaging.CreateExplanation(
+                critic.AuthorHuman,
+                req.GetComment(),
+                filePath,
+                lineNo,
+                codeVersion,
+                "", // context
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">logger.Info("Created explanation %s at %s:%d", conversation.UUID, filePath, lineNo)
+        return &amp;api.CreateExplanationResponse{
+                Success: true,
+        }, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+)
+
+// GetConfig returns server configuration for the frontend.
+func (s *Server) GetConfig(ctx context.Context, req *connect.Request[api.GetConfigRequest]) (*connect.Response[api.GetConfigResponse], error) <span class="cov0" title="0">{
+        return connect.NewResponse(depanic(func() (*api.GetConfigResponse, error) </span><span class="cov0" title="0">{
+                return &amp;api.GetConfigResponse{
+                        GitRoot: s.config.GitRoot,
+                        DevMode: s.config.Dev,
+                }, nil
+        }</span>)), nil
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/git"
+        "github.com/radiospiel/critic/src/pkg/critic"
+        "github.com/samber/lo"
+)
+
+// GetConversations returns conversations matching the given filters.
+// If paths is empty, returns conversations across all files.
+// If statuses is empty, returns conversations with any status.
+// Conversations are filtered to the current start..end diff range.
+func (s *Server) GetConversations(
+        ctx context.Context,
+        req *connect.Request[api.GetConversationsRequest],
+) (*connect.Response[api.GetConversationsResponse], error) <span class="cov8" title="1">{
+        response := depanic(func() (*api.GetConversationsResponse, error) </span><span class="cov8" title="1">{
+                return getConversationsImpl(s, req.Msg)
+        }</span>)
+        <span class="cov8" title="1">return connect.NewResponse(response), nil</span>
+}
+
+func getConversationsImpl(server *Server, req *api.GetConversationsRequest) (*api.GetConversationsResponse, error) <span class="cov8" title="1">{
+        paths := req.GetPaths()
+        statuses := req.GetStatuses()
+
+        m := server.config.Messaging
+
+        // Build status filter set (empty means accept all)
+        statusSet := make(map[api.ConversationStatus]bool, len(statuses))
+        for _, s := range statuses </span><span class="cov0" title="0">{
+                statusSet[s] = true
+        }</span>
+
+        // Collect conversations: per-file if paths given, all roots otherwise
+        <span class="cov8" title="1">var criticConversations []*critic.Conversation
+        if len(paths) &gt; 0 </span><span class="cov8" title="1">{
+                for _, path := range paths </span><span class="cov8" title="1">{
+                        convs, err := m.GetConversationsForFile(path)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return nil, err
+                        }</span>
+                        <span class="cov8" title="1">criticConversations = append(criticConversations, convs...)</span>
+                }
+        } else<span class="cov0" title="0"> {
+                // No paths filter: load all root conversations then fetch full threads
+                roots, err := m.GetConversations("")
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, err
+                }</span>
+                <span class="cov0" title="0">for _, root := range roots </span><span class="cov0" title="0">{
+                        conv, err := m.GetFullConversation(root.UUID)
+                        if err != nil </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                        <span class="cov0" title="0">criticConversations = append(criticConversations, conv)</span>
+                }
+        }
+
+        // Get current diff range for filtering and branch resolution (if session exists)
+        <span class="cov8" title="1">var start, end string
+        var bases []string
+        if server.session != nil </span><span class="cov8" title="1">{
+                start = server.session.GetCurrentStart()
+                end = server.session.GetCurrentEnd()
+                bases = server.session.GetDiffBases()
+        }</span>
+
+        // Filter conversations to the current diff range, apply status filter,
+        // and resolve branch names.
+        <span class="cov8" title="1">cache := git.NewAncestryCache()
+        apiConversations := make([]*api.Conversation, 0, len(criticConversations))
+        for _, conv := range criticConversations </span><span class="cov8" title="1">{
+                if start != "" </span><span class="cov0" title="0">{
+                        if !git.IsCommitInRangeCached(conv.CodeVersion, start, end, cache) </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                }
+
+                <span class="cov8" title="1">apiStatus := criticStatusToApiStatus(conv.Status)
+                if len(statusSet) &gt; 0 &amp;&amp; !statusSet[apiStatus] </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">apiConv := criticToApiConversation(conv, 0)
+                if conv.CodeVersion != "" &amp;&amp; len(bases) &gt; 0 </span><span class="cov0" title="0">{
+                        apiConv.BranchName = git.ClosestBranchForSHACached(conv.CodeVersion, bases, cache)
+                }</span>
+                <span class="cov8" title="1">apiConversations = append(apiConversations, apiConv)</span>
+        }
+
+        <span class="cov8" title="1">return &amp;api.GetConversationsResponse{
+                Conversations: apiConversations,
+        }, nil</span>
+}
+
+func criticToApiMessage(msg critic.Message, index int) *api.Message <span class="cov8" title="1">{
+        return &amp;api.Message{
+                Id:        msg.UUID,
+                Author:    string(msg.Author),
+                Content:   msg.Message,
+                CreatedAt: msg.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+                UpdatedAt: msg.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+                IsUnread:  msg.IsUnread,
+        }
+}</span>
+
+func criticStatusToApiStatus(status critic.ConversationStatus) api.ConversationStatus <span class="cov8" title="1">{
+        switch status </span>{
+        case critic.StatusResolved:<span class="cov0" title="0">
+                return api.ConversationStatus_CONVERSATION_STATUS_RESOLVED</span>
+        case critic.StatusUnresolved:<span class="cov8" title="1">
+                return api.ConversationStatus_CONVERSATION_STATUS_UNRESOLVED</span>
+        case critic.StatusActive:<span class="cov0" title="0">
+                return api.ConversationStatus_CONVERSATION_STATUS_ACTIVE</span>
+        case critic.StatusWaitingForResponse:<span class="cov0" title="0">
+                return api.ConversationStatus_CONVERSATION_STATUS_WAITING_FOR_RESPONSE</span>
+        case critic.StatusInformal:<span class="cov0" title="0">
+                return api.ConversationStatus_CONVERSATION_STATUS_INFORMAL</span>
+        case critic.StatusArchived:<span class="cov0" title="0">
+                return api.ConversationStatus_CONVERSATION_STATUS_ARCHIVED</span>
+        default:<span class="cov0" title="0">
+                return api.ConversationStatus_CONVERSATION_STATUS_INVALID</span>
+        }
+}
+
+func criticTypeToApiType(ct critic.ConversationType) api.ConversationType <span class="cov8" title="1">{
+        switch ct </span>{
+        case critic.TypeExplanation:<span class="cov0" title="0">
+                return api.ConversationType_CONVERSATION_TYPE_EXPLANATION</span>
+        case critic.TypeConversation:<span class="cov0" title="0">
+                return api.ConversationType_CONVERSATION_TYPE_CONVERSATION</span>
+        default:<span class="cov8" title="1">
+                return api.ConversationType_CONVERSATION_TYPE_INVALID</span>
+        }
+}
+
+func criticToApiConversation(conv *critic.Conversation, index int) *api.Conversation <span class="cov8" title="1">{
+        messages := lo.Map(conv.Messages, criticToApiMessage)
+        return &amp;api.Conversation{
+                Id:               conv.UUID,
+                Status:           criticStatusToApiStatus(conv.Status),
+                ConversationType: criticTypeToApiType(conv.ConversationType),
+                FilePath:         conv.FilePath,
+                LineNumber:       int32(conv.LineNumber),
+                CodeVersion:      conv.CodeVersion,
+                Context:          conv.Context,
+                Messages:         messages,
+                CreatedAt:        conv.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+                UpdatedAt:        conv.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+        }
+}</span>
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/pkg/critic"
+        "github.com/samber/lo"
+)
+
+// GetConversationsSummary returns conversation counts and status per file path.
+func (s *Server) GetConversationsSummary(
+        ctx context.Context,
+        req *connect.Request[api.GetConversationsSummaryRequest],
+) (*connect.Response[api.GetConversationsSummaryResponse], error) <span class="cov8" title="1">{
+        response := depanic(func() (*api.GetConversationsSummaryResponse, error) </span><span class="cov8" title="1">{
+                return getConversationsSummaryImpl(s, req.Msg)
+        }</span>)
+        <span class="cov8" title="1">return connect.NewResponse(response), nil</span>
+}
+
+func getConversationsSummaryImpl(server *Server, req *api.GetConversationsSummaryRequest) (*api.GetConversationsSummaryResponse, error) <span class="cov8" title="1">{
+        m := server.config.Messaging
+        criticSummaries, err := m.GetConversationsSummary()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">apiSummaries := lo.Map(criticSummaries, criticToApiFileConversationSummary)
+
+        return &amp;api.GetConversationsSummaryResponse{
+                Summaries: apiSummaries,
+        }, nil</span>
+}
+
+func criticToApiFileConversationSummary(summary *critic.FileConversationSummary, index int) *api.FileConversationSummary <span class="cov8" title="1">{
+        return &amp;api.FileConversationSummary{
+                FilePath:            summary.FilePath,
+                TotalCount:          int32(summary.TotalCount),
+                UnresolvedCount:     int32(summary.UnresolvedCount),
+                ResolvedCount:       int32(summary.ResolvedCount),
+                ExplanationCount:    int32(summary.ExplanationCount),
+                HasUnreadAiMessages: summary.HasUnreadAIMessages,
+        }
+}</span>
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/pkg/types"
+)
+
+// GetDiff returns the full diff for a specific file path.
+func (s *Server) GetDiff(
+        ctx context.Context,
+        req *connect.Request[api.GetDiffRequest],
+) (*connect.Response[api.GetDiffResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.GetDiffResponse, error) </span><span class="cov0" title="0">{
+                return getDiffImpl(s, req.Msg)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func getDiffImpl(server *Server, req *api.GetDiffRequest) (*api.GetDiffResponse, error) <span class="cov0" title="0">{
+        session := server.GetSession()
+        path := req.GetPath()
+        contextLines := int(req.GetContextLines())
+
+        fileDiff := session.GetFileDiff(path, contextLines)
+
+        return &amp;api.GetDiffResponse{
+                File: convertFileDiff(fileDiff),
+        }, nil
+}</span>
+
+// convertFileDiff converts a types.FileDiff to an api.FileDiff (with hunks)
+func convertFileDiff(f *types.FileDiff) *api.FileDiff <span class="cov0" title="0">{
+        if f == nil </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">hunks := make([]*api.Hunk, len(f.Hunks))
+        for i, h := range f.Hunks </span><span class="cov0" title="0">{
+                hunks[i] = convertHunk(h)
+        }</span>
+
+        <span class="cov0" title="0">return &amp;api.FileDiff{
+                OldPath:     f.OldPath,
+                NewPath:     f.NewPath,
+                FileModeOld: f.OldMode,
+                FileModeNew: f.NewMode,
+                Status:      convertFileStatus(f.FileStatus),
+                IsBinary:    f.IsBinary,
+                Hunks:       hunks,
+        }</span>
+}
+
+// convertHunk converts a types.Hunk to an api.Hunk
+func convertHunk(h *types.Hunk) *api.Hunk <span class="cov0" title="0">{
+        if h == nil </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">lines := make([]*api.Line, len(h.Lines))
+        for i, l := range h.Lines </span><span class="cov0" title="0">{
+                lines[i] = convertLine(l)
+        }</span>
+
+        <span class="cov0" title="0">return &amp;api.Hunk{
+                OldStart: int32(h.OldStart),
+                OldLines: int32(h.OldLines),
+                NewStart: int32(h.NewStart),
+                NewLines: int32(h.NewLines),
+                Header:   h.Header,
+                Lines:    lines,
+                Stats: &amp;api.HunkStats{
+                        Added:   int32(h.Stats.Added),
+                        Deleted: int32(h.Stats.Deleted),
+                },
+        }</span>
+}
+
+// convertLine converts a types.Line to an api.Line
+func convertLine(l *types.Line) *api.Line <span class="cov0" title="0">{
+        if l == nil </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">var lineType api.LineType
+        switch l.Type </span>{
+        case types.LineContext:<span class="cov0" title="0">
+                lineType = api.LineType_LINE_TYPE_CONTEXT</span>
+        case types.LineAdded:<span class="cov0" title="0">
+                lineType = api.LineType_LINE_TYPE_ADDED</span>
+        case types.LineDeleted:<span class="cov0" title="0">
+                lineType = api.LineType_LINE_TYPE_DELETED</span>
+        default:<span class="cov0" title="0">
+                lineType = api.LineType_LINE_TYPE_UNSPECIFIED</span>
+        }
+
+        <span class="cov0" title="0">return &amp;api.Line{
+                Type:      lineType,
+                Content:   l.Content,
+                LineNoOld: int32(l.OldNum),
+                LineNoNew: int32(l.NewNum),
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+)
+
+// GetDiffBases returns the available diff bases and the current selection.
+func (s *Server) GetDiffBases(
+        ctx context.Context,
+        req *connect.Request[api.GetDiffBasesRequest],
+) (*connect.Response[api.GetDiffBasesResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.GetDiffBasesResponse, error) </span><span class="cov0" title="0">{
+                return getDiffBasesImpl(s, req.Msg)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func getDiffBasesImpl(server *Server, req *api.GetDiffBasesRequest) (*api.GetDiffBasesResponse, error) <span class="cov0" title="0">{
+        return &amp;api.GetDiffBasesResponse{
+                Bases:        server.session.GetDiffBases(),
+                CurrentBase:  server.session.GetCurrentBase(),
+                CurrentStart: server.session.GetCurrentStart(),
+                CurrentEnd:   server.session.GetCurrentEnd(),
+        }, nil
+}</span>
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/pkg/types"
+)
+
+// GetDiffSummary returns the current diff summary (file list without hunks) and state.
+func (s *Server) GetDiffSummary(
+        ctx context.Context,
+        req *connect.Request[api.GetDiffSummaryRequest],
+) (*connect.Response[api.GetDiffSummaryResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.GetDiffSummaryResponse, error) </span><span class="cov0" title="0">{
+                return getDiffSummaryImpl(s, req.Msg)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func getDiffSummaryImpl(server *Server, req *api.GetDiffSummaryRequest) (*api.GetDiffSummaryResponse, error) <span class="cov0" title="0">{
+        session := server.GetSession()
+        state := session.GetState()
+        diff := session.GetDiffSummary()
+
+        return &amp;api.GetDiffSummaryResponse{
+                State: string(state),
+                Diff:  convertDiffSummary(diff),
+        }, nil
+}</span>
+
+// convertDiffSummary converts a []*types.FileDiff to an api.DiffSummary (without hunks)
+func convertDiffSummary(files []*types.FileDiff) *api.DiffSummary <span class="cov0" title="0">{
+        if files == nil </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">apiFiles := make([]*api.FileSummary, len(files))
+        for i, f := range files </span><span class="cov0" title="0">{
+                apiFiles[i] = convertFileSummary(f)
+        }</span>
+
+        <span class="cov0" title="0">return &amp;api.DiffSummary{
+                Files: apiFiles,
+        }</span>
+}
+
+// convertFileSummary converts a types.FileDiff to an api.FileSummary (without hunks)
+func convertFileSummary(f *types.FileDiff) *api.FileSummary <span class="cov0" title="0">{
+        if f == nil </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">return &amp;api.FileSummary{
+                OldPath:     f.OldPath,
+                NewPath:     f.NewPath,
+                FileModeOld: f.OldMode,
+                FileModeNew: f.NewMode,
+                Status:      convertFileStatus(f.FileStatus),
+                IsBinary:    f.IsBinary,
+        }</span>
+}
+
+// convertFileStatus converts types.FileStatus to api.FileStatus
+func convertFileStatus(s types.FileStatus) api.FileStatus <span class="cov0" title="0">{
+        switch s </span>{
+        case types.FileStatusNew:<span class="cov0" title="0">
+                return api.FileStatus_FILE_STATUS_NEW</span>
+        case types.FileStatusDeleted:<span class="cov0" title="0">
+                return api.FileStatus_FILE_STATUS_DELETED</span>
+        case types.FileStatusRenamed:<span class="cov0" title="0">
+                return api.FileStatus_FILE_STATUS_RENAMED</span>
+        case types.FileStatusUntracked:<span class="cov0" title="0">
+                return api.FileStatus_FILE_STATUS_UNTRACKED</span>
+        case types.FileStatusModified:<span class="cov0" title="0">
+                return api.FileStatus_FILE_STATUS_MODIFIED</span>
+        default:<span class="cov0" title="0">
+                return api.FileStatus_FILE_STATUS_UNSPECIFIED</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package server
+
+import (
+        "context"
+        "path/filepath"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/git"
+)
+
+// GetFile returns the content of a file at a specific path.
+func (s *Server) GetFile(
+        ctx context.Context,
+        req *connect.Request[api.GetFileRequest],
+) (*connect.Response[api.GetFileResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.GetFileResponse, error) </span><span class="cov0" title="0">{
+                return getFileImpl(s, req.Msg)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func getFileImpl(server *Server, req *api.GetFileRequest) (*api.GetFileResponse, error) <span class="cov0" title="0">{
+        path := req.GetPath()
+
+        // Resolve path relative to git root
+        fullPath := filepath.Join(server.config.GitRoot, path)
+
+        // Read file content from working directory
+        content, err := git.GetFileContent(fullPath, "")
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, api.NotFoundError("file not found: " + path)
+        }</span>
+
+        <span class="cov0" title="0">return &amp;api.GetFileResponse{
+                Content: content,
+        }, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file9" style="display: none">package server
+
+import (
+        "context"
+        "time"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+)
+
+// GetLastChange returns the current time in milliseconds.
+func (s *Server) GetLastChange(
+        ctx context.Context,
+        req *connect.Request[api.GetLastChangeRequest],
+) (*connect.Response[api.GetLastChangeResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.GetLastChangeResponse, error) </span><span class="cov0" title="0">{
+                return getLastChangeImpl(s, req.Msg)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func getLastChangeImpl(server *Server, req *api.GetLastChangeRequest) (*api.GetLastChangeResponse, error) <span class="cov0" title="0">{
+        // Use tracked timestamp if available, otherwise use current time
+        timestamp := server.LastChangeTime()
+        if timestamp == 0 </span><span class="cov0" title="0">{
+                timestamp = time.Now().UnixMilli()
+        }</span>
+        <span class="cov0" title="0">return &amp;api.GetLastChangeResponse{
+                MtimeMsecs: uint64(timestamp),
+        }, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file10" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/config"
+)
+
+// GetProjectConfig returns the parsed project.critic configuration.
+func (s *Server) GetProjectConfig(
+        ctx context.Context,
+        req *connect.Request[api.GetProjectConfigRequest],
+) (*connect.Response[api.GetProjectConfigResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.GetProjectConfigResponse, error) </span><span class="cov0" title="0">{
+                return getProjectConfigImpl(s)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func getProjectConfigImpl(server *Server) (*api.GetProjectConfigResponse, error) <span class="cov0" title="0">{
+        pc := server.config.ProjectConfig
+        if pc == nil </span><span class="cov0" title="0">{
+                pc = config.DefaultProjectConfig()
+        }</span>
+
+        <span class="cov0" title="0">categories := make([]*api.FileCategory, 0, len(pc.Categories))
+        for name, patterns := range pc.Categories </span><span class="cov0" title="0">{
+                categories = append(categories, &amp;api.FileCategory{
+                        Name:     name,
+                        Patterns: patterns,
+                })
+        }</span>
+
+        <span class="cov0" title="0">var editor *api.EditorConfig
+        if pc.Editor.URL != "" </span><span class="cov0" title="0">{
+                editor = &amp;api.EditorConfig{
+                        Url: pc.Editor.URL,
+                }
+        }</span>
+
+        <span class="cov0" title="0">return &amp;api.GetProjectConfigResponse{
+                ProjectName: pc.Project.Name,
+                Categories:  categories,
+                Editor:      editor,
+        }, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file11" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/pkg/critic"
+)
+
+// GetRootConversation returns the root conversation if it exists and is unresolved.
+func (s *Server) GetRootConversation(
+        ctx context.Context,
+        req *connect.Request[api.GetRootConversationRequest],
+) (*connect.Response[api.GetRootConversationResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.GetRootConversationResponse, error) </span><span class="cov0" title="0">{
+                return getRootConversationImpl(s)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func getRootConversationImpl(server *Server) (*api.GetRootConversationResponse, error) <span class="cov0" title="0">{
+        conv, err := server.config.Messaging.LoadRootConversation()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        // Only return the conversation if it's unresolved and has messages beyond the empty root
+        <span class="cov0" title="0">if conv == nil || conv.Status == critic.StatusResolved || len(conv.Messages) &lt;= 1 </span><span class="cov0" title="0">{
+                return &amp;api.GetRootConversationResponse{}, nil
+        }</span>
+
+        // Check if the only message is the empty root message
+        <span class="cov0" title="0">if len(conv.Messages) == 1 &amp;&amp; conv.Messages[0].Message == "" </span><span class="cov0" title="0">{
+                return &amp;api.GetRootConversationResponse{}, nil
+        }</span>
+
+        <span class="cov0" title="0">return &amp;api.GetRootConversationResponse{
+                Conversation: criticToApiConversation(conv, 0),
+        }, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file12" style="display: none">package server
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "time"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/simple-go/logger"
+        "github.com/radiospiel/critic/simple-go/preconditions"
+        "github.com/radiospiel/critic/src/api"
+        "google.golang.org/protobuf/encoding/protojson"
+        "google.golang.org/protobuf/proto"
+)
+
+// loggingInterceptor logs gRPC requests and responses using JSON format
+func loggingInterceptor() connect.UnaryInterceptorFunc <span class="cov0" title="0">{
+        return func(next connect.UnaryFunc) connect.UnaryFunc </span><span class="cov0" title="0">{
+                return func(ctx context.Context, request connect.AnyRequest) (connect.AnyResponse, error) </span><span class="cov0" title="0">{
+                        start := time.Now()
+
+                        // Call the handler
+                        response, err := next(ctx, request)
+
+                        duration := time.Since(start)
+
+                        if err != nil </span><span class="cov0" title="0">{
+                                logGrpcError(duration, request, err)
+                        }</span> else<span class="cov0" title="0"> {
+                                logGrpcResponse(duration, request, response)
+                        }</span>
+
+                        <span class="cov0" title="0">return response, err</span>
+                }
+        }
+}
+
+func logGrpcError(duration time.Duration, req connect.AnyRequest, err error) bool <span class="cov0" title="0">{
+        // marshall request into a single line
+        reqMsg, ok := req.Any().(proto.Message)
+        reqMsgJSON, _ := protojson.MarshalOptions{}.Marshal(reqMsg)
+        preconditions.Check(ok, "This must always be a proto.Message")
+
+        return logger.Info(
+                "GRPC %s duration=%s req=%s err=%q",
+                req.Spec().Procedure,
+                formatDuration(duration),
+                reqMsgJSON,
+                err.Error(),
+        )
+}</span>
+
+func logGrpcResponse(duration time.Duration, req connect.AnyRequest, resp connect.AnyResponse) <span class="cov0" title="0">{
+        // marshall request into a single line
+        reqMsg, ok := req.Any().(proto.Message)
+        reqMsgJSON, _ := protojson.MarshalOptions{}.Marshal(reqMsg)
+        preconditions.Check(ok, "This must always be a proto.Message")
+
+        respMsg, ok := resp.Any().(proto.Message)
+        preconditions.Check(ok, "This must always be a proto.Message")
+
+        // Log response, but include the result only in DEBUG level.
+        if logger.Level() &gt; logger.DEBUG </span><span class="cov0" title="0">{
+                logger.Info(
+                        "GRPC %s duration=%s (%d bytes) %s",
+                        req.Spec().Procedure,
+                        formatDuration(duration),
+                        proto.Size(respMsg),
+                        reqMsgJSON,
+                )
+        }</span> else<span class="cov0" title="0"> {
+                logger.Debug(
+                        "GRPC %s duration=%s (%d bytes) %s resp=%s",
+                        req.Spec().Procedure,
+                        formatDuration(duration),
+                        proto.Size(respMsg),
+                        reqMsgJSON,
+                        respMsg,
+                )
+        }</span>
+}
+
+func formatDuration(duration time.Duration) string <span class="cov0" title="0">{
+        if duration &gt;= time.Millisecond </span><span class="cov0" title="0">{
+                return fmt.Sprintf("%.3fms", float64(duration/time.Millisecond))
+        }</span> else<span class="cov0" title="0"> {
+                return fmt.Sprintf("%dµs", int32(duration/time.Microsecond))
+        }</span>
+}
+
+// validatorInterceptor validates requests against JSON schemas
+func validatorInterceptor() connect.UnaryInterceptorFunc <span class="cov0" title="0">{
+        return func(next connect.UnaryFunc) connect.UnaryFunc </span><span class="cov0" title="0">{
+                return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) </span><span class="cov0" title="0">{
+                        procedure := req.Spec().Procedure
+
+                        if validationErr := validateRequest(procedure, req.Any()); validationErr != nil </span><span class="cov0" title="0">{
+                                return nil, connect.NewError(connect.CodeInvalidArgument, validationErr)
+                        }</span>
+
+                        <span class="cov0" title="0">return next(ctx, req)</span>
+                }
+        }
+}
+
+// protoToMap converts a protobuf message to a map for validation.
+func protoToMap(msg any) (map[string]any, error) <span class="cov0" title="0">{
+        data, err := json.Marshal(msg)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">var result map[string]any
+        if err := json.Unmarshal(data, &amp;result); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">return result, nil</span>
+}
+
+// validateRequest validates a request against its JSON schema.
+// Returns an error suitable for connect.NewError if validation fails.
+func validateRequest(procedure string, msg any) error <span class="cov0" title="0">{
+        reqMap, err := protoToMap(msg)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to parse request: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if err := api.ValidateRequest(procedure, reqMap); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("%s", api.FormatValidationError(err))
+        }</span>
+        <span class="cov0" title="0">return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file13" style="display: none">package server
+
+import (
+        "context"
+        "fmt"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/simple-go/logger"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/pkg/critic"
+)
+
+// MarkConversationAs updates the status of a conversation.
+func (s *Server) MarkConversationAs(
+        ctx context.Context,
+        req *connect.Request[api.MarkConversationAsRequest],
+) (*connect.Response[api.MarkConversationAsResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.MarkConversationAsResponse, error) </span><span class="cov0" title="0">{
+                return markConversationAsImpl(s, req.Msg)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func apiStatusToConversationUpdate(status api.ConversationStatus) (critic.ConversationUpdate, error) <span class="cov0" title="0">{
+        switch status </span>{
+        case api.ConversationStatus_CONVERSATION_STATUS_RESOLVED:<span class="cov0" title="0">
+                return critic.ConversationResolved, nil</span>
+        case api.ConversationStatus_CONVERSATION_STATUS_UNRESOLVED:<span class="cov0" title="0">
+                return critic.ConversationUnresolved, nil</span>
+        case api.ConversationStatus_CONVERSATION_STATUS_ARCHIVED:<span class="cov0" title="0">
+                return critic.ConversationArchived, nil</span>
+        default:<span class="cov0" title="0">
+                return "", fmt.Errorf("unsupported status transition: %s", status)</span>
+        }
+}
+
+func markConversationAsImpl(server *Server, req *api.MarkConversationAsRequest) (*api.MarkConversationAsResponse, error) <span class="cov0" title="0">{
+        logger.Info("MarkConversationAs: conversation_id=%s status=%s", req.GetConversationId(), req.GetStatus())
+
+        update, err := apiStatusToConversationUpdate(req.GetStatus())
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">err = server.config.Messaging.MarkConversationAs(req.GetConversationId(), update)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">logger.Info("Marked conversation %s as %s", req.GetConversationId(), update)
+        return &amp;api.MarkConversationAsResponse{}, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file14" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/simple-go/logger"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/pkg/critic"
+)
+
+// ReplyToConversation adds a reply message to an existing conversation.
+func (s *Server) ReplyToConversation(
+        ctx context.Context,
+        req *connect.Request[api.ReplyToConversationRequest],
+) (*connect.Response[api.ReplyToConversationResponse], error) <span class="cov8" title="1">{
+        response := depanic(func() (*api.ReplyToConversationResponse, error) </span><span class="cov8" title="1">{
+                return replyToConversationImpl(s, req.Msg)
+        }</span>)
+        <span class="cov8" title="1">return connect.NewResponse(response), nil</span>
+}
+
+func replyToConversationImpl(server *Server, req *api.ReplyToConversationRequest) (*api.ReplyToConversationResponse, error) <span class="cov8" title="1">{
+        logger.Info("ReplyToConversation: conversation_id=%s, message=%q",
+                req.GetConversationId(),
+                req.GetMessage(),
+        )
+
+        // Add the reply using the messaging interface
+        message, err := server.config.Messaging.ReplyToConversation(
+                req.GetConversationId(),
+                req.GetMessage(),
+                critic.AuthorHuman,
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">logger.Info("Added reply %s to conversation %s", message.UUID, req.GetConversationId())
+        return &amp;api.ReplyToConversationResponse{
+                Success: true,
+        }, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file15" style="display: none">package server
+
+import (
+        "bufio"
+        "context"
+        "errors"
+        "fmt"
+        "net"
+        "net/http"
+        "os"
+        "os/signal"
+        "sync/atomic"
+        "syscall"
+        "time"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/simple-go/logger"
+        "github.com/radiospiel/critic/src/api"
+        "github.com/radiospiel/critic/src/api/apiconnect"
+        "github.com/radiospiel/critic/src/config"
+        "github.com/radiospiel/critic/src/git"
+        "github.com/radiospiel/critic/src/messagedb"
+        "github.com/radiospiel/critic/src/pkg/critic"
+        "github.com/radiospiel/critic/src/webui"
+        "google.golang.org/protobuf/proto"
+        "google.golang.org/protobuf/reflect/protoreflect"
+)
+
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+        http.ResponseWriter
+        statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) <span class="cov0" title="0">{
+        rw.statusCode = code
+        rw.ResponseWriter.WriteHeader(code)
+}</span>
+
+// Hijack implements http.Hijacker for WebSocket support
+func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) <span class="cov0" title="0">{
+        if hijacker, ok := rw.ResponseWriter.(http.Hijacker); ok </span><span class="cov0" title="0">{
+                return hijacker.Hijack()
+        }</span>
+        <span class="cov0" title="0">return nil, nil, fmt.Errorf("underlying ResponseWriter does not support hijacking")</span>
+}
+
+// loggingMiddleware logs HTTP requests
+func loggingMiddleware(next http.Handler) http.Handler <span class="cov0" title="0">{
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                start := time.Now()
+                rw := &amp;responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+                next.ServeHTTP(rw, r)
+
+                if rw.statusCode != 200 || r.Method != "POST" || r.URL.Path[:25] != "/critic.v1.CriticService/" </span><span class="cov0" title="0">{
+                        duration := time.Since(start)
+                        logger.Info("%s %s %d %v", r.Method, r.URL.Path, rw.statusCode, duration)
+                }</span>
+        })
+}
+
+// Config holds the configuration for the API server.
+type Config struct {
+        Port          int
+        GitRoot       string
+        Messaging     critic.Messaging
+        Dev           bool // Development mode: proxy to Vite dev server instead of serving embedded files
+        DiffBases     []string
+        ProjectConfig *config.ProjectConfig
+}
+
+// Server implements the CriticService API.
+type Server struct {
+        config         Config
+        session        *Session
+        wsHub          *webui.Hub
+        devServer      *webui.DevServer
+        gitWatcher     *git.GitWatcher
+        dbWatcher      *messagedb.DBWatcher
+        lastChangeTime atomic.Int64 // Unix milliseconds of last detected change
+}
+
+// NewServer creates a new API server with the given configuration.
+// It initializes a default session with the provided configuration values.
+func NewServer(config Config) *Server <span class="cov8" title="1">{
+        paths := []string{}
+        if config.ProjectConfig != nil </span><span class="cov0" title="0">{
+                paths = config.ProjectConfig.Paths
+        }</span>
+        <span class="cov8" title="1">session := NewSession(config.GitRoot, config.Messaging, paths, config.DiffBases)
+        return &amp;Server{
+                config:  config,
+                session: session,
+                wsHub:   webui.NewHub(),
+        }</span>
+}
+
+// GetSession returns the server's session
+func (s *Server) GetSession() *Session <span class="cov0" title="0">{
+        return s.session
+}</span>
+
+// SetLastChangeTime sets the timestamp of the last detected change.
+func (s *Server) SetLastChangeTime(t int64) <span class="cov0" title="0">{
+        s.lastChangeTime.Store(t)
+}</span>
+
+// LastChangeTime returns the timestamp of the last detected change.
+// Returns 0 if no change has been recorded.
+func (s *Server) LastChangeTime() int64 <span class="cov0" title="0">{
+        return s.lastChangeTime.Load()
+}</span>
+
+// handleGitChanges listens for git directory changes and broadcasts reload messages.
+func (s *Server) handleGitChanges() <span class="cov0" title="0">{
+        if s.gitWatcher == nil </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov0" title="0">for range s.gitWatcher.Changes() </span><span class="cov0" title="0">{
+                // Update last change time
+                s.SetLastChangeTime(s.gitWatcher.LastChangeTime())
+                logger.Info("Git change detected, triggering diff reload")
+
+                // Re-run the git diff to pick up any new/changed files
+                // When done, broadcast reload message to all connected clients
+                done := s.session.TriggerDiff()
+                go func() </span><span class="cov0" title="0">{
+                        &lt;-done
+                        logger.Info("Diff reload complete, broadcasting reload")
+                        s.wsHub.Broadcast([]byte(`{"type":"reload"}`))
+                }</span>()
+        }
+}
+
+// handleDBChanges listens for database changes and broadcasts reload messages.
+func (s *Server) handleDBChanges() <span class="cov0" title="0">{
+        if s.dbWatcher == nil </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov0" title="0">for range s.dbWatcher.Changes() </span><span class="cov0" title="0">{
+                // Update last change time
+                s.SetLastChangeTime(s.dbWatcher.LastChangeTime())
+                logger.Info("Database change detected, broadcasting reload")
+
+                // Broadcast reload message to all connected clients
+                s.wsHub.Broadcast([]byte(`{"type":"reload"}`))
+        }</span>
+}
+
+// Start starts the API server and blocks until it receives an error.
+func (s *Server) Start() error <span class="cov0" title="0">{
+        // Start WebSocket hub
+        go s.wsHub.Run()
+
+        // Start git directory watcher
+        if s.config.GitRoot != "" </span><span class="cov0" title="0">{
+                gitDir := s.config.GitRoot + "/.git"
+                watcher, err := git.NewGitWatcher(gitDir, 100) // 100ms debounce
+                if err != nil </span><span class="cov0" title="0">{
+                        logger.Error("Failed to start git watcher: %v", err)
+                }</span> else<span class="cov0" title="0"> {
+                        s.gitWatcher = watcher
+                        // Set initial last change time
+                        s.SetLastChangeTime(watcher.LastChangeTime())
+                        // Listen for changes
+                        go s.handleGitChanges()
+                }</span>
+        }
+
+        // Start database watcher for conversation changes
+        <span class="cov0" title="0">if s.config.GitRoot != "" </span><span class="cov0" title="0">{
+                dbWatcher, err := messagedb.NewDBWatcher(s.config.GitRoot, 1000) // 1 second polling
+                if err != nil </span><span class="cov0" title="0">{
+                        logger.Error("Failed to start database watcher: %v", err)
+                }</span> else<span class="cov0" title="0"> {
+                        s.dbWatcher = dbWatcher
+                        // Listen for changes
+                        go s.handleDBChanges()
+                }</span>
+        }
+
+        <span class="cov0" title="0">mux := http.NewServeMux()
+
+        // Connect RPC API with logging and validation interceptors
+        interceptors := connect.WithInterceptors(loggingInterceptor(), validatorInterceptor())
+        path, handler := apiconnect.NewCriticServiceHandler(s, interceptors)
+        mux.Handle(path, handler)
+
+        // WebSocket
+        mux.HandleFunc("GET /ws", webui.WebSocketHandler(s.wsHub))
+
+        // In dev mode, we need to start the HTTP server first so Vite's proxy can connect.
+        // We'll add the frontend handler after the server is listening.
+        var frontendHandler http.Handler
+
+        if s.config.Dev </span><span class="cov0" title="0">{
+                // Defer Vite startup until HTTP server is ready
+                s.devServer = webui.NewDevServer("src/webui/frontend", 5173)
+        }</span>
+
+        <span class="cov0" title="0">if s.devServer == nil </span><span class="cov0" title="0">{
+                // Production mode: serve embedded files
+                distFS, err := webui.DistFS()
+                if err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to get dist fs: %w", err)
+                }</span>
+                <span class="cov0" title="0">frontendHandler = http.FileServer(distFS)</span>
+        }
+
+        // Use a dynamic handler that can be updated after Vite starts
+        <span class="cov0" title="0">var dynamicFrontendHandler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                if frontendHandler != nil </span><span class="cov0" title="0">{
+                        frontendHandler.ServeHTTP(w, r)
+                }</span> else<span class="cov0" title="0"> {
+                        // Vite not ready yet, return a simple "loading" response
+                        w.Header().Set("Content-Type", "text/html")
+                        w.WriteHeader(http.StatusServiceUnavailable)
+                        w.Write([]byte(`&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;head&gt;&lt;meta http-equiv="refresh" content="1"&gt;&lt;/head&gt;&lt;body&gt;Starting dev server...&lt;/body&gt;&lt;/html&gt;`))
+                }</span>
+        })
+        <span class="cov0" title="0">mux.Handle("/", dynamicFrontendHandler)
+
+        // Set up HTTP server with graceful shutdown
+        addr := fmt.Sprintf(":%d", s.config.Port)
+        srv := &amp;http.Server{
+                Addr:    addr,
+                Handler: loggingMiddleware(mux),
+        }
+
+        // Channel to listen for shutdown signals
+        stop := make(chan os.Signal, 1)
+        signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+        // Start server in goroutine
+        serverErr := make(chan error, 1)
+        go func() </span><span class="cov0" title="0">{
+                fmt.Printf("Critic running at http://localhost%s\n", addr)
+                if err := srv.ListenAndServe(); err != nil &amp;&amp; err != http.ErrServerClosed </span><span class="cov0" title="0">{
+                        serverErr &lt;- err
+                }</span>
+        }()
+
+        // Start Vite dev server after HTTP server is listening (in dev mode)
+        <span class="cov0" title="0">if s.devServer != nil </span><span class="cov0" title="0">{
+                // Give HTTP server a moment to start listening
+                time.Sleep(100 * time.Millisecond)
+                if !s.devServer.Start() </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to start Vite dev server")
+                }</span>
+                <span class="cov0" title="0">frontendHandler = s.devServer.Handler()
+                fmt.Println("Development mode: proxying to Vite dev server at http://localhost:5173")</span>
+        }
+
+        // Wait for shutdown signal or server error
+        <span class="cov0" title="0">select </span>{
+        case &lt;-stop:<span class="cov0" title="0">
+                logger.Info("Shutdown signal received")</span>
+        case err := &lt;-serverErr:<span class="cov0" title="0">
+                return err</span>
+        }
+
+        // Graceful shutdown
+        <span class="cov0" title="0">ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+        defer cancel()
+
+        if err := srv.Shutdown(ctx); err != nil </span><span class="cov0" title="0">{
+                logger.Error("HTTP server shutdown error: %v", err)
+        }</span>
+
+        // Stop dev server if running
+        <span class="cov0" title="0">if s.devServer != nil </span><span class="cov0" title="0">{
+                s.devServer.Stop()
+        }</span>
+
+        // Stop git watcher if running
+        <span class="cov0" title="0">if s.gitWatcher != nil </span><span class="cov0" title="0">{
+                s.gitWatcher.Close()
+        }</span>
+
+        // Stop database watcher if running
+        <span class="cov0" title="0">if s.dbWatcher != nil </span><span class="cov0" title="0">{
+                s.dbWatcher.Close()
+        }</span>
+
+        // Stop file watcher if running
+        <span class="cov0" title="0">s.session.StopFileWatcher()
+
+        return nil</span>
+}
+
+func rpcErrorFromGoError(reason any) *api.RpcError <span class="cov0" title="0">{
+        if reason == nil </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        // Check if it's already an RpcErr (typed error from api package)
+        <span class="cov0" title="0">if rpcErr, ok := reason.(*api.RpcErr); ok </span><span class="cov0" title="0">{
+                return rpcErr.RpcError()
+        }</span>
+
+        // Convert to error if not already
+        <span class="cov0" title="0">err, ok := reason.(error)
+        if !ok </span><span class="cov0" title="0">{
+                err = fmt.Errorf("panic: %v", reason)
+        }</span>
+
+        // Check if the error wraps an RpcErr
+        <span class="cov0" title="0">var rpcErr *api.RpcErr
+        if errors.As(err, &amp;rpcErr) </span><span class="cov0" title="0">{
+                return rpcErr.RpcError()
+        }</span>
+
+        // Default: internal server error
+        <span class="cov0" title="0">return &amp;api.RpcError{
+                Code:    api.ErrorCode_ERROR_CODE_INTERNAL,
+                Message: "internal server error",
+                Details: err.Error(),
+        }</span>
+}
+
+// setResponseError sets the "error" field on a proto message using reflection.
+func setResponseError(msg proto.Message, rpcErr *api.RpcError) <span class="cov0" title="0">{
+        if rpcErr == nil </span><span class="cov0" title="0">{
+                return
+        }</span>
+        <span class="cov0" title="0">reflect := msg.ProtoReflect()
+        errorField := reflect.Descriptor().Fields().ByName("error")
+        if errorField != nil </span><span class="cov0" title="0">{
+                reflect.Set(errorField, protoreflect.ValueOfMessage(rpcErr.ProtoReflect()))
+        }</span>
+}
+
+// depanic wraps a function that returns a proto response and error,
+// catching panics and errors and setting them on the response's Error field.
+//
+// The trick is the two-type-parameter constraint:
+//   - T is the underlying struct type (e.g., api.CreateConversationResponse)
+//   - PT is constrained to be both *T and proto.Message
+//
+// This lets us use PT(new(T)) to create a new pointer instance without needing
+// a constructor function. Go infers both type parameters from the function signature.
+func depanic[T any, PT interface {
+        *T
+        proto.Message
+}](fun func() (PT, error)) PT <span class="cov8" title="1">{
+        var result PT
+        defer func() </span><span class="cov8" title="1">{
+                if recovered := recover(); recovered != nil </span><span class="cov0" title="0">{
+                        result = PT(new(T))
+                        setResponseError(result, rpcErrorFromGoError(recovered))
+                }</span>
+        }()
+
+        <span class="cov8" title="1">var err error
+        result, err = fun()
+        if err != nil </span><span class="cov0" title="0">{
+                result = PT(new(T))
+                setResponseError(result, rpcErrorFromGoError(err))
+        }</span>
+        <span class="cov8" title="1">return result</span>
+}
+</pre>
+		
+		<pre class="file" id="file16" style="display: none">package server
+
+import (
+        "strings"
+        "sync"
+
+        "github.com/radiospiel/critic/simple-go/logger"
+        "github.com/radiospiel/critic/simple-go/preconditions"
+        "github.com/radiospiel/critic/simple-go/tasks"
+        "github.com/radiospiel/critic/simple-go/utils"
+        "github.com/radiospiel/critic/src/git"
+        "github.com/radiospiel/critic/src/pkg/critic"
+        "github.com/radiospiel/critic/src/pkg/types"
+)
+
+// State represents the current state of the session
+type State string
+
+const (
+        StateInitialising State = "INITIALISING"
+        StateReady        State = "READY"
+)
+
+// DiffArgs holds the arguments for generating a diff.
+// Unlike session.DiffArgs, this does not include currentBase as it is managed
+// separately in the Session.
+type DiffArgs struct {
+        Paths []string `json:"paths"` // File path patterns
+}
+
+// Session manages the state for the API server.
+// It tracks the current diff state and handles background diff loading.
+type Session struct {
+        mu sync.RWMutex
+
+        // Configuration
+        gitRoot   string
+        messaging critic.Messaging
+        paths     []string
+        diffBases []string
+
+        // State
+        state        State
+        currentBase  string // kept for backwards compat; equals currentStart
+        currentStart string
+        currentEnd   string // empty means working directory
+        diff         []*types.FileDiff
+
+        // Background task management
+        currentTask *tasks.Task[diffResult]
+
+        // File watcher for the currently viewed file
+        fileWatcher *utils.FileWatcher
+}
+
+// diffResult holds the result of a diff loading operation
+type diffResult struct {
+        files []*types.FileDiff
+        err   error
+}
+
+// NewSession creates a new API session with the given diff bases.
+// The first diff base is used as the current base.
+func NewSession(gitRoot string, messaging critic.Messaging, paths []string, diffBases []string) *Session <span class="cov8" title="1">{
+        s := &amp;Session{
+                gitRoot:   gitRoot,
+                messaging: messaging,
+                paths:     paths,
+                state:     StateReady,
+        }
+        if len(diffBases) &gt; 0 </span><span class="cov0" title="0">{
+                // SetDiffBases sets all valid diff bases and initializes the current base
+                // to be the first of the passed in bases.
+                _ = s.SetDiffBases(diffBases)
+        }</span>
+        <span class="cov8" title="1">return s</span>
+}
+
+// GetState returns the current session state
+func (s *Session) GetState() State <span class="cov0" title="0">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return s.state
+}</span>
+
+// GetCurrentBase returns the current base ref (same as GetCurrentStart)
+func (s *Session) GetCurrentBase() string <span class="cov0" title="0">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return s.currentBase
+}</span>
+
+// GetCurrentStart returns the start of the current diff range
+func (s *Session) GetCurrentStart() string <span class="cov8" title="1">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return s.currentStart
+}</span>
+
+// GetCurrentEnd returns the end of the current diff range (empty = working directory)
+func (s *Session) GetCurrentEnd() string <span class="cov8" title="1">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return s.currentEnd
+}</span>
+
+// GetDiffBases returns the available diff bases
+func (s *Session) GetDiffBases() []string <span class="cov8" title="1">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return append([]string{}, s.diffBases...)
+}</span>
+
+// GetDiffSummary returns the current diff summary (file list without hunks)
+func (s *Session) GetDiffSummary() []*types.FileDiff <span class="cov0" title="0">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return s.diff
+}</span>
+
+// GetFileDiff returns the full diff for a specific file path.
+// It loads the diff on-demand using git.GetDiff.
+// contextLines specifies the number of context lines (minimum 3, default 3).
+func (s *Session) GetFileDiff(path string, contextLines int) *types.FileDiff <span class="cov0" title="0">{
+        s.mu.RLock()
+        currentBase := s.currentBase
+        currentEnd := s.currentEnd
+        s.mu.RUnlock()
+
+        if currentBase == "" </span><span class="cov0" title="0">{
+                logger.Error("session does not have current base")
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">preconditions.Check(path != "", "path required")
+
+        // Load the full diff for the specific file
+        fileDiff, err := git.GetDiff(currentBase, path, contextLines, git.WithEnd(currentEnd))
+        if err != nil </span><span class="cov0" title="0">{
+                logger.Error("git.GetDiff returns error %v", err)
+                return nil
+        }</span>
+        <span class="cov0" title="0">if fileDiff == nil </span><span class="cov0" title="0">{
+                logger.Error("git.GetDiff returns empty diff")
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">return fileDiff</span>
+}
+
+// HeadCommit returns the current HEAD commit SHA
+func (s *Session) HeadCommit() string <span class="cov8" title="1">{
+        return git.ResolveRef("HEAD")
+}</span>
+
+// SetDiffBases sets all valid diff bases, and initialises the current base
+// to be the first of the passed in bases.
+func (s *Session) SetDiffBases(bases []string) error <span class="cov0" title="0">{
+        preconditions.Check(len(bases) &gt; 0, "bases required")
+
+        s.mu.Lock()
+        s.diffBases = append([]string{}, bases...)
+        s.mu.Unlock()
+
+        return s.SetCurrentDiffBase(bases[0])
+}</span>
+
+// SetCurrentDiffBase sets the current base ref for the session, and
+// starts loading the diff in the background. Clears the end (uses working directory).
+func (s *Session) SetCurrentDiffBase(base string) error <span class="cov0" title="0">{
+        s.mu.Lock()
+        s.currentBase = base
+        s.currentStart = base
+        s.currentEnd = ""
+        s.mu.Unlock()
+
+        &lt;-s.TriggerDiff()
+        return nil
+}</span>
+
+// SetCurrentDiffRange sets the start and end of the diff range.
+// If end is empty, the working directory is used.
+func (s *Session) SetCurrentDiffRange(start, end string) error <span class="cov0" title="0">{
+        s.mu.Lock()
+        s.currentBase = start
+        s.currentStart = start
+        s.currentEnd = end
+        s.mu.Unlock()
+
+        &lt;-s.TriggerDiff()
+        return nil
+}</span>
+
+// TriggerDiff reloads the diff with the current base.
+// Returns a channel that closes when the diff is ready.
+func (s *Session) TriggerDiff() &lt;-chan struct{} <span class="cov0" title="0">{
+        done := make(chan struct{})
+
+        currentBase := s.GetCurrentBase()
+        if currentBase == "" </span><span class="cov0" title="0">{
+                close(done)
+                return done
+        }</span>
+
+        <span class="cov0" title="0">s.mu.RLock()
+        currentEnd := s.currentEnd
+        s.mu.RUnlock()
+
+        s.mu.Lock()
+
+        // Abort any existing task
+        if s.currentTask != nil </span><span class="cov0" title="0">{
+                s.currentTask.Abort()
+                s.currentTask = nil
+        }</span>
+
+        // Set state to initialising
+        <span class="cov0" title="0">s.state = StateInitialising
+        s.mu.Unlock()
+
+        // Start background task to load diff summary.
+        // Paths are passed directly to git commands as pathspec arguments,
+        // which filters at the source for better performance.
+        task, err := tasks.RunExclusively("api-session-diff", func() diffResult </span><span class="cov0" title="0">{
+                files, err := git.GetDiffNames(currentBase, s.paths, git.WithEnd(currentEnd))
+                if err != nil </span><span class="cov0" title="0">{
+                        return diffResult{err: err}
+                }</span>
+
+                <span class="cov0" title="0">return diffResult{files: files}</span>
+        })
+
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                s.mu.Lock()
+                s.state = StateReady
+                s.mu.Unlock()
+                close(done)
+                return done
+        }</span>
+
+        <span class="cov0" title="0">s.mu.Lock()
+        s.currentTask = task
+        s.mu.Unlock()
+
+        // Wait for result in background, update state, and signal done
+        go func() </span><span class="cov0" title="0">{
+                result := &lt;-task.Done()
+
+                s.mu.Lock()
+                // Only update if this task is still current
+                if s.currentTask == task </span><span class="cov0" title="0">{
+                        s.currentTask = nil
+                        if result.err == nil </span><span class="cov0" title="0">{
+                                s.diff = result.files
+                        }</span>
+                        <span class="cov0" title="0">s.state = StateReady</span>
+                }
+                <span class="cov0" title="0">s.mu.Unlock()
+
+                close(done)</span>
+        }()
+
+        <span class="cov0" title="0">return done</span>
+}
+
+// SetFileWatcher sets the file watcher for the currently viewed file.
+// It stops any existing watcher first.
+func (s *Session) SetFileWatcher(watcher *utils.FileWatcher) <span class="cov0" title="0">{
+        s.mu.Lock()
+        defer s.mu.Unlock()
+
+        // Stop existing watcher if any
+        if s.fileWatcher != nil </span><span class="cov0" title="0">{
+                s.fileWatcher.Close()
+        }</span>
+        <span class="cov0" title="0">s.fileWatcher = watcher</span>
+}
+
+// GetFileWatcher returns the current file watcher.
+func (s *Session) GetFileWatcher() *utils.FileWatcher <span class="cov0" title="0">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+        return s.fileWatcher
+}</span>
+
+// StopFileWatcher stops the current file watcher if one exists.
+func (s *Session) StopFileWatcher() <span class="cov0" title="0">{
+        s.mu.Lock()
+        defer s.mu.Unlock()
+
+        if s.fileWatcher != nil </span><span class="cov0" title="0">{
+                s.fileWatcher.Close()
+                s.fileWatcher = nil
+        }</span>
+}
+
+// filterDiffByExtensions filters the diff files to only include files with
+// the specified extensions.
+func filterDiffByExtensions(files []*types.FileDiff, extensions []string) []*types.FileDiff <span class="cov0" title="0">{
+        if files == nil || len(extensions) == 0 </span><span class="cov0" title="0">{
+                return files
+        }</span>
+
+        <span class="cov0" title="0">extMap := make(map[string]bool, len(extensions))
+        for _, ext := range extensions </span><span class="cov0" title="0">{
+                // Normalize extension (ensure it starts with .)
+                if len(ext) &gt; 0 &amp;&amp; ext[0] != '.' </span><span class="cov0" title="0">{
+                        ext = "." + ext
+                }</span>
+                <span class="cov0" title="0">extMap[ext] = true</span>
+        }
+
+        <span class="cov0" title="0">filtered := make([]*types.FileDiff, 0, len(files))
+
+        for _, file := range files </span><span class="cov0" title="0">{
+                path := file.GetPath()
+                for ext := range extMap </span><span class="cov0" title="0">{
+                        if len(path) &gt;= len(ext) &amp;&amp; path[len(path)-len(ext):] == ext </span><span class="cov0" title="0">{
+                                filtered = append(filtered, file)
+                                break</span>
+                        }
+                }
+        }
+
+        <span class="cov0" title="0">return filtered</span>
+}
+
+// filterDiffByPaths filters the diff files to only include files that match
+// any of the specified path patterns.
+func filterDiffByPaths(files []*types.FileDiff, paths []string) []*types.FileDiff <span class="cov0" title="0">{
+        if files == nil || len(paths) == 0 </span><span class="cov0" title="0">{
+                return files
+        }</span>
+
+        <span class="cov0" title="0">filtered := make([]*types.FileDiff, 0, len(files))
+
+        for _, file := range files </span><span class="cov0" title="0">{
+                filePath := file.GetPath()
+                for _, pattern := range paths </span><span class="cov0" title="0">{
+                        // Simple prefix matching for now
+                        if strings.HasPrefix(filePath, pattern) || filePath == pattern </span><span class="cov0" title="0">{
+                                filtered = append(filtered, file)
+                                break</span>
+                        }
+                }
+        }
+
+        <span class="cov0" title="0">return filtered</span>
+}
+</pre>
+		
+		<pre class="file" id="file17" style="display: none">package server
+
+import (
+        "context"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/src/api"
+)
+
+// SetDiffBase sets the current diff base.
+func (s *Server) SetDiffBase(
+        ctx context.Context,
+        req *connect.Request[api.SetDiffBaseRequest],
+) (*connect.Response[api.SetDiffBaseResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.SetDiffBaseResponse, error) </span><span class="cov0" title="0">{
+                return setDiffBaseImpl(s, req.Msg)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func setDiffBaseImpl(server *Server, req *api.SetDiffBaseRequest) (*api.SetDiffBaseResponse, error) <span class="cov0" title="0">{
+        start := req.GetStart()
+        end := req.GetEnd()
+        if start == "" </span><span class="cov0" title="0">{
+                return nil, api.InvalidArgumentError("start is required")
+        }</span>
+
+        // Check if start is in the list of available bases
+        <span class="cov0" title="0">bases := server.session.GetDiffBases()
+        isValidBase := func(ref string) bool </span><span class="cov0" title="0">{
+                for _, b := range bases </span><span class="cov0" title="0">{
+                        if b == ref </span><span class="cov0" title="0">{
+                                return true
+                        }</span>
+                }
+                <span class="cov0" title="0">return false</span>
+        }
+
+        <span class="cov0" title="0">if !isValidBase(start) </span><span class="cov0" title="0">{
+                return nil, api.InvalidArgumentError("invalid diff base: " + start)
+        }</span>
+
+        // End is optional; if provided, must also be a valid base
+        <span class="cov0" title="0">if end != "" &amp;&amp; !isValidBase(end) </span><span class="cov0" title="0">{
+                return nil, api.InvalidArgumentError("invalid diff end: " + end)
+        }</span>
+
+        <span class="cov0" title="0">if err := server.session.SetCurrentDiffRange(start, end); err != nil </span><span class="cov0" title="0">{
+                return nil, api.WrapError(err, "failed to set diff range")
+        }</span>
+
+        <span class="cov0" title="0">return &amp;api.SetDiffBaseResponse{
+                Success: true,
+        }, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file18" style="display: none">package server
+
+import (
+        "context"
+        "fmt"
+        "path/filepath"
+
+        "connectrpc.com/connect"
+        "github.com/radiospiel/critic/simple-go/logger"
+        "github.com/radiospiel/critic/simple-go/utils"
+        "github.com/radiospiel/critic/src/api"
+)
+
+// WatchFile sets up a file watcher for the specified file path.
+// When the file changes, a "file-changed" message is broadcast via WebSocket.
+func (s *Server) WatchFile(
+        ctx context.Context,
+        req *connect.Request[api.WatchFileRequest],
+) (*connect.Response[api.WatchFileResponse], error) <span class="cov0" title="0">{
+        response := depanic(func() (*api.WatchFileResponse, error) </span><span class="cov0" title="0">{
+                return watchFileImpl(s, req.Msg)
+        }</span>)
+        <span class="cov0" title="0">return connect.NewResponse(response), nil</span>
+}
+
+func watchFileImpl(server *Server, req *api.WatchFileRequest) (*api.WatchFileResponse, error) <span class="cov0" title="0">{
+        path := req.GetPath()
+
+        // Stop existing file watcher if any
+        server.session.StopFileWatcher()
+
+        // If path is empty, just stop watching
+        if path == "" </span><span class="cov0" title="0">{
+                logger.Info("WatchFile: Stopped watching files")
+                return &amp;api.WatchFileResponse{}, nil
+        }</span>
+
+        // Convert to absolute path
+        <span class="cov0" title="0">absPath := filepath.Join(server.config.GitRoot, path)
+
+        // Create a new file watcher
+        watcher, err := utils.NewFileWatcher(absPath, 100) // 100ms debounce
+        if err != nil </span><span class="cov0" title="0">{
+                logger.Error("WatchFile: Failed to create watcher for %s: %v", path, err)
+                return &amp;api.WatchFileResponse{}, err
+        }</span>
+
+        <span class="cov0" title="0">server.session.SetFileWatcher(watcher)
+
+        // Start listening for changes (pass relative path for WebSocket messages)
+        go handleFileChanges(server, watcher, path)
+
+        logger.Info("WatchFile: Now watching %s", path)
+        return &amp;api.WatchFileResponse{}, nil</span>
+}
+
+// handleFileChanges listens for file changes and broadcasts file-changed messages.
+// relativePath is the original path passed by the frontend for consistent comparison.
+func handleFileChanges(server *Server, watcher *utils.FileWatcher, relativePath string) <span class="cov0" title="0">{
+        for range watcher.Changes() </span><span class="cov0" title="0">{
+                // Check if this is still the active watcher
+                currentWatcher := server.session.GetFileWatcher()
+                if currentWatcher != watcher </span><span class="cov0" title="0">{
+                        return
+                }</span>
+
+                <span class="cov0" title="0">logger.Info("File change detected: %s, broadcasting file-changed", relativePath)
+
+                // Broadcast file-changed message to all connected clients
+                msg := fmt.Sprintf(`{"type":"file-changed","path":"%s"}`, relativePath)
+                server.wsHub.Broadcast([]byte(msg))</span>
+        }
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

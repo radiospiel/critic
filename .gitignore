@@ -19,7 +19,6 @@ critic.bin
 
 # Coverage artifacts
 coverage_grpc.out
-coverage_grpc.html
 
 # Go workspace file
 go.work
