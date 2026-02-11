@@ -92,8 +92,13 @@ type Messaging interface {
 	// GetConversations returns a list of root-level Conversations
 	// If status is provided, filters by that status (e.g., "unresolved")
 	// If status is empty, returns all Conversations
+	// If paths is provided, filters to conversations in those file paths
 	// Only returns the root message info, not the full thread
-	GetConversations(status string) ([]Conversation, error)
+	GetConversations(status string, paths []string) ([]*Conversation, error)
+
+	// GetFullConversations returns complete conversations including all replies
+	// for the given conversation UUIDs. Messages are ordered by created_at.
+	GetFullConversations(uuids []string) ([]*Conversation, error)
 
 	// GetFullConversation returns the complete conversation including all replies
 	// Messages are ordered by created_at (root message first, then replies in chronological order)
@@ -142,14 +147,37 @@ func NewDummyMessaging() *DummyMessaging {
 	}
 }
 
-func (m *DummyMessaging) GetConversations(status string) ([]Conversation, error) {
-	var all []Conversation
-	for _, convs := range m.Conversations {
-		for _, c := range convs {
-			all = append(all, *c)
+func (m *DummyMessaging) GetConversations(status string, paths []string) ([]*Conversation, error) {
+	pathSet := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		pathSet[p] = true
+	}
+
+	var all []*Conversation
+	for filePath, convs := range m.Conversations {
+		if len(paths) > 0 && !pathSet[filePath] {
+			continue
 		}
+		all = append(all, convs...)
 	}
 	return all, nil
+}
+
+func (m *DummyMessaging) GetFullConversations(uuids []string) ([]*Conversation, error) {
+	uuidSet := make(map[string]bool, len(uuids))
+	for _, u := range uuids {
+		uuidSet[u] = true
+	}
+
+	var result []*Conversation
+	for _, convs := range m.Conversations {
+		for _, c := range convs {
+			if uuidSet[c.UUID] {
+				result = append(result, c)
+			}
+		}
+	}
+	return result, nil
 }
 
 func (m *DummyMessaging) GetFullConversation(uuid string) (*Conversation, error) {

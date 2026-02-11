@@ -295,7 +295,7 @@ func (s *Server) handleGetCriticConversations(req Request, params CallToolParams
 	status, _ := params.Arguments["status"].(string)
 	s.logToStderr("Getting conversations with status filter: %s", status)
 
-	conversations, err := s.messaging.GetConversations(status)
+	conversations, err := s.messaging.GetConversations(status, nil)
 	if err != nil {
 		s.logToStderr("Failed to get conversations: %v", err)
 		return s.sendToolError(req.ID, fmt.Sprintf("Error getting conversations: %v", err))

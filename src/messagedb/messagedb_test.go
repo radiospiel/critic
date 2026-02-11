@@ -257,7 +257,7 @@ func TestGetConversationsReturnsOnlyTopLevel(t *testing.T) {
 	db.CreateReply(AuthorAI, "Reply to conv2", conv2.ID)
 
 	// Get all conversations
-	conversations, err := db.GetConversations("")
+	conversations, err := db.GetConversations("", nil)
 	assert.NoError(t, err, "failed to get conversations")
 
 	// Should only return 3 top-level conversations, not the 4 replies
@@ -292,7 +292,7 @@ func TestGetConversationsWithStatusFilter(t *testing.T) {
 	db.MarkConversationAs(conv3.ID, critic.ConversationResolved)
 
 	// Get unresolved conversations
-	unresolved, err := db.GetConversations("unresolved")
+	unresolved, err := db.GetConversations("unresolved", nil)
 	assert.NoError(t, err, "failed to get unresolved conversations")
 	assert.Equals(t, len(unresolved), 2, "expected 2 unresolved conversations")
 
@@ -304,10 +304,69 @@ func TestGetConversationsWithStatusFilter(t *testing.T) {
 	assert.Contains(t, unresolvedUUIDs, conv2.ID, "expected conv2 in unresolved conversations")
 
 	// Get resolved conversations
-	resolved, err := db.GetConversations("resolved")
+	resolved, err := db.GetConversations("resolved", nil)
 	assert.NoError(t, err, "failed to get resolved conversations")
 	assert.Equals(t, len(resolved), 1, "expected 1 resolved conversation")
 	assert.Equals(t, resolved[0].UUID, conv3.ID, "expected conv3 in resolved conversations")
+}
+
+func TestGetConversationsWithPathFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	db.CreateMessage(AuthorHuman, "Main comment", "src/main.go", 10, "abc123", "content")
+	db.CreateMessage(AuthorHuman, "Util comment", "src/util.go", 5, "abc123", "content")
+	db.CreateMessage(AuthorHuman, "Test comment", "src/test.go", 1, "abc123", "content")
+
+	// Filter to single path
+	convs, err := db.GetConversations("", []string{"src/main.go"})
+	assert.NoError(t, err, "failed to get conversations for path")
+	assert.Equals(t, len(convs), 1, "expected 1 conversation for src/main.go")
+	assert.Equals(t, convs[0].FilePath, "src/main.go")
+
+	// Filter to multiple paths
+	convs, err = db.GetConversations("", []string{"src/main.go", "src/util.go"})
+	assert.NoError(t, err, "failed to get conversations for paths")
+	assert.Equals(t, len(convs), 2, "expected 2 conversations for two paths")
+
+	// Combined status + path filter
+	db.MarkConversationAs(convs[0].UUID, critic.ConversationResolved)
+	unresolved, err := db.GetConversations("unresolved", []string{"src/main.go", "src/util.go"})
+	assert.NoError(t, err, "failed to get filtered conversations")
+	assert.Equals(t, len(unresolved), 1, "expected 1 unresolved conversation after resolving one")
+}
+
+func TestGetFullConversations(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Create conversations with replies
+	msg1, _ := db.CreateMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123", "content")
+	db.CreateReply(AuthorAI, "Reply to 1", msg1.ID)
+
+	msg2, _ := db.CreateMessage(AuthorHuman, "Comment 2", "src/util.go", 5, "def456", "content")
+	db.CreateReply(AuthorAI, "Reply to 2a", msg2.ID)
+	db.CreateReply(AuthorHuman, "Reply to 2b", msg2.ID)
+
+	// Batch fetch
+	convs, err := db.GetFullConversations([]string{msg1.ID, msg2.ID})
+	assert.NoError(t, err, "failed to batch-fetch conversations")
+	assert.Equals(t, len(convs), 2, "expected 2 conversations")
+
+	// First conversation should have 2 messages
+	assert.Equals(t, convs[0].UUID, msg1.ID)
+	assert.Equals(t, len(convs[0].Messages), 2, "expected 2 messages in first conversation")
+	assert.Equals(t, convs[0].FilePath, "src/main.go")
+
+	// Second conversation should have 3 messages
+	assert.Equals(t, convs[1].UUID, msg2.ID)
+	assert.Equals(t, len(convs[1].Messages), 3, "expected 3 messages in second conversation")
+	assert.Equals(t, convs[1].FilePath, "src/util.go")
+
+	// Empty input returns nil
+	empty, err := db.GetFullConversations([]string{})
+	assert.NoError(t, err, "empty input should not error")
+	assert.Nil(t, empty, "empty input should return nil")
 }
 
 func TestMarkConversationAsReadByAI(t *testing.T) {
