@@ -413,7 +413,7 @@ function AppContent() {
                   <tr><td><kbd>?</kbd></td><td>Show this help</td><td><kbd>g</kbd> / <kbd>G</kbd></td><td>Go to top / bottom</td></tr>
                   <tr><td><kbd>Tab</kbd></td><td>Switch file list / diff focus</td><td><kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd></td><td>Jump 25 lines</td></tr>
                   <tr><td><kbd>↑</kbd> / <kbd>k</kbd></td><td>Move selection up</td><td><kbd>Shift</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd></td><td>Expand selection</td></tr>
-                  <tr><td><kbd>↓</kbd> / <kbd>j</kbd></td><td>Move selection down</td><td><kbd>b</kbd> / <kbd>B</kbd></td><td>Range start / end selector</td></tr>
+                  <tr><td><kbd>↓</kbd> / <kbd>j</kbd></td><td>Move selection down</td><td></td><td></td></tr>
 
                   <tr><td colSpan={4} className="shortcut-table-heading">File List Sections</td></tr>
                   <tr><td><kbd>Ctrl</kbd> + <kbd>1</kbd></td><td>Conversations</td><td><kbd>Ctrl</kbd> + <kbd>3</kbd></td><td>Tests</td></tr>

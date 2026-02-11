@@ -68,21 +68,15 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
     }
   }
 
-  // Keyboard: 'b' toggles panel, Escape closes
+  // Escape closes the panel
   useEffect(() => {
+    if (!panelOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if ((e.target as HTMLElement)?.closest?.('.tiptap')) return
-
-      if (e.key === 'b' || e.key === 'B') {
-        e.preventDefault()
-        setPanelOpen((prev) => !prev)
-      } else if (e.key === 'Escape' && panelOpen) {
+      if (e.key === 'Escape') {
         e.preventDefault()
         setPanelOpen(false)
       }
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [panelOpen])
@@ -103,7 +97,7 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
         className={'diff-base-trigger' + (panelOpen ? ' open' : '')}
         onClick={() => setPanelOpen(!panelOpen)}
         disabled={loading}
-        title="Branch range (press 'b')"
+        title="Branch range"
       >
         <span className="diff-base-value">{displayBase(currentStart)}</span>
         <span className="diff-range-separator">→</span>
