@@ -1,7 +1,6 @@
 package messagedb
 
 import (
-	"database/sql"
 	"fmt"
 
 	"github.com/radiospiel/critic/simple-go/logger"
@@ -258,13 +257,9 @@ func (db *DB) applyMigration(mig *migration) error {
 // getSchemaVersion retrieves the current schema version from settings
 func (db *DB) getSchemaVersion() (string, error) {
 	var version string
-	query := `SELECT value FROM settings WHERE key = ?`
-	err := db.db.QueryRow(query, "db_schema").Scan(&version)
-	if err == sql.ErrNoRows {
-		return "", fmt.Errorf("schema version not found")
-	}
+	err := db.ask(`SELECT value FROM settings WHERE key = ?`, []any{"db_schema"}, &version)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("schema version not found")
 	}
 	return version, nil
 }
