@@ -215,12 +215,29 @@ func (db *DB) ReplyToConversation(conversationID string, message string, author 
 	return criticMsg, nil
 }
 
-// CreateConversation creates a new conversation (root message)
-func (db *DB) CreateConversation(author critic.Author, message, filePath string, lineNumber int, codeVersion string, context string) (*critic.Conversation, error) {
+// CreateConversation creates a new conversation (root message).
+// The conversationType determines the DB conversation type and initial status:
+//
+//	TypeConversation → StatusUnresolved (default)
+//	TypeExplanation  → StatusInformal
+func (db *DB) CreateConversation(author critic.Author, message, filePath string, lineNumber int, codeVersion string, context string, conversationType critic.ConversationType) (*critic.Conversation, error) {
 	dbAuthor := Author(author)
-	rootMsg, err := db.CreateMessage(dbAuthor, message, filePath, lineNumber, codeVersion, context)
+
+	dbConvType := ConversationTypeConversation
+	if conversationType == critic.TypeExplanation {
+		dbConvType = ConversationTypeExplanation
+	}
+
+	rootMsg, err := db.CreateMessageWithType(dbAuthor, message, filePath, lineNumber, codeVersion, context, dbConvType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create conversation: %w", err)
+		return nil, fmt.Errorf("failed to create %s: %w", conversationType, err)
+	}
+
+	// Explanations get informal status instead of the default unresolved
+	if conversationType == critic.TypeExplanation {
+		if err := db.UpdateMessageStatus(rootMsg.ID, StatusInformal); err != nil {
+			return nil, fmt.Errorf("failed to set explanation status: %w", err)
+		}
 	}
 
 	conversation := &critic.Conversation{
@@ -245,46 +262,12 @@ func (db *DB) CreateConversation(author critic.Author, message, filePath string,
 		UpdatedAt: rootMsg.UpdatedAt,
 	}
 
-	logger.Info("Created conversation %s at %s:%d", conversation.UUID, filePath, lineNumber)
-	return conversation, nil
-}
-
-// CreateExplanation creates a new explanation (informal annotation on a code line)
-func (db *DB) CreateExplanation(author critic.Author, comment, filePath string, lineNumber int, codeVersion string, context string) (*critic.Conversation, error) {
-	dbAuthor := Author(author)
-	rootMsg, err := db.CreateMessageWithType(dbAuthor, comment, filePath, lineNumber, codeVersion, context, ConversationTypeExplanation)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create explanation: %w", err)
+	// Re-read status after potential update
+	if conversationType == critic.TypeExplanation {
+		conversation.Status = critic.StatusInformal
 	}
 
-	// Set the status to informal
-	if err := db.UpdateMessageStatus(rootMsg.ID, StatusInformal); err != nil {
-		return nil, fmt.Errorf("failed to set explanation status: %w", err)
-	}
-
-	conversation := &critic.Conversation{
-		UUID:             rootMsg.ID,
-		Status:           critic.StatusInformal,
-		ConversationType: critic.TypeExplanation,
-		FilePath:         rootMsg.FilePath,
-		LineNumber:       rootMsg.Lineno,
-		CodeVersion:      rootMsg.Commit,
-		Context:          rootMsg.Context,
-		Messages: []critic.Message{
-			{
-				UUID:      rootMsg.ID,
-				Author:    critic.Author(rootMsg.Author),
-				Message:   rootMsg.Message,
-				CreatedAt: rootMsg.CreatedAt,
-				UpdatedAt: rootMsg.UpdatedAt,
-				IsUnread:  rootMsg.ReadStatus == ReadStatusUnread,
-			},
-		},
-		CreatedAt: rootMsg.CreatedAt,
-		UpdatedAt: rootMsg.UpdatedAt,
-	}
-
-	logger.Info("Created explanation %s at %s:%d", conversation.UUID, filePath, lineNumber)
+	logger.Info("Created %s %s at %s:%d", conversationType, conversation.UUID, filePath, lineNumber)
 	return conversation, nil
 }
 

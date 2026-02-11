@@ -501,7 +501,7 @@ func (s *Server) handleCriticExplain(req Request, params CallToolParams) error {
 
 	codeVersion := git.ResolveRef("HEAD")
 
-	conversation, err := s.messaging.CreateExplanation(critic.AuthorAI, comment, file, line, codeVersion, "")
+	conversation, err := s.messaging.CreateConversation(critic.AuthorAI, comment, file, line, codeVersion, "", critic.TypeExplanation)
 	if err != nil {
 		s.logToStderr("Failed to create explanation: %v", err)
 		return s.sendToolError(req.ID, fmt.Sprintf("Error creating explanation: %v", err))

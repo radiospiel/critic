@@ -21,16 +21,13 @@ func (s *Server) CreateConversation(
 }
 
 func createConversationImpl(server *Server, req *api.CreateConversationRequest) (*api.CreateConversationResponse, error) {
-	convType := req.GetConversationType()
-	isExplanation := convType == api.ConversationType_CONVERSATION_TYPE_EXPLANATION
-
 	logger.Info("CreateConversation: old_file=%s, old_line=%d, new_file=%s, new_line=%d, comment=%q, type=%s",
 		req.GetOldFile(),
 		req.GetOldLine(),
 		req.GetNewFile(),
 		req.GetNewLine(),
 		req.GetComment(),
-		convType,
+		req.GetConversationType(),
 	)
 
 	// Determine file path and line number to use
@@ -46,38 +43,26 @@ func createConversationImpl(server *Server, req *api.CreateConversationRequest) 
 	// Get the current commit SHA from the session
 	codeVersion := server.session.HeadCommit()
 
-	// Create the conversation using the appropriate messaging method based on type
-	var conversation *critic.Conversation
-	var err error
-
-	if isExplanation {
-		conversation, err = server.config.Messaging.CreateExplanation(
-			critic.AuthorHuman,
-			req.GetComment(),
-			filePath,
-			lineNo,
-			codeVersion,
-			"",
-		)
-	} else {
-		conversation, err = server.config.Messaging.CreateConversation(
-			critic.AuthorHuman,
-			req.GetComment(),
-			filePath,
-			lineNo,
-			codeVersion,
-			"",
-		)
+	// Map proto ConversationType to critic ConversationType
+	conversationType := critic.TypeConversation
+	if req.GetConversationType() == api.ConversationType_CONVERSATION_TYPE_EXPLANATION {
+		conversationType = critic.TypeExplanation
 	}
+
+	conversation, err := server.config.Messaging.CreateConversation(
+		critic.AuthorHuman,
+		req.GetComment(),
+		filePath,
+		lineNo,
+		codeVersion,
+		"",
+		conversationType,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	kind := "conversation"
-	if isExplanation {
-		kind = "explanation"
-	}
-	logger.Info("Created %s %s at %s:%d", kind, conversation.UUID, filePath, lineNo)
+	logger.Info("Created %s %s at %s:%d", conversationType, conversation.UUID, filePath, lineNo)
 	return &api.CreateConversationResponse{
 		Success: true,
 	}, nil

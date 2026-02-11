@@ -119,15 +119,20 @@ func (m *TestMessaging) ReplyToConversation(conversationUUID string, message str
 	return nil, api.NotFoundError("conversation not found", conversationUUID)
 }
 
-func (m *TestMessaging) CreateConversation(author critic.Author, message, filePath string, lineNumber int, codeVersion string, context string) (*critic.Conversation, error) {
+func (m *TestMessaging) CreateConversation(author critic.Author, message, filePath string, lineNumber int, codeVersion string, context string, conversationType critic.ConversationType) (*critic.Conversation, error) {
 	now := time.Now()
+	status := critic.StatusUnresolved
+	if conversationType == critic.TypeExplanation {
+		status = critic.StatusInformal
+	}
 	conv := &critic.Conversation{
-		UUID:        uuid.New().String(),
-		Status:      critic.StatusUnresolved,
-		FilePath:    filePath,
-		LineNumber:  lineNumber,
-		CodeVersion: codeVersion,
-		Context:     context,
+		UUID:             uuid.New().String(),
+		Status:           status,
+		ConversationType: conversationType,
+		FilePath:         filePath,
+		LineNumber:       lineNumber,
+		CodeVersion:      codeVersion,
+		Context:          context,
 		Messages: []critic.Message{
 			{
 				UUID:      uuid.New().String(),
@@ -169,10 +174,6 @@ func (m *TestMessaging) MarkMessageAs(messageUUID string, status critic.MessageR
 }
 func (m *TestMessaging) LoadRootConversation() (*critic.Conversation, error) {
 	return &critic.Conversation{UUID: "root-conv"}, nil
-}
-
-func (m *TestMessaging) CreateExplanation(author critic.Author, comment, filePath string, lineNumber int, codeVersion string, context string) (*critic.Conversation, error) {
-	return &critic.Conversation{UUID: "expl-1", ConversationType: critic.TypeExplanation, Status: critic.StatusInformal}, nil
 }
 
 func (m *TestMessaging) Close() error { return nil }
