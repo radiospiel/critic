@@ -3,7 +3,7 @@ import Markdown from 'react-markdown'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import { CommentConversation, CommentMessage, replyToConversation, resolveConversation } from '../api/client'
+import { CommentConversation, CommentMessage, replyToConversation, resolveConversation, archiveConversation, unresolveConversation } from '../api/client'
 
 interface CommentDisplayProps {
   conversations: CommentConversation[]
@@ -113,9 +113,18 @@ interface ConversationItemProps {
   alwaysShowEditor?: boolean
 }
 
+function truncateText(text: string, maxLen: number): string {
+  const plain = text.replace(/[#*_`~\[\]()>]/g, '').replace(/\s+/g, ' ').trim()
+  if (plain.length <= maxLen) return plain
+  return plain.slice(0, maxLen) + '...'
+}
+
 function ConversationItem({ conversation, onReplyAdded, alwaysShowEditor }: ConversationItemProps) {
   const [showEditor, setShowEditor] = useState(!!alwaysShowEditor)
   const [resolving, setResolving] = useState(false)
+  const [archiving, setArchiving] = useState(false)
+  const [unresolving, setUnresolving] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const handleReplySaved = () => {
     if (!alwaysShowEditor) setShowEditor(false)
@@ -136,7 +145,79 @@ function ConversationItem({ conversation, onReplyAdded, alwaysShowEditor }: Conv
     }
   }
 
+  const handleArchive = async () => {
+    setArchiving(true)
+    try {
+      const result = await archiveConversation(conversation.id)
+      if (result.success) {
+        onReplyAdded?.()
+      } else {
+        console.error('Failed to archive conversation:', result.error)
+      }
+    } finally {
+      setArchiving(false)
+    }
+  }
+
+  const handleUnresolve = async (e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setUnresolving(true)
+    try {
+      const result = await unresolveConversation(conversation.id)
+      if (result.success) {
+        onReplyAdded?.()
+      } else {
+        console.error('Failed to unresolve conversation:', result.error)
+      }
+    } finally {
+      setUnresolving(false)
+    }
+  }
+
   const isExplanation = conversation.conversationType === 'explanation'
+  const isResolved = conversation.status === 'resolved'
+
+  // Collapsed view for resolved conversations
+  if (isResolved && !expanded) {
+    const firstMessage = conversation.messages[0]
+    const replyCount = conversation.messages.length - 1
+    return (
+      <div
+        className={`comment-conversation comment-conversation-resolved collapsed${isExplanation ? ' conversation-type-explanation' : ''}`}
+        onClick={() => setExpanded(true)}
+      >
+        <div className="collapsed-conversation-content">
+          <span className="comment-conversation-status comment-status-resolved">resolved</span>
+          {firstMessage && (
+            <span className="collapsed-first-message">
+              {truncateText(firstMessage.content, 80)}
+            </span>
+          )}
+          {replyCount > 0 && (
+            <span className="collapsed-reply-count">
+              ... {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+            </span>
+          )}
+        </div>
+        <div className="collapsed-conversation-actions">
+          <button
+            className="unresolve-button"
+            onClick={(e) => handleUnresolve(e)}
+            disabled={unresolving}
+          >
+            {unresolving ? '...' : 'Unresolve'}
+          </button>
+          <button
+            className="archive-button"
+            onClick={(e) => { e.stopPropagation(); handleArchive() }}
+            disabled={archiving}
+          >
+            {archiving ? '...' : 'Archive'}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={`comment-conversation comment-conversation-${conversation.status}${isExplanation ? ' conversation-type-explanation' : ''}`}>
@@ -149,6 +230,11 @@ function ConversationItem({ conversation, onReplyAdded, alwaysShowEditor }: Conv
         <span className={`comment-conversation-status comment-status-${conversation.status}`}>
           {conversation.status}
         </span>
+        {isResolved && (
+          <button className="collapse-button" onClick={() => setExpanded(false)} title="Collapse">
+            &minus;
+          </button>
+        )}
       </div>
       <div className="comment-conversation-messages">
         {conversation.messages.map((message) => (
@@ -166,13 +252,31 @@ function ConversationItem({ conversation, onReplyAdded, alwaysShowEditor }: Conv
           <button className="reply-button" onClick={() => setShowEditor(true)}>
             Reply
           </button>
-          {conversation.status === 'unresolved' && (
+          {(conversation.status === 'unresolved' || conversation.status === 'informal') && (
             <button
               className="resolve-button"
               onClick={handleResolve}
               disabled={resolving}
             >
               {resolving ? 'Resolving...' : 'Resolve'}
+            </button>
+          )}
+          {isResolved && (
+            <button
+              className="unresolve-button"
+              onClick={() => handleUnresolve()}
+              disabled={unresolving}
+            >
+              {unresolving ? '...' : 'Unresolve'}
+            </button>
+          )}
+          {conversation.status !== 'archived' && (
+            <button
+              className="archive-button"
+              onClick={handleArchive}
+              disabled={archiving}
+            >
+              {archiving ? '...' : 'Archive'}
             </button>
           )}
         </div>

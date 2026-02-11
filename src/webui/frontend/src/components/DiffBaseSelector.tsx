@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getDiffBases, setDiffBase } from '../api/client'
+import { getDiffBases, setDiffRange } from '../api/client'
 
 interface DiffBaseSelectorProps {
   onBaseChange?: () => void
@@ -7,15 +7,17 @@ interface DiffBaseSelectorProps {
 
 function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
   const [bases, setBases] = useState<string[]>([])
-  const [currentBase, setCurrentBase] = useState<string>('')
+  const [currentStart, setCurrentStart] = useState<string>('')
+  const [currentEnd, setCurrentEnd] = useState<string>('')
   const [loading, setLoading] = useState(false)
-  const [isOpen, setIsOpen] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
 
   const fetchBases = useCallback(async () => {
     const result = await getDiffBases()
     if (!result.error) {
       setBases(result.bases)
-      setCurrentBase(result.currentBase)
+      setCurrentStart(result.currentStart)
+      setCurrentEnd(result.currentEnd)
     }
   }, [])
 
@@ -23,82 +25,127 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
     fetchBases()
   }, [fetchBases])
 
-  const handleBaseSelect = async (base: string) => {
-    if (base === currentBase) {
-      setIsOpen(false)
-      return
-    }
-
+  const applyRange = async (newStart: string, newEnd: string) => {
+    if (newStart === currentStart && newEnd === currentEnd) return
     setLoading(true)
-    const result = await setDiffBase(base)
+    const result = await setDiffRange(newStart, newEnd)
     if (result.success) {
-      setCurrentBase(base)
+      setCurrentStart(newStart)
+      setCurrentEnd(newEnd)
       onBaseChange?.()
     }
     setLoading(false)
-    setIsOpen(false)
   }
 
-  // Handle keyboard shortcut 'b' to toggle dropdown
+  // Full ordered list: bases (oldest first) then '' (working dir)
+  // bases come from the API in order, with the oldest/most-ancestral first.
+  const fullList = [...bases, '']
+
+  const handleNodeClick = (value: string) => {
+    if (loading) return
+    const clickIdx = fullList.indexOf(value)
+    const startIdx = fullList.indexOf(currentStart)
+    const endIdx = fullList.indexOf(currentEnd)
+    if (clickIdx < 0 || startIdx < 0 || endIdx < 0) return
+
+    if (clickIdx === startIdx) {
+      // Click on start: shrink range (move start inward), unless neighbors
+      if (startIdx + 1 >= endIdx) return
+      applyRange(fullList[startIdx + 1], currentEnd)
+    } else if (clickIdx === endIdx) {
+      // Click on end: shrink range (move end inward), unless neighbors
+      if (endIdx - 1 <= startIdx) return
+      applyRange(currentStart, fullList[endIdx - 1])
+    } else if (clickIdx > startIdx && clickIdx < endIdx) {
+      // Inside range: set start to clicked branch
+      applyRange(value, currentEnd)
+    } else if (clickIdx < startIdx) {
+      // Before range: expand start outward
+      applyRange(value, currentEnd)
+    } else if (clickIdx > endIdx) {
+      // After range: expand end outward
+      applyRange(currentStart, value)
+    }
+  }
+
+  // Keyboard: 'b' toggles panel, Escape closes
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return
-      }
-      if ((e.target as HTMLElement)?.closest?.('.tiptap')) {
-        return
-      }
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if ((e.target as HTMLElement)?.closest?.('.tiptap')) return
 
       if (e.key === 'b' || e.key === 'B') {
         e.preventDefault()
-        setIsOpen((prev) => !prev)
-      } else if (e.key === 'Escape' && isOpen) {
+        setPanelOpen((prev) => !prev)
+      } else if (e.key === 'Escape' && panelOpen) {
         e.preventDefault()
-        setIsOpen(false)
+        setPanelOpen(false)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen])
+  }, [panelOpen])
 
-  if (bases.length === 0) {
-    return null
-  }
+  if (bases.length === 0) return null
 
-  // Truncate long base names for display
   const displayBase = (base: string) => {
-    if (base.length > 12) {
-      return base.slice(0, 10) + '...'
-    }
+    if (!base) return 'working dir'
     return base
   }
+
+  const startIdx = fullList.indexOf(currentStart)
+  const endIdx = fullList.indexOf(currentEnd)
 
   return (
     <div className="diff-base-selector">
       <button
-        className="diff-base-button"
-        onClick={() => setIsOpen(!isOpen)}
+        className={'diff-base-trigger' + (panelOpen ? ' open' : '')}
+        onClick={() => setPanelOpen(!panelOpen)}
         disabled={loading}
-        title={"Current base: " + currentBase + " (press 'b' to change)"}
+        title="Branch range (press 'b')"
       >
-        <span className="diff-base-label">Base:</span>
-        <span className="diff-base-value">{displayBase(currentBase)}</span>
-        <span className="diff-base-arrow">{isOpen ? '▲' : '▼'}</span>
+        <span className="diff-base-value">{displayBase(currentStart)}</span>
+        <span className="diff-range-separator">→</span>
+        <span className="diff-base-value">{displayBase(currentEnd)}</span>
       </button>
-      {isOpen && (
-        <div className="diff-base-dropdown">
-          {bases.map((base) => (
-            <button
-              key={base}
-              className={"diff-base-option" + (base === currentBase ? ' active' : '')}
-              onClick={() => handleBaseSelect(base)}
-              disabled={loading}
-            >
-              {base}
-              {base === currentBase && <span className="check-mark">✓</span>}
-            </button>
-          ))}
+
+      {panelOpen && (
+        <div className="diff-graph-panel">
+          <div className="diff-graph-hint">Click on branch names to adjust selection</div>
+          {bases.map((base, idx) => {
+            const isStart = base === currentStart
+            const isEnd = base === currentEnd
+            const inRange = idx >= startIdx && idx <= endIdx
+            return (
+              <div
+                key={base}
+                className={`diff-graph-row${isStart ? ' selected-start' : ''}${isEnd ? ' selected-end' : ''}${inRange ? ' in-range' : ''}`}
+                onClick={() => handleNodeClick(base)}
+              >
+                <span className="diff-graph-line-segment" />
+                <span className={`diff-graph-node${isStart ? ' start' : ''}${isEnd ? ' end' : ''}`} />
+                <span className="diff-graph-label" title={base}>{base}</span>
+              </div>
+            )
+          })}
+
+          {/* Working dir row */}
+          {(() => {
+            const idx = fullList.length - 1
+            const isEnd = currentEnd === ''
+            const inRange = idx >= startIdx && idx <= endIdx
+            return (
+              <div
+                className={`diff-graph-row last${isEnd ? ' selected-end' : ''}${inRange ? ' in-range' : ''}`}
+                onClick={() => handleNodeClick('')}
+              >
+                <span className="diff-graph-line-segment" />
+                <span className={`diff-graph-node${isEnd ? ' end' : ''}`} />
+                <span className="diff-graph-label">working dir</span>
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>

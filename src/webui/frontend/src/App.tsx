@@ -1,10 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import FileList, { FilterType } from './components/FileList'
 import DiffView from './components/DiffView'
 import DiffBaseSelector from './components/DiffBaseSelector'
 import CommentDisplay from './components/CommentDisplay'
-import { criticClient, getConfig, getRootConversation, ServerConfig, CommentConversation } from './api/client'
+import { criticClient, getConfig, getConversations, getRootConversation, ServerConfig, CommentConversation } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
 import { useWebSocket } from './hooks/useWebSocket'
 
@@ -28,6 +28,8 @@ function AppContent() {
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null)
   const [rootConversation, setRootConversation] = useState<CommentConversation | null>(null)
   const [showRootConversation, setShowRootConversation] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+  const [allConversations, setAllConversations] = useState<CommentConversation[]>([])
   const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
 
@@ -71,9 +73,17 @@ function AppContent() {
       })
   }, [])
 
+  // Load all conversations in a single request
+  const loadAllConversations = useCallback(() => {
+    getConversations().then((result) => {
+      setAllConversations(result.conversations)
+    })
+  }, [])
+
   useEffect(() => {
     loadFileList()
-  }, [loadFileList])
+    loadAllConversations()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFileDiff = useCallback((file: string, ctxLines?: number, preserveSelection?: boolean) => {
     setSelectedFile(file)
@@ -88,10 +98,9 @@ function AppContent() {
       })
     }
     const lines = ctxLines ?? contextLines
-    criticClient
-      .getDiff({ path: file, contextLines: lines })
-      .then((response) => {
-        setSelectedFileDiff(response.file || null)
+    criticClient.getDiff({ path: file, contextLines: lines })
+      .then((diffResponse) => {
+        setSelectedFileDiff(diffResponse.file || null)
         setLoading(false)
       })
       .catch((err) => {
@@ -103,14 +112,19 @@ function AppContent() {
 
   // Handle WebSocket messages for live reload
   const handleWebSocketMessage = useCallback((message: { type: string; path?: string }) => {
+    // Don't reload while user is typing in the TipTap editor
+    if (document.activeElement?.closest('.tiptap')) {
+      return
+    }
+
     if (message.type === 'reload') {
       console.log('Reload triggered by git change')
       // Reset the timer
       loadTimeRef.current = Date.now()
       setSecondsSinceLoad(0)
-      // Reload the file list
+      // Reload the file list, conversations, and root conversation
       loadFileList()
-      // Reload root conversation
+      loadAllConversations()
       loadRootConversation()
       // Reload the current file diff if one is selected
       if (selectedFile) {
@@ -121,12 +135,13 @@ function AppContent() {
       // Reset the timer
       loadTimeRef.current = Date.now()
       setSecondsSinceLoad(0)
-      // Reload the diff if it's the currently selected file
+      // Reload conversations and the diff if it's the currently selected file
+      loadAllConversations()
       if (selectedFile === message.path) {
         loadFileDiff(selectedFile, contextLines, true)
       }
     }
-  }, [loadFileList, loadFileDiff, loadRootConversation, selectedFile, contextLines])
+  }, [loadFileList, loadFileDiff, loadAllConversations, loadRootConversation, selectedFile, contextLines])
 
   useWebSocket(handleWebSocketMessage)
 
@@ -166,8 +181,16 @@ function AppContent() {
   }, [selectedFile, loadFileDiff])
 
   const handleSelectFile = useCallback((file: string, _fileSummary: FileSummary) => {
+    if (file === selectedFile) {
+      setShowRootConversation(false)
+      return
+    }
     loadFileDiff(file)
-  }, [loadFileDiff])
+  }, [loadFileDiff, selectedFile])
+
+  const handleScrollToLine = useCallback((lineNo: number) => {
+    setRestoreLineNo({ lineNoNew: lineNo, lineNoOld: 0 })
+  }, [])
 
   const handleSelectRootConversation = useCallback(() => {
     setSelectedFile(null)
@@ -222,6 +245,14 @@ function AppContent() {
     setCurrentLineNo({ lineNoNew, lineNoOld })
   }, [])
 
+  // Filter conversations for the selected file (derived from single bulk load)
+  const selectedFileConversations = useMemo(
+    () => selectedFile
+      ? allConversations.filter((c) => c.filePath === selectedFile)
+      : [],
+    [allConversations, selectedFile]
+  )
+
   // Global keyboard handler for Tab, ?, and context line keys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -270,7 +301,15 @@ function AppContent() {
           <span>Critic</span>
           <span className="render-timestamp">{secondsSinceLoad}s</span>
           <div className="header-buttons">
-            <DiffBaseSelector onBaseChange={handleBaseChange} />
+            <button
+              className={`archive-toggle-button${showArchived ? ' active' : ''}`}
+              onClick={() => setShowArchived(!showArchived)}
+              title={showArchived ? 'Hide archived conversations' : 'Show archived conversations'}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M1.75 2.5h12.5a.25.25 0 0 1 .25.25v1.5a.25.25 0 0 1-.25.25H1.75a.25.25 0 0 1-.25-.25v-1.5a.25.25 0 0 1 .25-.25ZM2.5 6v5.75c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25V6h1.5v5.75A1.75 1.75 0 0 1 13.25 13.5H2.75A1.75 1.75 0 0 1 1 11.75V6Zm4.25 2a.75.75 0 0 0 0 1.5h2.5a.75.75 0 0 0 0-1.5Z"/>
+              </svg>
+            </button>
             <button className="help-button" onClick={() => { setSelectedFile(null); setSelectedFileDiff(null); setShowRootConversation(false) }} title="Keyboard shortcuts">
               ?
             </button>
@@ -295,8 +334,10 @@ function AppContent() {
             </button>
           </div>
         </div>
+        <DiffBaseSelector onBaseChange={handleBaseChange} />
         <FileList
           files={files}
+          allConversations={allConversations}
           selectedFile={selectedFile}
           onSelectFile={handleSelectFile}
           onSelectRootConversation={handleSelectRootConversation}
@@ -304,9 +345,11 @@ function AppContent() {
           onFocus={() => setFocusedPanel('fileList')}
           filter={fileListFilter}
           onFilterChange={setFileListFilter}
+          showArchived={showArchived}
           rootConversation={rootConversation}
           isRootConversationSelected={showRootConversation}
-          onConversationsChanged={() => { loadFileList(); loadRootConversation() }}
+          onConversationsChanged={() => { loadAllConversations(); loadFileList(); loadRootConversation() }}
+          onScrollToLine={handleScrollToLine}
         />
       </aside>
       <main className="main-content">
@@ -338,7 +381,10 @@ function AppContent() {
             onSelectionChange={handleSelectionChange}
             restoreLineNo={restoreLineNo}
             showOnlyConversations={fileListFilter === 'conversations'}
+            showArchived={showArchived}
             serverConfig={serverConfig}
+            conversations={selectedFileConversations}
+            onConversationsChanged={() => { loadAllConversations(); loadFileList() }}
           />
         ) : (
           <div className="empty-state usage-guide">
@@ -367,7 +413,7 @@ function AppContent() {
                   <tr><td><kbd>?</kbd></td><td>Show this help</td><td><kbd>g</kbd> / <kbd>G</kbd></td><td>Go to top / bottom</td></tr>
                   <tr><td><kbd>Tab</kbd></td><td>Switch file list / diff focus</td><td><kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd></td><td>Jump 25 lines</td></tr>
                   <tr><td><kbd>↑</kbd> / <kbd>k</kbd></td><td>Move selection up</td><td><kbd>Shift</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd></td><td>Expand selection</td></tr>
-                  <tr><td><kbd>↓</kbd> / <kbd>j</kbd></td><td>Move selection down</td><td><kbd>b</kbd></td><td>Toggle diff base selector</td></tr>
+                  <tr><td><kbd>↓</kbd> / <kbd>j</kbd></td><td>Move selection down</td><td><kbd>b</kbd> / <kbd>B</kbd></td><td>Range start / end selector</td></tr>
 
                   <tr><td colSpan={4} className="shortcut-table-heading">File List Sections</td></tr>
                   <tr><td><kbd>Ctrl</kbd> + <kbd>1</kbd></td><td>Conversations</td><td><kbd>Ctrl</kbd> + <kbd>3</kbd></td><td>Tests</td></tr>

@@ -32,6 +32,7 @@ export interface CommentConversation {
   messages: CommentMessage[]
   createdAt: string
   updatedAt: string
+  branchName: string
 }
 
 export interface GetCommentsResult {
@@ -64,6 +65,8 @@ function statusToString(status: ConversationStatus): string {
       return 'waiting_for_response'
     case ConversationStatus.INFORMAL:
       return 'informal'
+    case ConversationStatus.ARCHIVED:
+      return 'archived'
     default:
       return 'invalid'
   }
@@ -94,13 +97,19 @@ function convertConversation(conv: Conversation): CommentConversation {
     messages: conv.messages.map(convertMessage),
     createdAt: conv.createdAt,
     updatedAt: conv.updatedAt,
+    branchName: conv.branchName,
   }
 }
 
-// Fetch conversations for a file using the GRPC endpoint
-export async function getConversations(filePath: string): Promise<GetCommentsResult> {
+// Fetch conversations matching the given filters.
+// If paths is empty, returns conversations across all files.
+// If statuses is empty, returns conversations with any status.
+export async function getConversations(paths?: string[], statuses?: ConversationStatus[]): Promise<GetCommentsResult> {
   try {
-    const response = await criticClient.getConversations({ path: filePath })
+    const response = await criticClient.getConversations({
+      paths: paths || [],
+      statuses: statuses || [],
+    })
     if (response.error) {
       return {
         conversations: [],
@@ -169,7 +178,8 @@ export async function getConversationsSummary(): Promise<GetConversationsSummary
 // Types for diff bases
 export interface DiffBasesResult {
   bases: string[]
-  currentBase: string
+  currentStart: string
+  currentEnd: string
   error?: string
 }
 
@@ -178,34 +188,37 @@ export interface SetDiffBaseResult {
   error?: string
 }
 
-// Fetch available diff bases and current selection
+// Fetch available diff bases and current range selection
 export async function getDiffBases(): Promise<DiffBasesResult> {
   try {
     const response = await criticClient.getDiffBases({})
     if (response.error) {
       return {
         bases: [],
-        currentBase: '',
+        currentStart: '',
+        currentEnd: '',
         error: response.error.message,
       }
     }
     return {
       bases: response.bases,
-      currentBase: response.currentBase,
+      currentStart: response.currentStart,
+      currentEnd: response.currentEnd,
     }
   } catch (err) {
     return {
       bases: [],
-      currentBase: '',
+      currentStart: '',
+      currentEnd: '',
       error: err instanceof Error ? err.message : 'Unknown error',
     }
   }
 }
 
-// Set the current diff base
-export async function setDiffBase(base: string): Promise<SetDiffBaseResult> {
+// Set the current diff range (start and optional end)
+export async function setDiffRange(start: string, end: string): Promise<SetDiffBaseResult> {
   try {
-    const response = await criticClient.setDiffBase({ base })
+    const response = await criticClient.setDiffBase({ start, end })
     if (response.error) {
       return {
         success: false,
@@ -250,23 +263,22 @@ export async function replyToConversation(conversationId: string, message: strin
   }
 }
 
-// Types for resolve conversation
-export interface ResolveConversationResult {
+// Types for conversation status updates
+export interface MarkConversationResult {
   success: boolean
   error?: string
 }
 
-// Resolve a conversation
-export async function resolveConversation(conversationId: string): Promise<ResolveConversationResult> {
+// Update conversation status via the unified MarkConversationAs RPC
+async function markConversationAs(conversationId: string, status: ConversationStatus): Promise<MarkConversationResult> {
   try {
-    const response = await criticClient.resolveConversation({ conversationId })
+    const response = await criticClient.markConversationAs({ conversationId, status })
     if (response.error) {
       return {
         success: false,
         error: response.error.message,
       }
     }
-    // Absence of error means success
     return {
       success: true,
     }
@@ -276,6 +288,21 @@ export async function resolveConversation(conversationId: string): Promise<Resol
       error: err instanceof Error ? err.message : 'Unknown error',
     }
   }
+}
+
+// Resolve a conversation
+export async function resolveConversation(conversationId: string): Promise<MarkConversationResult> {
+  return markConversationAs(conversationId, ConversationStatus.RESOLVED)
+}
+
+// Archive a conversation
+export async function archiveConversation(conversationId: string): Promise<MarkConversationResult> {
+  return markConversationAs(conversationId, ConversationStatus.ARCHIVED)
+}
+
+// Unresolve a conversation
+export async function unresolveConversation(conversationId: string): Promise<MarkConversationResult> {
+  return markConversationAs(conversationId, ConversationStatus.UNRESOLVED)
 }
 
 // Types for root conversation

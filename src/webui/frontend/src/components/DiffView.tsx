@@ -3,7 +3,7 @@ import hljs from 'highlight.js'
 import { FileDiff, FileStatus, Line, LineType } from '../gen/critic_pb'
 import InlineCommentEditor, { CommentLineInfo } from './CommentEditor'
 import CommentDisplay from './CommentDisplay'
-import { getConversations, CommentConversation, ServerConfig } from '../api/client'
+import { CommentConversation, ServerConfig } from '../api/client'
 import LinkToSource from './LinkToSource'
 
 const ALT_JUMP_SIZE = 25
@@ -21,7 +21,10 @@ interface DiffViewProps {
   onSelectionChange?: (lineNoNew: number, lineNoOld: number) => void
   restoreLineNo?: { lineNoNew: number; lineNoOld: number } | null
   showOnlyConversations?: boolean
+  showArchived?: boolean
   serverConfig?: ServerConfig | null
+  conversations?: CommentConversation[]
+  onConversationsChanged?: () => void
 }
 
 function getFileExtension(path: string): string {
@@ -343,34 +346,24 @@ interface SelectionRange {
   end: number
 }
 
-function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo, showOnlyConversations = false, serverConfig }: DiffViewProps) {
+function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo, showOnlyConversations = false, showArchived = false, serverConfig, conversations: conversationsProp, onConversationsChanged }: DiffViewProps) {
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
   const [editorOpen, setEditorOpen] = useState(false)
-  const [comments, setComments] = useState<CommentConversation[]>([])
   const selectedLineRef = useRef<HTMLTableRowElement>(null)
+  const commentScrollRef = useRef<HTMLTableRowElement>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const [scrollJump, setScrollJump] = useState(false)
 
   const path = fileDiff.status === FileStatus.DELETED ? fileDiff.oldPath : fileDiff.newPath
   const language = getLanguage(path)
   const oldFile = fileDiff.oldPath
   const newFile = fileDiff.newPath
 
-  // Fetch conversations when file changes
-  const fetchComments = useCallback(async () => {
-    if (!path) return
-    try {
-      const response = await getConversations(path)
-      if (response.conversations) {
-        setComments(response.conversations)
-      }
-    } catch (err) {
-      console.error('Failed to fetch conversations:', err)
-    }
-  }, [path])
-
-  useEffect(() => {
-    fetchComments()
-  }, [fetchComments, fileDiff])
+  const comments = (conversationsProp || []).filter(
+    (c) => !(c.conversationType === 'explanation' && c.status === 'resolved')
+  ).filter(
+    (c) => showArchived || c.status !== 'archived'
+  )
 
   // Filter hunks to only show those with conversations when in conversations mode
   const filteredHunks = useMemo(() => {
@@ -487,6 +480,7 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
       }
 
       if (bestIndex >= 0) {
+        setScrollJump(true)
         setSelection({ start: bestIndex, end: bestIndex })
         return
       }
@@ -497,15 +491,21 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
 
   // Scroll selected line into view and notify parent of selection change
   useEffect(() => {
-    if (selectedLineRef.current) {
-      selectedLineRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    if (scrollJump) {
+      setScrollJump(false)
+      const target = commentScrollRef.current || selectedLineRef.current
+      target?.scrollIntoView({ block: 'start' })
+    } else if (selectedLineRef.current && !restoreLineNo) {
+      // Skip scroll when a jump is pending (restoreLineNo set but not yet processed).
+      // Use instant scroll for keyboard navigation to avoid competing animations.
+      selectedLineRef.current.scrollIntoView({ block: 'nearest' })
     }
     // Notify parent of the current selection's line numbers
     if (onSelectionChange && allLines.length > 0 && selection.end < allLines.length) {
       const { line } = allLines[selection.end]
       onSelectionChange(line.lineNoNew, line.lineNoOld)
     }
-  }, [selection, allLines, onSelectionChange])
+  }, [selection, allLines, onSelectionChange, scrollJump])
 
   // Check if a line index is within the selection range
   const isLineSelected = useCallback(
@@ -520,9 +520,8 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
   const handleCommentSaved = useCallback(() => {
     console.log('Comment saved successfully')
     setEditorOpen(false)
-    // Refresh comments after saving
-    fetchComments()
-  }, [fetchComments])
+    onConversationsChanged?.()
+  }, [onConversationsChanged])
 
   // Get comments for a specific line number
   const getCommentsForLine = useCallback(
@@ -735,10 +734,10 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
                             filePath={path}
                           />
                           {hasComments && (
-                            <tr className="diff-comment-row">
+                            <tr className="diff-comment-row" ref={shouldAttachRef ? commentScrollRef : undefined}>
                               <td colSpan={4}>
                                 <div className="diff-comment-wrapper">
-                                  <CommentDisplay conversations={lineComments} lineNumber={lineNo} onReplyAdded={fetchComments} />
+                                  <CommentDisplay conversations={lineComments} lineNumber={lineNo} onReplyAdded={onConversationsChanged} />
                                 </div>
                               </td>
                             </tr>

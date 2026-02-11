@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
-import { criticClient, getConversationsSummary, getConversations, resolveConversation, ConversationSummary, CommentConversation } from '../api/client'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { criticClient, resolveConversation, archiveConversation, unresolveConversation, ConversationSummary, CommentConversation } from '../api/client'
 import { FileSummary, FileStatus, FileCategory } from '../gen/critic_pb'
 import { pluralize } from './Pluralize'
 import { matchesAnyPattern } from '../utils/glob'
@@ -22,6 +22,7 @@ export type FilterType = 'automatic' | 'conversations' | 'files' | 'tests' | 'hi
 
 interface FileListProps {
   files: FileSummary[]
+  allConversations: CommentConversation[]
   selectedFile: string | null
   onSelectFile: (file: string, fileSummary: FileSummary) => void
   onSelectRootConversation?: () => void
@@ -29,9 +30,11 @@ interface FileListProps {
   onFocus?: () => void
   filter: FilterType
   onFilterChange: (filter: FilterType) => void
+  showArchived?: boolean
   rootConversation?: CommentConversation | null
   isRootConversationSelected?: boolean
   onConversationsChanged?: () => void
+  onScrollToLine?: (lineNo: number) => void
 }
 
 function getFilePath(file: FileSummary): string {
@@ -103,12 +106,10 @@ function MessagePreviews({ messages }: { messages: CommentMessage[] }) {
   )
 }
 
-function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, filter, onFilterChange, rootConversation, isRootConversationSelected, onConversationsChanged }: FileListProps) {
+function FileList({ files, allConversations, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, filter, onFilterChange, showArchived = false, rootConversation, isRootConversationSelected, onConversationsChanged, onScrollToLine }: FileListProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [categories, setCategories] = useState<FileCategory[]>([])
-  const [conversationSummaries, setConversationSummaries] = useState<Map<string, ConversationSummary>>(new Map())
-  const [fileConversations, setFileConversations] = useState<Map<string, CommentConversation[]>>(new Map())
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set())
   const selectedItemRef = useRef<HTMLLIElement>(null)
 
@@ -116,6 +117,34 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
     e.stopPropagation()
     setResolvingIds((prev) => new Set(prev).add(conversationId))
     const result = await resolveConversation(conversationId)
+    setResolvingIds((prev) => {
+      const next = new Set(prev)
+      next.delete(conversationId)
+      return next
+    })
+    if (result.success) {
+      onConversationsChanged?.()
+    }
+  }
+
+  const handleArchive = async (e: React.MouseEvent, conversationId: string) => {
+    e.stopPropagation()
+    setResolvingIds((prev) => new Set(prev).add(conversationId))
+    const result = await archiveConversation(conversationId)
+    setResolvingIds((prev) => {
+      const next = new Set(prev)
+      next.delete(conversationId)
+      return next
+    })
+    if (result.success) {
+      onConversationsChanged?.()
+    }
+  }
+
+  const handleUnresolve = async (e: React.MouseEvent, conversationId: string) => {
+    e.stopPropagation()
+    setResolvingIds((prev) => new Set(prev).add(conversationId))
+    const result = await unresolveConversation(conversationId)
     setResolvingIds((prev) => {
       const next = new Set(prev)
       next.delete(conversationId)
@@ -143,42 +172,32 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
       })
   }, [])
 
-  // Fetch conversation summaries whenever files change (on reload)
-  useEffect(() => {
-    getConversationsSummary()
-      .then((summaryResponse) => {
-        const summaryMap = new Map<string, ConversationSummary>()
-        for (const summary of summaryResponse.summaries) {
-          summaryMap.set(summary.filePath, summary)
-        }
-        setConversationSummaries(summaryMap)
-      })
-      .catch((err) => {
-        console.error('Failed to fetch conversation summaries:', err)
-      })
-  }, [files])
+  // Derive per-file conversation and summary maps from the single bulk load
+  const { fileConversations, conversationSummaries } = useMemo(() => {
+    const convMap = new Map<string, CommentConversation[]>()
+    const summaryMap = new Map<string, ConversationSummary>()
 
-  // Fetch full conversations for files that have them (for conversations view)
-  useEffect(() => {
-    if (conversationSummaries.size === 0) return
-    const filePaths = Array.from(conversationSummaries.entries())
-      .filter(([, s]) => s.totalCount > 0)
-      .map(([path]) => path)
-    if (filePaths.length === 0) {
-      setFileConversations(new Map())
-      return
+    for (const conv of allConversations) {
+      const path = conv.filePath
+      if (!convMap.has(path)) {
+        convMap.set(path, [])
+      }
+      convMap.get(path)!.push(conv)
     }
-    Promise.all(filePaths.map((path) => getConversations(path).then((r) => [path, r.conversations] as const)))
-      .then((results) => {
-        const map = new Map<string, CommentConversation[]>()
-        for (const [path, convos] of results) {
-          if (convos.length > 0) {
-            map.set(path, convos)
-          }
-        }
-        setFileConversations(map)
+
+    for (const [path, convos] of convMap) {
+      summaryMap.set(path, {
+        filePath: path,
+        totalCount: convos.length,
+        unresolvedCount: convos.filter((c) => c.status !== 'resolved' && c.status !== 'informal').length,
+        resolvedCount: convos.filter((c) => c.status === 'resolved').length,
+        explanationCount: convos.filter((c) => c.conversationType === 'explanation').length,
+        hasUnreadAiMessages: convos.some((c) => c.messages.some((m) => m.isUnread)),
       })
-  }, [conversationSummaries])
+    }
+
+    return { fileConversations: convMap, conversationSummaries: summaryMap }
+  }, [allConversations])
 
   // Scroll selected item into view
   useEffect(() => {
@@ -225,21 +244,15 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
     })
     .sort((a, b) => getFilePath(a).localeCompare(getFilePath(b)))
 
-  // Total conversation count (from visible files only, plus root conversation if present)
-  const hasRootConversation = rootConversation && rootConversation.messages.length > 0 ? 1 : 0
-  const { totalConversations, totalExplanations } = filesWithConversations.reduce((acc, file) => {
-    const path = getFilePath(file)
-    const summary = conversationSummaries.get(path)
-    const explanations = summary?.explanationCount || 0
-    return {
-      totalConversations: acc.totalConversations + (summary?.totalCount || 0) - explanations,
-      totalExplanations: acc.totalExplanations + explanations,
-    }
-  }, { totalConversations: hasRootConversation, totalExplanations: 0 })
+  // Total conversation count: only non-resolved, non-archived items (matching what's displayed)
+  const hasRootConversation = rootConversation && rootConversation.messages.length > 0 && rootConversation.status !== 'resolved' && rootConversation.status !== 'archived' ? 1 : 0
+  const totalVisibleConversations = hasRootConversation + Array.from(fileConversations.values()).reduce((sum, convos) => {
+    return sum + convos.filter((c) => c.status !== 'resolved' && (showArchived || c.status !== 'archived')).length
+  }, 0)
 
   // Compute effective filter: automatic means 'conversations' if any exist, otherwise 'files'
   const effectiveFilter = filter === 'automatic'
-    ? ((totalConversations + totalExplanations) > 0 ? 'conversations' : 'files')
+    ? (totalVisibleConversations > 0 ? 'conversations' : 'files')
     : filter
 
   // Determine displayed files based on filter
@@ -354,8 +367,7 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
           className={`file-list-filter-btn${effectiveFilter === 'conversations' ? ' active' : ''}`}
           onClick={() => onFilterChange('conversations')}
         >
-          {pluralize(totalConversations, 'Conversation')}
-          {totalExplanations > 0 && ` + ${pluralize(totalExplanations, 'Explanation')}`}
+          {pluralize(totalVisibleConversations, 'Conversation')}
         </button>
         <button
           className={`file-list-filter-btn${effectiveFilter === 'files' ? ' active' : ''}`}
@@ -413,7 +425,10 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
                 </li>
               )
             })()}
-            {filesWithConversations.map((file) => {
+            {filesWithConversations.filter((file) => {
+              const convos = fileConversations.get(getFilePath(file)) || []
+              return convos.some((c) => c.status !== 'resolved' && (showArchived || c.status !== 'archived'))
+            }).map((file) => {
               const path = getFilePath(file)
               const conversations = fileConversations.get(path) || []
               const isSelected = selectedFile === path
@@ -438,7 +453,7 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
                     </span>
                     <span className="file-path">{path}</span>
                   </div>
-                  {conversations.map((conv) => {
+                  {conversations.filter((c) => !(c.conversationType === 'explanation' && c.status === 'resolved')).filter((c) => showArchived || c.status !== 'archived').map((conv) => {
                     const lastMsg = conv.messages[conv.messages.length - 1]
                     const isUnresolved = conv.status !== 'resolved' && conv.status !== 'informal'
                     const isExplanation = conv.conversationType === 'explanation'
@@ -448,6 +463,7 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
                         className={`conversation-entry${isUnresolved ? ' unresolved' : ''}${isExplanation ? ' explanation' : ''}`}
                         onClick={() => {
                           onSelectFile(path, file)
+                          onScrollToLine?.(conv.lineNumber)
                           onFocus?.()
                         }}
                       >
@@ -465,13 +481,31 @@ function FileList({ files, selectedFile, onSelectFile, onSelectRootConversation,
                             {pluralize(conv.messages.length, 'message')}
                           </span>
                           {lastMsg && <span className="conversation-entry-timestamp">{formatTimestamp(lastMsg.createdAt)}</span>}
-                          {isUnresolved && (
+                          {(isUnresolved || (isExplanation && conv.status !== 'resolved')) && (
                             <button
                               className="conversation-resolve-btn"
                               disabled={resolvingIds.has(conv.id)}
                               onClick={(e) => handleResolve(e, conv.id)}
                             >
-                              {resolvingIds.has(conv.id) ? 'Resolving...' : 'Resolve'}
+                              {resolvingIds.has(conv.id) ? '...' : 'Resolve'}
+                            </button>
+                          )}
+                          {conv.status === 'resolved' && (
+                            <button
+                              className="conversation-resolve-btn"
+                              disabled={resolvingIds.has(conv.id)}
+                              onClick={(e) => handleUnresolve(e, conv.id)}
+                            >
+                              {resolvingIds.has(conv.id) ? '...' : 'Unresolve'}
+                            </button>
+                          )}
+                          {conv.status !== 'archived' && (
+                            <button
+                              className="conversation-resolve-btn"
+                              disabled={resolvingIds.has(conv.id)}
+                              onClick={(e) => handleArchive(e, conv.id)}
+                            >
+                              {resolvingIds.has(conv.id) ? '...' : 'Archive'}
                             </button>
                           )}
                         </span>
