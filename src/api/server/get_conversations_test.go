@@ -43,7 +43,7 @@ func TestGetConversations_ReturnsConversationsForFile(t *testing.T) {
 		},
 	}
 
-	req := connect.NewRequest(&api.GetConversationsRequest{Path: "src/main.go"})
+	req := connect.NewRequest(&api.GetConversationsRequest{Paths: []string{"src/main.go"}})
 	resp, err := s.GetConversations(context.Background(), req)
 
 	assert.NoError(t, err, "GetConversations should not return error")
@@ -74,7 +74,7 @@ func TestGetConversations_ReturnsEmptyForNoConversations(t *testing.T) {
 		},
 	}
 
-	req := connect.NewRequest(&api.GetConversationsRequest{Path: "nonexistent.go"})
+	req := connect.NewRequest(&api.GetConversationsRequest{Paths: []string{"nonexistent.go"}})
 	resp, err := s.GetConversations(context.Background(), req)
 
 	assert.NoError(t, err, "GetConversations should not return error")
@@ -111,7 +111,7 @@ func TestGetConversations_ReturnsMultipleConversations(t *testing.T) {
 		},
 	}
 
-	req := connect.NewRequest(&api.GetConversationsRequest{Path: "src/utils.go"})
+	req := connect.NewRequest(&api.GetConversationsRequest{Paths: []string{"src/utils.go"}})
 	resp, err := s.GetConversations(context.Background(), req)
 
 	assert.NoError(t, err, "GetConversations should not return error")
@@ -154,7 +154,7 @@ func TestGetConversations_HandlesMultipleMessages(t *testing.T) {
 		},
 	}
 
-	req := connect.NewRequest(&api.GetConversationsRequest{Path: "src/handler.go"})
+	req := connect.NewRequest(&api.GetConversationsRequest{Paths: []string{"src/handler.go"}})
 	resp, err := s.GetConversations(context.Background(), req)
 
 	assert.NoError(t, err, "GetConversations should not return error")
@@ -166,6 +166,110 @@ func TestGetConversations_HandlesMultipleMessages(t *testing.T) {
 	assert.Equals(t, conv.GetMessages()[0].GetAuthor(), "human", "first message author")
 	assert.Equals(t, conv.GetMessages()[1].GetAuthor(), "ai", "second message author")
 	assert.Equals(t, conv.GetMessages()[2].GetAuthor(), "human", "third message author")
+}
+
+func TestGetConversations_FiltersByStatus(t *testing.T) {
+	now := time.Now()
+	messaging := critic.NewDummyMessaging()
+	messaging.Conversations["src/app.go"] = []*critic.Conversation{
+		{
+			UUID:       "conv-1",
+			Status:     critic.StatusUnresolved,
+			FilePath:   "src/app.go",
+			LineNumber: 10,
+			Messages:   []critic.Message{{UUID: "msg-1", Author: critic.AuthorHuman, Message: "Fix this", CreatedAt: now, UpdatedAt: now}},
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+		{
+			UUID:       "conv-2",
+			Status:     critic.StatusResolved,
+			FilePath:   "src/app.go",
+			LineNumber: 20,
+			Messages:   []critic.Message{{UUID: "msg-2", Author: critic.AuthorHuman, Message: "Done", CreatedAt: now, UpdatedAt: now}},
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+		{
+			UUID:       "conv-3",
+			Status:     critic.StatusArchived,
+			FilePath:   "src/app.go",
+			LineNumber: 30,
+			Messages:   []critic.Message{{UUID: "msg-3", Author: critic.AuthorHuman, Message: "Old", CreatedAt: now, UpdatedAt: now}},
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+	}
+
+	s := &Server{
+		config: Config{
+			Messaging: messaging,
+		},
+	}
+
+	// Filter by unresolved only
+	req := connect.NewRequest(&api.GetConversationsRequest{
+		Paths:    []string{"src/app.go"},
+		Statuses: []api.ConversationStatus{api.ConversationStatus_CONVERSATION_STATUS_UNRESOLVED},
+	})
+	resp, err := s.GetConversations(context.Background(), req)
+
+	assert.NoError(t, err, "GetConversations should not return error")
+	assert.Equals(t, len(resp.Msg.GetConversations()), 1, "should return one unresolved conversation")
+	assert.Equals(t, resp.Msg.GetConversations()[0].GetId(), "conv-1", "should be the unresolved conversation")
+
+	// Filter by multiple statuses
+	req2 := connect.NewRequest(&api.GetConversationsRequest{
+		Paths: []string{"src/app.go"},
+		Statuses: []api.ConversationStatus{
+			api.ConversationStatus_CONVERSATION_STATUS_RESOLVED,
+			api.ConversationStatus_CONVERSATION_STATUS_ARCHIVED,
+		},
+	})
+	resp2, err := s.GetConversations(context.Background(), req2)
+
+	assert.NoError(t, err, "GetConversations should not return error")
+	assert.Equals(t, len(resp2.Msg.GetConversations()), 2, "should return resolved and archived conversations")
+}
+
+func TestGetConversations_EmptyPathsReturnsAll(t *testing.T) {
+	now := time.Now()
+	messaging := critic.NewDummyMessaging()
+	messaging.Conversations["src/a.go"] = []*critic.Conversation{
+		{
+			UUID:       "conv-1",
+			Status:     critic.StatusUnresolved,
+			FilePath:   "src/a.go",
+			LineNumber: 1,
+			Messages:   []critic.Message{{UUID: "msg-1", Author: critic.AuthorHuman, Message: "A", CreatedAt: now, UpdatedAt: now}},
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+	}
+	messaging.Conversations["src/b.go"] = []*critic.Conversation{
+		{
+			UUID:       "conv-2",
+			Status:     critic.StatusResolved,
+			FilePath:   "src/b.go",
+			LineNumber: 2,
+			Messages:   []critic.Message{{UUID: "msg-2", Author: critic.AuthorHuman, Message: "B", CreatedAt: now, UpdatedAt: now}},
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+	}
+
+	s := &Server{
+		config: Config{
+			Messaging: messaging,
+		},
+	}
+
+	// Empty paths = return all
+	req := connect.NewRequest(&api.GetConversationsRequest{})
+	resp, err := s.GetConversations(context.Background(), req)
+
+	assert.NoError(t, err, "GetConversations should not return error")
+	assert.Equals(t, len(resp.Msg.GetConversations()), 2, "should return conversations from all files")
 }
 
 func TestCriticToApiMessage(t *testing.T) {

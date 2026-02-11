@@ -21,6 +21,7 @@ const (
 	StatusActive             ConversationStatus = "active"
 	StatusWaitingForResponse ConversationStatus = "waiting_for_response"
 	StatusInformal           ConversationStatus = "informal"
+	StatusArchived           ConversationStatus = "archived"
 )
 
 // ConversationType represents the type of a conversation
@@ -37,6 +38,7 @@ type ConversationUpdate string
 const (
 	ConversationResolved   ConversationUpdate = "resolved"
 	ConversationUnresolved ConversationUpdate = "unresolved"
+	ConversationArchived   ConversationUpdate = "archived"
 	ConversationReadByAI   ConversationUpdate = "read_by_ai"
 )
 

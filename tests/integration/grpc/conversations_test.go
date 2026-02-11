@@ -204,7 +204,7 @@ func TestConversationsScenario(t *testing.T) {
 	assert.Nil(t, createResp.Msg.GetError(), "CreateConversation should have no error")
 
 	// Step 2: Get conversations for the file
-	getReq := connect.NewRequest(&api.GetConversationsRequest{Path: filePath})
+	getReq := connect.NewRequest(&api.GetConversationsRequest{Paths: []string{filePath}})
 	getResp, err := srv.GetConversations(ctx, getReq)
 
 	assert.NoError(t, err, "GetConversations should not return error")
@@ -292,7 +292,7 @@ func TestConversationsMultipleFiles(t *testing.T) {
 
 	// Verify GetConversations returns only conversations for the requested file
 	for _, file := range files {
-		req := connect.NewRequest(&api.GetConversationsRequest{Path: file})
+		req := connect.NewRequest(&api.GetConversationsRequest{Paths: []string{file}})
 		resp, err := srv.GetConversations(ctx, req)
 
 		assert.NoError(t, err, "GetConversations should not fail for %s", file)
@@ -311,7 +311,7 @@ func TestConversationsEmptyFile(t *testing.T) {
 	ctx := context.Background()
 
 	// Get conversations for a file with no conversations
-	req := connect.NewRequest(&api.GetConversationsRequest{Path: "nonexistent.go"})
+	req := connect.NewRequest(&api.GetConversationsRequest{Paths: []string{"nonexistent.go"}})
 	resp, err := srv.GetConversations(ctx, req)
 
 	assert.NoError(t, err, "GetConversations should not return error for empty file")
@@ -341,7 +341,7 @@ func TestConversationsMultipleMessagesInThread(t *testing.T) {
 	assert.NoError(t, err, "CreateConversation should not return error")
 
 	// Get the conversation to retrieve its ID
-	getReq := connect.NewRequest(&api.GetConversationsRequest{Path: filePath})
+	getReq := connect.NewRequest(&api.GetConversationsRequest{Paths: []string{filePath}})
 	getResp, err := srv.GetConversations(ctx, getReq)
 	assert.NoError(t, err, "GetConversations should not return error")
 

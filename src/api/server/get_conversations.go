@@ -5,11 +5,15 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/src/api"
+	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/samber/lo"
 )
 
-// GetConversations returns all conversations for a file at a specific path.
+// GetConversations returns conversations matching the given filters.
+// If paths is empty, returns conversations across all files.
+// If statuses is empty, returns conversations with any status.
+// Conversations are filtered to the current start..end diff range.
 func (s *Server) GetConversations(
 	ctx context.Context,
 	req *connect.Request[api.GetConversationsRequest],
@@ -21,14 +25,73 @@ func (s *Server) GetConversations(
 }
 
 func getConversationsImpl(server *Server, req *api.GetConversationsRequest) (*api.GetConversationsResponse, error) {
-	path := req.GetPath()
+	paths := req.GetPaths()
+	statuses := req.GetStatuses()
 
 	m := server.config.Messaging
-	criticConversations, err := m.GetConversationsForFile(path)
-	if err != nil {
-		return nil, err
+
+	// Build status filter set (empty means accept all)
+	statusSet := make(map[api.ConversationStatus]bool, len(statuses))
+	for _, s := range statuses {
+		statusSet[s] = true
 	}
-	apiConversations := lo.Map(criticConversations, criticToApiConversation)
+
+	// Collect conversations: per-file if paths given, all roots otherwise
+	var criticConversations []*critic.Conversation
+	if len(paths) > 0 {
+		for _, path := range paths {
+			convs, err := m.GetConversationsForFile(path)
+			if err != nil {
+				return nil, err
+			}
+			criticConversations = append(criticConversations, convs...)
+		}
+	} else {
+		// No paths filter: load all root conversations then fetch full threads
+		roots, err := m.GetConversations("")
+		if err != nil {
+			return nil, err
+		}
+		for _, root := range roots {
+			conv, err := m.GetFullConversation(root.UUID)
+			if err != nil {
+				continue
+			}
+			criticConversations = append(criticConversations, conv)
+		}
+	}
+
+	// Get current diff range for filtering and branch resolution (if session exists)
+	var start, end string
+	var bases []string
+	if server.session != nil {
+		start = server.session.GetCurrentStart()
+		end = server.session.GetCurrentEnd()
+		bases = server.session.GetDiffBases()
+	}
+
+	// Filter conversations to the current diff range, apply status filter,
+	// and resolve branch names.
+	cache := git.NewAncestryCache()
+	apiConversations := make([]*api.Conversation, 0, len(criticConversations))
+	for _, conv := range criticConversations {
+		if start != "" {
+			if !git.IsCommitInRangeCached(conv.CodeVersion, start, end, cache) {
+				continue
+			}
+		}
+
+		apiStatus := criticStatusToApiStatus(conv.Status)
+		if len(statusSet) > 0 && !statusSet[apiStatus] {
+			continue
+		}
+
+		apiConv := criticToApiConversation(conv, 0)
+		if conv.CodeVersion != "" && len(bases) > 0 {
+			apiConv.BranchName = git.ClosestBranchForSHACached(conv.CodeVersion, bases, cache)
+		}
+		apiConversations = append(apiConversations, apiConv)
+	}
 
 	return &api.GetConversationsResponse{
 		Conversations: apiConversations,
@@ -58,6 +121,8 @@ func criticStatusToApiStatus(status critic.ConversationStatus) api.ConversationS
 		return api.ConversationStatus_CONVERSATION_STATUS_WAITING_FOR_RESPONSE
 	case critic.StatusInformal:
 		return api.ConversationStatus_CONVERSATION_STATUS_INFORMAL
+	case critic.StatusArchived:
+		return api.ConversationStatus_CONVERSATION_STATUS_ARCHIVED
 	default:
 		return api.ConversationStatus_CONVERSATION_STATUS_INVALID
 	}
