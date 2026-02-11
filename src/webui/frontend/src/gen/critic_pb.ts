@@ -1064,6 +1064,14 @@ export class CreateConversationRequest extends Message$1<CreateConversationReque
    */
   comment = "";
 
+  /**
+   * conversation_type specifies the type of conversation to create.
+   * Defaults to CONVERSATION_TYPE_CONVERSATION if not set.
+   *
+   * @generated from field: critic.v1.ConversationType conversation_type = 6;
+   */
+  conversationType = ConversationType.INVALID;
+
   constructor(data?: PartialMessage<CreateConversationRequest>) {
     super();
     proto3.util.initPartial(data, this);
@@ -1077,6 +1085,7 @@ export class CreateConversationRequest extends Message$1<CreateConversationReque
     { no: 3, name: "new_file", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "new_line", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "comment", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 6, name: "conversation_type", kind: "enum", T: proto3.getEnumType(ConversationType) },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CreateConversationRequest {
