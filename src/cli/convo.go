@@ -98,33 +98,34 @@ Examples:
 			}
 			defer mdb.Close()
 
-			conversations, err := mdb.GetConversations(status)
+			roots, err := mdb.GetConversations(status, nil)
 			if err != nil {
 				return fmt.Errorf("failed to get conversations: %w", err)
 			}
 
-			if len(conversations) == 0 {
+			if len(roots) == 0 {
 				fmt.Println("[]")
 				return nil
 			}
 
-			// Fetch full details for each conversation
-			summaries := make([]ConversationSummary, 0, len(conversations))
-			for _, rootConv := range conversations {
-				conv, err := mdb.GetFullConversation(rootConv.UUID)
-				if err != nil {
-					// Skip conversations we can't load
-					continue
-				}
+			// Batch-fetch full conversations
+			uuids := make([]string, len(roots))
+			for i, r := range roots {
+				uuids[i] = r.UUID
+			}
+			conversations, err := mdb.GetFullConversations(uuids)
+			if err != nil {
+				return fmt.Errorf("failed to get full conversations: %w", err)
+			}
 
+			summaries := make([]ConversationSummary, 0, len(conversations))
+			for _, conv := range conversations {
 				if len(conv.Messages) == 0 {
 					continue
 				}
 
-				// Get first message (root message)
 				firstMsg := conv.Messages[0]
 
-				// Truncate message to 100 chars
 				messagePreview := firstMsg.Message
 				if len(messagePreview) > 100 {
 					messagePreview = messagePreview[:100] + "..."

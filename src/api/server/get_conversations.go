@@ -36,29 +36,20 @@ func getConversationsImpl(server *Server, req *api.GetConversationsRequest) (*ap
 		statusSet[s] = true
 	}
 
-	// Collect conversations: per-file if paths given, all roots otherwise
-	var criticConversations []*critic.Conversation
-	if len(paths) > 0 {
-		for _, path := range paths {
-			convs, err := m.GetConversationsForFile(path)
-			if err != nil {
-				return nil, err
-			}
-			criticConversations = append(criticConversations, convs...)
-		}
-	} else {
-		// No paths filter: load all root conversations then fetch full threads
-		roots, err := m.GetConversations("")
-		if err != nil {
-			return nil, err
-		}
-		for _, root := range roots {
-			conv, err := m.GetFullConversation(root.UUID)
-			if err != nil {
-				continue
-			}
-			criticConversations = append(criticConversations, conv)
-		}
+	// Step 1: get root conversations (lightweight, no messages)
+	roots, err := m.GetConversations("", paths)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 2: batch-fetch full conversations with messages
+	uuids := make([]string, len(roots))
+	for i, r := range roots {
+		uuids[i] = r.UUID
+	}
+	criticConversations, err := m.GetFullConversations(uuids)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get current diff range for filtering and branch resolution (if session exists)

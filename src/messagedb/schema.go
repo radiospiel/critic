@@ -257,7 +257,7 @@ func (db *DB) applyMigration(mig *migration) error {
 // getSchemaVersion retrieves the current schema version from settings
 func (db *DB) getSchemaVersion() (string, error) {
 	var version string
-	err := db.ask(`SELECT value FROM settings WHERE key = ?`, []any{"db_schema"}, &version)
+	err := db.db.Get(&version, `SELECT value FROM settings WHERE key = ?`, "db_schema")
 	if err != nil {
 		return "", fmt.Errorf("schema version not found")
 	}

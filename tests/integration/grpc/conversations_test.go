@@ -25,16 +25,41 @@ func NewTestMessaging() *TestMessaging {
 	}
 }
 
-func (m *TestMessaging) GetConversations(status string) ([]critic.Conversation, error) {
-	var all []critic.Conversation
-	for _, convs := range m.conversations {
+func (m *TestMessaging) GetConversations(status string, paths []string) ([]*critic.Conversation, error) {
+	pathSet := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		pathSet[p] = true
+	}
+
+	var all []*critic.Conversation
+	for filePath, convs := range m.conversations {
+		if len(paths) > 0 && !pathSet[filePath] {
+			continue
+		}
 		for _, c := range convs {
 			if status == "" || string(c.Status) == status {
-				all = append(all, *c)
+				all = append(all, c)
 			}
 		}
 	}
 	return all, nil
+}
+
+func (m *TestMessaging) GetFullConversations(uuids []string) ([]*critic.Conversation, error) {
+	uuidSet := make(map[string]bool, len(uuids))
+	for _, u := range uuids {
+		uuidSet[u] = true
+	}
+
+	var result []*critic.Conversation
+	for _, convs := range m.conversations {
+		for _, c := range convs {
+			if uuidSet[c.UUID] {
+				result = append(result, c)
+			}
+		}
+	}
+	return result, nil
 }
 
 func (m *TestMessaging) GetFullConversation(uuid string) (*critic.Conversation, error) {
