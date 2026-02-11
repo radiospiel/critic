@@ -16,14 +16,16 @@ service CriticService {
   rpc GetFile(GetFileRequest) returns (GetFileResponse);
   // CreateConversation creates a new conversation (comment thread) on a diff line.
   rpc CreateConversation(CreateConversationRequest) returns (CreateConversationResponse);
-  // GetConversations returns all conversations for a specific file.
+  // GetConversations returns conversations matching the given filters.
+  // If paths is empty, returns conversations across all files.
+  // If statuses is empty, returns conversations with any status.
   rpc GetConversations(GetConversationsRequest) returns (GetConversationsResponse);
   // GetConversationsSummary returns conversation counts and status per file path.
   rpc GetConversationsSummary(GetConversationsSummaryRequest) returns (GetConversationsSummaryResponse);
   // ReplyToConversation adds a reply message to an existing conversation.
   rpc ReplyToConversation(ReplyToConversationRequest) returns (ReplyToConversationResponse);
-  // ResolveConversation marks a conversation as resolved.
-  rpc ResolveConversation(ResolveConversationRequest) returns (ResolveConversationResponse);
+  // MarkConversationAs updates the status of a conversation (resolve, unresolve, archive).
+  rpc MarkConversationAs(MarkConversationAsRequest) returns (MarkConversationAsResponse);
   // GetDiffBases returns available diff bases and the current one.
   rpc GetDiffBases(GetDiffBasesRequest) returns (GetDiffBasesResponse);
   // SetDiffBase sets the current diff base.
@@ -210,10 +212,12 @@ message CreateConversationResponse {
   RpcError error = 15;
 }
 
-// GetConversationsRequest requests all conversations for a specific file.
+// GetConversationsRequest requests conversations matching the given filters.
 message GetConversationsRequest {
-  // path is the file path to get conversations for.
-  string path = 1;
+  // paths filters to conversations in these files. Empty means all files.
+  repeated string paths = 1;
+  // statuses filters to conversations with these statuses. Empty means any status.
+  repeated ConversationStatus statuses = 2;
 }
 
 // GetConversationsResponse contains all conversations for a file.
@@ -259,6 +263,7 @@ enum ConversationStatus {
   CONVERSATION_STATUS_ACTIVE = 3;
   CONVERSATION_STATUS_WAITING_FOR_RESPONSE = 4;
   CONVERSATION_STATUS_INFORMAL = 5;
+  CONVERSATION_STATUS_ARCHIVED = 6;
 }
 
 // ConversationType represents the type of a conversation.
@@ -290,6 +295,8 @@ message Conversation {
   string updated_at = 9;
   // conversation_type is the type of this conversation (conversation or explanation).
   ConversationType conversation_type = 10;
+  // branch_name is the closest branch name at or following the code_version SHA.
+  string branch_name = 11;
 }
 
 // Message represents a single message in a conversation.
@@ -311,20 +318,28 @@ message Message {
 // GetDiffBasesRequest is an empty request for GetDiffBases.
 message GetDiffBasesRequest {}
 
-// GetDiffBasesResponse contains the available diff bases and current selection.
+// GetDiffBasesResponse contains the available diff bases and current range selection.
 message GetDiffBasesResponse {
   // bases is the list of available diff base refs.
   repeated string bases = 1;
-  // current_base is the currently selected diff base.
+  // current_base is the currently selected diff base (deprecated, use current_start).
   string current_base = 2;
+  // current_start is the start of the selected diff range.
+  string current_start = 3;
+  // current_end is the end of the selected diff range (empty means working directory).
+  string current_end = 4;
   // error contains error details if the request failed.
   RpcError error = 15;
 }
 
-// SetDiffBaseRequest requests to change the current diff base.
+// SetDiffBaseRequest requests to change the current diff range.
 message SetDiffBaseRequest {
-  // base is the diff base ref to switch to.
+  // base is the diff base ref to switch to (deprecated, use start).
   string base = 1;
+  // start is the start of the diff range.
+  string start = 2;
+  // end is the end of the diff range (empty means working directory).
+  string end = 3;
 }
 
 // SetDiffBaseResponse contains the result of setting the diff base.
@@ -351,14 +366,16 @@ message ReplyToConversationResponse {
   RpcError error = 15;
 }
 
-// ResolveConversationRequest contains the data for resolving a conversation.
-message ResolveConversationRequest {
-  // conversation_id is the unique identifier of the conversation to resolve.
+// MarkConversationAsRequest updates the status of a conversation.
+message MarkConversationAsRequest {
+  // conversation_id is the unique identifier of the conversation to update.
   string conversation_id = 1;
+  // status is the new status to set on the conversation.
+  ConversationStatus status = 2;
 }
 
-// ResolveConversationResponse contains the result of resolving a conversation.
-message ResolveConversationResponse {
+// MarkConversationAsResponse contains the result of updating a conversation status.
+message MarkConversationAsResponse {
   // error contains error details if the request failed.
   RpcError error = 15;
 }

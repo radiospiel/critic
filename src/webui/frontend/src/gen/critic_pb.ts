@@ -161,6 +161,11 @@ export enum ConversationStatus {
    * @generated from enum value: CONVERSATION_STATUS_INFORMAL = 5;
    */
   INFORMAL = 5,
+
+  /**
+   * @generated from enum value: CONVERSATION_STATUS_ARCHIVED = 6;
+   */
+  ARCHIVED = 6,
 }
 // Retrieve enum metadata with: proto3.getEnumType(ConversationStatus)
 proto3.util.setEnumType(ConversationStatus, "critic.v1.ConversationStatus", [
@@ -170,6 +175,7 @@ proto3.util.setEnumType(ConversationStatus, "critic.v1.ConversationStatus", [
   { no: 3, name: "CONVERSATION_STATUS_ACTIVE" },
   { no: 4, name: "CONVERSATION_STATUS_WAITING_FOR_RESPONSE" },
   { no: 5, name: "CONVERSATION_STATUS_INFORMAL" },
+  { no: 6, name: "CONVERSATION_STATUS_ARCHIVED" },
 ]);
 
 /**
@@ -1140,17 +1146,24 @@ export class CreateConversationResponse extends Message$1<CreateConversationResp
 }
 
 /**
- * GetConversationsRequest requests all conversations for a specific file.
+ * GetConversationsRequest requests conversations matching the given filters.
  *
  * @generated from message critic.v1.GetConversationsRequest
  */
 export class GetConversationsRequest extends Message$1<GetConversationsRequest> {
   /**
-   * path is the file path to get conversations for.
+   * paths filters to conversations in these files. Empty means all files.
    *
-   * @generated from field: string path = 1;
+   * @generated from field: repeated string paths = 1;
    */
-  path = "";
+  paths: string[] = [];
+
+  /**
+   * statuses filters to conversations with these statuses. Empty means any status.
+   *
+   * @generated from field: repeated critic.v1.ConversationStatus statuses = 2;
+   */
+  statuses: ConversationStatus[] = [];
 
   constructor(data?: PartialMessage<GetConversationsRequest>) {
     super();
@@ -1160,7 +1173,8 @@ export class GetConversationsRequest extends Message$1<GetConversationsRequest> 
   static readonly runtime: typeof proto3 = proto3;
   static readonly typeName = "critic.v1.GetConversationsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
-    { no: 1, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 1, name: "paths", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
+    { no: 2, name: "statuses", kind: "enum", T: proto3.getEnumType(ConversationStatus), repeated: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): GetConversationsRequest {
@@ -1468,6 +1482,13 @@ export class Conversation extends Message$1<Conversation> {
    */
   conversationType = ConversationType.INVALID;
 
+  /**
+   * branch_name is the closest branch name at or following the code_version SHA.
+   *
+   * @generated from field: string branch_name = 11;
+   */
+  branchName = "";
+
   constructor(data?: PartialMessage<Conversation>) {
     super();
     proto3.util.initPartial(data, this);
@@ -1486,6 +1507,7 @@ export class Conversation extends Message$1<Conversation> {
     { no: 8, name: "created_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 9, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 10, name: "conversation_type", kind: "enum", T: proto3.getEnumType(ConversationType) },
+    { no: 11, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Conversation {
@@ -1620,7 +1642,7 @@ export class GetDiffBasesRequest extends Message$1<GetDiffBasesRequest> {
 }
 
 /**
- * GetDiffBasesResponse contains the available diff bases and current selection.
+ * GetDiffBasesResponse contains the available diff bases and current range selection.
  *
  * @generated from message critic.v1.GetDiffBasesResponse
  */
@@ -1633,11 +1655,25 @@ export class GetDiffBasesResponse extends Message$1<GetDiffBasesResponse> {
   bases: string[] = [];
 
   /**
-   * current_base is the currently selected diff base.
+   * current_base is the currently selected diff base (deprecated, use current_start).
    *
    * @generated from field: string current_base = 2;
    */
   currentBase = "";
+
+  /**
+   * current_start is the start of the selected diff range.
+   *
+   * @generated from field: string current_start = 3;
+   */
+  currentStart = "";
+
+  /**
+   * current_end is the end of the selected diff range (empty means working directory).
+   *
+   * @generated from field: string current_end = 4;
+   */
+  currentEnd = "";
 
   /**
    * error contains error details if the request failed.
@@ -1656,6 +1692,8 @@ export class GetDiffBasesResponse extends Message$1<GetDiffBasesResponse> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "bases", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
     { no: 2, name: "current_base", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "current_start", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 4, name: "current_end", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 15, name: "error", kind: "message", T: RpcError },
   ]);
 
@@ -1677,17 +1715,31 @@ export class GetDiffBasesResponse extends Message$1<GetDiffBasesResponse> {
 }
 
 /**
- * SetDiffBaseRequest requests to change the current diff base.
+ * SetDiffBaseRequest requests to change the current diff range.
  *
  * @generated from message critic.v1.SetDiffBaseRequest
  */
 export class SetDiffBaseRequest extends Message$1<SetDiffBaseRequest> {
   /**
-   * base is the diff base ref to switch to.
+   * base is the diff base ref to switch to (deprecated, use start).
    *
    * @generated from field: string base = 1;
    */
   base = "";
+
+  /**
+   * start is the start of the diff range.
+   *
+   * @generated from field: string start = 2;
+   */
+  start = "";
+
+  /**
+   * end is the end of the diff range (empty means working directory).
+   *
+   * @generated from field: string end = 3;
+   */
+  end = "";
 
   constructor(data?: PartialMessage<SetDiffBaseRequest>) {
     super();
@@ -1698,6 +1750,8 @@ export class SetDiffBaseRequest extends Message$1<SetDiffBaseRequest> {
   static readonly typeName = "critic.v1.SetDiffBaseRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "base", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "start", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "end", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SetDiffBaseRequest {
@@ -1865,52 +1919,60 @@ export class ReplyToConversationResponse extends Message$1<ReplyToConversationRe
 }
 
 /**
- * ResolveConversationRequest contains the data for resolving a conversation.
+ * MarkConversationAsRequest updates the status of a conversation.
  *
- * @generated from message critic.v1.ResolveConversationRequest
+ * @generated from message critic.v1.MarkConversationAsRequest
  */
-export class ResolveConversationRequest extends Message$1<ResolveConversationRequest> {
+export class MarkConversationAsRequest extends Message$1<MarkConversationAsRequest> {
   /**
-   * conversation_id is the unique identifier of the conversation to resolve.
+   * conversation_id is the unique identifier of the conversation to update.
    *
    * @generated from field: string conversation_id = 1;
    */
   conversationId = "";
 
-  constructor(data?: PartialMessage<ResolveConversationRequest>) {
+  /**
+   * status is the new status to set on the conversation.
+   *
+   * @generated from field: critic.v1.ConversationStatus status = 2;
+   */
+  status = ConversationStatus.INVALID;
+
+  constructor(data?: PartialMessage<MarkConversationAsRequest>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "critic.v1.ResolveConversationRequest";
+  static readonly typeName = "critic.v1.MarkConversationAsRequest";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "conversation_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "status", kind: "enum", T: proto3.getEnumType(ConversationStatus) },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ResolveConversationRequest {
-    return new ResolveConversationRequest().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MarkConversationAsRequest {
+    return new MarkConversationAsRequest().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ResolveConversationRequest {
-    return new ResolveConversationRequest().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MarkConversationAsRequest {
+    return new MarkConversationAsRequest().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ResolveConversationRequest {
-    return new ResolveConversationRequest().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MarkConversationAsRequest {
+    return new MarkConversationAsRequest().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ResolveConversationRequest | PlainMessage<ResolveConversationRequest> | undefined, b: ResolveConversationRequest | PlainMessage<ResolveConversationRequest> | undefined): boolean {
-    return proto3.util.equals(ResolveConversationRequest, a, b);
+  static equals(a: MarkConversationAsRequest | PlainMessage<MarkConversationAsRequest> | undefined, b: MarkConversationAsRequest | PlainMessage<MarkConversationAsRequest> | undefined): boolean {
+    return proto3.util.equals(MarkConversationAsRequest, a, b);
   }
 }
 
 /**
- * ResolveConversationResponse contains the result of resolving a conversation.
+ * MarkConversationAsResponse contains the result of updating a conversation status.
  *
- * @generated from message critic.v1.ResolveConversationResponse
+ * @generated from message critic.v1.MarkConversationAsResponse
  */
-export class ResolveConversationResponse extends Message$1<ResolveConversationResponse> {
+export class MarkConversationAsResponse extends Message$1<MarkConversationAsResponse> {
   /**
    * error contains error details if the request failed.
    *
@@ -1918,31 +1980,31 @@ export class ResolveConversationResponse extends Message$1<ResolveConversationRe
    */
   error?: RpcError;
 
-  constructor(data?: PartialMessage<ResolveConversationResponse>) {
+  constructor(data?: PartialMessage<MarkConversationAsResponse>) {
     super();
     proto3.util.initPartial(data, this);
   }
 
   static readonly runtime: typeof proto3 = proto3;
-  static readonly typeName = "critic.v1.ResolveConversationResponse";
+  static readonly typeName = "critic.v1.MarkConversationAsResponse";
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 15, name: "error", kind: "message", T: RpcError },
   ]);
 
-  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ResolveConversationResponse {
-    return new ResolveConversationResponse().fromBinary(bytes, options);
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): MarkConversationAsResponse {
+    return new MarkConversationAsResponse().fromBinary(bytes, options);
   }
 
-  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ResolveConversationResponse {
-    return new ResolveConversationResponse().fromJson(jsonValue, options);
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): MarkConversationAsResponse {
+    return new MarkConversationAsResponse().fromJson(jsonValue, options);
   }
 
-  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ResolveConversationResponse {
-    return new ResolveConversationResponse().fromJsonString(jsonString, options);
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): MarkConversationAsResponse {
+    return new MarkConversationAsResponse().fromJsonString(jsonString, options);
   }
 
-  static equals(a: ResolveConversationResponse | PlainMessage<ResolveConversationResponse> | undefined, b: ResolveConversationResponse | PlainMessage<ResolveConversationResponse> | undefined): boolean {
-    return proto3.util.equals(ResolveConversationResponse, a, b);
+  static equals(a: MarkConversationAsResponse | PlainMessage<MarkConversationAsResponse> | undefined, b: MarkConversationAsResponse | PlainMessage<MarkConversationAsResponse> | undefined): boolean {
+    return proto3.util.equals(MarkConversationAsResponse, a, b);
   }
 }
 

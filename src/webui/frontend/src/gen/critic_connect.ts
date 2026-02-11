@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CreateConversationRequest, CreateConversationResponse, CreateExplanationRequest, CreateExplanationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, GetProjectConfigRequest, GetProjectConfigResponse, GetRootConversationRequest, GetRootConversationResponse, ReplyToConversationRequest, ReplyToConversationResponse, ResolveConversationRequest, ResolveConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
+import { CreateConversationRequest, CreateConversationResponse, CreateExplanationRequest, CreateExplanationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, GetProjectConfigRequest, GetProjectConfigResponse, GetRootConversationRequest, GetRootConversationResponse, MarkConversationAsRequest, MarkConversationAsResponse, ReplyToConversationRequest, ReplyToConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -70,7 +70,9 @@ export const CriticService = {
       kind: MethodKind.Unary,
     },
     /**
-     * GetConversations returns all conversations for a specific file.
+     * GetConversations returns conversations matching the given filters.
+     * If paths is empty, returns conversations across all files.
+     * If statuses is empty, returns conversations with any status.
      *
      * @generated from rpc critic.v1.CriticService.GetConversations
      */
@@ -103,14 +105,14 @@ export const CriticService = {
       kind: MethodKind.Unary,
     },
     /**
-     * ResolveConversation marks a conversation as resolved.
+     * MarkConversationAs updates the status of a conversation (resolve, unresolve, archive).
      *
-     * @generated from rpc critic.v1.CriticService.ResolveConversation
+     * @generated from rpc critic.v1.CriticService.MarkConversationAs
      */
-    resolveConversation: {
-      name: "ResolveConversation",
-      I: ResolveConversationRequest,
-      O: ResolveConversationResponse,
+    markConversationAs: {
+      name: "MarkConversationAs",
+      I: MarkConversationAsRequest,
+      O: MarkConversationAsResponse,
       kind: MethodKind.Unary,
     },
     /**
