@@ -21,12 +21,13 @@ func (s *Server) CreateConversation(
 }
 
 func createConversationImpl(server *Server, req *api.CreateConversationRequest) (*api.CreateConversationResponse, error) {
-	logger.Info("CreateConversation: old_file=%s, old_line=%d, new_file=%s, new_line=%d, comment=%q",
+	logger.Info("CreateConversation: old_file=%s, old_line=%d, new_file=%s, new_line=%d, comment=%q, type=%s",
 		req.GetOldFile(),
 		req.GetOldLine(),
 		req.GetNewFile(),
 		req.GetNewLine(),
 		req.GetComment(),
+		req.GetConversationType(),
 	)
 
 	// Determine file path and line number to use
@@ -42,20 +43,26 @@ func createConversationImpl(server *Server, req *api.CreateConversationRequest) 
 	// Get the current commit SHA from the session
 	codeVersion := server.session.HeadCommit()
 
-	// Create the conversation using the messaging interface
+	// Map proto ConversationType to critic ConversationType
+	conversationType := critic.TypeConversation
+	if req.GetConversationType() == api.ConversationType_CONVERSATION_TYPE_EXPLANATION {
+		conversationType = critic.TypeExplanation
+	}
+
 	conversation, err := server.config.Messaging.CreateConversation(
 		critic.AuthorHuman,
 		req.GetComment(),
 		filePath,
 		lineNo,
 		codeVersion,
-		"", // context - could be enhanced to include surrounding code
+		"",
+		conversationType,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Info("Created conversation %s at %s:%d", conversation.UUID, filePath, lineNo)
+	logger.Info("Created %s %s at %s:%d", conversationType, conversation.UUID, filePath, lineNo)
 	return &api.CreateConversationResponse{
 		Success: true,
 	}, nil

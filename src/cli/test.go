@@ -123,6 +123,7 @@ Examples:
 					lineNumber,
 					codeVersion,
 					"", // no context for CLI-created conversations
+					critic.TypeConversation,
 				)
 				if err != nil {
 					return fmt.Errorf("failed to create conversation: %w", err)

@@ -109,11 +109,11 @@ type Messaging interface {
 	// ReplyToConversation adds a reply to an existing conversation
 	ReplyToConversation(conversationUUID string, message string, author Author) (*Message, error)
 
-	// CreateConversation creates a new conversation (root message)
-	CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error)
-
-	// CreateExplanation creates a new explanation (informal annotation on a code line)
-	CreateExplanation(author Author, comment, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error)
+	// CreateConversation creates a new conversation (root message).
+	// The conversationType determines the initial status:
+	//   TypeConversation → StatusUnresolved
+	//   TypeExplanation  → StatusInformal
+	CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string, conversationType ConversationType) (*Conversation, error)
 
 	// MarkConversationAs applies an update to a conversation (resolved, unresolved, read_by_ai)
 	MarkConversationAs(conversationUUID string, update ConversationUpdate) error
@@ -179,12 +179,12 @@ func (m *DummyMessaging) ReplyToConversation(conversationUUID string, message st
 	return &Message{UUID: "reply-1"}, nil
 }
 
-func (m *DummyMessaging) CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error) {
-	return &Conversation{UUID: "conv-1"}, nil
-}
-
-func (m *DummyMessaging) CreateExplanation(author Author, comment, filePath string, lineNumber int, codeVersion string, context string) (*Conversation, error) {
-	return &Conversation{UUID: "expl-1", ConversationType: TypeExplanation, Status: StatusInformal}, nil
+func (m *DummyMessaging) CreateConversation(author Author, message, filePath string, lineNumber int, codeVersion string, context string, conversationType ConversationType) (*Conversation, error) {
+	status := StatusUnresolved
+	if conversationType == TypeExplanation {
+		status = StatusInformal
+	}
+	return &Conversation{UUID: "conv-1", ConversationType: conversationType, Status: status}, nil
 }
 
 func (m *DummyMessaging) MarkConversationAs(conversationUUID string, update ConversationUpdate) error {

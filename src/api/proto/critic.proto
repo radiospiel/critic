@@ -202,6 +202,9 @@ message CreateConversationRequest {
   int32 new_line = 4;
   // comment is the markdown content of the comment.
   string comment = 5;
+  // conversation_type specifies the type of conversation to create.
+  // Defaults to CONVERSATION_TYPE_CONVERSATION if not set.
+  ConversationType conversation_type = 6;
 }
 
 // CreateConversationResponse contains the result of creating a conversation.

@@ -17,6 +17,9 @@ critic.bin
 # Test binaries
 *.test
 
+# Coverage artifacts
+coverage_grpc.out
+
 # Go workspace file
 go.work
 
