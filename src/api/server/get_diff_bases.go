@@ -20,7 +20,9 @@ func (s *Server) GetDiffBases(
 
 func getDiffBasesImpl(server *Server, req *api.GetDiffBasesRequest) (*api.GetDiffBasesResponse, error) {
 	return &api.GetDiffBasesResponse{
-		Bases:       server.session.GetDiffBases(),
-		CurrentBase: server.session.GetCurrentBase(),
+		Bases:        server.session.GetDiffBases(),
+		CurrentBase:  server.session.GetCurrentBase(),
+		CurrentStart: server.session.GetCurrentStart(),
+		CurrentEnd:   server.session.GetCurrentEnd(),
 	}, nil
 }

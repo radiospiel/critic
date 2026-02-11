@@ -47,10 +47,9 @@ Examples:
 				}
 			}()
 
-			// Set default bases if none provided (deferred to avoid git calls during help)
-			if len(diffBases) == 0 {
-				diffBases = getDefaultBases()
-			}
+			// Always include default bases (master, main, HEAD) plus any explicitly added.
+			// Deferred to avoid git calls during help.
+			diffBases = mergeDefaultBases(diffBases)
 
 			// Start CPU profiling if requested
 			if cpuProfile != "" {

@@ -17,6 +17,31 @@ func getDefaultBases() []string {
 	})
 }
 
+// mergeDefaultBases merges explicitly added bases with the defaults (master, main, HEAD),
+// ensuring all valid refs are included without duplicates.
+func mergeDefaultBases(explicit []string) []string {
+	defaults := getDefaultBases()
+
+	// Start with defaults, then append explicit ones that aren't already present
+	seen := make(map[string]bool, len(defaults)+len(explicit))
+	merged := make([]string, 0, len(defaults)+len(explicit))
+
+	for _, ref := range defaults {
+		if !seen[ref] {
+			seen[ref] = true
+			merged = append(merged, ref)
+		}
+	}
+	for _, ref := range explicit {
+		if !seen[ref] && git.HasRef(ref) {
+			seen[ref] = true
+			merged = append(merged, ref)
+		}
+	}
+
+	return merged
+}
+
 // Execute runs the CLI application with the given handler
 func Execute() error {
 	rootCmd := newRootCmd()

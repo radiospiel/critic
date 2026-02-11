@@ -40,9 +40,11 @@ type Session struct {
 	diffBases []string
 
 	// State
-	state       State
-	currentBase string
-	diff        []*types.FileDiff
+	state        State
+	currentBase  string // kept for backwards compat; equals currentStart
+	currentStart string
+	currentEnd   string // empty means working directory
+	diff         []*types.FileDiff
 
 	// Background task management
 	currentTask *tasks.Task[diffResult]
@@ -81,11 +83,25 @@ func (s *Session) GetState() State {
 	return s.state
 }
 
-// GetCurrentBase returns the current base ref
+// GetCurrentBase returns the current base ref (same as GetCurrentStart)
 func (s *Session) GetCurrentBase() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.currentBase
+}
+
+// GetCurrentStart returns the start of the current diff range
+func (s *Session) GetCurrentStart() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.currentStart
+}
+
+// GetCurrentEnd returns the end of the current diff range (empty = working directory)
+func (s *Session) GetCurrentEnd() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.currentEnd
 }
 
 // GetDiffBases returns the available diff bases
@@ -108,6 +124,7 @@ func (s *Session) GetDiffSummary() []*types.FileDiff {
 func (s *Session) GetFileDiff(path string, contextLines int) *types.FileDiff {
 	s.mu.RLock()
 	currentBase := s.currentBase
+	currentEnd := s.currentEnd
 	s.mu.RUnlock()
 
 	if currentBase == "" {
@@ -118,7 +135,7 @@ func (s *Session) GetFileDiff(path string, contextLines int) *types.FileDiff {
 	preconditions.Check(path != "", "path required")
 
 	// Load the full diff for the specific file
-	fileDiff, err := git.GetDiff(currentBase, path, contextLines)
+	fileDiff, err := git.GetDiff(currentBase, path, contextLines, git.WithEnd(currentEnd))
 	if err != nil {
 		logger.Error("git.GetDiff returns error %v", err)
 		return nil
@@ -149,10 +166,25 @@ func (s *Session) SetDiffBases(bases []string) error {
 }
 
 // SetCurrentDiffBase sets the current base ref for the session, and
-// starts loading the diff in the background.
+// starts loading the diff in the background. Clears the end (uses working directory).
 func (s *Session) SetCurrentDiffBase(base string) error {
 	s.mu.Lock()
 	s.currentBase = base
+	s.currentStart = base
+	s.currentEnd = ""
+	s.mu.Unlock()
+
+	<-s.TriggerDiff()
+	return nil
+}
+
+// SetCurrentDiffRange sets the start and end of the diff range.
+// If end is empty, the working directory is used.
+func (s *Session) SetCurrentDiffRange(start, end string) error {
+	s.mu.Lock()
+	s.currentBase = start
+	s.currentStart = start
+	s.currentEnd = end
 	s.mu.Unlock()
 
 	<-s.TriggerDiff()
@@ -170,6 +202,10 @@ func (s *Session) TriggerDiff() <-chan struct{} {
 		return done
 	}
 
+	s.mu.RLock()
+	currentEnd := s.currentEnd
+	s.mu.RUnlock()
+
 	s.mu.Lock()
 
 	// Abort any existing task
@@ -186,7 +222,7 @@ func (s *Session) TriggerDiff() <-chan struct{} {
 	// Paths are passed directly to git commands as pathspec arguments,
 	// which filters at the source for better performance.
 	task, err := tasks.RunExclusively("api-session-diff", func() diffResult {
-		files, err := git.GetDiffNames(currentBase, s.paths)
+		files, err := git.GetDiffNames(currentBase, s.paths, git.WithEnd(currentEnd))
 		if err != nil {
 			return diffResult{err: err}
 		}

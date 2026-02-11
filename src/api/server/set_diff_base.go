@@ -19,26 +19,34 @@ func (s *Server) SetDiffBase(
 }
 
 func setDiffBaseImpl(server *Server, req *api.SetDiffBaseRequest) (*api.SetDiffBaseResponse, error) {
-	base := req.GetBase()
-	if base == "" {
-		return nil, api.InvalidArgumentError("base is required")
+	start := req.GetStart()
+	end := req.GetEnd()
+	if start == "" {
+		return nil, api.InvalidArgumentError("start is required")
 	}
 
-	// Check if the base is in the list of available bases
+	// Check if start is in the list of available bases
 	bases := server.session.GetDiffBases()
-	found := false
-	for _, b := range bases {
-		if b == base {
-			found = true
-			break
+	isValidBase := func(ref string) bool {
+		for _, b := range bases {
+			if b == ref {
+				return true
+			}
 		}
-	}
-	if !found {
-		return nil, api.InvalidArgumentError("invalid diff base: " + base)
+		return false
 	}
 
-	if err := server.session.SetCurrentDiffBase(base); err != nil {
-		return nil, api.WrapError(err, "failed to set diff base")
+	if !isValidBase(start) {
+		return nil, api.InvalidArgumentError("invalid diff base: " + start)
+	}
+
+	// End is optional; if provided, must also be a valid base
+	if end != "" && !isValidBase(end) {
+		return nil, api.InvalidArgumentError("invalid diff end: " + end)
+	}
+
+	if err := server.session.SetCurrentDiffRange(start, end); err != nil {
+		return nil, api.WrapError(err, "failed to set diff range")
 	}
 
 	return &api.SetDiffBaseResponse{

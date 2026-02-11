@@ -45,10 +45,34 @@ func HasRef(ref string) bool {
 	return err == nil
 }
 
-// GetDiff returns the diff for a single file between a base commit and the working directory.
+// DiffOption is a functional option for diff commands.
+type DiffOption func(*diffOptions)
+
+type diffOptions struct {
+	end string // empty means working directory
+}
+
+// WithEnd sets the end ref for a diff range. Empty means working directory.
+func WithEnd(end string) DiffOption {
+	return func(o *diffOptions) {
+		o.end = end
+	}
+}
+
+func applyDiffOptions(opts []DiffOption) diffOptions {
+	var o diffOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
+
+// GetDiff returns the diff for a single file between a base commit and the working directory (or end ref).
 // base is a commit SHA, path is the file path to diff.
 // contextLines specifies the number of context lines (minimum 3, default 3).
-func GetDiff(base string, path string, contextLines int) (*ctypes.FileDiff, error) {
+// Use WithEnd to specify an end ref for range diffs.
+func GetDiff(base string, path string, contextLines int, opts ...DiffOption) (*ctypes.FileDiff, error) {
+	o := applyDiffOptions(opts)
 	preconditions.Check(len(path) > 0, "Path cannot be empty")
 
 	// Ensure contextLines is at least 3
@@ -56,13 +80,20 @@ func GetDiff(base string, path string, contextLines int) (*ctypes.FileDiff, erro
 		contextLines = 3
 	}
 
-	// Check if file is untracked first
-	if isUntracked(path) {
+	// Check if file is untracked first (only when diffing against working directory)
+	if o.end == "" && isUntracked(path) {
 		return readUntrackedFile(path)
 	}
 
 	// Build git diff command
-	args := []string{"diff", base, "--merge-base", "--patch", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}
+	var args []string
+	if o.end != "" {
+		// Range diff: base...end (three-dot = merge-base mode)
+		args = []string{"diff", base + "..." + o.end, "--patch", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}
+	} else {
+		// Working directory diff: base --merge-base
+		args = []string{"diff", base, "--merge-base", "--patch", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}
+	}
 	args = append(args, diffWhitespaceOpts...)
 	args = append(args, "--", path)
 
@@ -137,18 +168,28 @@ func readUntrackedFile(path string) (*ctypes.FileDiff, error) {
 // GetDiffNames returns a diff summary (file metadata only, no hunks) between a base commit and a target.
 // base is a commit SHA, target is either "current" for working directory or a commit SHA.
 // This is more efficient than GetDiff when you only need to know which files changed.
-// Also includes untracked files (new files not yet added to git).
+// Also includes untracked files (new files not yet added to git) when diffing against working directory.
 //
 // When paths is non-empty, only files under those paths are included. The paths are
 // passed directly to git as pathspec arguments (after --) to filter at the source,
 // avoiding the overhead of listing all changed files and filtering afterwards.
-func GetDiffNames(base string, paths []string) ([]*ctypes.FileDiff, error) {
+// Use WithEnd to specify an end ref for range diffs.
+func GetDiffNames(base string, paths []string, opts ...DiffOption) ([]*ctypes.FileDiff, error) {
+	o := applyDiffOptions(opts)
+
 	for _, path := range paths {
 		preconditions.Check(len(path) > 0, "Path cannot be empty")
 	}
 
 	// Build git diff --name-status command
-	args := []string{"diff", "--merge-base", base, "--name-status"}
+	var args []string
+	if o.end != "" {
+		// Range diff: base...end
+		args = []string{"diff", base + "..." + o.end, "--name-status"}
+	} else {
+		// Working directory diff
+		args = []string{"diff", "--merge-base", base, "--name-status"}
+	}
 	args = append(args, diffWhitespaceOpts...)
 
 	// Pass paths as pathspec arguments after -- to let git filter at the source
@@ -165,9 +206,11 @@ func GetDiffNames(base string, paths []string) ([]*ctypes.FileDiff, error) {
 		return nil, fmt.Errorf("failed to parse diff name-status: %w", err)
 	}
 
-	// Get untracked files and add them as untracked
-	untrackedDiffs := getUntrackedDiffs(paths)
-	files = append(files, untrackedDiffs...)
+	// Get untracked files and add them as untracked (only when diffing against working directory)
+	if o.end == "" {
+		untrackedDiffs := getUntrackedDiffs(paths)
+		files = append(files, untrackedDiffs...)
+	}
 
 	return files, nil
 }
