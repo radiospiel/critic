@@ -613,6 +613,22 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
             setSelection({ start: totalLines - 1, end: totalLines - 1 })
           }
           break
+        case ' ':
+          e.preventDefault()
+          if (editorOpen) return
+          if (selection.end >= totalLines - 1 && onNavigateNextFile) {
+            onNavigateNextFile()
+          } else {
+            // Calculate page size from visible area
+            const container = containerRef.current
+            const lineHeight = selectedLineRef.current?.offsetHeight || 20
+            const pageSize = container
+              ? Math.max(1, Math.floor(container.clientHeight / lineHeight) - 2)
+              : ALT_JUMP_SIZE
+            const newIndex = Math.min(totalLines - 1, selection.end + pageSize)
+            setSelection({ start: newIndex, end: newIndex })
+          }
+          break
       }
     },
     [isFocused, selection, totalLines, onNavigatePrevFile, onNavigateNextFile, editorOpen]
