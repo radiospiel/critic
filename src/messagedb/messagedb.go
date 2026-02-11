@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/simple-go/preconditions"
@@ -52,25 +53,76 @@ const (
 
 // Message represents a comment/reply in the system
 type Message struct {
-	ID               string
-	Author           Author
-	Status           Status
-	ReadStatus       ReadStatus
-	ReadByAI         bool // Whether the AI has read this conversation via MCP
-	Message          string
-	FilePath         string           // File this message is attached to (git-relative path)
-	Lineno           int              // Line number in the file
-	ConversationID   string           // ID of the root message in the conversation
-	Commit           string           // Git commit SHA1
-	Context          string           // Code context around the commented line
-	ConversationType ConversationType // Type of conversation (conversation or explanation)
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID               string           `db:"id"`
+	Author           Author           `db:"author"`
+	Status           Status           `db:"status"`
+	ReadStatus       ReadStatus       `db:"read_status"`
+	ReadByAI         bool             `db:"read_by_ai"`
+	Message          string           `db:"message"`
+	FilePath         string           `db:"file_path"`
+	Lineno           int              `db:"lineno"`
+	ConversationID   string           `db:"conversation_id"`
+	Commit           string           `db:"sha1"`
+	Context          string           `db:"context"`
+	ConversationType ConversationType `db:"conversation_type"`
+	CreatedAt        time.Time        `db:"created_at"`
+	UpdatedAt        time.Time        `db:"updated_at"`
+}
+
+// conversationRow is a scan target for conversation-level queries.
+type conversationRow struct {
+	UUID             string    `db:"id"`
+	Status           string    `db:"status"`
+	FilePath         string    `db:"file_path"`
+	LineNumber       int       `db:"lineno"`
+	CodeVersion      string    `db:"sha1"`
+	Context          *string   `db:"context"`
+	ConversationType string    `db:"conversation_type"`
+	CreatedAt        time.Time `db:"created_at"`
+	UpdatedAt        time.Time `db:"updated_at"`
+}
+
+func (r conversationRow) toConversation() critic.Conversation {
+	conv := critic.Conversation{
+		UUID:        r.UUID,
+		FilePath:    r.FilePath,
+		LineNumber:  r.LineNumber,
+		CodeVersion: r.CodeVersion,
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
+	}
+	conv.Status = convertToCriticStatus(Status(r.Status))
+	conv.ConversationType = convertToCriticType(ConversationType(r.ConversationType))
+	if r.Context != nil {
+		conv.Context = *r.Context
+	}
+	return conv
+}
+
+// fileSummaryRow is a scan target for file summary queries.
+type fileSummaryRow struct {
+	FilePath         string `db:"file_path"`
+	UnresolvedCount  int    `db:"unresolved_count"`
+	ResolvedCount    int    `db:"resolved_count"`
+	ExplanationCount int    `db:"explanation_count"`
+	TotalCount       int    `db:"total_count"`
+}
+
+func (r fileSummaryRow) toSummary() *critic.FileConversationSummary {
+	return &critic.FileConversationSummary{
+		FilePath:              r.FilePath,
+		TotalCount:            r.TotalCount,
+		UnresolvedCount:       r.UnresolvedCount,
+		ResolvedCount:         r.ResolvedCount,
+		ExplanationCount:      r.ExplanationCount,
+		HasUnresolvedComments: r.UnresolvedCount > 0,
+		HasResolvedComments:   r.ResolvedCount > 0,
+	}
 }
 
 // DB manages the SQLite database for messages
 type DB struct {
-	db     *sql.DB
+	db     *sqlx.DB
 	dbPath string
 }
 
@@ -87,7 +139,7 @@ func New(gitRoot string) (*DB, error) {
 	dbPath := filepath.Join(criticDir, "critic.db")
 	logger.Info("Opening message database at: %s", dbPath)
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sqlx.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -205,26 +257,12 @@ func (db *DB) insertMessage(msg *Message) error {
 		INSERT INTO messages (
 			id, author, status, read_status, read_by_ai, message, file_path, lineno,
 			conversation_id, sha1, context, conversation_type, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (
+			:id, :author, :status, :read_status, :read_by_ai, :message, :file_path, :lineno,
+			:conversation_id, :sha1, :context, :conversation_type, :created_at, :updated_at
+		)
 	`
-
-	_, err := db.exec(query,
-		msg.ID,
-		string(msg.Author),
-		string(msg.Status),
-		string(msg.ReadStatus),
-		lo.Ternary(msg.ReadByAI, 1, 0),
-		msg.Message,
-		msg.FilePath,
-		msg.Lineno,
-		msg.ConversationID,
-		msg.Commit,
-		msg.Context,
-		string(msg.ConversationType),
-		msg.CreatedAt,
-		msg.UpdatedAt,
-	)
-
+	_, err := db.db.NamedExec(query, msg)
 	return err
 }
 
@@ -240,23 +278,13 @@ func (db *DB) GetMessage(id string) (*Message, error) {
 	`
 
 	var msg Message
-	var readByAI int
-
-	err := db.ask(query, []any{id},
-		&msg.ID, &msg.Author, &msg.Status, &msg.ReadStatus, &readByAI,
-		&msg.Message, &msg.FilePath, &msg.Lineno, &msg.ConversationID,
-		&msg.Commit, &msg.Context, &msg.ConversationType,
-		&msg.CreatedAt, &msg.UpdatedAt,
-	)
-
+	err := db.db.Get(&msg, query, id)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message: %w", err)
 	}
-
-	msg.ReadByAI = readByAI != 0
 	return &msg, nil
 }
 
@@ -272,7 +300,9 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 		ORDER BY created_at ASC
 	`
 
-	return all(db, query, scanMessage, conversationID)
+	var messages []*Message
+	err := db.db.Select(&messages, query, conversationID)
+	return messages, err
 }
 
 // GetUnresolvedRootMessages retrieves all unresolved root messages (not replies)
@@ -285,7 +315,8 @@ func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
 		ORDER BY file_path, lineno, created_at ASC
 	`
 
-	messages, err := all(db, query, scanMessage, string(StatusResolved))
+	var messages []*Message
+	err := db.db.Select(&messages, query, string(StatusResolved))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get unresolved messages: %w", err)
 	}
@@ -306,7 +337,9 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 		ORDER BY lineno, created_at ASC
 	`
 
-	return all(db, query, scanMessage, filePath)
+	var messages []*Message
+	err := db.db.Select(&messages, query, filePath)
+	return messages, err
 }
 
 // MarkConversationAs applies an update to a conversation (resolved, unresolved, read_by_ai)
@@ -333,7 +366,7 @@ func (db *DB) MarkConversationAs(conversationID string, update critic.Conversati
 		return fmt.Errorf("unknown conversation update: %s", update)
 	}
 
-	result, err := db.exec(query, args...)
+	result, err := db.db.Exec(query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to mark conversation as %s: %w", update, err)
 	}
@@ -363,7 +396,7 @@ func (db *DB) MarkMessageAs(messageID string, status critic.MessageReadStatus) e
 		WHERE id = ? AND author = ?
 	`
 
-	_, err := db.exec(query, dbStatus, time.Now(), messageID, string(AuthorAI))
+	_, err := db.db.Exec(query, dbStatus, time.Now(), messageID, string(AuthorAI))
 	if err != nil {
 		return fmt.Errorf("failed to mark message as %s: %w", status, err)
 	}
@@ -381,7 +414,9 @@ func (db *DB) GetFilesWithUnreadAIMessages() ([]string, error) {
 		ORDER BY file_path
 	`
 
-	return all(db, query, scanString, string(AuthorAI), string(ReadStatusUnread))
+	var files []string
+	err := db.db.Select(&files, query, string(AuthorAI), string(ReadStatusUnread))
+	return files, err
 }
 
 // UpdateMessageStatus updates the status of a message
@@ -394,7 +429,7 @@ func (db *DB) UpdateMessageStatus(id string, status Status) error {
 		WHERE id = ?
 	`
 
-	_, err := db.exec(query, string(status), time.Now(), id)
+	_, err := db.db.Exec(query, string(status), time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update message status: %w", err)
 	}
@@ -414,7 +449,7 @@ func (db *DB) UpdateMessage(id string, newMessage string) error {
 		WHERE id = ?
 	`
 
-	result, err := db.exec(query, newMessage, time.Now(), id)
+	result, err := db.db.Exec(query, newMessage, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update message: %w", err)
 	}
@@ -462,70 +497,33 @@ func (db *DB) UpsertMessage(author Author, message, filePath string, lineno int,
 // Returns 0 if the table doesn't exist or has no entry.
 func (db *DB) GetMessagesMtime() (int64, error) {
 	var mtime int64
-	err := db.ask(`SELECT mtime_msec FROM _db_mtime WHERE tablename = 'messages'`, nil, &mtime)
+	err := db.db.Get(&mtime, `SELECT mtime_msec FROM _db_mtime WHERE tablename = 'messages'`)
 	if err != nil {
 		return 0, nil
 	}
 	return mtime, nil
 }
 
-// --- scanners ---------------------------------------------------------------
-
-// scanString scans a single string column from a row.
-func scanString(rows *sql.Rows) (string, error) {
-	var s string
-	return s, rows.Scan(&s)
+// convertToCriticStatus converts messagedb.Status to critic.ConversationStatus
+func convertToCriticStatus(status Status) critic.ConversationStatus {
+	switch status {
+	case StatusResolved:
+		return critic.StatusResolved
+	case StatusInformal:
+		return critic.StatusInformal
+	case StatusArchived:
+		return critic.StatusArchived
+	default:
+		return critic.StatusUnresolved
+	}
 }
 
-// scanMessage scans a row from the messages table into a *Message.
-func scanMessage(rows *sql.Rows) (*Message, error) {
-	var msg Message
-	var readByAI int
-	err := rows.Scan(
-		&msg.ID, &msg.Author, &msg.Status, &msg.ReadStatus, &readByAI,
-		&msg.Message, &msg.FilePath, &msg.Lineno, &msg.ConversationID,
-		&msg.Commit, &msg.Context, &msg.ConversationType,
-		&msg.CreatedAt, &msg.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
+// convertToCriticType converts messagedb.ConversationType to critic.ConversationType
+func convertToCriticType(ct ConversationType) critic.ConversationType {
+	switch ct {
+	case ConversationTypeExplanation:
+		return critic.TypeExplanation
+	default:
+		return critic.TypeConversation
 	}
-	msg.ReadByAI = readByAI != 0
-	return &msg, nil
-}
-
-// scanFileSummary scans a file conversation summary row.
-func scanFileSummary(rows *sql.Rows) (*critic.FileConversationSummary, error) {
-	var filePath string
-	var unresolvedCount, resolvedCount, explanationCount, totalCount int
-	if err := rows.Scan(&filePath, &unresolvedCount, &resolvedCount, &explanationCount, &totalCount); err != nil {
-		return nil, err
-	}
-	return &critic.FileConversationSummary{
-		FilePath:              filePath,
-		TotalCount:            totalCount,
-		UnresolvedCount:       unresolvedCount,
-		ResolvedCount:         resolvedCount,
-		ExplanationCount:      explanationCount,
-		HasUnresolvedComments: unresolvedCount > 0,
-		HasResolvedComments:   resolvedCount > 0,
-	}, nil
-}
-
-// scanConversation scans a conversation row (from the messages table with conversation-level columns).
-func scanConversation(rows *sql.Rows) (critic.Conversation, error) {
-	var conv critic.Conversation
-	var status string
-	var convType string
-	var context *string
-	err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &context, &convType, &conv.CreatedAt, &conv.UpdatedAt)
-	if err != nil {
-		return conv, err
-	}
-	conv.Status = convertToCriticStatus(Status(status))
-	conv.ConversationType = convertToCriticType(ConversationType(convType))
-	if context != nil {
-		conv.Context = *context
-	}
-	return conv, nil
 }

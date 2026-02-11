@@ -47,9 +47,15 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 		return nil, fmt.Errorf("invalid status: %s", status)
 	}
 
-	conversations, err := all(db, query, scanConversation, args...)
+	var rows []conversationRow
+	err := db.db.Select(&rows, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversations: %w", err)
+	}
+
+	conversations := make([]critic.Conversation, len(rows))
+	for i, row := range rows {
+		conversations[i] = row.toConversation()
 	}
 
 	logger.Debug("Found %d conversations (status: %s)", len(conversations), status)
@@ -141,13 +147,16 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 		ORDER BY file_path
 	`
 
-	summaries, err := all(db, query, scanFileSummary)
+	var rows []fileSummaryRow
+	err := db.db.Select(&rows, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query file summaries: %w", err)
 	}
 
-	summaryMap := make(map[string]*critic.FileConversationSummary, len(summaries))
-	for i := range summaries {
+	summaries := make([]*critic.FileConversationSummary, len(rows))
+	summaryMap := make(map[string]*critic.FileConversationSummary, len(rows))
+	for i, row := range rows {
+		summaries[i] = row.toSummary()
 		summaryMap[summaries[i].FilePath] = summaries[i]
 	}
 
@@ -159,7 +168,8 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 		GROUP BY file_path
 	`
 
-	unreadFiles, err := all(db, unreadQuery, scanString)
+	var unreadFiles []string
+	err = db.db.Select(&unreadFiles, unreadQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread AI messages: %w", err)
 	}
@@ -292,11 +302,11 @@ func (db *DB) CreateExplanation(author critic.Author, comment, filePath string, 
 // If it doesn't exist, it creates one.
 func (db *DB) LoadRootConversation() (*critic.Conversation, error) {
 	var id string
-	err := db.ask(`
+	err := db.db.Get(&id, `
 		SELECT id FROM messages
 		WHERE file_path = '' AND lineno = 0 AND id = conversation_id
 		LIMIT 1
-	`, nil, &id)
+	`)
 	if err != nil {
 		// Not found — insert a sentinel root message.
 		id = uuid.Must(uuid.NewV7()).String()
@@ -320,28 +330,4 @@ func (db *DB) LoadRootConversation() (*critic.Conversation, error) {
 	}
 
 	return db.GetFullConversation(id)
-}
-
-// convertToCriticStatus converts messagedb.Status to critic.ConversationStatus
-func convertToCriticStatus(status Status) critic.ConversationStatus {
-	switch status {
-	case StatusResolved:
-		return critic.StatusResolved
-	case StatusInformal:
-		return critic.StatusInformal
-	case StatusArchived:
-		return critic.StatusArchived
-	default:
-		return critic.StatusUnresolved
-	}
-}
-
-// convertToCriticType converts messagedb.ConversationType to critic.ConversationType
-func convertToCriticType(ct ConversationType) critic.ConversationType {
-	switch ct {
-	case ConversationTypeExplanation:
-		return critic.TypeExplanation
-	default:
-		return critic.TypeConversation
-	}
 }
