@@ -21,7 +21,6 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 	var args []interface{}
 
 	if status == "" {
-		// Get all root messages (conversations)
 		query = `
 			SELECT id, status, file_path, lineno, sha1, context, conversation_type, created_at, updated_at
 			FROM messages
@@ -29,7 +28,6 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 			ORDER BY file_path, lineno, created_at ASC
 		`
 	} else if status == string(critic.StatusUnresolved) {
-		// Get unresolved conversations
 		query = `
 			SELECT id, status, file_path, lineno, sha1, context, conversation_type, created_at, updated_at
 			FROM messages
@@ -38,7 +36,6 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 		`
 		args = []interface{}{string(StatusResolved)}
 	} else if status == string(critic.StatusResolved) {
-		// Get resolved conversations
 		query = `
 			SELECT id, status, file_path, lineno, sha1, context, conversation_type, created_at, updated_at
 			FROM messages
@@ -50,27 +47,9 @@ func (db *DB) GetConversations(status string) ([]critic.Conversation, error) {
 		return nil, fmt.Errorf("invalid status: %s", status)
 	}
 
-	rows, err := db.query(query, args...)
+	conversations, err := all(db, query, scanConversation, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversations: %w", err)
-	}
-	defer rows.Close()
-
-	var conversations []critic.Conversation
-	for rows.Next() {
-		var conv critic.Conversation
-		var status string
-		var convType string
-		var context *string
-		if err := rows.Scan(&conv.UUID, &status, &conv.FilePath, &conv.LineNumber, &conv.CodeVersion, &context, &convType, &conv.CreatedAt, &conv.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan conversation: %w", err)
-		}
-		conv.Status = convertToCriticStatus(Status(status))
-		conv.ConversationType = convertToCriticType(ConversationType(convType))
-		if context != nil {
-			conv.Context = *context
-		}
-		conversations = append(conversations, conv)
 	}
 
 	logger.Debug("Found %d conversations (status: %s)", len(conversations), status)
@@ -149,7 +128,6 @@ func (db *DB) GetConversationsForFile(filePath string) ([]*critic.Conversation, 
 
 // GetConversationsSummary returns summaries for all files that have conversations
 func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, error) {
-	// Query to get summaries for all files that have conversations
 	query := `
 		SELECT
 			file_path,
@@ -163,58 +141,33 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 		ORDER BY file_path
 	`
 
-	rows, err := db.query(query)
+	summaries, err := all(db, query, scanFileSummary)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query file summaries: %w", err)
 	}
-	defer rows.Close()
 
-	summaryMap := make(map[string]*critic.FileConversationSummary)
-	for rows.Next() {
-		var filePath string
-		var unresolvedCount, resolvedCount, explanationCount, totalCount int
-		if err := rows.Scan(&filePath, &unresolvedCount, &resolvedCount, &explanationCount, &totalCount); err != nil {
-			return nil, fmt.Errorf("failed to scan file summary: %w", err)
-		}
-		summaryMap[filePath] = &critic.FileConversationSummary{
-			FilePath:              filePath,
-			TotalCount:            totalCount,
-			UnresolvedCount:       unresolvedCount,
-			ResolvedCount:         resolvedCount,
-			ExplanationCount:      explanationCount,
-			HasUnresolvedComments: unresolvedCount > 0,
-			HasResolvedComments:   resolvedCount > 0,
-		}
+	summaryMap := make(map[string]*critic.FileConversationSummary, len(summaries))
+	for i := range summaries {
+		summaryMap[summaries[i].FilePath] = summaries[i]
 	}
 
 	// Check for unread AI messages per file
 	unreadQuery := `
-		SELECT file_path, COUNT(*) as unread_count
+		SELECT file_path
 		FROM messages
 		WHERE author = 'ai' AND read_status = 'unread'
 		GROUP BY file_path
 	`
-	unreadRows, err := db.query(unreadQuery)
+
+	unreadFiles, err := all(db, unreadQuery, scanString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread AI messages: %w", err)
 	}
-	defer unreadRows.Close()
 
-	for unreadRows.Next() {
-		var filePath string
-		var unreadCount int
-		if err := unreadRows.Scan(&filePath, &unreadCount); err != nil {
-			return nil, fmt.Errorf("failed to scan unread count: %w", err)
-		}
-		if summary, ok := summaryMap[filePath]; ok && unreadCount > 0 {
+	for _, filePath := range unreadFiles {
+		if summary, ok := summaryMap[filePath]; ok {
 			summary.HasUnreadAIMessages = true
 		}
-	}
-
-	// Convert map to slice
-	summaries := make([]*critic.FileConversationSummary, 0, len(summaryMap))
-	for _, summary := range summaryMap {
-		summaries = append(summaries, summary)
 	}
 
 	logger.Debug("Found conversation summaries for %d files", len(summaries))
@@ -338,16 +291,12 @@ func (db *DB) CreateExplanation(author critic.Author, comment, filePath string, 
 // LoadRootConversation returns the root conversation (filePath="", lineNumber=0).
 // If it doesn't exist, it creates one.
 func (db *DB) LoadRootConversation() (*critic.Conversation, error) {
-	// Query for a conversation with file_path="" AND lineno=0 AND id=conversation_id (root message)
-	query := `
+	var id string
+	err := db.ask(`
 		SELECT id FROM messages
 		WHERE file_path = '' AND lineno = 0 AND id = conversation_id
 		LIMIT 1
-	`
-	var id string
-	err := logRuntime(query, func() error {
-		return db.db.QueryRow(query).Scan(&id)
-	})
+	`, nil, &id)
 	if err != nil {
 		// Not found — insert a sentinel root message.
 		id = uuid.Must(uuid.NewV7()).String()
