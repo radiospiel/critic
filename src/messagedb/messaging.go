@@ -25,7 +25,7 @@ var _ critic.Messaging = (*DB)(nil)
 // If status is empty, returns all conversations
 // If paths is provided, filters to conversations in those file paths
 func (db *DB) GetConversations(status string, paths []string) ([]*critic.Conversation, error) {
-	conditions := []string{"id = conversation_id"}
+	var conditions []string
 	var args []interface{}
 
 	if status == string(critic.StatusUnresolved) {
@@ -47,23 +47,27 @@ func (db *DB) GetConversations(status string, paths []string) ([]*critic.Convers
 		args = append(args, inArgs...)
 	}
 
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + joinConditions(conditions)
+	}
+
 	query := fmt.Sprintf(`
-		SELECT id, status, file_path, lineno, sha1, context, conversation_type, created_at, updated_at
-		FROM messages
-		WHERE %s
+		SELECT * FROM conversations
+		%s
 		ORDER BY file_path, lineno, created_at ASC
-	`, joinConditions(conditions))
+	`, whereClause)
 
 	query = db.db.Rebind(query)
-	var rows []conversationRow
+	var rows []ConversationRecord
 	err := db.db.Select(&rows, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversations: %w", err)
 	}
 
 	conversations := make([]*critic.Conversation, len(rows))
-	for i, row := range rows {
-		conv := row.toConversation()
+	for i := range rows {
+		conv := rows[i].toConversation()
 		conversations[i] = &conv
 	}
 
@@ -78,63 +82,59 @@ func (db *DB) GetFullConversations(uuids []string) ([]*critic.Conversation, erro
 		return nil, nil
 	}
 
-	query, args, err := sqlx.In(`
-		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
-		       conversation_id, sha1, context, conversation_type, created_at, updated_at
-		FROM messages
+	// Fetch conversation records
+	convQuery, convArgs, err := sqlx.In(`SELECT * FROM conversations WHERE id IN (?)`, uuids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build conversations query: %w", err)
+	}
+	convQuery = db.db.Rebind(convQuery)
+
+	var convRows []ConversationRecord
+	if err := db.db.Select(&convRows, convQuery, convArgs...); err != nil {
+		return nil, fmt.Errorf("failed to batch-fetch conversations: %w", err)
+	}
+
+	convMap := make(map[string]*ConversationRecord, len(convRows))
+	for i := range convRows {
+		convMap[convRows[i].ID] = &convRows[i]
+	}
+
+	// Fetch all messages for these conversations
+	msgQuery, msgArgs, err := sqlx.In(`
+		SELECT * FROM messages
 		WHERE conversation_id IN (?)
 		ORDER BY conversation_id, created_at ASC
 	`, uuids)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build batch query: %w", err)
+		return nil, fmt.Errorf("failed to build messages query: %w", err)
 	}
-	query = db.db.Rebind(query)
+	msgQuery = db.db.Rebind(msgQuery)
 
-	var messages []*Message
-	if err := db.db.Select(&messages, query, args...); err != nil {
-		return nil, fmt.Errorf("failed to batch-fetch conversations: %w", err)
+	var messages []*MessageRecord
+	if err := db.db.Select(&messages, msgQuery, msgArgs...); err != nil {
+		return nil, fmt.Errorf("failed to batch-fetch messages: %w", err)
 	}
 
 	// Group messages by conversation_id
-	grouped := make(map[string][]*Message)
+	grouped := make(map[string][]*MessageRecord)
 	for _, msg := range messages {
 		grouped[msg.ConversationID] = append(grouped[msg.ConversationID], msg)
 	}
 
 	// Build conversations preserving requested order
 	conversations := make([]*critic.Conversation, 0, len(uuids))
-	for _, uuid := range uuids {
-		msgs, ok := grouped[uuid]
-		if !ok || len(msgs) == 0 {
+	for _, id := range uuids {
+		convRec, ok := convMap[id]
+		if !ok {
 			continue
 		}
 
-		rootMsg := msgs[0]
-		criticMessages := make([]critic.Message, len(msgs))
-		for i, msg := range msgs {
-			criticMessages[i] = critic.Message{
-				UUID:      msg.ID,
-				Author:    critic.Author(msg.Author),
-				Message:   msg.Message,
-				CreatedAt: msg.CreatedAt,
-				UpdatedAt: msg.UpdatedAt,
-				IsUnread:  msg.ReadStatus == ReadStatusUnread,
-			}
+		conv := convRec.toConversation()
+		if msgs, ok := grouped[id]; ok {
+			conv.Messages = toCriticMessages(msgs)
 		}
 
-		conversations = append(conversations, &critic.Conversation{
-			UUID:             rootMsg.ID,
-			Status:           convertToCriticStatus(rootMsg.Status),
-			ConversationType: convertToCriticType(rootMsg.ConversationType),
-			FilePath:         rootMsg.FilePath,
-			LineNumber:       rootMsg.Lineno,
-			CodeVersion:      rootMsg.Commit,
-			Context:          rootMsg.Context,
-			Messages:         criticMessages,
-			CreatedAt:        rootMsg.CreatedAt,
-			UpdatedAt:        rootMsg.UpdatedAt,
-			ReadByAI:         rootMsg.ReadByAI,
-		})
+		conversations = append(conversations, &conv)
 	}
 
 	logger.Debug("Batch-fetched %d conversations", len(conversations))
@@ -144,65 +144,40 @@ func (db *DB) GetFullConversations(uuids []string) ([]*critic.Conversation, erro
 // GetFullConversation returns the complete conversation including all replies
 // Messages are ordered by created_at (root message first, then replies in chronological order)
 func (db *DB) GetFullConversation(conversationID string) (*critic.Conversation, error) {
-	// Get all messages in the conversation
+	convRec, err := db.getConversation(conversationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation: %w", err)
+	}
+	if convRec == nil {
+		return nil, fmt.Errorf("conversation not found: %s", conversationID)
+	}
+
 	messages, err := db.GetThreadMessages(conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation messages: %w", err)
 	}
 
-	if len(messages) == 0 {
-		return nil, fmt.Errorf("conversation not found: %s", conversationID)
-	}
+	conv := convRec.toConversation()
+	conv.Messages = toCriticMessages(messages)
 
-	// First message is the root
-	rootMsg := messages[0]
-
-	// Convert messages to critic.Message type
-	criticMessages := make([]critic.Message, len(messages))
-	for i, msg := range messages {
-		criticMessages[i] = critic.Message{
-			UUID:      msg.ID,
-			Author:    critic.Author(msg.Author),
-			Message:   msg.Message,
-			CreatedAt: msg.CreatedAt,
-			UpdatedAt: msg.UpdatedAt,
-			IsUnread:  msg.ReadStatus == ReadStatusUnread,
-		}
-	}
-
-	conversation := &critic.Conversation{
-		UUID:             rootMsg.ID,
-		Status:           convertToCriticStatus(rootMsg.Status),
-		ConversationType: convertToCriticType(rootMsg.ConversationType),
-		FilePath:         rootMsg.FilePath,
-		LineNumber:       rootMsg.Lineno,
-		CodeVersion:      rootMsg.Commit,
-		Context:          rootMsg.Context,
-		Messages:         criticMessages,
-		CreatedAt:        rootMsg.CreatedAt,
-		UpdatedAt:        rootMsg.UpdatedAt,
-		ReadByAI:         rootMsg.ReadByAI,
-	}
-
-	logger.Debug("Retrieved conversation %s with %d messages", conversationID, len(criticMessages))
-	return conversation, nil
+	logger.Debug("Retrieved conversation %s with %d messages", conversationID, len(conv.Messages))
+	return &conv, nil
 }
 
 // GetConversationsForFile returns all conversations for a specific file
 func (db *DB) GetConversationsForFile(filePath string) ([]*critic.Conversation, error) {
-	// Get all root messages for this file
-	rootMessages, err := db.GetMessagesByFile(filePath)
+	roots, err := db.GetConversationsByFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get messages by file: %w", err)
+		return nil, fmt.Errorf("failed to get conversations by file: %w", err)
 	}
 
-	preconditions.Check(rootMessages != nil, "rootMessages cannot be nil")
-	// Build full conversations for each root message
-	conversations := make([]*critic.Conversation, 0, len(rootMessages))
-	for _, rootMsg := range rootMessages {
-		conv, err := db.GetFullConversation(rootMsg.ID)
+	preconditions.Check(roots != nil, "roots cannot be nil")
+
+	conversations := make([]*critic.Conversation, 0, len(roots))
+	for _, root := range roots {
+		conv, err := db.GetFullConversation(root.ID)
 		if err != nil {
-			logger.Warn("Failed to get conversation %s: %v", rootMsg.ID, err)
+			logger.Warn("Failed to get conversation %s: %v", root.ID, err)
 			continue
 		}
 		conversations = append(conversations, conv)
@@ -220,8 +195,7 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 			SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved_count,
 			SUM(CASE WHEN conversation_type = 'explanation' THEN 1 ELSE 0 END) as explanation_count,
 			COUNT(*) as total_count
-		FROM messages
-		WHERE id = conversation_id
+		FROM conversations
 		GROUP BY file_path
 		ORDER BY file_path
 	`
@@ -239,12 +213,12 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 		summaryMap[summaries[i].FilePath] = summaries[i]
 	}
 
-	// Check for unread AI messages per file
+	// Check for unread AI messages per file (needs join)
 	unreadQuery := `
-		SELECT file_path
-		FROM messages
-		WHERE author = 'ai' AND read_status = 'unread'
-		GROUP BY file_path
+		SELECT DISTINCT c.file_path
+		FROM messages m
+		JOIN conversations c ON m.conversation_id = c.id
+		WHERE m.author = 'ai' AND m.read_status = 'unread'
 	`
 
 	var unreadFiles []string
@@ -276,11 +250,11 @@ func (db *DB) ReplyToConversation(conversationID string, message string, author 
 	}
 
 	// Verify conversation exists
-	rootMsg, err := db.GetMessage(conversationID)
+	conv, err := db.getConversation(conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation: %w", err)
 	}
-	if rootMsg == nil {
+	if conv == nil {
 		return nil, fmt.Errorf("conversation not found: %s", conversationID)
 	}
 
@@ -317,47 +291,33 @@ func (db *DB) CreateConversation(author critic.Author, message, filePath string,
 		dbConvType = ConversationTypeExplanation
 	}
 
-	rootMsg, err := db.CreateMessageWithType(dbAuthor, message, filePath, lineNumber, codeVersion, context, dbConvType)
+	convRec, msgRec, err := db.createConversationWithMessage(dbAuthor, message, filePath, lineNumber, codeVersion, context, dbConvType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create %s: %w", conversationType, err)
 	}
 
 	// Explanations get informal status instead of the default unresolved
 	if conversationType == critic.TypeExplanation {
-		if err := db.UpdateMessageStatus(rootMsg.ID, StatusInformal); err != nil {
+		if err := db.UpdateConversationStatus(convRec.ID, StatusInformal); err != nil {
 			return nil, fmt.Errorf("failed to set explanation status: %w", err)
 		}
+		convRec.Status = StatusInformal
 	}
 
-	conversation := &critic.Conversation{
-		UUID:             rootMsg.ID,
-		Status:           convertToCriticStatus(rootMsg.Status),
-		ConversationType: convertToCriticType(rootMsg.ConversationType),
-		FilePath:         rootMsg.FilePath,
-		LineNumber:       rootMsg.Lineno,
-		CodeVersion:      rootMsg.Commit,
-		Context:          rootMsg.Context,
-		Messages: []critic.Message{
-			{
-				UUID:      rootMsg.ID,
-				Author:    critic.Author(rootMsg.Author),
-				Message:   rootMsg.Message,
-				CreatedAt: rootMsg.CreatedAt,
-				UpdatedAt: rootMsg.UpdatedAt,
-				IsUnread:  rootMsg.ReadStatus == ReadStatusUnread,
-			},
+	conversation := convRec.toConversation()
+	conversation.Messages = []critic.Message{
+		{
+			UUID:      msgRec.ID,
+			Author:    critic.Author(msgRec.Author),
+			Message:   msgRec.Message,
+			CreatedAt: msgRec.CreatedAt,
+			UpdatedAt: msgRec.UpdatedAt,
+			IsUnread:  msgRec.ReadStatus == ReadStatusUnread,
 		},
-		CreatedAt: rootMsg.CreatedAt,
-		UpdatedAt: rootMsg.UpdatedAt,
-	}
-
-	// Re-read status after potential update
-	if conversationType == critic.TypeExplanation {
-		conversation.Status = critic.StatusInformal
 	}
 
 	logger.Info("Created %s %s at %s:%d", conversationType, conversation.UUID, filePath, lineNumber)
-	return conversation, nil
+	return &conversation, nil
 }
 
 // LoadRootConversation returns the root conversation (filePath="", lineNumber=0).
@@ -365,31 +325,57 @@ func (db *DB) CreateConversation(author critic.Author, message, filePath string,
 func (db *DB) LoadRootConversation() (*critic.Conversation, error) {
 	var id string
 	err := db.db.Get(&id, `
-		SELECT id FROM messages
-		WHERE file_path = '' AND lineno = 0 AND id = conversation_id
+		SELECT id FROM conversations
+		WHERE file_path = '' AND lineno = 0
 		LIMIT 1
 	`)
 	if err != nil {
-		// Not found — insert a sentinel root message.
+		// Not found — insert a sentinel conversation + message.
 		id = uuid.Must(uuid.NewV7()).String()
 		now := time.Now()
-		msg := &Message{
+
+		conv := &ConversationRecord{
+			ID:               id,
+			Status:           StatusNew,
+			FilePath:         "",
+			Lineno:           0,
+			ConversationType: ConversationTypeConversation,
+			CreatedAt:        now,
+			UpdatedAt:        now,
+		}
+		err := db.insertConversation(conv)
+		preconditions.Check(err == nil, "failed to create root conversation: %v", err)
+
+		msg := &MessageRecord{
 			ID:             id,
-			Author:         AuthorAI,
-			Status:         StatusNew,
-			ReadStatus:     ReadStatusRead,
-			Message:        "",
-			FilePath:       "",
-			Lineno:         0,
 			ConversationID: id,
+			Author:         AuthorAI,
+			Message:        "",
+			ReadStatus:     ReadStatusRead,
 			CreatedAt:      now,
 			UpdatedAt:      now,
 		}
-		err := db.insertMessage(msg)
-		preconditions.Check(err == nil, "failed to create root conversation: %v", err)
+		err = db.insertMessage(msg)
+		preconditions.Check(err == nil, "failed to create root message: %v", err)
 
 		logger.Info("Created root conversation w/id %s", id)
 	}
 
 	return db.GetFullConversation(id)
+}
+
+// toCriticMessages converts a slice of MessageRecord to critic.Message.
+func toCriticMessages(msgs []*MessageRecord) []critic.Message {
+	result := make([]critic.Message, len(msgs))
+	for i, msg := range msgs {
+		result[i] = critic.Message{
+			UUID:      msg.ID,
+			Author:    critic.Author(msg.Author),
+			Message:   msg.Message,
+			CreatedAt: msg.CreatedAt,
+			UpdatedAt: msg.UpdatedAt,
+			IsUnread:  msg.ReadStatus == ReadStatusUnread,
+		}
+	}
+	return result
 }

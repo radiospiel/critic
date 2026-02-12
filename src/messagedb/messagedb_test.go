@@ -28,29 +28,33 @@ func setupTestDB(t *testing.T) (*DB, func()) {
 	return db, cleanup
 }
 
-func TestCreateMessage(t *testing.T) {
+func TestCreateConversationWithMessage(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	msg, err := db.CreateMessage(AuthorHuman, "Test comment", "src/main.go", 42, "abc123", "context")
-	assert.NoError(t, err, "failed to create message")
+	conv, msg, err := db.createConversationWithMessage(AuthorHuman, "Test comment", "src/main.go", 42, "abc123", "context", ConversationTypeConversation)
+	assert.NoError(t, err, "failed to create conversation")
 
-	assert.NotEquals(t, msg.ID, "", "expected ID to be set")
+	assert.NotEquals(t, conv.ID, "", "expected ID to be set")
+	assert.Equals(t, conv.Status, StatusNew)
+	assert.Equals(t, conv.FilePath, "src/main.go")
+	assert.Equals(t, conv.Lineno, 42)
+	assert.Equals(t, conv.Commit, "abc123")
+	assert.Equals(t, conv.Context, "context")
+
+	assert.Equals(t, msg.ID, conv.ID, "first message should share conversation ID")
+	assert.Equals(t, msg.ConversationID, conv.ID)
 	assert.Equals(t, msg.Author, AuthorHuman)
-	assert.Equals(t, msg.Status, StatusNew)
 	assert.Equals(t, msg.ReadStatus, ReadStatusRead, "expected read_status to be read for human message")
 	assert.Equals(t, msg.Message, "Test comment")
-	assert.Equals(t, msg.FilePath, "src/main.go")
-	assert.Equals(t, msg.Lineno, 42)
-	assert.Equals(t, msg.ConversationID, msg.ID, "expected conversation_id to equal id for root message")
 }
 
-func TestCreateAIMessage(t *testing.T) {
+func TestCreateAIConversation(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	msg, err := db.CreateMessage(AuthorAI, "AI response", "src/main.go", 42, "abc123", "content")
-	assert.NoError(t, err, "failed to create AI message")
+	_, msg, err := db.createConversationWithMessage(AuthorAI, "AI response", "src/main.go", 42, "abc123", "content", ConversationTypeConversation)
+	assert.NoError(t, err, "failed to create AI conversation")
 	assert.Equals(t, msg.Author, AuthorAI)
 	assert.Equals(t, msg.ReadStatus, ReadStatusUnread, "expected read_status to be unread for AI message")
 }
@@ -59,25 +63,23 @@ func TestCreateReply(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// Create parent message
-	parent, err := db.CreateMessage(AuthorHuman, "Parent comment", "src/main.go", 42, "abc123", "conent")
-	assert.NoError(t, err, "failed to create parent message")
+	// Create parent conversation
+	conv, _, err := db.createConversationWithMessage(AuthorHuman, "Parent comment", "src/main.go", 42, "abc123", "content", ConversationTypeConversation)
+	assert.NoError(t, err, "failed to create parent conversation")
 
 	// Create reply
-	reply, err := db.CreateReply(AuthorAI, "AI reply", parent.ID)
+	reply, err := db.CreateReply(AuthorAI, "AI reply", conv.ID)
 	assert.NoError(t, err, "failed to create reply")
 
-	assert.Equals(t, reply.ConversationID, parent.ID)
-	assert.Equals(t, reply.FilePath, parent.FilePath)
-	assert.Equals(t, reply.Lineno, parent.Lineno)
+	assert.Equals(t, reply.ConversationID, conv.ID)
 }
 
 func TestGetMessage(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	created, err := db.CreateMessage(AuthorHuman, "Test comment", "src/main.go", 42, "abc123", "content")
-	assert.NoError(t, err, "failed to create message")
+	_, created, err := db.createConversationWithMessage(AuthorHuman, "Test comment", "src/main.go", 42, "abc123", "content", ConversationTypeConversation)
+	assert.NoError(t, err, "failed to create conversation")
 
 	retrieved, err := db.GetMessage(created.ID)
 	assert.NoError(t, err, "failed to get message")
@@ -95,103 +97,99 @@ func TestGetThreadMessages(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// Create parent message
-	parent, err := db.CreateMessage(AuthorHuman, "Parent comment", "src/main.go", 42, "abc123", "content")
+	// Create parent conversation
+	conv, parentMsg, err := db.createConversationWithMessage(AuthorHuman, "Parent comment", "src/main.go", 42, "abc123", "content", ConversationTypeConversation)
 	assert.NoError(t, err, "failed to create parent")
 
 	// Create replies
-	reply1, err := db.CreateReply(AuthorAI, "AI reply 1", parent.ID)
+	reply1, err := db.CreateReply(AuthorAI, "AI reply 1", conv.ID)
 	assert.NoError(t, err, "failed to create reply 1")
 
-	reply2, err := db.CreateReply(AuthorHuman, "Human reply 2", parent.ID)
+	reply2, err := db.CreateReply(AuthorHuman, "Human reply 2", conv.ID)
 	assert.NoError(t, err, "failed to create reply 2")
 
 	// Get thread
-	thread, err := db.GetThreadMessages(parent.ID)
+	thread, err := db.GetThreadMessages(conv.ID)
 	assert.NoError(t, err, "failed to get thread")
 	assert.Equals(t, len(thread), 3, "expected 3 messages in thread")
 
 	// Check order (should be by created_at)
-	assert.Equals(t, thread[0].ID, parent.ID, "expected first message to be parent")
+	assert.Equals(t, thread[0].ID, parentMsg.ID, "expected first message to be parent")
 	assert.Equals(t, thread[1].ID, reply1.ID, "expected second message to be reply1")
 	assert.Equals(t, thread[2].ID, reply2.ID, "expected third message to be reply2")
 }
 
-func TestGetUnresolvedRootMessages(t *testing.T) {
+func TestGetUnresolvedConversations(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// Create some messages
-	msg1, _ := db.CreateMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123", "content")
-	msg2, _ := db.CreateMessage(AuthorHuman, "Comment 2", "src/main.go", 20, "abc123", "content")
-	msg3, _ := db.CreateMessage(AuthorHuman, "Comment 3", "src/util.go", 5, "abc123", "content")
+	// Create some conversations
+	conv1, _, _ := db.createConversationWithMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
+	conv2, _, _ := db.createConversationWithMessage(AuthorHuman, "Comment 2", "src/main.go", 20, "abc123", "content", ConversationTypeConversation)
+	conv3, _, _ := db.createConversationWithMessage(AuthorHuman, "Comment 3", "src/util.go", 5, "abc123", "content", ConversationTypeConversation)
 
-	// Create a reply (should not appear in root messages)
-	db.CreateReply(AuthorAI, "Reply to msg1", msg1.ID)
+	// Create a reply (should not appear in conversations)
+	db.CreateReply(AuthorAI, "Reply to conv1", conv1.ID)
 
-	// Mark msg2 as resolved
-	db.MarkConversationAs(msg2.ID, critic.ConversationResolved)
+	// Mark conv2 as resolved
+	db.MarkConversationAs(conv2.ID, critic.ConversationResolved)
 
 	// Get unresolved
-	unresolved, err := db.GetUnresolvedRootMessages()
+	unresolved, err := db.GetUnresolvedConversations()
 	assert.NoError(t, err, "failed to get unresolved")
-	assert.Equals(t, len(unresolved), 2, "expected 2 unresolved messages")
+	assert.Equals(t, len(unresolved), 2, "expected 2 unresolved conversations")
 
-	// Should be msg1 and msg3 (not msg2 which is resolved)
-	uuids := []string{unresolved[0].ID, unresolved[1].ID}
-	assert.Contains(t, uuids, msg1.ID, "expected msg1 in unresolved messages")
-	assert.Contains(t, uuids, msg3.ID, "expected msg3 in unresolved messages")
+	// Should be conv1 and conv3 (not conv2 which is resolved)
+	ids := []string{unresolved[0].ID, unresolved[1].ID}
+	assert.Contains(t, ids, conv1.ID, "expected conv1 in unresolved conversations")
+	assert.Contains(t, ids, conv3.ID, "expected conv3 in unresolved conversations")
 }
 
-func TestGetMessagesByFile(t *testing.T) {
+func TestGetConversationsByFile(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// Create messages in different files
-	msg1, _ := db.CreateMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123", "content")
-	msg2, _ := db.CreateMessage(AuthorHuman, "Comment 2", "src/main.go", 20, "abc123", "content")
-	db.CreateMessage(AuthorHuman, "Comment 3", "src/util.go", 5, "abc123", "content")
+	// Create conversations in different files
+	conv1, _, _ := db.createConversationWithMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
+	conv2, _, _ := db.createConversationWithMessage(AuthorHuman, "Comment 2", "src/main.go", 20, "abc123", "content", ConversationTypeConversation)
+	db.createConversationWithMessage(AuthorHuman, "Comment 3", "src/util.go", 5, "abc123", "content", ConversationTypeConversation)
 
-	// Create a reply (should not appear)
-	db.CreateReply(AuthorAI, "Reply", msg1.ID)
+	// Create a reply (should not affect conversation count)
+	db.CreateReply(AuthorAI, "Reply", conv1.ID)
 
-	// Get messages for src/main.go
-	messages, err := db.GetMessagesByFile("src/main.go")
-	assert.NoError(t, err, "failed to get messages by file")
-	assert.Equals(t, len(messages), 2, "expected 2 messages for src/main.go")
+	// Get conversations for src/main.go
+	conversations, err := db.GetConversationsByFile("src/main.go")
+	assert.NoError(t, err, "failed to get conversations by file")
+	assert.Equals(t, len(conversations), 2, "expected 2 conversations for src/main.go")
 
 	// Should be ordered by line number
-	assert.Equals(t, messages[0].ID, msg1.ID, "expected msg1 to be first (line 10)")
-	assert.Equals(t, messages[1].ID, msg2.ID, "expected msg2 to be second (line 20)")
+	assert.Equals(t, conversations[0].ID, conv1.ID, "expected conv1 to be first (line 10)")
+	assert.Equals(t, conversations[1].ID, conv2.ID, "expected conv2 to be second (line 20)")
 }
 
 func TestMarkConversationAsResolved(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// Create parent and replies
-	parent, _ := db.CreateMessage(AuthorHuman, "Parent", "src/main.go", 10, "abc123", "content")
-	reply, _ := db.CreateReply(AuthorAI, "Reply", parent.ID)
+	// Create conversation with a reply
+	conv, _, _ := db.createConversationWithMessage(AuthorHuman, "Parent", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
+	db.CreateReply(AuthorAI, "Reply", conv.ID)
 
 	// Mark as resolved
-	err := db.MarkConversationAs(parent.ID, critic.ConversationResolved)
+	err := db.MarkConversationAs(conv.ID, critic.ConversationResolved)
 	assert.NoError(t, err, "failed to mark as resolved")
 
-	// Check parent
-	parentAfter, _ := db.GetMessage(parent.ID)
-	assert.Equals(t, parentAfter.Status, StatusResolved)
-
-	// Check reply (should also be resolved)
-	replyAfter, _ := db.GetMessage(reply.ID)
-	assert.Equals(t, replyAfter.Status, StatusResolved)
+	// Check conversation record
+	convAfter, _ := db.getConversation(conv.ID)
+	assert.Equals(t, convAfter.Status, StatusResolved)
 }
 
 func TestMarkMessageAsRead(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// Create AI message (should be unread by default)
-	msg, _ := db.CreateMessage(AuthorAI, "AI comment", "src/main.go", 10, "abc123", "content")
+	// Create AI conversation (message should be unread by default)
+	_, msg, _ := db.createConversationWithMessage(AuthorAI, "AI comment", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
 	assert.Equals(t, msg.ReadStatus, ReadStatusUnread, "expected AI message to be unread initially")
 
 	// Mark as read
@@ -207,15 +205,16 @@ func TestGetFilesWithUnreadAIMessages(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// Create some AI messages
-	db.CreateMessage(AuthorAI, "AI comment 1", "src/main.go", 10, "abc123", "content")
-	msg2, _ := db.CreateMessage(AuthorAI, "AI comment 2", "src/util.go", 20, "abc123", "content")
-	db.CreateMessage(AuthorAI, "AI comment 3", "src/main.go", 30, "abc123", "content")
+	// Create some AI conversations
+	db.createConversationWithMessage(AuthorAI, "AI comment 1", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
+	conv2, msg2, _ := db.createConversationWithMessage(AuthorAI, "AI comment 2", "src/util.go", 20, "abc123", "content", ConversationTypeConversation)
+	db.createConversationWithMessage(AuthorAI, "AI comment 3", "src/main.go", 30, "abc123", "content", ConversationTypeConversation)
 
-	// Create human message (should not affect result)
-	db.CreateMessage(AuthorHuman, "Human comment", "src/test.go", 5, "abc123", "content")
+	// Create human conversation (should not affect result)
+	db.createConversationWithMessage(AuthorHuman, "Human comment", "src/test.go", 5, "abc123", "content", ConversationTypeConversation)
 
 	// Mark one as read
+	_ = conv2 // suppress unused warning
 	db.MarkMessageAs(msg2.ID, critic.MessageRead)
 
 	// Get files with unread
@@ -227,17 +226,17 @@ func TestGetFilesWithUnreadAIMessages(t *testing.T) {
 	assert.Equals(t, files[0], "src/main.go")
 }
 
-func TestUpdateMessageStatus(t *testing.T) {
+func TestUpdateConversationStatus(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	msg, _ := db.CreateMessage(AuthorHuman, "Comment", "src/main.go", 10, "abc123", "content")
+	conv, _, _ := db.createConversationWithMessage(AuthorHuman, "Comment", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
 
-	err := db.UpdateMessageStatus(msg.ID, StatusDelivered)
+	err := db.UpdateConversationStatus(conv.ID, StatusDelivered)
 	assert.NoError(t, err, "failed to update status")
 
-	msgAfter, _ := db.GetMessage(msg.ID)
-	assert.Equals(t, msgAfter.Status, StatusDelivered)
+	convAfter, _ := db.getConversation(conv.ID)
+	assert.Equals(t, convAfter.Status, StatusDelivered)
 }
 
 func TestGetConversationsReturnsOnlyTopLevel(t *testing.T) {
@@ -245,9 +244,9 @@ func TestGetConversationsReturnsOnlyTopLevel(t *testing.T) {
 	defer cleanup()
 
 	// Create three root conversations
-	conv1, _ := db.CreateMessage(AuthorHuman, "Conversation 1", "src/main.go", 10, "abc123", "content")
-	conv2, _ := db.CreateMessage(AuthorHuman, "Conversation 2", "src/main.go", 20, "abc123", "content")
-	conv3, _ := db.CreateMessage(AuthorHuman, "Conversation 3", "src/util.go", 5, "abc123", "content")
+	conv1, _, _ := db.createConversationWithMessage(AuthorHuman, "Conversation 1", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
+	conv2, _, _ := db.createConversationWithMessage(AuthorHuman, "Conversation 2", "src/main.go", 20, "abc123", "content", ConversationTypeConversation)
+	conv3, _, _ := db.createConversationWithMessage(AuthorHuman, "Conversation 3", "src/util.go", 5, "abc123", "content", ConversationTypeConversation)
 
 	// Create replies to conv1 (should NOT appear in GetConversations)
 	db.CreateReply(AuthorAI, "Reply 1 to conv1", conv1.ID)
@@ -280,9 +279,9 @@ func TestGetConversationsWithStatusFilter(t *testing.T) {
 	defer cleanup()
 
 	// Create conversations
-	conv1, _ := db.CreateMessage(AuthorHuman, "Unresolved 1", "src/main.go", 10, "abc123", "content")
-	conv2, _ := db.CreateMessage(AuthorHuman, "Unresolved 2", "src/main.go", 20, "abc123", "content")
-	conv3, _ := db.CreateMessage(AuthorHuman, "To be resolved", "src/util.go", 5, "abc123", "content")
+	conv1, _, _ := db.createConversationWithMessage(AuthorHuman, "Unresolved 1", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
+	conv2, _, _ := db.createConversationWithMessage(AuthorHuman, "Unresolved 2", "src/main.go", 20, "abc123", "content", ConversationTypeConversation)
+	conv3, _, _ := db.createConversationWithMessage(AuthorHuman, "To be resolved", "src/util.go", 5, "abc123", "content", ConversationTypeConversation)
 
 	// Add replies (should not affect conversation count)
 	db.CreateReply(AuthorAI, "Reply to conv1", conv1.ID)
@@ -314,9 +313,9 @@ func TestGetConversationsWithPathFilter(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	db.CreateMessage(AuthorHuman, "Main comment", "src/main.go", 10, "abc123", "content")
-	db.CreateMessage(AuthorHuman, "Util comment", "src/util.go", 5, "abc123", "content")
-	db.CreateMessage(AuthorHuman, "Test comment", "src/test.go", 1, "abc123", "content")
+	db.createConversationWithMessage(AuthorHuman, "Main comment", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
+	db.createConversationWithMessage(AuthorHuman, "Util comment", "src/util.go", 5, "abc123", "content", ConversationTypeConversation)
+	db.createConversationWithMessage(AuthorHuman, "Test comment", "src/test.go", 1, "abc123", "content", ConversationTypeConversation)
 
 	// Filter to single path
 	convs, err := db.GetConversations("", []string{"src/main.go"})
@@ -341,25 +340,25 @@ func TestGetFullConversations(t *testing.T) {
 	defer cleanup()
 
 	// Create conversations with replies
-	msg1, _ := db.CreateMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123", "content")
-	db.CreateReply(AuthorAI, "Reply to 1", msg1.ID)
+	conv1, _, _ := db.createConversationWithMessage(AuthorHuman, "Comment 1", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
+	db.CreateReply(AuthorAI, "Reply to 1", conv1.ID)
 
-	msg2, _ := db.CreateMessage(AuthorHuman, "Comment 2", "src/util.go", 5, "def456", "content")
-	db.CreateReply(AuthorAI, "Reply to 2a", msg2.ID)
-	db.CreateReply(AuthorHuman, "Reply to 2b", msg2.ID)
+	conv2, _, _ := db.createConversationWithMessage(AuthorHuman, "Comment 2", "src/util.go", 5, "def456", "content", ConversationTypeConversation)
+	db.CreateReply(AuthorAI, "Reply to 2a", conv2.ID)
+	db.CreateReply(AuthorHuman, "Reply to 2b", conv2.ID)
 
 	// Batch fetch
-	convs, err := db.GetFullConversations([]string{msg1.ID, msg2.ID})
+	convs, err := db.GetFullConversations([]string{conv1.ID, conv2.ID})
 	assert.NoError(t, err, "failed to batch-fetch conversations")
 	assert.Equals(t, len(convs), 2, "expected 2 conversations")
 
 	// First conversation should have 2 messages
-	assert.Equals(t, convs[0].UUID, msg1.ID)
+	assert.Equals(t, convs[0].UUID, conv1.ID)
 	assert.Equals(t, len(convs[0].Messages), 2, "expected 2 messages in first conversation")
 	assert.Equals(t, convs[0].FilePath, "src/main.go")
 
 	// Second conversation should have 3 messages
-	assert.Equals(t, convs[1].UUID, msg2.ID)
+	assert.Equals(t, convs[1].UUID, conv2.ID)
 	assert.Equals(t, len(convs[1].Messages), 3, "expected 3 messages in second conversation")
 	assert.Equals(t, convs[1].FilePath, "src/util.go")
 
@@ -373,62 +372,30 @@ func TestMarkConversationAsReadByAI(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// Create parent message and replies
-	parent, err := db.CreateMessage(AuthorHuman, "Parent comment", "src/main.go", 10, "abc123", "content")
-	assert.NoError(t, err, "failed to create parent")
-	assert.False(t, parent.ReadByAI, "expected ReadByAI to be false initially")
+	// Create conversation and replies
+	conv, _, err := db.createConversationWithMessage(AuthorHuman, "Parent comment", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
+	assert.NoError(t, err, "failed to create conversation")
+	assert.False(t, conv.ReadByAI, "expected ReadByAI to be false initially")
 
-	// Create replies
-	reply1, err := db.CreateReply(AuthorAI, "AI reply", parent.ID)
-	assert.NoError(t, err, "failed to create reply1")
-
-	reply2, err := db.CreateReply(AuthorHuman, "Human reply", parent.ID)
-	assert.NoError(t, err, "failed to create reply2")
+	db.CreateReply(AuthorAI, "AI reply", conv.ID)
+	db.CreateReply(AuthorHuman, "Human reply", conv.ID)
 
 	// Mark conversation as read by AI
-	err = db.MarkConversationAs(parent.ID, critic.ConversationReadByAI)
+	err = db.MarkConversationAs(conv.ID, critic.ConversationReadByAI)
 	assert.NoError(t, err, "failed to mark as read by AI")
 
-	// Verify all messages in conversation are marked
-	parentAfter, _ := db.GetMessage(parent.ID)
-	assert.True(t, parentAfter.ReadByAI, "expected parent to be marked as read by AI")
-
-	reply1After, _ := db.GetMessage(reply1.ID)
-	assert.True(t, reply1After.ReadByAI, "expected reply1 to be marked as read by AI")
-
-	reply2After, _ := db.GetMessage(reply2.ID)
-	assert.True(t, reply2After.ReadByAI, "expected reply2 to be marked as read by AI")
-}
-
-func TestReadByAIFieldInGetThreadMessages(t *testing.T) {
-	db, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	// Create conversation
-	parent, _ := db.CreateMessage(AuthorHuman, "Parent", "src/main.go", 10, "abc123", "content")
-	db.CreateReply(AuthorAI, "Reply", parent.ID)
-
-	// Mark as read by AI
-	db.MarkConversationAs(parent.ID, critic.ConversationReadByAI)
-
-	// Get thread messages and verify ReadByAI field
-	thread, err := db.GetThreadMessages(parent.ID)
-	assert.NoError(t, err, "failed to get thread messages")
-	assert.Equals(t, len(thread), 2, "expected 2 messages in thread")
-
-	for _, msg := range thread {
-		assert.True(t, msg.ReadByAI, "expected message %s to be marked as read by AI", msg.ID)
-	}
+	// Verify conversation record is marked
+	convAfter, _ := db.getConversation(conv.ID)
+	assert.True(t, convAfter.ReadByAI, "expected conversation to be marked as read by AI")
 }
 
 func TestReadByAIFieldDefaultsFalse(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	// Create message
-	msg, _ := db.CreateMessage(AuthorHuman, "Comment", "src/main.go", 10, "abc123", "content")
+	conv, _, _ := db.createConversationWithMessage(AuthorHuman, "Comment", "src/main.go", 10, "abc123", "content", ConversationTypeConversation)
 
 	// Verify ReadByAI defaults to false
-	retrieved, _ := db.GetMessage(msg.ID)
+	retrieved, _ := db.getConversation(conv.ID)
 	assert.False(t, retrieved.ReadByAI, "expected ReadByAI to default to false")
 }

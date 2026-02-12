@@ -85,15 +85,15 @@ Examples:
 			defer mdb.Close()
 
 			// Check if a conversation already exists at this file:line
-			rootMessages, err := mdb.GetMessagesByFile(filePath)
+			conversations, err := mdb.GetConversationsByFile(filePath)
 			if err != nil {
-				return fmt.Errorf("failed to get messages for file: %w", err)
+				return fmt.Errorf("failed to get conversations for file: %w", err)
 			}
 
 			var existingConvID string
-			for _, msg := range rootMessages {
-				if msg.Lineno == lineNumber {
-					existingConvID = msg.ID
+			for _, conv := range conversations {
+				if conv.Lineno == lineNumber {
+					existingConvID = conv.ID
 					break
 				}
 			}

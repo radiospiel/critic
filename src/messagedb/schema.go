@@ -6,7 +6,7 @@ import (
 	"github.com/radiospiel/critic/simple-go/logger"
 )
 
-const currentSchemaVersion = "5"
+const currentSchemaVersion = "6"
 
 // schema_v2 defines the v2 database schema with renamed columns and context
 var schema_v2 = `
@@ -124,6 +124,179 @@ var schema_v4_migration = `
 	END;
 `
 
+// schema_v6_initial is the complete schema for a fresh v6 database.
+// It creates separate conversations and messages tables.
+var schema_v6_initial = `
+	-- Settings table for metadata
+	CREATE TABLE IF NOT EXISTS settings (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	);
+
+	-- Conversations table for conversation-level data
+	CREATE TABLE IF NOT EXISTS conversations (
+		id TEXT PRIMARY KEY,
+		status TEXT NOT NULL CHECK(status IN ('new', 'delivered', 'resolved', 'informal')),
+		file_path TEXT NOT NULL,
+		lineno INTEGER NOT NULL,
+		sha1 TEXT NOT NULL DEFAULT '',
+		context TEXT NOT NULL DEFAULT '',
+		conversation_type TEXT NOT NULL DEFAULT 'conversation',
+		read_by_ai INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
+	);
+
+	-- Messages table for individual messages in conversations
+	CREATE TABLE IF NOT EXISTS messages (
+		id TEXT PRIMARY KEY,
+		conversation_id TEXT NOT NULL,
+		author TEXT NOT NULL CHECK(author IN ('human', 'ai')),
+		message TEXT NOT NULL,
+		read_status TEXT NOT NULL DEFAULT 'read' CHECK(read_status IN ('unread', 'read')),
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL,
+		FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+	);
+
+	-- Indexes
+	CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
+	CREATE INDEX IF NOT EXISTS idx_conversations_file_path ON conversations(file_path);
+	CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+	CREATE INDEX IF NOT EXISTS idx_messages_read_status ON messages(read_status) WHERE author = 'ai';
+
+	-- Modification time tracking table
+	CREATE TABLE IF NOT EXISTS _db_mtime (
+		tablename TEXT PRIMARY KEY,
+		mtime_msec INTEGER NOT NULL DEFAULT 0
+	);
+
+	INSERT OR IGNORE INTO _db_mtime (tablename, mtime_msec) VALUES ('messages', CAST(unixepoch('subsec') * 1000 AS INTEGER));
+
+	-- Triggers on messages table
+	CREATE TRIGGER IF NOT EXISTS _messages_insert_mtime
+	AFTER INSERT ON messages
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS _messages_update_mtime
+	AFTER UPDATE ON messages
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS _messages_delete_mtime
+	AFTER DELETE ON messages
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+
+	-- Triggers on conversations table (same _db_mtime row so DBWatcher works unchanged)
+	CREATE TRIGGER IF NOT EXISTS _conversations_insert_mtime
+	AFTER INSERT ON conversations
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS _conversations_update_mtime
+	AFTER UPDATE ON conversations
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS _conversations_delete_mtime
+	AFTER DELETE ON conversations
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+`
+
+// schema_v6_migration splits the messages table into conversations + messages.
+var schema_v6_migration = `
+	-- Create conversations table from root messages
+	CREATE TABLE conversations (
+		id TEXT PRIMARY KEY,
+		status TEXT NOT NULL CHECK(status IN ('new', 'delivered', 'resolved', 'informal')),
+		file_path TEXT NOT NULL,
+		lineno INTEGER NOT NULL,
+		sha1 TEXT NOT NULL DEFAULT '',
+		context TEXT NOT NULL DEFAULT '',
+		conversation_type TEXT NOT NULL DEFAULT 'conversation',
+		read_by_ai INTEGER NOT NULL DEFAULT 0,
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL
+	);
+
+	INSERT INTO conversations (id, status, file_path, lineno, sha1, context, conversation_type, read_by_ai, created_at, updated_at)
+	SELECT id, status, file_path, lineno, sha1, COALESCE(context, ''), conversation_type, read_by_ai, created_at, updated_at
+	FROM messages
+	WHERE id = conversation_id;
+
+	-- Recreate messages table with only message-level columns
+	CREATE TABLE messages_new (
+		id TEXT PRIMARY KEY,
+		conversation_id TEXT NOT NULL,
+		author TEXT NOT NULL CHECK(author IN ('human', 'ai')),
+		message TEXT NOT NULL,
+		read_status TEXT NOT NULL DEFAULT 'read' CHECK(read_status IN ('unread', 'read')),
+		created_at TIMESTAMP NOT NULL,
+		updated_at TIMESTAMP NOT NULL,
+		FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+	);
+
+	INSERT INTO messages_new (id, conversation_id, author, message, read_status, created_at, updated_at)
+	SELECT id, conversation_id, author, message, read_status, created_at, updated_at
+	FROM messages;
+
+	DROP TABLE messages;
+	ALTER TABLE messages_new RENAME TO messages;
+
+	-- Indexes
+	CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
+	CREATE INDEX IF NOT EXISTS idx_conversations_file_path ON conversations(file_path);
+	CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+	CREATE INDEX IF NOT EXISTS idx_messages_read_status ON messages(read_status) WHERE author = 'ai';
+
+	-- Recreate triggers on messages table (old triggers were dropped with table)
+	CREATE TRIGGER IF NOT EXISTS _messages_insert_mtime
+	AFTER INSERT ON messages
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS _messages_update_mtime
+	AFTER UPDATE ON messages
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS _messages_delete_mtime
+	AFTER DELETE ON messages
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+
+	-- Triggers on conversations table (same _db_mtime row)
+	CREATE TRIGGER IF NOT EXISTS _conversations_insert_mtime
+	AFTER INSERT ON conversations
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS _conversations_update_mtime
+	AFTER UPDATE ON conversations
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS _conversations_delete_mtime
+	AFTER DELETE ON conversations
+	BEGIN
+		UPDATE _db_mtime SET mtime_msec = CAST(unixepoch('subsec') * 1000 AS INTEGER) WHERE tablename = 'messages';
+	END;
+`
+
 // initSchema creates the database schema if it doesn't exist
 func (db *DB) initSchema() error {
 	// Check if we need to initialize
@@ -150,31 +323,11 @@ func (db *DB) initSchema() error {
 
 // createInitialSchema creates all tables and initial data for a new database
 func (db *DB) createInitialSchema() error {
-	// Create tables using schema v2 (base schema)
-	_, err := db.db.Exec(schema_v2)
+	_, err := db.db.Exec(schema_v6_initial)
 	if err != nil {
-		return fmt.Errorf("failed to create schema v2: %w", err)
+		return fmt.Errorf("failed to create schema v6: %w", err)
 	}
 
-	// Apply v3 migration (adds read_by_ai column)
-	_, err = db.db.Exec(schema_v3_migration)
-	if err != nil {
-		return fmt.Errorf("failed to apply schema v3 migration: %w", err)
-	}
-
-	// Apply v4 migration (adds _db_mtime table and triggers)
-	_, err = db.db.Exec(schema_v4_migration)
-	if err != nil {
-		return fmt.Errorf("failed to apply schema v4 migration: %w", err)
-	}
-
-	// Apply v5 migration (adds conversation_type column)
-	_, err = db.db.Exec(schema_v5_migration)
-	if err != nil {
-		return fmt.Errorf("failed to apply schema v5 migration: %w", err)
-	}
-
-	// Set schema version
 	if err := db.setSchemaVersion(currentSchemaVersion); err != nil {
 		return fmt.Errorf("failed to set schema version: %w", err)
 	}
@@ -194,6 +347,7 @@ var migrations = []migration{
 	{"2", "3", schema_v3_migration},
 	{"3", "4", schema_v4_migration},
 	{"4", "5", schema_v5_migration},
+	{"5", "6", schema_v6_migration},
 }
 
 // migrateSchema applies migrations to bring the database up to current version

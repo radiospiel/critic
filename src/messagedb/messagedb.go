@@ -24,7 +24,7 @@ const (
 	AuthorAI    Author = "ai"
 )
 
-// Status represents the state of a message
+// Status represents the state of a conversation
 type Status string
 
 const (
@@ -51,52 +51,44 @@ const (
 	ReadStatusRead   ReadStatus = "read"
 )
 
-// Message represents a comment/reply in the system
-type Message struct {
+// ConversationRecord represents a row in the conversations table.
+type ConversationRecord struct {
 	ID               string           `db:"id"`
-	Author           Author           `db:"author"`
 	Status           Status           `db:"status"`
-	ReadStatus       ReadStatus       `db:"read_status"`
-	ReadByAI         bool             `db:"read_by_ai"`
-	Message          string           `db:"message"`
 	FilePath         string           `db:"file_path"`
 	Lineno           int              `db:"lineno"`
-	ConversationID   string           `db:"conversation_id"`
 	Commit           string           `db:"sha1"`
 	Context          string           `db:"context"`
 	ConversationType ConversationType `db:"conversation_type"`
+	ReadByAI         bool             `db:"read_by_ai"`
 	CreatedAt        time.Time        `db:"created_at"`
 	UpdatedAt        time.Time        `db:"updated_at"`
 }
 
-// conversationRow is a scan target for conversation-level queries.
-type conversationRow struct {
-	UUID             string    `db:"id"`
-	Status           string    `db:"status"`
-	FilePath         string    `db:"file_path"`
-	LineNumber       int       `db:"lineno"`
-	CodeVersion      string    `db:"sha1"`
-	Context          *string   `db:"context"`
-	ConversationType string    `db:"conversation_type"`
-	CreatedAt        time.Time `db:"created_at"`
-	UpdatedAt        time.Time `db:"updated_at"`
+func (r *ConversationRecord) toConversation() critic.Conversation {
+	return critic.Conversation{
+		UUID:             r.ID,
+		Status:           convertToCriticStatus(r.Status),
+		ConversationType: convertToCriticType(r.ConversationType),
+		FilePath:         r.FilePath,
+		LineNumber:       r.Lineno,
+		CodeVersion:      r.Commit,
+		Context:          r.Context,
+		CreatedAt:        r.CreatedAt,
+		UpdatedAt:        r.UpdatedAt,
+		ReadByAI:         r.ReadByAI,
+	}
 }
 
-func (r conversationRow) toConversation() critic.Conversation {
-	conv := critic.Conversation{
-		UUID:        r.UUID,
-		FilePath:    r.FilePath,
-		LineNumber:  r.LineNumber,
-		CodeVersion: r.CodeVersion,
-		CreatedAt:   r.CreatedAt,
-		UpdatedAt:   r.UpdatedAt,
-	}
-	conv.Status = convertToCriticStatus(Status(r.Status))
-	conv.ConversationType = convertToCriticType(ConversationType(r.ConversationType))
-	if r.Context != nil {
-		conv.Context = *r.Context
-	}
-	return conv
+// MessageRecord represents a row in the messages table.
+type MessageRecord struct {
+	ID             string     `db:"id"`
+	ConversationID string     `db:"conversation_id"`
+	Author         Author     `db:"author"`
+	Message        string     `db:"message"`
+	ReadStatus     ReadStatus `db:"read_status"`
+	CreatedAt      time.Time  `db:"created_at"`
+	UpdatedAt      time.Time  `db:"updated_at"`
 }
 
 // fileSummaryRow is a scan target for file summary queries.
@@ -174,76 +166,88 @@ func (db *DB) Close() error {
 	return db.db.Close()
 }
 
-// CreateMessage creates a new root message (not a reply)
-func (db *DB) CreateMessage(author Author, message, filePath string, lineno int, commit string, context string) (*Message, error) {
-	return db.CreateMessageWithType(author, message, filePath, lineno, commit, context, ConversationTypeConversation)
-}
-
-// CreateMessageWithType creates a new root message with an explicit conversation type
-func (db *DB) CreateMessageWithType(author Author, message, filePath string, lineno int, commit string, context string, convType ConversationType) (*Message, error) {
+// createConversationWithMessage creates a new conversation and its initial message in a transaction.
+func (db *DB) createConversationWithMessage(author Author, message, filePath string, lineno int, commit string, context string, convType ConversationType) (*ConversationRecord, *MessageRecord, error) {
 	preconditions.Check(author == AuthorHuman || author == AuthorAI, "invalid author: %s", author)
 	preconditions.Check(message != "", "message must not be empty")
 	preconditions.Check(filePath != "", "filePath must not be empty")
 	preconditions.Check(lineno > 0, "lineno must be positive: %d", lineno)
 
-	id := uuid.Must(uuid.NewV7()).String()
-	msg := &Message{
-		ID:               id,
-		Author:           author,
+	now := time.Now()
+	convID := uuid.Must(uuid.NewV7()).String()
+
+	conv := &ConversationRecord{
+		ID:               convID,
 		Status:           StatusNew,
-		ReadStatus:       lo.Ternary(author == AuthorAI, ReadStatusUnread, ReadStatusRead),
-		Message:          message,
 		FilePath:         filePath,
 		Lineno:           lineno,
-		ConversationID:   id, // Root message points to itself
 		Commit:           commit,
 		Context:          context,
 		ConversationType: convType,
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 
-	err := db.insertMessage(msg)
+	msg := &MessageRecord{
+		ID:             convID, // first message shares conversation ID
+		ConversationID: convID,
+		Author:         author,
+		Message:        message,
+		ReadStatus:     lo.Ternary(author == AuthorAI, ReadStatusUnread, ReadStatusRead),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	tx, err := db.db.Beginx()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create message: %w", err)
+		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	logger.Info("Created %s message %s for %s:%d", author, msg.ID, filePath, lineno)
-	return msg, nil
+	if err := insertConversationTx(tx, conv); err != nil {
+		tx.Rollback()
+		return nil, nil, fmt.Errorf("failed to insert conversation: %w", err)
+	}
+
+	if err := insertMessageTx(tx, msg); err != nil {
+		tx.Rollback()
+		return nil, nil, fmt.Errorf("failed to insert message: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("failed to commit: %w", err)
+	}
+
+	logger.Info("Created %s conversation %s for %s:%d", author, convID, filePath, lineno)
+	return conv, msg, nil
 }
 
 // CreateReply creates a reply to an existing conversation
-func (db *DB) CreateReply(author Author, message, conversationID string) (*Message, error) {
+func (db *DB) CreateReply(author Author, message, conversationID string) (*MessageRecord, error) {
 	preconditions.Check(author == AuthorHuman || author == AuthorAI, "invalid author: %s", author)
 	preconditions.Check(message != "", "message must not be empty")
 	preconditions.Check(conversationID != "", "conversationID must not be empty")
 
-	// Get root message to inherit file path and line number
-	root, err := db.GetMessage(conversationID)
+	// Verify conversation exists
+	conv, err := db.getConversation(conversationID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get conversation root message: %w", err)
+		return nil, fmt.Errorf("failed to get conversation: %w", err)
 	}
-	if root == nil {
+	if conv == nil {
 		return nil, fmt.Errorf("conversation not found: %s", conversationID)
 	}
 
-	msg := &Message{
+	now := time.Now()
+	msg := &MessageRecord{
 		ID:             uuid.Must(uuid.NewV7()).String(),
-		Author:         author,
-		Status:         StatusNew,
-		ReadStatus:     lo.Ternary(author == AuthorAI, ReadStatusUnread, ReadStatusRead),
-		Message:        message,
-		FilePath:       root.FilePath,
-		Lineno:         root.Lineno,
 		ConversationID: conversationID,
-		Commit:         root.Commit,
-		Context:        root.Context,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		Author:         author,
+		Message:        message,
+		ReadStatus:     lo.Ternary(author == AuthorAI, ReadStatusUnread, ReadStatusRead),
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 
-	err = db.insertMessage(msg)
-	if err != nil {
+	if err := db.insertMessage(msg); err != nil {
 		return nil, fmt.Errorf("failed to create reply: %w", err)
 	}
 
@@ -251,34 +255,83 @@ func (db *DB) CreateReply(author Author, message, conversationID string) (*Messa
 	return msg, nil
 }
 
-// insertMessage inserts a message into the database
-func (db *DB) insertMessage(msg *Message) error {
+// insertConversationTx inserts a conversation record within a transaction.
+func insertConversationTx(tx *sqlx.Tx, conv *ConversationRecord) error {
+	query := `
+		INSERT INTO conversations (
+			id, status, file_path, lineno, sha1, context,
+			conversation_type, read_by_ai, created_at, updated_at
+		) VALUES (
+			:id, :status, :file_path, :lineno, :sha1, :context,
+			:conversation_type, :read_by_ai, :created_at, :updated_at
+		)
+	`
+	_, err := tx.NamedExec(query, conv)
+	return err
+}
+
+// insertConversation inserts a conversation record.
+func (db *DB) insertConversation(conv *ConversationRecord) error {
+	query := `
+		INSERT INTO conversations (
+			id, status, file_path, lineno, sha1, context,
+			conversation_type, read_by_ai, created_at, updated_at
+		) VALUES (
+			:id, :status, :file_path, :lineno, :sha1, :context,
+			:conversation_type, :read_by_ai, :created_at, :updated_at
+		)
+	`
+	_, err := db.db.NamedExec(query, conv)
+	return err
+}
+
+// insertMessageTx inserts a message record within a transaction.
+func insertMessageTx(tx *sqlx.Tx, msg *MessageRecord) error {
 	query := `
 		INSERT INTO messages (
-			id, author, status, read_status, read_by_ai, message, file_path, lineno,
-			conversation_id, sha1, context, conversation_type, created_at, updated_at
+			id, conversation_id, author, message, read_status, created_at, updated_at
 		) VALUES (
-			:id, :author, :status, :read_status, :read_by_ai, :message, :file_path, :lineno,
-			:conversation_id, :sha1, :context, :conversation_type, :created_at, :updated_at
+			:id, :conversation_id, :author, :message, :read_status, :created_at, :updated_at
+		)
+	`
+	_, err := tx.NamedExec(query, msg)
+	return err
+}
+
+// insertMessage inserts a message record.
+func (db *DB) insertMessage(msg *MessageRecord) error {
+	query := `
+		INSERT INTO messages (
+			id, conversation_id, author, message, read_status, created_at, updated_at
+		) VALUES (
+			:id, :conversation_id, :author, :message, :read_status, :created_at, :updated_at
 		)
 	`
 	_, err := db.db.NamedExec(query, msg)
 	return err
 }
 
-// GetMessage retrieves a message by ID
-func (db *DB) GetMessage(id string) (*Message, error) {
+// getConversation retrieves a conversation record by ID.
+func (db *DB) getConversation(id string) (*ConversationRecord, error) {
 	preconditions.Check(id != "", "id must not be empty")
 
-	query := `
-		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
-		       conversation_id, sha1, context, conversation_type, created_at, updated_at
-		FROM messages
-		WHERE id = ?
-	`
+	var conv ConversationRecord
+	err := db.db.Get(&conv, `SELECT * FROM conversations WHERE id = ?`, id)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get conversation: %w", err)
+	}
+	return &conv, nil
+}
 
-	var msg Message
-	err := db.db.Get(&msg, query, id)
+// GetMessage retrieves a message by ID
+func (db *DB) GetMessage(id string) (*MessageRecord, error) {
+	preconditions.Check(id != "", "id must not be empty")
+
+	var msg MessageRecord
+	err := db.db.Get(&msg, `SELECT * FROM messages WHERE id = ?`, id)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -289,57 +342,45 @@ func (db *DB) GetMessage(id string) (*Message, error) {
 }
 
 // GetThreadMessages retrieves all messages in a conversation
-func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
+func (db *DB) GetThreadMessages(conversationID string) ([]*MessageRecord, error) {
 	preconditions.Check(conversationID != "", "conversationID must not be empty")
 
-	query := `
-		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
-		       conversation_id, sha1, context, conversation_type, created_at, updated_at
-		FROM messages
+	var messages []*MessageRecord
+	err := db.db.Select(&messages, `
+		SELECT * FROM messages
 		WHERE conversation_id = ?
 		ORDER BY created_at ASC
-	`
-
-	var messages []*Message
-	err := db.db.Select(&messages, query, conversationID)
+	`, conversationID)
 	return messages, err
 }
 
-// GetUnresolvedRootMessages retrieves all unresolved root messages (not replies)
-func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
-	query := `
-		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
-		       conversation_id, sha1, context, conversation_type, created_at, updated_at
-		FROM messages
-		WHERE status != ? AND id = conversation_id
+// GetUnresolvedConversations retrieves all unresolved conversations
+func (db *DB) GetUnresolvedConversations() ([]*ConversationRecord, error) {
+	var conversations []*ConversationRecord
+	err := db.db.Select(&conversations, `
+		SELECT * FROM conversations
+		WHERE status != ?
 		ORDER BY file_path, lineno, created_at ASC
-	`
-
-	var messages []*Message
-	err := db.db.Select(&messages, query, string(StatusResolved))
+	`, string(StatusResolved))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get unresolved messages: %w", err)
+		return nil, fmt.Errorf("failed to get unresolved conversations: %w", err)
 	}
 
-	logger.Debug("Found %d unresolved root messages", len(messages))
-	return messages, nil
+	logger.Debug("Found %d unresolved conversations", len(conversations))
+	return conversations, nil
 }
 
-// GetMessagesByFile retrieves all root messages for a specific file
-func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
+// GetConversationsByFile retrieves all conversations for a specific file
+func (db *DB) GetConversationsByFile(filePath string) ([]*ConversationRecord, error) {
 	preconditions.Check(filePath != "", "filePath must not be empty")
 
-	query := `
-		SELECT id, author, status, read_status, read_by_ai, message, file_path, lineno,
-		       conversation_id, sha1, context, conversation_type, created_at, updated_at
-		FROM messages
-		WHERE file_path = ? AND id = conversation_id
+	var conversations []*ConversationRecord
+	err := db.db.Select(&conversations, `
+		SELECT * FROM conversations
+		WHERE file_path = ?
 		ORDER BY lineno, created_at ASC
-	`
-
-	var messages []*Message
-	err := db.db.Select(&messages, query, filePath)
-	return messages, err
+	`, filePath)
+	return conversations, err
 }
 
 // MarkConversationAs applies an update to a conversation (resolved, unresolved, read_by_ai)
@@ -351,16 +392,16 @@ func (db *DB) MarkConversationAs(conversationID string, update critic.Conversati
 
 	switch update {
 	case critic.ConversationResolved:
-		query = `UPDATE messages SET status = ?, updated_at = ? WHERE conversation_id = ?`
+		query = `UPDATE conversations SET status = ?, updated_at = ? WHERE id = ?`
 		args = []interface{}{string(StatusResolved), time.Now(), conversationID}
 	case critic.ConversationUnresolved:
-		query = `UPDATE messages SET status = ?, updated_at = ? WHERE conversation_id = ?`
+		query = `UPDATE conversations SET status = ?, updated_at = ? WHERE id = ?`
 		args = []interface{}{string(StatusNew), time.Now(), conversationID}
 	case critic.ConversationArchived:
-		query = `UPDATE messages SET status = ?, updated_at = ? WHERE conversation_id = ?`
+		query = `UPDATE conversations SET status = ?, updated_at = ? WHERE id = ?`
 		args = []interface{}{string(StatusArchived), time.Now(), conversationID}
 	case critic.ConversationReadByAI:
-		query = `UPDATE messages SET read_by_ai = 1, updated_at = ? WHERE conversation_id = ?`
+		query = `UPDATE conversations SET read_by_ai = 1, updated_at = ? WHERE id = ?`
 		args = []interface{}{time.Now(), conversationID}
 	default:
 		return fmt.Errorf("unknown conversation update: %s", update)
@@ -372,7 +413,7 @@ func (db *DB) MarkConversationAs(conversationID string, update critic.Conversati
 	}
 
 	affected, _ := result.RowsAffected()
-	logger.Info("Marked conversation %s (%d messages) as %s", conversationID, affected, update)
+	logger.Info("Marked conversation %s as %s (affected: %d)", conversationID, update, affected)
 	return nil
 }
 
@@ -408,10 +449,11 @@ func (db *DB) MarkMessageAs(messageID string, status critic.MessageReadStatus) e
 // GetFilesWithUnreadAIMessages retrieves all file paths that have unread AI messages
 func (db *DB) GetFilesWithUnreadAIMessages() ([]string, error) {
 	query := `
-		SELECT DISTINCT file_path
-		FROM messages
-		WHERE author = ? AND read_status = ?
-		ORDER BY file_path
+		SELECT DISTINCT c.file_path
+		FROM messages m
+		JOIN conversations c ON m.conversation_id = c.id
+		WHERE m.author = ? AND m.read_status = ?
+		ORDER BY c.file_path
 	`
 
 	var files []string
@@ -419,22 +461,18 @@ func (db *DB) GetFilesWithUnreadAIMessages() ([]string, error) {
 	return files, err
 }
 
-// UpdateMessageStatus updates the status of a message
-func (db *DB) UpdateMessageStatus(id string, status Status) error {
+// UpdateConversationStatus updates the status of a conversation
+func (db *DB) UpdateConversationStatus(id string, status Status) error {
 	preconditions.Check(id != "", "id must not be empty")
 
-	query := `
-		UPDATE messages
-		SET status = ?, updated_at = ?
-		WHERE id = ?
-	`
-
-	_, err := db.db.Exec(query, string(status), time.Now(), id)
+	_, err := db.db.Exec(`
+		UPDATE conversations SET status = ?, updated_at = ? WHERE id = ?
+	`, string(status), time.Now(), id)
 	if err != nil {
-		return fmt.Errorf("failed to update message status: %w", err)
+		return fmt.Errorf("failed to update conversation status: %w", err)
 	}
 
-	logger.Debug("Updated message %s status to %s", id, status)
+	logger.Debug("Updated conversation %s status to %s", id, status)
 	return nil
 }
 
@@ -443,13 +481,9 @@ func (db *DB) UpdateMessage(id string, newMessage string) error {
 	preconditions.Check(id != "", "id must not be empty")
 	preconditions.Check(newMessage != "", "newMessage must not be empty")
 
-	query := `
-		UPDATE messages
-		SET message = ?, updated_at = ?
-		WHERE id = ?
-	`
-
-	result, err := db.db.Exec(query, newMessage, time.Now(), id)
+	result, err := db.db.Exec(`
+		UPDATE messages SET message = ?, updated_at = ? WHERE id = ?
+	`, newMessage, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update message: %w", err)
 	}
@@ -463,34 +497,35 @@ func (db *DB) UpdateMessage(id string, newMessage string) error {
 	return nil
 }
 
-// UpsertMessage creates a new message or updates an existing one
-// If existingID is provided and exists, updates that message
-// Otherwise, creates a new message with a new ID
-func (db *DB) UpsertMessage(author Author, message, filePath string, lineno int, commit string, context string, existingID string) (*Message, error) {
+// UpsertConversation creates a new conversation or updates an existing one.
+// If existingID is provided and exists, updates the first message's text.
+// Otherwise, creates a new conversation.
+func (db *DB) UpsertConversation(author Author, message, filePath string, lineno int, commit string, context string, existingID string) (*ConversationRecord, *MessageRecord, error) {
 	preconditions.Check(author == AuthorHuman || author == AuthorAI, "invalid author: %s", author)
 	preconditions.Check(message != "", "message must not be empty")
 	preconditions.Check(filePath != "", "filePath must not be empty")
 	preconditions.Check(lineno > 0, "lineno must be positive: %d", lineno)
 
-	// If ID provided, try to update existing message
 	if existingID != "" {
-		existing, err := db.GetMessage(existingID)
+		existing, err := db.getConversation(existingID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check for existing message: %w", err)
+			return nil, nil, fmt.Errorf("failed to check for existing conversation: %w", err)
 		}
 
 		if existing != nil {
-			// Update existing message
+			// Update the first message's text
 			if err := db.UpdateMessage(existingID, message); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			// Return updated message
-			return db.GetMessage(existingID)
+			msg, err := db.GetMessage(existingID)
+			if err != nil {
+				return nil, nil, err
+			}
+			return existing, msg, nil
 		}
 	}
 
-	// Create new message
-	return db.CreateMessage(author, message, filePath, lineno, commit, context)
+	return db.createConversationWithMessage(author, message, filePath, lineno, commit, context, ConversationTypeConversation)
 }
 
 // GetMessagesMtime returns the mtime_msec for the messages table from _db_mtime.
