@@ -169,14 +169,14 @@ func (s *Server) Start() error {
 		}
 	}
 
-	// Start database watcher for conversation changes
-	if s.config.GitRoot != "" {
-		dbWatcher, err := messagedb.NewDBWatcher(s.config.GitRoot, 1000) // 1 second polling
+	// Start database watcher for conversation changes.
+	// Uses the same DB instance as Messaging to ensure it sees writes immediately.
+	if db, ok := s.config.Messaging.(*messagedb.DB); ok {
+		dbWatcher, err := messagedb.NewDBWatcher(db, 1000) // 1 second polling
 		if err != nil {
 			logger.Error("Failed to start database watcher: %v", err)
 		} else {
 			s.dbWatcher = dbWatcher
-			// Listen for changes
 			go s.handleDBChanges()
 		}
 	}

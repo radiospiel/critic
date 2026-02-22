@@ -5,13 +5,11 @@ import (
 	"time"
 
 	"github.com/radiospiel/critic/simple-go/logger"
-	"github.com/radiospiel/critic/simple-go/must"
 )
 
 // DBWatcher watches the critic database for changes by polling the _db_mtime table.
 // It opens a fresh connection for each poll to ensure it sees the latest data.
 type DBWatcher struct {
-	gitRoot      string
 	pollInterval time.Duration
 
 	lastMtime   int64
@@ -27,13 +25,11 @@ const MTIME_UNINITIALIZED int64 = -1
 
 // NewDBWatcher creates a watcher that polls the database for message changes.
 // pollIntervalMs specifies how often to check for changes (in milliseconds).
-func NewDBWatcher(gitRoot string, pollIntervalMs int) (*DBWatcher, error) {
-	logger.Info("NewDBWatcher: Creating polling watcher for %s with interval=%dms", gitRoot, pollIntervalMs)
-
-	db := must.Must2(New(gitRoot))
+// It uses the provided DB instance to ensure it sees writes from the same connection pool.
+func NewDBWatcher(db *DB, pollIntervalMs int) (*DBWatcher, error) {
+	logger.Info("NewDBWatcher: Creating polling watcher with interval=%dms", pollIntervalMs)
 
 	dw := &DBWatcher{
-		gitRoot:      gitRoot,
 		pollInterval: time.Duration(pollIntervalMs) * time.Millisecond,
 		changesChan:  make(chan struct{}, 10),
 		stopChan:     make(chan struct{}),
