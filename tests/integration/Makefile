@@ -1,8 +1,12 @@
-.PHONY: test test-verbose clean
+.PHONY: test test-verbose clean api-tests
 
 # Run integration tests with required -p 1 flag
-test: fixtures
+test: fixtures api-tests
 	go test -p 1 -v
+
+# Run API integration tests (bash-based, using testsh)
+api-tests:
+	$(MAKE) -C api test
 
 # Run integration tests with verbose output
 # test-verbose:
