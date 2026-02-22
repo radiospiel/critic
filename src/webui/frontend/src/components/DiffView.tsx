@@ -532,13 +532,12 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      // Don't handle if not focused or in an input field
+      // Don't handle if not focused or in an input/editor field
       if (!isFocused) return
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
-      // Don't handle if in tiptap editor
-      if ((e.target as HTMLElement)?.closest?.('.tiptap')) {
+      if ((e.target as HTMLElement)?.isContentEditable) {
         return
       }
 
