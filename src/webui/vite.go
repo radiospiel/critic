@@ -45,7 +45,7 @@ func (d *DevServer) Start() bool {
 		return false
 	}
 
-	d.npmProcess = exec.Command("npm", "run", "dev")
+	d.npmProcess = exec.Command("npm", "run", "dev", "--", "--logLevel", "debug")
 	d.npmProcess.Dir = d.frontendDir
 	d.npmProcess.Stdout = os.Stdout
 	d.npmProcess.Stderr = os.Stderr

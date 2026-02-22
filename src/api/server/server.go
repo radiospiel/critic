@@ -250,7 +250,7 @@ func (s *Server) Start() error {
 			return fmt.Errorf("failed to start Vite dev server")
 		}
 		frontendHandler = s.devServer.Handler()
-		fmt.Println("Development mode: proxying to Vite dev server at http://localhost:5173")
+		fmt.Println("Development mode: proxying to Vite dev server.")
 	}
 
 	// Wait for shutdown signal or server error
