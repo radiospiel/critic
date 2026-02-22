@@ -265,6 +265,16 @@ function AppContent() {
         return
       }
 
+      // Let browser handle Cmd+key shortcuts (copy, paste, select all, etc.)
+      if (e.metaKey) {
+        return
+      }
+
+      // Let browser handle Ctrl+key shortcuts, except Ctrl+1..9 which we use below
+      if (e.ctrlKey && !(e.key >= '1' && e.key <= '9')) {
+        return
+      }
+
       // Ctrl+1..4 to switch filter sections
       if (e.ctrlKey && e.key >= '1' && e.key <= '4') {
         e.preventDefault()
@@ -404,6 +414,11 @@ function AppContent() {
               <pre><code>claude mcp add critic -- critic mcp</code></pre>
               <p>Then use the slash commands:</p>
               <pre><code>/critic:summarize  — summarize changes and post via critic_announce{'\n'}/critic:step       — address unresolved feedback{'\n'}/critic:loop       — repeat step until all conversations are resolved</code></pre>
+            </section>
+            <section>
+              <h3>VS Code Extension</h3>
+              <p>Install the Critic extension to see review comments inline in VS Code:</p>
+              <pre><code>curl -O {window.location.origin}/download/critic-vscode.vsix{'\n'}code --install-extension critic-vscode.vsix</code></pre>
             </section>
             <section>
               <h3>Keyboard Shortcuts</h3>
