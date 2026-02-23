@@ -5,8 +5,10 @@ test: fixtures api-tests
 	go test -p 1 -v
 
 # Run API integration tests (bash-based, using testsh)
+# Reuse repo-root binary from CI if available, otherwise build locally
+REPO_CRITIC_BIN := $(wildcard ../../critic)
 api-tests:
-	$(MAKE) -C api test
+	$(MAKE) -C api test $(if $(REPO_CRITIC_BIN),CRITIC_BIN=$(abspath $(REPO_CRITIC_BIN)))
 
 # Run integration tests with verbose output
 # test-verbose:

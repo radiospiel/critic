@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/testsh.inc"
 
-CRITIC_BIN="$SCRIPT_DIR/critic"
+CRITIC_BIN="${CRITIC_BIN:-$SCRIPT_DIR/critic}"
 PORT=0  # will be assigned dynamically
 BASE_URL="" # set after server starts
 

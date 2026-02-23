@@ -1,14 +1,12 @@
-.PHONY: test build clean
+.PHONY: test clean
 
-CRITIC_BIN := critic
+CRITIC_BIN ?= $(shell pwd)/critic
 
-test: build
-	bash test_api.sh
+test: $(CRITIC_BIN)
+	CRITIC_BIN=$(CRITIC_BIN) bash test_api.sh
 
-build: $(CRITIC_BIN)
-
-$(CRITIC_BIN): $(shell find ../../../src ../../../simple-go -name '*.go' -not -name '*_test.go' 2>/dev/null)
+$(CRITIC_BIN):
 	go build -o $(CRITIC_BIN) ../../../src/cmd
 
 clean:
-	rm -f $(CRITIC_BIN)
+	rm -f critic
