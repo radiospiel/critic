@@ -39,7 +39,8 @@ func TestGetConversations_ReturnsConversationsForFile(t *testing.T) {
 
 	s := &Server{
 		config: Config{
-			Messaging: messaging,
+			Messaging:     messaging,
+			ProjectConfig: testProjectConfig(),
 		},
 	}
 
@@ -56,6 +57,7 @@ func TestGetConversations_ReturnsConversationsForFile(t *testing.T) {
 	assert.Equals(t, conv.GetLineNumber(), int32(42), "line number should match")
 	assert.Equals(t, conv.GetCodeVersion(), "abc123", "code version should match")
 	assert.Equals(t, conv.GetContext(), "func main() {", "context should match")
+	assert.Equals(t, conv.GetCategory(), "source", "src/main.go should be source category")
 	assert.Equals(t, len(conv.GetMessages()), 1, "should have one message")
 
 	msg := conv.GetMessages()[0]
@@ -70,7 +72,8 @@ func TestGetConversations_ReturnsEmptyForNoConversations(t *testing.T) {
 
 	s := &Server{
 		config: Config{
-			Messaging: messaging,
+			Messaging:     messaging,
+			ProjectConfig: testProjectConfig(),
 		},
 	}
 
@@ -107,7 +110,8 @@ func TestGetConversations_ReturnsMultipleConversations(t *testing.T) {
 
 	s := &Server{
 		config: Config{
-			Messaging: messaging,
+			Messaging:     messaging,
+			ProjectConfig: testProjectConfig(),
 		},
 	}
 
@@ -150,7 +154,8 @@ func TestGetConversations_HandlesMultipleMessages(t *testing.T) {
 
 	s := &Server{
 		config: Config{
-			Messaging: messaging,
+			Messaging:     messaging,
+			ProjectConfig: testProjectConfig(),
 		},
 	}
 
@@ -203,7 +208,8 @@ func TestGetConversations_FiltersByStatus(t *testing.T) {
 
 	s := &Server{
 		config: Config{
-			Messaging: messaging,
+			Messaging:     messaging,
+			ProjectConfig: testProjectConfig(),
 		},
 	}
 
@@ -260,7 +266,8 @@ func TestGetConversations_EmptyPathsReturnsAll(t *testing.T) {
 
 	s := &Server{
 		config: Config{
-			Messaging: messaging,
+			Messaging:     messaging,
+			ProjectConfig: testProjectConfig(),
 		},
 	}
 
@@ -270,6 +277,36 @@ func TestGetConversations_EmptyPathsReturnsAll(t *testing.T) {
 
 	assert.NoError(t, err, "GetConversations should not return error")
 	assert.Equals(t, len(resp.Msg.GetConversations()), 2, "should return conversations from all files")
+}
+
+func TestGetConversations_AnnotatesCategories(t *testing.T) {
+	now := time.Now()
+	messaging := critic.NewDummyMessaging()
+	messaging.Conversations["src/main_test.go"] = []*critic.Conversation{
+		{
+			UUID:       "conv-1",
+			Status:     critic.StatusUnresolved,
+			FilePath:   "src/main_test.go",
+			LineNumber: 1,
+			Messages:   []critic.Message{{UUID: "msg-1", Author: critic.AuthorHuman, Message: "Test", CreatedAt: now, UpdatedAt: now}},
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+	}
+
+	s := &Server{
+		config: Config{
+			Messaging:     messaging,
+			ProjectConfig: testProjectConfig(),
+		},
+	}
+
+	req := connect.NewRequest(&api.GetConversationsRequest{Paths: []string{"src/main_test.go"}})
+	resp, err := s.GetConversations(context.Background(), req)
+
+	assert.NoError(t, err, "GetConversations should not return error")
+	assert.Equals(t, len(resp.Msg.GetConversations()), 1, "should return one conversation")
+	assert.Equals(t, resp.Msg.GetConversations()[0].GetCategory(), "test", "test file conversation should have test category")
 }
 
 func TestCriticToApiMessage(t *testing.T) {
@@ -295,6 +332,7 @@ func TestCriticToApiMessage(t *testing.T) {
 
 func TestCriticToApiConversation(t *testing.T) {
 	now := time.Now()
+	categorize := testProjectConfig().CategorizeFile
 	conv := &critic.Conversation{
 		UUID:        "conv-uuid",
 		Status:      critic.StatusResolved,
@@ -309,7 +347,7 @@ func TestCriticToApiConversation(t *testing.T) {
 		UpdatedAt: now,
 	}
 
-	apiConv := criticToApiConversation(conv, 0)
+	apiConv := criticToApiConversation(conv, 0, categorize)
 
 	assert.Equals(t, apiConv.GetId(), "conv-uuid", "ID should match")
 	assert.Equals(t, apiConv.GetStatus(), api.ConversationStatus_CONVERSATION_STATUS_RESOLVED, "status should match")
@@ -317,5 +355,6 @@ func TestCriticToApiConversation(t *testing.T) {
 	assert.Equals(t, apiConv.GetLineNumber(), int32(55), "line number should match")
 	assert.Equals(t, apiConv.GetCodeVersion(), "sha256abc", "code version should match")
 	assert.Equals(t, apiConv.GetContext(), "// comment context", "context should match")
+	assert.Equals(t, apiConv.GetCategory(), "source", "path/to/file.go should be source category")
 	assert.Equals(t, len(apiConv.GetMessages()), 1, "should have one message")
 }

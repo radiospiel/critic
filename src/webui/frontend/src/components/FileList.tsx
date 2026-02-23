@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { criticClient, resolveConversation, archiveConversation, unresolveConversation, ConversationSummary, CommentConversation } from '../api/client'
-import { FileSummary, FileStatus, FileCategory } from '../gen/critic_pb'
+import { resolveConversation, archiveConversation, unresolveConversation, ConversationSummary, CommentConversation } from '../api/client'
+import { FileSummary, FileStatus } from '../gen/critic_pb'
 import { pluralize } from './Pluralize'
-import { matchesAnyPattern } from '../utils/glob'
 
 function formatTimestamp(dateStr: string): string {
   const date = new Date(dateStr)
@@ -57,19 +56,6 @@ function getStatusLabel(status: FileStatus): string {
   }
 }
 
-// Convert a git pathspec glob pattern to a regex.
-// Categorize a file based on project config categories.
-// Categories are checked in order: the first matching category wins.
-// Returns "source" if no category matches.
-function categorizeFile(path: string, categories: FileCategory[]): string {
-  for (const category of categories) {
-    if (matchesAnyPattern(path, category.patterns)) {
-      return category.name
-    }
-  }
-  return 'source'
-}
-
 // Truncate text to maxLen characters, adding ellipsis if needed
 function truncateText(text: string, maxLen: number): string {
   // Strip markdown/HTML and collapse whitespace
@@ -107,9 +93,6 @@ function MessagePreviews({ messages }: { messages: CommentMessage[] }) {
 }
 
 function FileList({ files, allConversations, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, filter, onFilterChange, showArchived = false, rootConversation, isRootConversationSelected, onConversationsChanged, onScrollToLine }: FileListProps) {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [categories, setCategories] = useState<FileCategory[]>([])
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set())
   const selectedItemRef = useRef<HTMLLIElement>(null)
 
@@ -155,23 +138,6 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
     }
   }
 
-  // Fetch project config (categories) once on mount
-  useEffect(() => {
-    criticClient.getProjectConfig({})
-      .then((response) => {
-        if (response.error) {
-          console.error('Failed to fetch project config:', response.error.message)
-        } else {
-          setCategories(response.categories)
-        }
-        setLoading(false)
-      })
-      .catch((err) => {
-        setError(err.message)
-        setLoading(false)
-      })
-  }, [])
-
   // Derive per-file conversation and summary maps from the single bulk load
   const { fileConversations, conversationSummaries } = useMemo(() => {
     const convMap = new Map<string, CommentConversation[]>()
@@ -206,17 +172,15 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
     }
   }, [selectedFile, isFocused])
 
-  // Compute visible, test, and hidden files based on project config categories, sorted by path
+  // Compute visible, test, and hidden files using server-provided category, sorted by path
   const { regularFiles, testFiles, hiddenFiles } = (() => {
     const regular: FileSummary[] = []
     const tests: FileSummary[] = []
     const hidden: FileSummary[] = []
     for (const file of files) {
-      const path = getFilePath(file)
-      const category = categorizeFile(path, categories)
-      if (category === 'hidden') {
+      if (file.category === 'hidden') {
         hidden.push(file)
-      } else if (category === 'test') {
+      } else if (file.category === 'test') {
         tests.push(file)
       } else {
         regular.push(file)
@@ -341,24 +305,6 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
-
-  if (loading) {
-    return (
-      <div>
-        <div className="file-list-header">Files (loading)</div>
-        <div className="file-list-message">Loading...</div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div>
-        <div className="file-list-header">Files (error)</div>
-        <div className="file-list-message file-list-error">{error}</div>
-      </div>
-    )
-  }
 
   return (
     <div className={`file-list-container${isFocused ? ' focused' : ''}`}>

@@ -115,6 +115,8 @@ message FileSummary {
   string file_mode_new = 4;
   FileStatus status = 5;
   bool is_binary = 6;
+  // category is the file category name (e.g., "source", "test", "hidden") determined by project.critic config.
+  string category = 7;
 }
 
 // Diff represents a git diff with multiple file changes.
@@ -141,6 +143,8 @@ message FileDiff {
   FileStatus status = 5;
   bool is_binary = 6;
   repeated Hunk hunks = 7;
+  // category is the file category name (e.g., "source", "test", "hidden") determined by project.critic config.
+  string category = 8;
 }
 
 // Hunk represents a chunk of changes within a file.
@@ -256,6 +260,8 @@ message FileConversationSummary {
   bool has_unread_ai_messages = 5;
   // explanation_count is the number of explanation (informal annotation) conversations.
   int32 explanation_count = 6;
+  // category is the file category name (e.g., "source", "test", "hidden") determined by project.critic config.
+  string category = 7;
 }
 
 // ConversationStatus represents the status of a conversation.
@@ -300,6 +306,8 @@ message Conversation {
   ConversationType conversation_type = 10;
   // branch_name is the closest branch name at or following the code_version SHA.
   string branch_name = 11;
+  // category is the file category name (e.g., "source", "test", "hidden") determined by project.critic config.
+  string category = 12;
 }
 
 // Message represents a single message in a conversation.

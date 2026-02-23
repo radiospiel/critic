@@ -77,7 +77,7 @@ func getConversationsImpl(server *Server, req *api.GetConversationsRequest) (*ap
 			continue
 		}
 
-		apiConv := criticToApiConversation(conv, 0)
+		apiConv := criticToApiConversation(conv, 0, server.categorizeFile)
 		if conv.CodeVersion != "" && len(bases) > 0 {
 			apiConv.BranchName = git.ClosestBranchForSHACached(conv.CodeVersion, bases, cache)
 		}
@@ -130,7 +130,7 @@ func criticTypeToApiType(ct critic.ConversationType) api.ConversationType {
 	}
 }
 
-func criticToApiConversation(conv *critic.Conversation, index int) *api.Conversation {
+func criticToApiConversation(conv *critic.Conversation, index int, categorize func(string) string) *api.Conversation {
 	messages := lo.Map(conv.Messages, criticToApiMessage)
 	return &api.Conversation{
 		Id:               conv.UUID,
@@ -143,5 +143,6 @@ func criticToApiConversation(conv *critic.Conversation, index int) *api.Conversa
 		Messages:         messages,
 		CreatedAt:        conv.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:        conv.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		Category:         categorize(conv.FilePath),
 	}
 }

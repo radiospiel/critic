@@ -5,17 +5,29 @@ import (
 
 	"github.com/radiospiel/critic/simple-go/assert"
 	"github.com/radiospiel/critic/src/api"
+	"github.com/radiospiel/critic/src/config"
 	"github.com/radiospiel/critic/src/pkg/types"
 )
 
+func testProjectConfig() *config.ProjectConfig {
+	return &config.ProjectConfig{
+		Categories: map[string][]string{
+			"test":   {"*_test.go", "/test/*"},
+			"hidden": {".*"},
+		},
+	}
+}
+
 func TestConvertDiffSummary(t *testing.T) {
+	categorize := testProjectConfig().CategorizeFile
+
 	// Test nil diff
-	result := convertDiffSummary(nil)
+	result := convertDiffSummary(nil, categorize)
 	assert.Nil(t, result, "nil diff should return nil")
 
 	// Test empty diff
 	files := []*types.FileDiff{}
-	result = convertDiffSummary(files)
+	result = convertDiffSummary(files, categorize)
 	assert.NotNil(t, result, "empty diff should not be nil")
 	assert.Equals(t, len(result.Files), 0, "empty diff should have no files")
 
@@ -41,7 +53,7 @@ func TestConvertDiffSummary(t *testing.T) {
 		},
 	}
 
-	result = convertDiffSummary(files)
+	result = convertDiffSummary(files, categorize)
 	assert.NotNil(t, result, "diff should not be nil")
 	assert.Equals(t, len(result.Files), 1, "should have 1 file")
 
@@ -49,11 +61,14 @@ func TestConvertDiffSummary(t *testing.T) {
 	assert.Equals(t, file.OldPath, "old.go", "old path should match")
 	assert.Equals(t, file.NewPath, "new.go", "new path should match")
 	assert.Equals(t, file.Status, api.FileStatus_FILE_STATUS_RENAMED, "status should be RENAMED")
+	assert.Equals(t, file.Category, "source", "renamed .go file should be categorized as source")
 }
 
 func TestConvertFileSummary(t *testing.T) {
+	categorize := testProjectConfig().CategorizeFile
+
 	// Test nil file diff
-	result := convertFileSummary(nil)
+	result := convertFileSummary(nil, categorize)
 	assert.Nil(t, result, "nil file diff should return nil")
 
 	// Test file diff with all fields - renamed file
@@ -69,7 +84,7 @@ func TestConvertFileSummary(t *testing.T) {
 		},
 	}
 
-	result = convertFileSummary(fd)
+	result = convertFileSummary(fd, categorize)
 	assert.NotNil(t, result, "result should not be nil")
 	assert.Equals(t, result.OldPath, "path/to/old.go", "old path should match")
 	assert.Equals(t, result.NewPath, "path/to/new.go", "new path should match")
@@ -77,21 +92,65 @@ func TestConvertFileSummary(t *testing.T) {
 	assert.Equals(t, result.FileModeNew, "100755", "file_mode_new should match")
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_RENAMED, "status should be RENAMED")
 	assert.Equals(t, result.IsBinary, false, "is_binary should be false")
+	assert.Equals(t, result.Category, "source", "regular .go file should be categorized as source")
 
 	// Test new file
 	fd = &types.FileDiff{FileStatus: types.FileStatusNew}
-	result = convertFileSummary(fd)
+	result = convertFileSummary(fd, categorize)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_NEW, "status should be NEW")
 
 	// Test deleted file
 	fd = &types.FileDiff{FileStatus: types.FileStatusDeleted}
-	result = convertFileSummary(fd)
+	result = convertFileSummary(fd, categorize)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_DELETED, "status should be DELETED")
 
 	// Test modified file (default)
 	fd = &types.FileDiff{}
-	result = convertFileSummary(fd)
+	result = convertFileSummary(fd, categorize)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_MODIFIED, "status should be MODIFIED")
+}
+
+func TestConvertFileSummary_Categories(t *testing.T) {
+	categorize := testProjectConfig().CategorizeFile
+
+	tests := []struct {
+		name             string
+		fileDiff         *types.FileDiff
+		expectedCategory string
+	}{
+		{
+			name:             "source file",
+			fileDiff:         &types.FileDiff{NewPath: "src/main.go", FileStatus: types.FileStatusModified},
+			expectedCategory: "source",
+		},
+		{
+			name:             "test file",
+			fileDiff:         &types.FileDiff{NewPath: "src/main_test.go", FileStatus: types.FileStatusModified},
+			expectedCategory: "test",
+		},
+		{
+			name:             "hidden file (dotfile)",
+			fileDiff:         &types.FileDiff{NewPath: ".gitignore", FileStatus: types.FileStatusModified},
+			expectedCategory: "hidden",
+		},
+		{
+			name:             "deleted file uses old_path for category",
+			fileDiff:         &types.FileDiff{OldPath: "src/old_test.go", FileStatus: types.FileStatusDeleted},
+			expectedCategory: "test",
+		},
+		{
+			name:             "test directory file",
+			fileDiff:         &types.FileDiff{NewPath: "test/fixture.go", FileStatus: types.FileStatusNew},
+			expectedCategory: "test",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := convertFileSummary(tc.fileDiff, categorize)
+			assert.Equals(t, result.Category, tc.expectedCategory, "category should match for %s", tc.name)
+		})
+	}
 }
 
 func TestGetDiffSummaryResponseTypes(t *testing.T) {

@@ -36,6 +36,6 @@ func getRootConversationImpl(server *Server) (*api.GetRootConversationResponse, 
 	}
 
 	return &api.GetRootConversationResponse{
-		Conversation: criticToApiConversation(conv, 0),
+		Conversation: criticToApiConversation(conv, 0, server.categorizeFile),
 	}, nil
 }

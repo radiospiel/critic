@@ -26,19 +26,19 @@ func getDiffSummaryImpl(server *Server, req *api.GetDiffSummaryRequest) (*api.Ge
 
 	return &api.GetDiffSummaryResponse{
 		State: string(state),
-		Diff:  convertDiffSummary(diff),
+		Diff:  convertDiffSummary(diff, server.categorizeFile),
 	}, nil
 }
 
 // convertDiffSummary converts a []*types.FileDiff to an api.DiffSummary (without hunks)
-func convertDiffSummary(files []*types.FileDiff) *api.DiffSummary {
+func convertDiffSummary(files []*types.FileDiff, categorize func(string) string) *api.DiffSummary {
 	if files == nil {
 		return nil
 	}
 
 	apiFiles := make([]*api.FileSummary, len(files))
 	for i, f := range files {
-		apiFiles[i] = convertFileSummary(f)
+		apiFiles[i] = convertFileSummary(f, categorize)
 	}
 
 	return &api.DiffSummary{
@@ -47,7 +47,7 @@ func convertDiffSummary(files []*types.FileDiff) *api.DiffSummary {
 }
 
 // convertFileSummary converts a types.FileDiff to an api.FileSummary (without hunks)
-func convertFileSummary(f *types.FileDiff) *api.FileSummary {
+func convertFileSummary(f *types.FileDiff, categorize func(string) string) *api.FileSummary {
 	if f == nil {
 		return nil
 	}
@@ -59,6 +59,7 @@ func convertFileSummary(f *types.FileDiff) *api.FileSummary {
 		FileModeNew: f.NewMode,
 		Status:      convertFileStatus(f.FileStatus),
 		IsBinary:    f.IsBinary,
+		Category:    categorize(f.GetPath()),
 	}
 }
 

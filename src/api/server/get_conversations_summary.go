@@ -6,7 +6,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/pkg/critic"
-	"github.com/samber/lo"
 )
 
 // GetConversationsSummary returns conversation counts and status per file path.
@@ -26,14 +25,19 @@ func getConversationsSummaryImpl(server *Server, req *api.GetConversationsSummar
 	if err != nil {
 		return nil, err
 	}
-	apiSummaries := lo.Map(criticSummaries, criticToApiFileConversationSummary)
+
+	categorize := server.categorizeFile
+	apiSummaries := make([]*api.FileConversationSummary, len(criticSummaries))
+	for i, s := range criticSummaries {
+		apiSummaries[i] = criticToApiFileConversationSummary(s, i, categorize)
+	}
 
 	return &api.GetConversationsSummaryResponse{
 		Summaries: apiSummaries,
 	}, nil
 }
 
-func criticToApiFileConversationSummary(summary *critic.FileConversationSummary, index int) *api.FileConversationSummary {
+func criticToApiFileConversationSummary(summary *critic.FileConversationSummary, index int, categorize func(string) string) *api.FileConversationSummary {
 	return &api.FileConversationSummary{
 		FilePath:            summary.FilePath,
 		TotalCount:          int32(summary.TotalCount),
@@ -41,5 +45,6 @@ func criticToApiFileConversationSummary(summary *critic.FileConversationSummary,
 		ResolvedCount:       int32(summary.ResolvedCount),
 		ExplanationCount:    int32(summary.ExplanationCount),
 		HasUnreadAiMessages: summary.HasUnreadAIMessages,
+		Category:            categorize(summary.FilePath),
 	}
 }

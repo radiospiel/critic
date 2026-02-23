@@ -609,6 +609,13 @@ export class FileSummary extends Message$1<FileSummary> {
    */
   isBinary = false;
 
+  /**
+   * category is the file category name (e.g., "source", "test", "hidden") determined by project.critic config.
+   *
+   * @generated from field: string category = 7;
+   */
+  category = "";
+
   constructor(data?: PartialMessage<FileSummary>) {
     super();
     proto3.util.initPartial(data, this);
@@ -623,6 +630,7 @@ export class FileSummary extends Message$1<FileSummary> {
     { no: 4, name: "file_mode_new", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "status", kind: "enum", T: proto3.getEnumType(FileStatus) },
     { no: 6, name: "is_binary", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 7, name: "category", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileSummary {
@@ -722,6 +730,13 @@ export class FileDiff extends Message$1<FileDiff> {
    */
   hunks: Hunk[] = [];
 
+  /**
+   * category is the file category name (e.g., "source", "test", "hidden") determined by project.critic config.
+   *
+   * @generated from field: string category = 8;
+   */
+  category = "";
+
   constructor(data?: PartialMessage<FileDiff>) {
     super();
     proto3.util.initPartial(data, this);
@@ -737,6 +752,7 @@ export class FileDiff extends Message$1<FileDiff> {
     { no: 5, name: "status", kind: "enum", T: proto3.getEnumType(FileStatus) },
     { no: 6, name: "is_binary", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 7, name: "hunks", kind: "message", T: Hunk, repeated: true },
+    { no: 8, name: "category", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileDiff {
@@ -1382,6 +1398,13 @@ export class FileConversationSummary extends Message$1<FileConversationSummary> 
    */
   explanationCount = 0;
 
+  /**
+   * category is the file category name (e.g., "source", "test", "hidden") determined by project.critic config.
+   *
+   * @generated from field: string category = 7;
+   */
+  category = "";
+
   constructor(data?: PartialMessage<FileConversationSummary>) {
     super();
     proto3.util.initPartial(data, this);
@@ -1396,6 +1419,7 @@ export class FileConversationSummary extends Message$1<FileConversationSummary> 
     { no: 4, name: "resolved_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
     { no: 5, name: "has_unread_ai_messages", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
     { no: 6, name: "explanation_count", kind: "scalar", T: 5 /* ScalarType.INT32 */ },
+    { no: 7, name: "category", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileConversationSummary {
@@ -1498,6 +1522,13 @@ export class Conversation extends Message$1<Conversation> {
    */
   branchName = "";
 
+  /**
+   * category is the file category name (e.g., "source", "test", "hidden") determined by project.critic config.
+   *
+   * @generated from field: string category = 12;
+   */
+  category = "";
+
   constructor(data?: PartialMessage<Conversation>) {
     super();
     proto3.util.initPartial(data, this);
@@ -1517,6 +1548,7 @@ export class Conversation extends Message$1<Conversation> {
     { no: 9, name: "updated_at", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 10, name: "conversation_type", kind: "enum", T: proto3.getEnumType(ConversationType) },
     { no: 11, name: "branch_name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 12, name: "category", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Conversation {

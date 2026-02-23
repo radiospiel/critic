@@ -27,12 +27,12 @@ func getDiffImpl(server *Server, req *api.GetDiffRequest) (*api.GetDiffResponse,
 	fileDiff := session.GetFileDiff(path, contextLines)
 
 	return &api.GetDiffResponse{
-		File: convertFileDiff(fileDiff),
+		File: convertFileDiff(fileDiff, server.categorizeFile),
 	}, nil
 }
 
 // convertFileDiff converts a types.FileDiff to an api.FileDiff (with hunks)
-func convertFileDiff(f *types.FileDiff) *api.FileDiff {
+func convertFileDiff(f *types.FileDiff, categorize func(string) string) *api.FileDiff {
 	if f == nil {
 		return nil
 	}
@@ -50,6 +50,7 @@ func convertFileDiff(f *types.FileDiff) *api.FileDiff {
 		Status:      convertFileStatus(f.FileStatus),
 		IsBinary:    f.IsBinary,
 		Hunks:       hunks,
+		Category:    categorize(f.GetPath()),
 	}
 }
 

@@ -100,6 +100,16 @@ func (s *Server) GetSession() *Session {
 	return s.session
 }
 
+// categorizeFile returns the category name for a file path using the project config.
+// Falls back to the default config if no project config is set.
+func (s *Server) categorizeFile(path string) string {
+	pc := s.config.ProjectConfig
+	if pc == nil {
+		pc = config.DefaultProjectConfig()
+	}
+	return pc.CategorizeFile(path)
+}
+
 // SetLastChangeTime sets the timestamp of the last detected change.
 func (s *Server) SetLastChangeTime(t int64) {
 	s.lastChangeTime.Store(t)
