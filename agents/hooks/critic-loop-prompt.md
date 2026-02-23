@@ -1,6 +1,5 @@
 Before finishing, check for unresolved reviewer feedback:
 
-1. Call `get_critic_conversations` with status "unresolved" to list pending feedback.
-2. If there are unresolved conversations, call `get_full_critic_conversation` for each one.
-3. For each conversation where the last message is from a human reviewer (not from AI), address the feedback: make code changes if needed, then reply via `reply_to_critic_conversation`.
-4. If all unresolved conversations already have your reply as the last message, there is nothing new to address — you may finish.
+1. Call `get_critic_conversations` with status "actionable" to find conversations that need your attention (unresolved, with the last message from a human reviewer).
+2. If there are actionable conversations, read each one via `get_full_critic_conversation`, address the feedback (make code changes if needed), and reply via `reply_to_critic_conversation`.
+3. If there are no actionable conversations, you may finish.

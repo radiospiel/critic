@@ -34,6 +34,12 @@ func (db *DB) GetConversations(status string, paths []string) ([]*critic.Convers
 	} else if status == string(critic.StatusResolved) {
 		conditions = append(conditions, "status = ?")
 		args = append(args, string(StatusResolved))
+	} else if status == "actionable" {
+		// Actionable: unresolved AND the last message in the thread is from a human
+		conditions = append(conditions, "status != ?")
+		args = append(args, string(StatusResolved))
+		conditions = append(conditions, `(SELECT author FROM messages m2 WHERE m2.conversation_id = messages.id ORDER BY m2.created_at DESC LIMIT 1) = ?`)
+		args = append(args, string(AuthorHuman))
 	} else if status != "" {
 		return nil, fmt.Errorf("invalid status: %s", status)
 	}
