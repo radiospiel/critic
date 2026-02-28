@@ -33,7 +33,7 @@ function AppContent() {
   const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
 
-  // Load server config on mount
+  // Load server config and project config on mount
   useEffect(() => {
     getConfig().then((result) => {
       if (result.config) {
@@ -270,16 +270,20 @@ function AppContent() {
         return
       }
 
-      // Let browser handle Ctrl+key shortcuts, except Ctrl+1..9 which we use below
-      if (e.ctrlKey && !(e.key >= '1' && e.key <= '9')) {
+      // Ctrl+1 = conversations, Ctrl+2 = files
+      if (e.ctrlKey && e.key === '1') {
+        e.preventDefault()
+        setFileListFilter('conversations')
+        return
+      }
+      if (e.ctrlKey && e.key === '2') {
+        e.preventDefault()
+        setFileListFilter('files')
         return
       }
 
-      // Ctrl+1..4 to switch filter sections
-      if (e.ctrlKey && e.key >= '1' && e.key <= '4') {
-        e.preventDefault()
-        const filters: FilterType[] = ['conversations', 'files', 'tests', 'hidden']
-        setFileListFilter(filters[parseInt(e.key) - 1])
+      // Let browser handle other Ctrl+key shortcuts
+      if (e.ctrlKey) {
         return
       }
 
@@ -311,15 +315,6 @@ function AppContent() {
           <span>Critic</span>
           <span className="render-timestamp">{secondsSinceLoad}s</span>
           <div className="header-buttons">
-            <button
-              className={`archive-toggle-button${showArchived ? ' active' : ''}`}
-              onClick={() => setShowArchived(!showArchived)}
-              title={showArchived ? 'Hide archived conversations' : 'Show archived conversations'}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M1.75 2.5h12.5a.25.25 0 0 1 .25.25v1.5a.25.25 0 0 1-.25.25H1.75a.25.25 0 0 1-.25-.25v-1.5a.25.25 0 0 1 .25-.25ZM2.5 6v5.75c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25V6h1.5v5.75A1.75 1.75 0 0 1 13.25 13.5H2.75A1.75 1.75 0 0 1 1 11.75V6Zm4.25 2a.75.75 0 0 0 0 1.5h2.5a.75.75 0 0 0 0-1.5Z"/>
-              </svg>
-            </button>
             <button className="help-button" onClick={() => { setSelectedFile(null); setSelectedFileDiff(null); setShowRootConversation(false) }} title="Keyboard shortcuts">
               ?
             </button>
@@ -356,6 +351,7 @@ function AppContent() {
           filter={fileListFilter}
           onFilterChange={setFileListFilter}
           showArchived={showArchived}
+          onShowArchivedChange={setShowArchived}
           rootConversation={rootConversation}
           isRootConversationSelected={showRootConversation}
           onConversationsChanged={() => { loadAllConversations(); loadFileList(); loadRootConversation() }}
@@ -431,8 +427,10 @@ function AppContent() {
                   <tr><td><kbd>↓</kbd> / <kbd>j</kbd></td><td>Move selection down</td><td></td><td></td></tr>
 
                   <tr><td colSpan={4} className="shortcut-table-heading">File List Sections</td></tr>
-                  <tr><td><kbd>Ctrl</kbd> + <kbd>1</kbd></td><td>Conversations</td><td><kbd>Ctrl</kbd> + <kbd>3</kbd></td><td>Tests</td></tr>
-                  <tr><td><kbd>Ctrl</kbd> + <kbd>2</kbd></td><td>Files</td><td><kbd>Ctrl</kbd> + <kbd>4</kbd></td><td>Hidden</td></tr>
+                  <tr>
+                    <td><kbd>Ctrl</kbd> + <kbd>1</kbd></td><td>Conversations</td>
+                    <td><kbd>Ctrl</kbd> + <kbd>2</kbd></td><td>Files</td>
+                  </tr>
 
                   <tr><td colSpan={4} className="shortcut-table-heading">Diffs</td></tr>
                   <tr><td><kbd>Enter</kbd></td><td>Open comment editor</td><td><kbd>⌥</kbd> + <kbd>↵</kbd></td><td>Save comment</td></tr>

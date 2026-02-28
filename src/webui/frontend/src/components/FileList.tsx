@@ -18,7 +18,7 @@ function formatTimestamp(dateStr: string): string {
   return date.toLocaleDateString()
 }
 
-export type FilterType = 'automatic' | 'conversations' | 'files' | 'tests' | 'hidden'
+export type FilterType = string  // 'automatic' | 'conversations' | 'files'
 
 interface FileListProps {
   files: FileSummary[]
@@ -31,6 +31,7 @@ interface FileListProps {
   filter: FilterType
   onFilterChange: (filter: FilterType) => void
   showArchived?: boolean
+  onShowArchivedChange?: (show: boolean) => void
   rootConversation?: CommentConversation | null
   isRootConversationSelected?: boolean
   onConversationsChanged?: () => void
@@ -67,7 +68,7 @@ function categorizeFile(path: string, categories: FileCategory[]): string {
       return category.name
     }
   }
-  return 'source'
+  return 'other'
 }
 
 // Truncate text to maxLen characters, adding ellipsis if needed
@@ -106,11 +107,13 @@ function MessagePreviews({ messages }: { messages: CommentMessage[] }) {
   )
 }
 
-function FileList({ files, allConversations, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, filter, onFilterChange, showArchived = false, rootConversation, isRootConversationSelected, onConversationsChanged, onScrollToLine }: FileListProps) {
+function FileList({ files, allConversations, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, filter, onFilterChange, showArchived = false, onShowArchivedChange, rootConversation, isRootConversationSelected, onConversationsChanged, onScrollToLine }: FileListProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [categories, setCategories] = useState<FileCategory[]>([])
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set())
+  const [showUntracked, setShowUntracked] = useState(false)
+  const [openCategory, setOpenCategory] = useState<string>('')
   const selectedItemRef = useRef<HTMLLIElement>(null)
 
   const handleResolve = async (e: React.MouseEvent, conversationId: string) => {
@@ -163,6 +166,9 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
           console.error('Failed to fetch project config:', response.error.message)
         } else {
           setCategories(response.categories)
+          if (response.categories.length > 0) {
+            setOpenCategory(response.categories[0].name)
+          }
         }
         setLoading(false)
       })
@@ -206,43 +212,39 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
     }
   }, [selectedFile, isFocused])
 
-  // Compute visible, test, and hidden files based on project config categories, sorted by path
-  const { regularFiles, testFiles, hiddenFiles } = (() => {
-    const regular: FileSummary[] = []
-    const tests: FileSummary[] = []
-    const hidden: FileSummary[] = []
+  // Categorize files into a map keyed by category name
+  const sortByPath = (a: FileSummary, b: FileSummary) =>
+    getFilePath(a).localeCompare(getFilePath(b))
+
+  const categoryMap = useMemo(() => {
+    const map = new Map<string, FileSummary[]>()
+    // Initialize buckets for each configured category + source
+    for (const cat of categories) {
+      map.set(cat.name, [])
+    }
+    map.set('other', [])
     for (const file of files) {
       const path = getFilePath(file)
-      const category = categorizeFile(path, categories)
-      if (category === 'hidden') {
-        hidden.push(file)
-      } else if (category === 'test') {
-        tests.push(file)
-      } else {
-        regular.push(file)
-      }
+      const cat = categorizeFile(path, categories)
+      map.get(cat)!.push(file)
     }
-    // Sort each category by path
-    const sortByPath = (a: FileSummary, b: FileSummary) =>
-      getFilePath(a).localeCompare(getFilePath(b))
-    return {
-      regularFiles: regular.sort(sortByPath),
-      testFiles: tests.sort(sortByPath),
-      hiddenFiles: hidden.sort(sortByPath),
+    // Sort each bucket by path
+    for (const [, bucket] of map) {
+      bucket.sort(sortByPath)
     }
-  })()
+    return map
+  }, [files, categories])
 
-  // All visible files (regular + tests) for conversations filter
-  const visibleFiles = [...regularFiles, ...testFiles]
+  // All files sorted by path (for 'all' tab)
+  const allFilesSorted = useMemo(() => [...files].sort(sortByPath), [files])
 
-  // Files with conversations (from visible files only), sorted by path
-  const filesWithConversations = visibleFiles
+  // Files with conversations (from all files), sorted by path
+  const filesWithConversations = allFilesSorted
     .filter((file) => {
       const path = getFilePath(file)
       const summary = conversationSummaries.get(path)
       return summary && summary.totalCount > 0
     })
-    .sort((a, b) => getFilePath(a).localeCompare(getFilePath(b)))
 
   // Total conversation count: only non-resolved, non-archived items (matching what's displayed)
   const hasRootConversation = rootConversation && rootConversation.messages.length > 0 && rootConversation.status !== 'resolved' && rootConversation.status !== 'archived' ? 1 : 0
@@ -250,25 +252,43 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
     return sum + convos.filter((c) => c.status !== 'resolved' && (showArchived || c.status !== 'archived')).length
   }, 0)
 
-  // Compute effective filter: automatic means 'conversations' if any exist, otherwise 'files'
+  // Compute effective filter: automatic means 'conversations' if any exist, otherwise files
   const effectiveFilter = filter === 'automatic'
     ? (totalVisibleConversations > 0 ? 'conversations' : 'files')
     : filter
 
-  // Determine displayed files based on filter
-  const displayedFiles = (() => {
-    switch (effectiveFilter) {
-      case 'conversations':
-        return filesWithConversations
-      case 'tests':
-        return testFiles
-      case 'hidden':
-        return hiddenFiles
-      case 'files':
-      default:
-        return regularFiles
+  // Determine displayed files based on filter, optionally hiding untracked
+  const untrackedCount = useMemo(() => files.filter((f) => f.status === FileStatus.UNTRACKED).length, [files])
+
+  const displayedFiles = useMemo(() => {
+    let result: FileSummary[]
+    if (effectiveFilter === 'conversations') result = filesWithConversations
+    else result = allFilesSorted
+
+    if (!showUntracked && untrackedCount > 0) {
+      result = result.filter((f) => f.status !== FileStatus.UNTRACKED)
     }
-  })()
+    return result
+  }, [effectiveFilter, filesWithConversations, allFilesSorted, showUntracked, untrackedCount])
+
+  // Non-empty category sections for files mode
+  const fileSections = useMemo(() => {
+    const allCategoryNames = [...categories.map((c) => c.name), 'other']
+    return allCategoryNames.map((catName) => {
+      const bucket = categoryMap.get(catName) || []
+      const visibleFiles = !showUntracked && untrackedCount > 0
+        ? bucket.filter((f) => f.status !== FileStatus.UNTRACKED)
+        : bucket
+      return { name: catName, files: visibleFiles }
+    }).filter((s) => s.files.length > 0)
+  }, [categories, categoryMap, showUntracked, untrackedCount])
+
+  // Files visible for keyboard navigation: in files mode, only the open category
+  const visibleFiles = useMemo(() => {
+    if (effectiveFilter === 'conversations') return displayedFiles
+    const section = fileSections.find((s) => s.name === openCategory)
+    return section ? section.files : []
+  }, [effectiveFilter, displayedFiles, fileSections, openCategory])
 
   // Keyboard navigation when focused
   const showRootInList = effectiveFilter === 'conversations' && hasRootConversation > 0
@@ -283,9 +303,39 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
       }
 
       const currentIndex = selectedFile
-        ? displayedFiles.findIndex((f) => getFilePath(f) === selectedFile)
+        ? visibleFiles.findIndex((f) => getFilePath(f) === selectedFile)
         : -1
       const onRoot = isRootConversationSelected
+
+      const openNextCategory = () => {
+        if (effectiveFilter === 'conversations' || fileSections.length === 0) return false
+        const idx = fileSections.findIndex((s) => s.name === openCategory)
+        if (idx < fileSections.length - 1) {
+          const next = fileSections[idx + 1]
+          setOpenCategory(next.name)
+          if (next.files.length > 0) {
+            const first = next.files[0]
+            onSelectFile(getFilePath(first), first)
+          }
+          return true
+        }
+        return false
+      }
+
+      const openPrevCategory = () => {
+        if (effectiveFilter === 'conversations' || fileSections.length === 0) return false
+        const idx = fileSections.findIndex((s) => s.name === openCategory)
+        if (idx > 0) {
+          const prev = fileSections[idx - 1]
+          setOpenCategory(prev.name)
+          if (prev.files.length > 0) {
+            const last = prev.files[prev.files.length - 1]
+            onSelectFile(getFilePath(last), last)
+          }
+          return true
+        }
+        return false
+      }
 
       switch (e.key) {
         case 'ArrowUp':
@@ -294,15 +344,15 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
           if (onRoot) {
             // Already at the top, do nothing
           } else if (currentIndex === 0 && showRootInList) {
-            // At first file, go up to root conversation
             onSelectRootConversation?.()
+          } else if (currentIndex === 0) {
+            openPrevCategory()
           } else if (currentIndex > 0) {
-            const prevFile = displayedFiles[currentIndex - 1]
+            const prevFile = visibleFiles[currentIndex - 1]
             onSelectFile(getFilePath(prevFile), prevFile)
           } else if (currentIndex === -1 && !onRoot) {
-            // No selection, select last file
-            if (displayedFiles.length > 0) {
-              const lastFile = displayedFiles[displayedFiles.length - 1]
+            if (visibleFiles.length > 0) {
+              const lastFile = visibleFiles[visibleFiles.length - 1]
               onSelectFile(getFilePath(lastFile), lastFile)
             } else if (showRootInList) {
               onSelectRootConversation?.()
@@ -312,29 +362,28 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
         case 'ArrowDown':
         case 'j':
           e.preventDefault()
-          if (onRoot && displayedFiles.length > 0) {
-            // On root, go down to first file
-            const firstFile = displayedFiles[0]
+          if (onRoot && visibleFiles.length > 0) {
+            const firstFile = visibleFiles[0]
             onSelectFile(getFilePath(firstFile), firstFile)
-          } else if (currentIndex < displayedFiles.length - 1) {
-            const nextFile = displayedFiles[currentIndex + 1]
+          } else if (currentIndex >= 0 && currentIndex >= visibleFiles.length - 1) {
+            openNextCategory()
+          } else if (currentIndex < visibleFiles.length - 1) {
+            const nextFile = visibleFiles[currentIndex + 1]
             onSelectFile(getFilePath(nextFile), nextFile)
           } else if (currentIndex === -1 && !onRoot) {
-            // No selection, select root or first file
             if (showRootInList) {
               onSelectRootConversation?.()
-            } else if (displayedFiles.length > 0) {
-              const firstFile = displayedFiles[0]
+            } else if (visibleFiles.length > 0) {
+              const firstFile = visibleFiles[0]
               onSelectFile(getFilePath(firstFile), firstFile)
             }
           }
           break
         case 'Enter':
-          // Already selected, just confirm (could switch focus to diff view)
           break
       }
     },
-    [isFocused, displayedFiles, selectedFile, onSelectFile, isRootConversationSelected, showRootInList, onSelectRootConversation]
+    [isFocused, visibleFiles, selectedFile, onSelectFile, isRootConversationSelected, showRootInList, onSelectRootConversation, effectiveFilter, fileSections, openCategory]
   )
 
   useEffect(() => {
@@ -373,20 +422,30 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
           className={`file-list-filter-btn${effectiveFilter === 'files' ? ' active' : ''}`}
           onClick={() => onFilterChange('files')}
         >
-          {pluralize(regularFiles.length, 'File')}
+          {showUntracked ? files.length : files.length - untrackedCount} Files
         </button>
-        <button
-          className={`file-list-filter-btn${effectiveFilter === 'tests' ? ' active' : ''}`}
-          onClick={() => onFilterChange('tests')}
-        >
-          {pluralize(testFiles.length, 'Test')}
-        </button>
-        <button
-          className={`file-list-filter-btn${filter === 'hidden' ? ' active' : ''}`}
-          onClick={() => onFilterChange('hidden')}
-        >
-          {hiddenFiles.length} Hidden
-        </button>
+      </div>
+      <div className="file-list-toggles">
+        {untrackedCount > 0 && (
+          <label className="file-list-checkbox-toggle">
+            <input
+              type="checkbox"
+              checked={showUntracked}
+              onChange={() => setShowUntracked(!showUntracked)}
+            />
+            show {untrackedCount} untracked {untrackedCount === 1 ? 'file' : 'files'}
+          </label>
+        )}
+        {onShowArchivedChange && (
+          <label className="file-list-checkbox-toggle">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={() => onShowArchivedChange(!showArchived)}
+            />
+            show archived conversations
+          </label>
+        )}
       </div>
       <ul className="file-list">
         {effectiveFilter === 'conversations' ? (
@@ -522,55 +581,79 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
           </>
         ) : (
           <>
-            {displayedFiles.map((file) => {
-              const path = getFilePath(file)
-              const isSelected = selectedFile === path
-              const summary = conversationSummaries.get(path)
-              return (
-                <li
-                  key={path}
-                  ref={isSelected ? selectedItemRef : undefined}
-                  className={`file-item${isSelected ? ' selected' : ''}`}
-                  onClick={() => {
-                    onSelectFile(path, file)
-                    onFocus?.()
-                  }}
-                  title={path}
-                >
-                  <span className={`file-status status-${getStatusLabel(file.status).toLowerCase()}`}>
-                    {getStatusLabel(file.status)}
-                  </span>
-                  <span className="file-path">{path}</span>
-                  {summary && summary.unresolvedCount > 0 && (
-                    <span
-                      className="conversation-icon unresolved"
-                      title={`${summary.unresolvedCount} open`}
-                    >
-                      {summary.unresolvedCount}
+            {(() => {
+              const renderFileItem = (file: FileSummary) => {
+                const path = getFilePath(file)
+                const isSelected = selectedFile === path
+                const summary = conversationSummaries.get(path)
+                return (
+                  <li
+                    key={path}
+                    ref={isSelected ? selectedItemRef : undefined}
+                    className={`file-item${isSelected ? ' selected' : ''}`}
+                    onClick={() => {
+                      onSelectFile(path, file)
+                      onFocus?.()
+                    }}
+                    title={path}
+                  >
+                    <span className={`file-status status-${getStatusLabel(file.status).toLowerCase()}`}>
+                      {getStatusLabel(file.status)}
                     </span>
-                  )}
-                  {summary && summary.resolvedCount > 0 && (
-                    <span
-                      className="conversation-icon resolved"
-                      title={`${summary.resolvedCount} resolved`}
+                    <span className="file-path">{path}</span>
+                    {summary && summary.unresolvedCount > 0 && (
+                      <span className="conversation-icon unresolved" title={`${summary.unresolvedCount} open`}>
+                        {summary.unresolvedCount}
+                      </span>
+                    )}
+                    {summary && summary.resolvedCount > 0 && (
+                      <span className="conversation-icon resolved" title={`${summary.resolvedCount} resolved`}>
+                        {summary.resolvedCount}
+                      </span>
+                    )}
+                  </li>
+                )
+              }
+
+              if (fileSections.length === 0) {
+                return <li className="file-list-message">No files found</li>
+              }
+
+              const selectCategory = (name: string) => {
+                setOpenCategory(name)
+                const section = fileSections.find((s) => s.name === name)
+                if (section && section.files.length > 0) {
+                  const first = section.files[0]
+                  onSelectFile(getFilePath(first), first)
+                }
+              }
+
+              // If only one section, always keep it open
+              if (fileSections.length === 1 && openCategory !== fileSections[0].name) {
+                setOpenCategory(fileSections[0].name)
+              }
+
+              return fileSections.map((section) => {
+                const isOpen = openCategory === section.name
+                const label = section.name.charAt(0).toUpperCase() + section.name.slice(1)
+                return (
+                  <li key={section.name} className="file-category-group">
+                    <div
+                      className={`file-category-header${isOpen ? ' open' : ''}`}
+                      onClick={() => selectCategory(section.name)}
                     >
-                      {summary.resolvedCount}
-                    </span>
-                  )}
-                </li>
-              )
-            })}
-            {displayedFiles.length === 0 && (
-              <li className="file-list-message">
-                {filter === 'conversations'
-                  ? 'No files with conversations'
-                  : filter === 'tests'
-                    ? 'No test files (configure via project.critic)'
-                    : filter === 'hidden'
-                      ? 'Files can be hidden via project.critic'
-                      : 'No files found'}
-              </li>
-            )}
+                      <span className="file-category-label">{label}</span>
+                      <span className="file-category-count">{section.files.length}</span>
+                    </div>
+                    <div className={`file-category-collapse${isOpen ? ' open' : ''}`}>
+                      <ul className="file-category-files">
+                        {section.files.map(renderFileItem)}
+                      </ul>
+                    </div>
+                  </li>
+                )
+              })
+            })()}
           </>
         )}
       </ul>

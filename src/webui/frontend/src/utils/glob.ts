@@ -66,14 +66,34 @@ export function patternToRegex(pattern: string): RegExp {
   return new RegExp('^' + regex + '$')
 }
 
-// Check if a file path matches any of the given patterns
+// Check if a file path matches any of the given patterns.
+// Patterns starting with "!" are negations: a file matches only if it
+// matches at least one positive pattern and none of the negative patterns.
 export function matchesAnyPattern(path: string, patterns: string[]): boolean {
-  for (const pattern of patterns) {
-    if (!pattern) continue
-    const regex = patternToRegex(pattern)
-    if (regex.test(path)) {
-      return true
+  const positive: string[] = []
+  const negative: string[] = []
+  for (const p of patterns) {
+    if (!p) continue
+    if (p.startsWith('!')) {
+      negative.push(p.slice(1))
+    } else {
+      positive.push(p)
     }
   }
-  return false
+
+  let matched = false
+  for (const p of positive) {
+    if (patternToRegex(p).test(path)) {
+      matched = true
+      break
+    }
+  }
+  if (!matched) return false
+
+  for (const p of negative) {
+    if (patternToRegex(p).test(path)) {
+      return false
+    }
+  }
+  return true
 }

@@ -489,6 +489,61 @@ html, body, #root {
   color: var(--text-error);
 }
 
+.file-list-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 16px;
+  font-size: 12px;
+}
+
+.file-list-checkbox-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.file-list-checkbox-toggle:hover {
+  color: var(--text-primary);
+}
+
+.file-list-checkbox-toggle input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--border-primary);
+  border-radius: 3px;
+  background: var(--bg-primary);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease;
+}
+
+.file-list-checkbox-toggle input[type="checkbox"]:checked {
+  border-color: var(--text-muted);
+}
+
+.file-list-checkbox-toggle input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 1px;
+  width: 4px;
+  height: 7px;
+  border: solid var(--text-secondary);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+.file-list-checkbox-toggle:hover input[type="checkbox"] {
+  border-color: var(--text-muted);
+}
+
 .file-item {
   display: flex;
   align-items: center;
@@ -517,6 +572,54 @@ html, body, #root {
 .file-list-container.focused .file-item.selected {
   border-left: 3px solid var(--diff-hunk-text);
   padding-left: 13px;
+}
+
+.file-category-group {
+  list-style: none;
+}
+
+.file-category-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-secondary);
+  user-select: none;
+}
+
+.file-category-header:hover {
+  background-color: var(--bg-hover);
+}
+
+.file-category-label {
+  flex: 1;
+}
+
+.file-category-count {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.file-category-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.1s ease;
+}
+
+.file-category-collapse.open {
+  grid-template-rows: 1fr;
+}
+
+.file-category-files {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
 }
 
 .file-status {
@@ -665,6 +768,8 @@ html, body, #root {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .diff-header {
@@ -782,6 +887,37 @@ html, body, #root {
   color: var(--text-primary);
 }
 
+.view-mode-toggle {
+  display: flex;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.view-mode-button {
+  padding: 2px 8px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+.view-mode-button:not(:last-child) {
+  border-right: 1px solid var(--border-primary);
+}
+
+.view-mode-button:hover {
+  background-color: var(--bg-hover);
+}
+
+.view-mode-button.active {
+  background-color: var(--bg-selected);
+  color: var(--text-primary);
+}
+
 .diff-content {
   flex: 1;
   overflow: auto;
@@ -790,6 +926,24 @@ html, body, #root {
   max-width: 100%;
   padding-bottom: 75vh;
 }
+
+.file-view-content {
+  padding: 0;
+}
+
+.file-view-loading,
+.file-view-error {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.file-view-error {
+  color: var(--text-error);
+}
+
+
 
 .diff-binary-notice,
 .diff-empty-notice {
@@ -807,6 +961,7 @@ html, body, #root {
   font-family: 'PT Mono', monospace;
   font-size: 12px;
   line-height: 1.5;
+  user-select: none;
 }
 
 .diff-table tr:not(.diff-hunk-header-row):not(.diff-comment-row):not(.diff-inline-editor-row) {
