@@ -421,6 +421,50 @@ func TestReadByAIFieldInGetThreadMessages(t *testing.T) {
 	}
 }
 
+func TestGetConversationsActionableFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// conv1: human starts, no AI reply → actionable
+	conv1, _ := db.CreateMessage(AuthorHuman, "Please fix this", "src/main.go", 10, "abc123", "content")
+
+	// conv2: human starts, AI replies → NOT actionable (last message is from AI)
+	conv2, _ := db.CreateMessage(AuthorHuman, "Bug here", "src/main.go", 20, "abc123", "content")
+	db.CreateReply(AuthorAI, "Fixed it", conv2.ID)
+
+	// conv3: human starts, AI replies, human follows up → actionable (last message is from human)
+	conv3, _ := db.CreateMessage(AuthorHuman, "Another issue", "src/util.go", 5, "abc123", "content")
+	db.CreateReply(AuthorAI, "Working on it", conv3.ID)
+	db.CreateReply(AuthorHuman, "Actually this is still broken", conv3.ID)
+
+	// conv4: resolved conversation → NOT actionable
+	conv4, _ := db.CreateMessage(AuthorHuman, "Old issue", "src/test.go", 1, "abc123", "content")
+	db.MarkConversationAs(conv4.ID, critic.ConversationResolved)
+
+	// Get actionable conversations
+	actionable, err := db.GetConversations("actionable", nil)
+	assert.NoError(t, err, "failed to get actionable conversations")
+	assert.Equals(t, len(actionable), 2, "expected 2 actionable conversations")
+
+	actionableUUIDs := make([]string, len(actionable))
+	for i, conv := range actionable {
+		actionableUUIDs[i] = conv.UUID
+	}
+	assert.Contains(t, actionableUUIDs, conv1.ID, "conv1 should be actionable (no AI reply)")
+	assert.Contains(t, actionableUUIDs, conv3.ID, "conv3 should be actionable (human followed up)")
+
+	// conv2 should NOT be actionable (AI replied last)
+	for _, uuid := range actionableUUIDs {
+		assert.NotEquals(t, uuid, conv2.ID, "conv2 should NOT be actionable (AI replied last)")
+	}
+
+	// Actionable + path filter
+	actionableMain, err := db.GetConversations("actionable", []string{"src/main.go"})
+	assert.NoError(t, err, "failed to get actionable for path")
+	assert.Equals(t, len(actionableMain), 1, "expected 1 actionable conversation in src/main.go")
+	assert.Equals(t, actionableMain[0].UUID, conv1.ID)
+}
+
 func TestReadByAIFieldDefaultsFalse(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()

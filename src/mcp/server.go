@@ -130,13 +130,13 @@ func (s *Server) handleToolsList(req Request) error {
 	tools := []Tool{
 		{
 			Name:        "get_critic_conversations",
-			Description: "Get a list of conversation UUIDs. Optionally filter by status ('unresolved' or 'resolved'). Use this to check for reviewer feedback.",
+			Description: "Get a list of conversation UUIDs. Optionally filter by status ('unresolved', 'resolved', or 'actionable'). Use this to check for reviewer feedback. The 'actionable' filter returns only unresolved conversations where the last message is from a human reviewer (i.e., conversations that need AI attention).",
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]Property{
 					"status": {
 						Type:        "string",
-						Description: "Optional filter: 'unresolved' or 'resolved'. If omitted, returns all conversations.",
+						Description: "Optional filter: 'unresolved', 'resolved', or 'actionable'. 'actionable' returns unresolved conversations where the last message is from a human. If omitted, returns all conversations.",
 					},
 				},
 			},
