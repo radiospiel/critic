@@ -22,6 +22,7 @@ import (
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/webui"
+	"github.com/radiospiel/critic/simple-go/utils"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -61,12 +62,13 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 // Config holds the configuration for the API server.
 type Config struct {
-	Port          int
-	GitRoot       string
-	Messaging     critic.Messaging
-	Dev           bool // Development mode: proxy to Vite dev server instead of serving embedded files
-	DiffBases     []string
-	ProjectConfig *config.ProjectConfig
+	Port              int
+	GitRoot           string
+	Messaging         critic.Messaging
+	Dev               bool // Development mode: proxy to Vite dev server instead of serving embedded files
+	DiffBases         []string
+	ProjectConfig     *config.ProjectConfig
+	ProjectConfigPath string // Absolute path to project.critic file (for watching)
 }
 
 // Server implements the CriticService API.
@@ -77,6 +79,7 @@ type Server struct {
 	devServer      *webui.DevServer
 	gitWatcher     *git.GitWatcher
 	dbWatcher      *messagedb.DBWatcher
+	configWatcher  *utils.FileWatcher
 	lastChangeTime atomic.Int64 // Unix milliseconds of last detected change
 }
 
@@ -133,6 +136,25 @@ func (s *Server) handleGitChanges() {
 	}
 }
 
+// handleConfigChanges listens for project.critic file changes,
+// reloads the config, and broadcasts a config-changed message.
+func (s *Server) handleConfigChanges() {
+	if s.configWatcher == nil {
+		return
+	}
+
+	for range s.configWatcher.Changes() {
+		logger.Info("Project config changed, reloading")
+		pc, err := config.LoadProjectConfigFromFile(s.config.ProjectConfigPath)
+		if err != nil {
+			logger.Error("Failed to reload project config: %v", err)
+			continue
+		}
+		s.config.ProjectConfig = pc
+		s.wsHub.Broadcast([]byte(`{"type":"config-changed"}`))
+	}
+}
+
 // handleDBChanges listens for database changes and broadcasts reload messages.
 func (s *Server) handleDBChanges() {
 	if s.dbWatcher == nil {
@@ -178,6 +200,17 @@ func (s *Server) Start() error {
 		} else {
 			s.dbWatcher = dbWatcher
 			go s.handleDBChanges()
+		}
+	}
+
+	// Start project config file watcher
+	if s.config.ProjectConfigPath != "" {
+		watcher, err := utils.NewFileWatcher(s.config.ProjectConfigPath, 200) // 200ms debounce
+		if err != nil {
+			logger.Error("Failed to start config watcher: %v", err)
+		} else {
+			s.configWatcher = watcher
+			go s.handleConfigChanges()
 		}
 	}
 
@@ -282,6 +315,11 @@ func (s *Server) Start() error {
 	// Stop database watcher if running
 	if s.dbWatcher != nil {
 		s.dbWatcher.Close()
+	}
+
+	// Stop config watcher if running
+	if s.configWatcher != nil {
+		s.configWatcher.Close()
 	}
 
 	// Stop file watcher if running

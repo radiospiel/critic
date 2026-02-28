@@ -26,10 +26,10 @@ func getProjectConfigImpl(server *Server) (*api.GetProjectConfigResponse, error)
 	}
 
 	categories := make([]*api.FileCategory, 0, len(pc.Categories))
-	for name, patterns := range pc.Categories {
+	for _, cat := range pc.Categories {
 		categories = append(categories, &api.FileCategory{
-			Name:     name,
-			Patterns: patterns,
+			Name:     cat.Name,
+			Patterns: cat.Patterns,
 		})
 	}
 
