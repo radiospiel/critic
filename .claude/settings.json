@@ -13,6 +13,15 @@
             "prompt": "file:agents/hooks/pre-commit-review.md"
           }
         ]
+      },
+      {
+        "matcher": "mcp__critic__",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash agents/hooks/capture-session-id.sh"
+          }
+        ]
       }
     ],
     "Stop": [

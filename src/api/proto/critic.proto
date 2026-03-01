@@ -40,6 +40,10 @@ service CriticService {
   rpc GetProjectConfig(GetProjectConfigRequest) returns (GetProjectConfigResponse);
   // CreateExplanation creates a new explanation (informal annotation) on a code line.
   rpc CreateExplanation(CreateExplanationRequest) returns (CreateExplanationResponse);
+  // SetClaudeSession stores the Claude Code session ID for prompt injection.
+  rpc SetClaudeSession(SetClaudeSessionRequest) returns (SetClaudeSessionResponse);
+  // InjectPrompt sends a prompt to the connected Claude Code session.
+  rpc InjectPrompt(InjectPromptRequest) returns (InjectPromptResponse);
 }
 
 // ErrorCode represents the type of RPC error.
@@ -419,6 +423,8 @@ message GetConfigResponse {
   string git_root = 1;
   // dev_mode indicates whether the server is running in development mode.
   bool dev_mode = 2;
+  // claude_session_id is the connected Claude Code session ID (empty if not connected).
+  string claude_session_id = 3;
   // error contains error details if the request failed.
   RpcError error = 15;
 }
@@ -467,6 +473,36 @@ message CreateExplanationRequest {
 message CreateExplanationResponse {
   // success indicates whether the explanation was created successfully.
   bool success = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// SetClaudeSessionRequest stores a Claude Code session ID.
+message SetClaudeSessionRequest {
+  // session_id is the Claude Code session identifier.
+  string session_id = 1;
+}
+
+// SetClaudeSessionResponse confirms the session was stored.
+message SetClaudeSessionResponse {
+  // success indicates whether the session was stored successfully.
+  bool success = 1;
+  // error contains error details if the request failed.
+  RpcError error = 15;
+}
+
+// InjectPromptRequest sends a prompt to the connected Claude Code session.
+message InjectPromptRequest {
+  // prompt is the text to send to Claude Code.
+  string prompt = 1;
+}
+
+// InjectPromptResponse contains the result of the prompt injection.
+message InjectPromptResponse {
+  // success indicates whether the prompt was executed successfully.
+  bool success = 1;
+  // output is the Claude Code response output.
+  string output = 2;
   // error contains error details if the request failed.
   RpcError error = 15;
 }

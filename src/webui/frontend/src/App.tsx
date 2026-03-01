@@ -4,7 +4,7 @@ import FileList, { FilterType } from './components/FileList'
 import DiffView from './components/DiffView'
 import DiffBaseSelector from './components/DiffBaseSelector'
 import CommentDisplay from './components/CommentDisplay'
-import { criticClient, getConfig, getConversations, getRootConversation, ServerConfig, CommentConversation } from './api/client'
+import { criticClient, getConfig, getConversations, getRootConversation, injectPrompt, ServerConfig, CommentConversation } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
 import { useWebSocket } from './hooks/useWebSocket'
 
@@ -38,6 +38,7 @@ function AppContent() {
   const [showRootConversation, setShowRootConversation] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [allConversations, setAllConversations] = useState<CommentConversation[]>([])
+  const [claudePromptLoading, setClaudePromptLoading] = useState<string | null>(null)
   const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
 
@@ -135,7 +136,8 @@ function AppContent() {
       // Reset the timer
       loadTimeRef.current = Date.now()
       setSecondsSinceLoad(0)
-      // Reload the file list, conversations, and root conversation
+      // Reload config (picks up session_id changes), file list, conversations, and root conversation
+      getConfig().then((result) => { if (result.config) setServerConfig(result.config) })
       loadFileList()
       loadAllConversations()
       loadRootConversation()
@@ -258,6 +260,17 @@ function AppContent() {
     setCurrentLineNo({ lineNoNew, lineNoOld })
   }, [])
 
+  const handleClaudePrompt = useCallback(async (prompt: string, label: string) => {
+    setClaudePromptLoading(label)
+    try {
+      await injectPrompt(prompt)
+    } finally {
+      setClaudePromptLoading(null)
+    }
+  }, [])
+
+  const hasClaudeSession = !!serverConfig?.claudeSessionId
+
   // Filter conversations for the selected file (derived from single bulk load)
   const selectedFileConversations = useMemo(
     () => selectedFile
@@ -328,6 +341,22 @@ function AppContent() {
           <span>Critic</span>
           <span className="render-timestamp">{secondsSinceLoad}s</span>
           <div className="header-buttons">
+            <button
+              className="claude-button"
+              disabled={!hasClaudeSession || claudePromptLoading !== null}
+              onClick={() => handleClaudePrompt('/critic:loop', 'loop')}
+              title={hasClaudeSession ? 'Ask Claude to check and resolve feedback' : 'No Claude session connected — run /critic:activate'}
+            >
+              {claudePromptLoading === 'loop' ? '...' : 'Ask Claude'}
+            </button>
+            <button
+              className="claude-button"
+              disabled={!hasClaudeSession || claudePromptLoading !== null}
+              onClick={() => handleClaudePrompt('/critic:summarize', 'summarize')}
+              title={hasClaudeSession ? 'Ask Claude to summarize changes' : 'No Claude session connected — run /critic:activate'}
+            >
+              {claudePromptLoading === 'summarize' ? '...' : 'Summarize'}
+            </button>
             <button className="help-button" onClick={() => { setSelectedFile(null); setSelectedFileDiff(null); setShowRootConversation(false) }} title="Keyboard shortcuts">
               ?
             </button>

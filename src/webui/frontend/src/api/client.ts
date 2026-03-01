@@ -332,11 +332,41 @@ export async function getRootConversation(): Promise<GetRootConversationResult> 
   }
 }
 
+// Types for prompt injection
+export interface InjectPromptResult {
+  success: boolean
+  output?: string
+  error?: string
+}
+
+// Inject a prompt into the connected Claude Code session
+export async function injectPrompt(prompt: string): Promise<InjectPromptResult> {
+  try {
+    const response = await criticClient.injectPrompt({ prompt })
+    if (response.error) {
+      return {
+        success: false,
+        error: response.error.message,
+      }
+    }
+    return {
+      success: response.success,
+      output: response.output,
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
 // Types for server config
 export interface ServerConfig {
   gitRoot: string
   devMode: boolean
   editorUrl: string
+  claudeSessionId: string
 }
 
 export interface GetConfigResult {
@@ -362,6 +392,7 @@ export async function getConfig(): Promise<GetConfigResult> {
         gitRoot: configResponse.gitRoot,
         devMode: configResponse.devMode,
         editorUrl: projectResponse?.editor?.url || '',
+        claudeSessionId: configResponse.claudeSessionId || '',
       },
     }
   } catch (err) {

@@ -77,6 +77,12 @@ const (
 	// CriticServiceCreateExplanationProcedure is the fully-qualified name of the CriticService's
 	// CreateExplanation RPC.
 	CriticServiceCreateExplanationProcedure = "/critic.v1.CriticService/CreateExplanation"
+	// CriticServiceSetClaudeSessionProcedure is the fully-qualified name of the CriticService's
+	// SetClaudeSession RPC.
+	CriticServiceSetClaudeSessionProcedure = "/critic.v1.CriticService/SetClaudeSession"
+	// CriticServiceInjectPromptProcedure is the fully-qualified name of the CriticService's
+	// InjectPrompt RPC.
+	CriticServiceInjectPromptProcedure = "/critic.v1.CriticService/InjectPrompt"
 )
 
 // CriticServiceClient is a client for the critic.v1.CriticService service.
@@ -115,6 +121,10 @@ type CriticServiceClient interface {
 	GetProjectConfig(context.Context, *connect.Request[api.GetProjectConfigRequest]) (*connect.Response[api.GetProjectConfigResponse], error)
 	// CreateExplanation creates a new explanation (informal annotation) on a code line.
 	CreateExplanation(context.Context, *connect.Request[api.CreateExplanationRequest]) (*connect.Response[api.CreateExplanationResponse], error)
+	// SetClaudeSession stores the Claude Code session ID for prompt injection.
+	SetClaudeSession(context.Context, *connect.Request[api.SetClaudeSessionRequest]) (*connect.Response[api.SetClaudeSessionResponse], error)
+	// InjectPrompt sends a prompt to the connected Claude Code session.
+	InjectPrompt(context.Context, *connect.Request[api.InjectPromptRequest]) (*connect.Response[api.InjectPromptResponse], error)
 }
 
 // NewCriticServiceClient constructs a client for the critic.v1.CriticService service. By default,
@@ -224,6 +234,18 @@ func NewCriticServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(criticServiceMethods.ByName("CreateExplanation")),
 			connect.WithClientOptions(opts...),
 		),
+		setClaudeSession: connect.NewClient[api.SetClaudeSessionRequest, api.SetClaudeSessionResponse](
+			httpClient,
+			baseURL+CriticServiceSetClaudeSessionProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("SetClaudeSession")),
+			connect.WithClientOptions(opts...),
+		),
+		injectPrompt: connect.NewClient[api.InjectPromptRequest, api.InjectPromptResponse](
+			httpClient,
+			baseURL+CriticServiceInjectPromptProcedure,
+			connect.WithSchema(criticServiceMethods.ByName("InjectPrompt")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -245,6 +267,8 @@ type criticServiceClient struct {
 	getRootConversation     *connect.Client[api.GetRootConversationRequest, api.GetRootConversationResponse]
 	getProjectConfig        *connect.Client[api.GetProjectConfigRequest, api.GetProjectConfigResponse]
 	createExplanation       *connect.Client[api.CreateExplanationRequest, api.CreateExplanationResponse]
+	setClaudeSession        *connect.Client[api.SetClaudeSessionRequest, api.SetClaudeSessionResponse]
+	injectPrompt            *connect.Client[api.InjectPromptRequest, api.InjectPromptResponse]
 }
 
 // GetLastChange calls critic.v1.CriticService.GetLastChange.
@@ -327,6 +351,16 @@ func (c *criticServiceClient) CreateExplanation(ctx context.Context, req *connec
 	return c.createExplanation.CallUnary(ctx, req)
 }
 
+// SetClaudeSession calls critic.v1.CriticService.SetClaudeSession.
+func (c *criticServiceClient) SetClaudeSession(ctx context.Context, req *connect.Request[api.SetClaudeSessionRequest]) (*connect.Response[api.SetClaudeSessionResponse], error) {
+	return c.setClaudeSession.CallUnary(ctx, req)
+}
+
+// InjectPrompt calls critic.v1.CriticService.InjectPrompt.
+func (c *criticServiceClient) InjectPrompt(ctx context.Context, req *connect.Request[api.InjectPromptRequest]) (*connect.Response[api.InjectPromptResponse], error) {
+	return c.injectPrompt.CallUnary(ctx, req)
+}
+
 // CriticServiceHandler is an implementation of the critic.v1.CriticService service.
 type CriticServiceHandler interface {
 	// GetLastChange returns the timestamp of the last change.
@@ -363,6 +397,10 @@ type CriticServiceHandler interface {
 	GetProjectConfig(context.Context, *connect.Request[api.GetProjectConfigRequest]) (*connect.Response[api.GetProjectConfigResponse], error)
 	// CreateExplanation creates a new explanation (informal annotation) on a code line.
 	CreateExplanation(context.Context, *connect.Request[api.CreateExplanationRequest]) (*connect.Response[api.CreateExplanationResponse], error)
+	// SetClaudeSession stores the Claude Code session ID for prompt injection.
+	SetClaudeSession(context.Context, *connect.Request[api.SetClaudeSessionRequest]) (*connect.Response[api.SetClaudeSessionResponse], error)
+	// InjectPrompt sends a prompt to the connected Claude Code session.
+	InjectPrompt(context.Context, *connect.Request[api.InjectPromptRequest]) (*connect.Response[api.InjectPromptResponse], error)
 }
 
 // NewCriticServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -468,6 +506,18 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(criticServiceMethods.ByName("CreateExplanation")),
 		connect.WithHandlerOptions(opts...),
 	)
+	criticServiceSetClaudeSessionHandler := connect.NewUnaryHandler(
+		CriticServiceSetClaudeSessionProcedure,
+		svc.SetClaudeSession,
+		connect.WithSchema(criticServiceMethods.ByName("SetClaudeSession")),
+		connect.WithHandlerOptions(opts...),
+	)
+	criticServiceInjectPromptHandler := connect.NewUnaryHandler(
+		CriticServiceInjectPromptProcedure,
+		svc.InjectPrompt,
+		connect.WithSchema(criticServiceMethods.ByName("InjectPrompt")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/critic.v1.CriticService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case CriticServiceGetLastChangeProcedure:
@@ -502,6 +552,10 @@ func NewCriticServiceHandler(svc CriticServiceHandler, opts ...connect.HandlerOp
 			criticServiceGetProjectConfigHandler.ServeHTTP(w, r)
 		case CriticServiceCreateExplanationProcedure:
 			criticServiceCreateExplanationHandler.ServeHTTP(w, r)
+		case CriticServiceSetClaudeSessionProcedure:
+			criticServiceSetClaudeSessionHandler.ServeHTTP(w, r)
+		case CriticServiceInjectPromptProcedure:
+			criticServiceInjectPromptHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -573,4 +627,12 @@ func (UnimplementedCriticServiceHandler) GetProjectConfig(context.Context, *conn
 
 func (UnimplementedCriticServiceHandler) CreateExplanation(context.Context, *connect.Request[api.CreateExplanationRequest]) (*connect.Response[api.CreateExplanationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.CreateExplanation is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) SetClaudeSession(context.Context, *connect.Request[api.SetClaudeSessionRequest]) (*connect.Response[api.SetClaudeSessionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.SetClaudeSession is not implemented"))
+}
+
+func (UnimplementedCriticServiceHandler) InjectPrompt(context.Context, *connect.Request[api.InjectPromptRequest]) (*connect.Response[api.InjectPromptResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("critic.v1.CriticService.InjectPrompt is not implemented"))
 }

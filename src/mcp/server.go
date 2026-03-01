@@ -188,6 +188,20 @@ func (s *Server) handleToolsList(req Request) error {
 			},
 		},
 		{
+			Name:        "critic_set_session_id",
+			Description: "Store the current Claude Code session ID so the critic UI can send prompts back to this session. Call this once during /critic:activate.",
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]Property{
+					"session_id": {
+						Type:        "string",
+						Description: "The Claude Code session ID (UUID format)",
+					},
+				},
+				Required: []string{"session_id"},
+			},
+		},
+		{
 			Name:        "critic_explain",
 			Description: "Post an explanation on a specific code line. Explanations are informal annotations shown with a lightbulb icon in the Critic UI.",
 			InputSchema: InputSchema{
@@ -238,6 +252,8 @@ func (s *Server) handleToolsCall(req Request) error {
 		return s.handleReplyToCriticConversation(req, params)
 	case "critic_announce":
 		return s.handleCriticAnnounce(req, params)
+	case "critic_set_session_id":
+		return s.handleCriticSetSessionID(req, params)
 	case "critic_explain":
 		return s.handleCriticExplain(req, params)
 	default:
@@ -474,6 +490,26 @@ func (s *Server) handleCriticAnnounce(req Request, params CallToolParams) error 
 	return s.sendToolResult(req.ID, string(result))
 }
 
+// handleCriticSetSessionID handles the critic_set_session_id tool
+func (s *Server) handleCriticSetSessionID(req Request, params CallToolParams) error {
+	sessionID, ok := params.Arguments["session_id"].(string)
+	if !ok || sessionID == "" {
+		return s.sendToolError(req.ID, "session_id is required")
+	}
+
+	db, ok := s.messaging.(*messagedb.DB)
+	if !ok {
+		return s.sendToolError(req.ID, "database not available")
+	}
+
+	if err := db.SetSetting("claude_session_id", sessionID); err != nil {
+		return s.sendToolError(req.ID, fmt.Sprintf("failed to store session ID: %v", err))
+	}
+
+	s.logToStderr("Stored Claude session ID: %s", sessionID)
+	return s.sendToolResult(req.ID, fmt.Sprintf(`{"success":true,"session_id":"%s"}`, sessionID))
+}
+
 // handleCriticExplain handles the critic_explain tool
 func (s *Server) handleCriticExplain(req Request, params CallToolParams) error {
 	if s.messaging == nil {
@@ -542,6 +578,10 @@ func (s *Server) handlePromptsList(req Request) error {
 			Name:        "explain",
 			Description: "Identify the changes and post an explanation on all non-obvious changes",
 		},
+		{
+			Name:        "activate",
+			Description: "Activate the critic session — connects Claude Code to the critic browser UI",
+		},
 	}
 
 	return s.sendResult(req.ID, PromptsListResult{Prompts: prompts})
@@ -599,6 +639,20 @@ func (s *Server) handlePromptsGet(req Request) error {
 				{
 					Role:    "user",
 					Content: TextContent("Review all uncommitted changes in the diff. For each non-obvious change — anything where the intent, reason, or mechanism isn't immediately clear from the code alone — post an explanation using the critic_explain MCP tool. Skip trivial or self-explanatory changes (renames, formatting, obvious bug fixes). Focus on: why a change was made, subtle implications, non-obvious design decisions, and tricky logic."),
+				},
+			},
+		})
+	case "activate":
+		return s.sendResult(req.ID, GetPromptResult{
+			Description: "Activate critic session",
+			Messages: []PromptMessage{
+				{
+					Role: "user",
+					Content: TextContent("Activate the critic review session:\n\n" +
+						"1. Find your session ID: run `ls -t ~/.claude/projects/*/` and take the most recent `.jsonl` filename (without the extension) — that UUID is your session ID.\n" +
+						"2. Call the `critic_set_session_id` MCP tool with that session ID.\n" +
+						"3. Open the critic browser UI: run `open http://localhost:65432`\n" +
+						"4. Confirm by calling `get_critic_conversations` to verify the connection works."),
 				},
 			},
 		})
