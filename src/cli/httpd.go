@@ -70,7 +70,12 @@ Examples:
 			} else {
 				projectFile = filepath.Join(gitRoot, "project.critic")
 			}
-			projectConfig, err := config.LoadProjectConfig(projectFile, git.GetCurrentBranch(), git.HasRef)
+			projectConfig, err := config.LoadProjectConfig(projectFile, git.GetCurrentBranch(), &config.GitOps{
+				HasRef:              git.HasRef,
+				ResolveRef:          git.ResolveRef,
+				SortByGraphOrder:    git.SortRefsByGraphOrder,
+				LocalBranchesOnPath: git.LocalBranchesOnPath,
+			})
 			if err != nil {
 				return err
 			}

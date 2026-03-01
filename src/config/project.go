@@ -51,21 +51,69 @@ func DefaultProjectConfig() *ProjectConfig {
 	}
 }
 
+// GitOps provides git operations needed for diff base discovery.
+// When nil is passed to LoadProjectConfig, no git operations are performed.
+type GitOps struct {
+	HasRef              func(string) bool
+	ResolveRef          func(string) string
+	SortByGraphOrder    func([]string)
+	LocalBranchesOnPath func(string) []string
+}
+
 // LoadProjectConfig loads the project config from path, falling back to defaults if missing.
 //
 // currentBranch is the current git branch name (used to build default bases).
-// hasRef validates whether a diff base is a valid git ref.
-// The returned config's DiffBases will be the merged result of defaults and configured bases.
-func LoadProjectConfig(path, currentBranch string, hasRef func(string) bool) (*ProjectConfig, error) {
+// gitOps provides git operations for ref validation, branch discovery, and ordering.
+// When gitOps is nil, DiffBases are left as-is from the config file.
+// The returned config's DiffBases will be the merged result of defaults and configured bases,
+// sorted by graph distance from HEAD (oldest first), with discovered local branches included.
+func LoadProjectConfig(path, currentBranch string, gitOps *GitOps) (*ProjectConfig, error) {
 	pc, err := loadProjectConfigFromFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	if hasRef != nil {
+	if gitOps != nil && gitOps.HasRef != nil {
 		allDiffBases := append([]string{"main", "master", "origin/" + currentBranch, "HEAD"}, pc.DiffBases...)
 		unique := lo.Uniq(allDiffBases)
-		pc.DiffBases = lo.Filter(unique, func(ref string, _ int) bool { return hasRef(ref) })
+		candidates := lo.Filter(unique, func(ref string, _ int) bool { return gitOps.HasRef(ref) })
+
+		// Sort candidates by graph order so we can identify the oldest.
+		if gitOps.SortByGraphOrder != nil && len(candidates) > 0 {
+			gitOps.SortByGraphOrder(candidates)
+		}
+
+		// Discover local branches on the ancestry path from oldest to HEAD.
+		if gitOps.LocalBranchesOnPath != nil && gitOps.ResolveRef != nil && len(candidates) > 0 {
+			oldest := candidates[0]
+			discovered := gitOps.LocalBranchesOnPath(oldest)
+
+			// Merge discovered branches, dedup by resolved SHA.
+			seenSHA := make(map[string]bool)
+			var merged []string
+			addRef := func(ref string) {
+				sha := gitOps.ResolveRef(ref)
+				if seenSHA[sha] {
+					return
+				}
+				seenSHA[sha] = true
+				merged = append(merged, ref)
+			}
+			for _, ref := range candidates {
+				addRef(ref)
+			}
+			for _, ref := range discovered {
+				addRef(ref)
+			}
+			candidates = merged
+		}
+
+		// Final sort by graph order, oldest first.
+		if gitOps.SortByGraphOrder != nil {
+			gitOps.SortByGraphOrder(candidates)
+		}
+
+		pc.DiffBases = candidates
 	}
 
 	logger.Info("Loading critic configuration from %s", pc.ConfigPath)
