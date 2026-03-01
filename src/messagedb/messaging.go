@@ -62,7 +62,7 @@ func (db *DB) GetConversations(status string, paths []string) ([]*critic.Convers
 
 	query = db.db.Rebind(query)
 	var rows []conversationRow
-	err := db.db.Select(&rows, query, args...)
+	err := db.Select(&rows, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversations: %w", err)
 	}
@@ -97,7 +97,7 @@ func (db *DB) GetFullConversations(uuids []string) ([]*critic.Conversation, erro
 	query = db.db.Rebind(query)
 
 	var messages []*Message
-	if err := db.db.Select(&messages, query, args...); err != nil {
+	if err := db.Select(&messages, query, args...); err != nil {
 		return nil, fmt.Errorf("failed to batch-fetch conversations: %w", err)
 	}
 
@@ -233,7 +233,7 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 	`
 
 	var rows []fileSummaryRow
-	err := db.db.Select(&rows, query)
+	err := db.Select(&rows, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query file summaries: %w", err)
 	}
@@ -254,7 +254,7 @@ func (db *DB) GetConversationsSummary() ([]*critic.FileConversationSummary, erro
 	`
 
 	var unreadFiles []string
-	err = db.db.Select(&unreadFiles, unreadQuery)
+	err = db.Select(&unreadFiles, unreadQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread AI messages: %w", err)
 	}
@@ -370,7 +370,7 @@ func (db *DB) CreateConversation(author critic.Author, message, filePath string,
 // If it doesn't exist, it creates one.
 func (db *DB) LoadRootConversation() (*critic.Conversation, error) {
 	var id string
-	err := db.db.Get(&id, `
+	err := db.Get(&id, `
 		SELECT id FROM messages
 		WHERE file_path = '' AND lineno = 0 AND id = conversation_id
 		LIMIT 1

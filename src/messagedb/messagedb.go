@@ -262,7 +262,7 @@ func (db *DB) insertMessage(msg *Message) error {
 			:conversation_id, :sha1, :context, :conversation_type, :created_at, :updated_at
 		)
 	`
-	_, err := db.db.NamedExec(query, msg)
+	_, err := db.NamedExec(query, msg)
 	return err
 }
 
@@ -278,7 +278,7 @@ func (db *DB) GetMessage(id string) (*Message, error) {
 	`
 
 	var msg Message
-	err := db.db.Get(&msg, query, id)
+	err := db.Get(&msg, query, id)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -301,7 +301,7 @@ func (db *DB) GetThreadMessages(conversationID string) ([]*Message, error) {
 	`
 
 	var messages []*Message
-	err := db.db.Select(&messages, query, conversationID)
+	err := db.Select(&messages, query, conversationID)
 	return messages, err
 }
 
@@ -316,7 +316,7 @@ func (db *DB) GetUnresolvedRootMessages() ([]*Message, error) {
 	`
 
 	var messages []*Message
-	err := db.db.Select(&messages, query, string(StatusResolved))
+	err := db.Select(&messages, query, string(StatusResolved))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get unresolved messages: %w", err)
 	}
@@ -338,7 +338,7 @@ func (db *DB) GetMessagesByFile(filePath string) ([]*Message, error) {
 	`
 
 	var messages []*Message
-	err := db.db.Select(&messages, query, filePath)
+	err := db.Select(&messages, query, filePath)
 	return messages, err
 }
 
@@ -366,7 +366,7 @@ func (db *DB) MarkConversationAs(conversationID string, update critic.Conversati
 		return fmt.Errorf("unknown conversation update: %s", update)
 	}
 
-	result, err := db.db.Exec(query, args...)
+	result, err := db.Exec(query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to mark conversation as %s: %w", update, err)
 	}
@@ -396,7 +396,7 @@ func (db *DB) MarkMessageAs(messageID string, status critic.MessageReadStatus) e
 		WHERE id = ? AND author = ?
 	`
 
-	_, err := db.db.Exec(query, dbStatus, time.Now(), messageID, string(AuthorAI))
+	_, err := db.Exec(query, dbStatus, time.Now(), messageID, string(AuthorAI))
 	if err != nil {
 		return fmt.Errorf("failed to mark message as %s: %w", status, err)
 	}
@@ -415,7 +415,7 @@ func (db *DB) GetFilesWithUnreadAIMessages() ([]string, error) {
 	`
 
 	var files []string
-	err := db.db.Select(&files, query, string(AuthorAI), string(ReadStatusUnread))
+	err := db.Select(&files, query, string(AuthorAI), string(ReadStatusUnread))
 	return files, err
 }
 
@@ -429,7 +429,7 @@ func (db *DB) UpdateMessageStatus(id string, status Status) error {
 		WHERE id = ?
 	`
 
-	_, err := db.db.Exec(query, string(status), time.Now(), id)
+	_, err := db.Exec(query, string(status), time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update message status: %w", err)
 	}
@@ -449,7 +449,7 @@ func (db *DB) UpdateMessage(id string, newMessage string) error {
 		WHERE id = ?
 	`
 
-	result, err := db.db.Exec(query, newMessage, time.Now(), id)
+	result, err := db.Exec(query, newMessage, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update message: %w", err)
 	}
@@ -497,7 +497,7 @@ func (db *DB) UpsertMessage(author Author, message, filePath string, lineno int,
 // Returns 0 if the table doesn't exist or has no entry.
 func (db *DB) GetMessagesMtime() (int64, error) {
 	var mtime int64
-	err := db.db.Get(&mtime, `SELECT mtime_msec FROM _db_mtime WHERE tablename = 'messages'`)
+	err := db.Get(&mtime, `SELECT mtime_msec FROM _db_mtime WHERE tablename = 'messages'`)
 	if err != nil {
 		return 0, nil
 	}

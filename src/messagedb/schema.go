@@ -93,7 +93,7 @@ func (db *DB) initSchema() error {
 
 // createInitialSchema creates all tables and initial data for a new database
 func (db *DB) createInitialSchema() error {
-	_, err := db.db.Exec(schema)
+	_, err := db.Exec(schema)
 	if err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
@@ -114,7 +114,7 @@ func (db *DB) createInitialSchema() error {
 // BEGIN...END blocks in multi-statement Exec calls.
 func (db *DB) ensureTriggers() error {
 	for _, trigger := range schemaTriggers {
-		if _, err := db.db.Exec(trigger); err != nil {
+		if _, err := db.Exec(trigger); err != nil {
 			return fmt.Errorf("failed to create trigger: %w", err)
 		}
 	}
@@ -124,7 +124,7 @@ func (db *DB) ensureTriggers() error {
 // getSchemaVersion retrieves the current schema version from settings
 func (db *DB) getSchemaVersion() (string, error) {
 	var version string
-	err := db.db.Get(&version, `SELECT value FROM settings WHERE key = ?`, "db_schema")
+	err := db.Get(&version, `SELECT value FROM settings WHERE key = ?`, "db_schema")
 	if err != nil {
 		return "", fmt.Errorf("schema version not found")
 	}
@@ -134,6 +134,6 @@ func (db *DB) getSchemaVersion() (string, error) {
 // setSchemaVersion sets the schema version in settings
 func (db *DB) setSchemaVersion(version string) error {
 	query := `INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`
-	_, err := db.db.Exec(query, "db_schema", version)
+	_, err := db.Exec(query, "db_schema", version)
 	return err
 }
