@@ -15,6 +15,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/radiospiel/critic/simple-go/utils"
 	"github.com/radiospiel/critic/src/api"
 	"github.com/radiospiel/critic/src/api/apiconnect"
 	"github.com/radiospiel/critic/src/config"
@@ -22,7 +23,6 @@ import (
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
 	"github.com/radiospiel/critic/src/webui"
-	"github.com/radiospiel/critic/simple-go/utils"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -145,7 +145,7 @@ func (s *Server) handleConfigChanges() {
 
 	for range s.configWatcher.Changes() {
 		logger.Info("Project config changed, reloading")
-		pc, err := config.LoadProjectConfigFromFile(s.config.ProjectConfigPath)
+		_, pc, err := config.LoadProjectConfig(s.config.ProjectConfigPath, "")
 		if err != nil {
 			logger.Error("Failed to reload project config: %v", err)
 			continue

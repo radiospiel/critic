@@ -3,10 +3,8 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime/pprof"
 
-	"github.com/radiospiel/critic/simple-go/logger"
 	"github.com/radiospiel/critic/src/api/server"
 	"github.com/radiospiel/critic/src/config"
 	"github.com/radiospiel/critic/src/git"
@@ -70,19 +68,9 @@ Examples:
 			gitRoot := git.GetGitRoot()
 
 			// Load project config (optional)
-			var projectConfigPath string
-			if projectFile != "" {
-				projectConfigPath = projectFile
-			} else {
-				projectConfigPath = filepath.Join(gitRoot, "project.critic")
-			}
-			projectConfig, err := config.LoadProjectConfigFromFile(projectConfigPath)
+			projectConfigPath, projectConfig, err := config.LoadProjectConfig(projectFile, gitRoot)
 			if err != nil {
-				if projectFile != "" {
-					return fmt.Errorf("failed to load project config from %s: %w", projectFile, err)
-				}
-				logger.Error("failed to load project.critic: %v", err)
-				projectConfig = config.DefaultProjectConfig()
+				return err
 			}
 
 			// Initialize the message database

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/radiospiel/critic/simple-go/logger"
 	"gopkg.in/yaml.v3"
 )
 
@@ -25,10 +26,10 @@ type EditorConfig struct {
 
 // ProjectConfig represents the parsed project.critic configuration file.
 type ProjectConfig struct {
-	Project    projectInfo  `yaml:"project"`
-	Paths      []string     `yaml:"paths"`
+	Project    projectInfo    `yaml:"project"`
+	Paths      []string       `yaml:"paths"`
 	Categories []FileCategory `yaml:"categories"`
-	Editor     EditorConfig `yaml:"editor"`
+	Editor     EditorConfig   `yaml:"editor"`
 }
 
 type projectInfo struct {
@@ -47,21 +48,39 @@ func DefaultProjectConfig() *ProjectConfig {
 	}
 }
 
-// LoadProjectConfig loads and parses a project.critic YAML file from the given directory.
-// Returns DefaultProjectConfig if the file does not exist.
-func LoadProjectConfig(dir string) (*ProjectConfig, error) {
-	path := filepath.Join(dir, "project.critic")
-	return LoadProjectConfigFromFile(path)
+// LoadProjectConfig resolves the config path and loads the project config.
+// If projectFile is set, it must exist. Otherwise, looks for project.critic in gitRoot
+// and returns DefaultProjectConfig if not found.
+func LoadProjectConfig(path, gitRoot string) (string, *ProjectConfig, error) {
+	if path != "" {
+		// verify that the path exists
+		if _, err := os.Stat(path); err != nil {
+			logger.Error("Cannot load critic configuration from %s: %w", path, err)
+			return path, nil, err
+		}
+	} else {
+		// use default path instead.
+		path = filepath.Join(gitRoot, "project.critic")
+		logger.Info("trying to load critic configuration from default location %s", path)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			logger.Info("No critic configuration at default location %s, falling back to hardcoded default", path)
+			return path, DefaultProjectConfig(), nil
+		}
+	}
+
+	pc, err := loadProjectConfigFromFile(path)
+	if err != nil {
+		return path, nil, fmt.Errorf("failed to load project config from %s: %w", path, err)
+	}
+
+	logger.Info("Loading critic configuration from %s", path)
+	return path, pc, nil
 }
 
-// LoadProjectConfigFromFile loads and parses a project.critic YAML file from the given path.
-// Returns DefaultProjectConfig if the file does not exist.
-func LoadProjectConfigFromFile(path string) (*ProjectConfig, error) {
+// loadProjectConfigFromFile loads and parses a project.critic YAML file from the given path.
+func loadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return DefaultProjectConfig(), nil
-		}
 		return nil, fmt.Errorf("failed to read project config: %w", err)
 	}
 

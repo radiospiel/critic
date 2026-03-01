@@ -85,11 +85,17 @@ func TestDefaultProjectConfig(t *testing.T) {
 }
 
 func TestLoadProjectConfig_FileNotFound(t *testing.T) {
-	config, err := LoadProjectConfig("/nonexistent/directory")
-	assert.NoError(t, err, "missing file should return default config, not error")
-	assert.NotNil(t, config, "should return default config")
-	testPatterns := findCategory(config.Categories, "test")
+	dir := t.TempDir()
+	_, pc, err := LoadProjectConfig("", dir)
+	assert.NoError(t, err, "missing file should return default config")
+	assert.NotNil(t, pc, "should return default config")
+	testPatterns := findCategory(pc.Categories, "test")
 	assert.Equals(t, len(testPatterns), 1, "should have default test patterns")
+}
+
+func TestLoadProjectConfig_ExplicitFileNotFound(t *testing.T) {
+	_, _, err := LoadProjectConfig("/nonexistent/file.critic", "")
+	assert.Error(t, err, "no such file")
 }
 
 func TestLoadProjectConfig_ValidFile(t *testing.T) {
@@ -117,7 +123,7 @@ editor:
 	err := os.WriteFile(path, []byte(yaml), 0644)
 	assert.NoError(t, err)
 
-	config, err := LoadProjectConfig(dir)
+	_, config, err := LoadProjectConfig("", dir)
 	assert.NoError(t, err)
 	assert.Equals(t, config.Project.Name, "test-project", "project name")
 	assert.Equals(t, len(config.Paths), 1, "paths count")
