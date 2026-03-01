@@ -37,8 +37,8 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
     setLoading(false)
   }
 
-  // Full ordered list: bases (oldest first) then '' (working dir)
-  // bases come from the API in order, with the oldest/most-ancestral first.
+  // Logical order: bases (oldest first) then '' (working dir).
+  // This order is used for range semantics (start < end in index terms).
   const fullList = [...bases, '']
 
   const handleNodeClick = (value: string) => {
@@ -91,6 +91,9 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
   const startIdx = fullList.indexOf(currentStart)
   const endIdx = fullList.indexOf(currentEnd)
 
+  // Display list: reversed so newest (working dir) is at top, oldest at bottom.
+  const displayList = [...fullList].reverse()
+
   return (
     <div className="diff-base-selector">
       <button
@@ -100,18 +103,19 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
         title="Branch range"
       >
         <span className="diff-base-value">{displayBase(currentStart)}</span>
-        <span className="diff-range-separator">→</span>
+        <span className="diff-range-separator">&rarr;</span>
         <span className="diff-base-value">{displayBase(currentEnd)}</span>
       </button>
 
       {panelOpen && (
         <div className="diff-graph-panel">
           <div className="diff-graph-hint">Click on branch names to adjust selection</div>
-          {fullList.map((value, idx) => {
+          {displayList.map((value, displayIdx) => {
+            const logicalIdx = fullList.indexOf(value)
             const isStart = value === currentStart
             const isEnd = value === currentEnd
-            const inRange = idx >= startIdx && idx <= endIdx
-            const isLast = idx === fullList.length - 1
+            const inRange = logicalIdx >= startIdx && logicalIdx <= endIdx
+            const isLast = displayIdx === displayList.length - 1
             const label = value || 'working dir'
 
             return (
