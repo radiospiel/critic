@@ -15,33 +15,14 @@ project:
 #   - A pattern without "/" matches the basename at any depth
 # See https://git-scm.com/docs/gitignore#_pattern_format
 categories:
-  - name: Backend
-    patterns:
-      - "src/**/*.go"
-      - "!*_test.go"
-  - name: Backend Tests
-    patterns:
-      - "*_test.go"
-  - name: Web UI
-    patterns:
-      - "src/webui/**/*"
-  - name: VSCode UI
-    patterns:
-      - "editors/vscode/**/*"
-  - name: integration tests
-    patterns:
-      - "/test/*"
-  - name: auto generated
-    patterns:
-      - "src/webui/frontend/src/gen/*.ts"
-      - "package-lock.json"
-      - "src/api/critic.pb.go"
-  - name: Agent Integration
-    patterns:
-      - "agents/**/*"
-  - name: hidden
-    patterns:
-      - ".*"
+  test:
+    - "*_test.go"
+    - "/test/*"
+  hidden:
+    - ".*"
+    - "src/webui/frontend/src/gen/*.ts"
+    - "package-lock.json"
+    - "src/api/critic.pb.go"
 
 editor:
   url: "goland://open?file={file}&line={line}"

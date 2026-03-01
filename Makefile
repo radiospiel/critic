@@ -12,21 +12,38 @@ PROTO_GEN_CONNECT := $(PROTO_FILES:$(PROTO_DIR)/%.proto=src/api/apiconnect/%.con
 FRONTEND_DIR := src/webui/frontend
 FRONTEND_DIST := src/webui/dist
 
-.PHONY: all build dbuild rbuild test unit-tests integration install uninstall clean install-deps proto proto-ts frontend
+.PHONY: all build dbuild rbuild test unit-tests integration install uninstall clean install-deps proto proto-ts frontend vscode-extension
 
 all: build tests
 
 build: install-deps debug release
 
-debug: frontend $(DBINARY)
-release: frontend $(RBINARY)
+debug: frontend vscode-extension $(DBINARY)
+release: frontend vscode-extension $(RBINARY)
 
 GO_FILES := $(shell find src simple-go -name '*.go' -not -name '*_test.go')
 
-$(RBINARY): $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES)
+# VS Code extension
+VSCODE_DIR := editors/vscode
+VSCODE_VSIX := src/webui/dist/extensions/critic-vscode.vsix
+VSCODE_SRC := $(shell find $(VSCODE_DIR)/src -type f 2>/dev/null) \
+              $(VSCODE_DIR)/package.json \
+              $(VSCODE_DIR)/tsconfig.json
+
+# Build the VS Code extension .vsix after the frontend (Vite clears dist/ with emptyOutDir)
+$(VSCODE_VSIX): $(FRONTEND_DIST)/index.html $(VSCODE_SRC)
+	mkdir -p $(dir $(VSCODE_VSIX))
+	cp LICENSE $(VSCODE_DIR)/LICENSE
+	cd $(VSCODE_DIR) && npm install && npm run compile && \
+		node_modules/.bin/vsce package --no-dependencies --out ../../$(VSCODE_VSIX)
+
+reinstall-vscode-extension: vscode-extension
+	code --install-extension $(VSCODE_VSIX)
+
+$(RBINARY): $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES) $(VSCODE_VSIX)
 	go build -o $(RBINARY) ./src/cmd
 
-$(DBINARY): $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES)
+$(DBINARY): $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(GO_FILES) $(VSCODE_VSIX)
 	go build -gcflags='all=-N -l' -o $(DBINARY) ./src/cmd
 
 # Build frontend (React app)

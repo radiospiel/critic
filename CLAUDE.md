@@ -1,3 +1,13 @@
+### VS Code Extension
+
+The extension source is in `editors/vscode/`. To install after changes:
+
+```
+cd editors/vscode && npm run compile && npx vsce package --no-dependencies && code --install-extension critic-vscode-0.1.0.vsix --force
+```
+
+After installing, the user must **reload the VS Code window** (Cmd+Shift+P → "Developer: Reload Window") for changes to take effect.
+
 ### Task Strategy Selection
 
 Before starting any task, identify which strategy applies from [agents/strategy-guide.md](agents/strategy-guide.md):

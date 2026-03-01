@@ -17,3 +17,9 @@ func DistFS() (http.FileSystem, error) {
 	}
 	return http.FS(distFS), nil
 }
+
+// VSCodeExtensionBytes returns the embedded VS Code extension (.vsix) bytes.
+// Returns an error if the extension was not embedded at build time.
+func VSCodeExtensionBytes() ([]byte, error) {
+	return fs.ReadFile(embeddedFS, "dist/extensions/critic-vscode.vsix")
+}

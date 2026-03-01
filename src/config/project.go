@@ -11,8 +11,8 @@ import (
 // FileCategory represents a named category of files with glob patterns.
 // Categories are used to classify files in the diff view (e.g., test, hidden).
 type FileCategory struct {
-	Name     string   `yaml:"name" json:"name"`
-	Patterns []string `yaml:"patterns" json:"patterns"`
+	Name     string   `json:"name"`
+	Patterns []string `json:"patterns"`
 }
 
 // EditorConfig holds editor integration settings.
@@ -25,10 +25,10 @@ type EditorConfig struct {
 
 // ProjectConfig represents the parsed project.critic configuration file.
 type ProjectConfig struct {
-	Project    projectInfo  `yaml:"project"`
-	Paths      []string     `yaml:"paths"`
-	Categories []FileCategory `yaml:"categories"`
-	Editor     EditorConfig `yaml:"editor"`
+	Project    projectInfo       `yaml:"project"`
+	Paths      []string          `yaml:"paths"`
+	Categories map[string][]string `yaml:"categories"`
+	Editor     EditorConfig      `yaml:"editor"`
 }
 
 type projectInfo struct {
@@ -40,9 +40,9 @@ type projectInfo struct {
 func DefaultProjectConfig() *ProjectConfig {
 	return &ProjectConfig{
 		Project: projectInfo{Name: ""},
-		Categories: []FileCategory{
-			{Name: "test", Patterns: []string{"*_test.go"}},
-			{Name: "hidden", Patterns: []string{".*"}},
+		Categories: map[string][]string{
+			"test":   {"*_test.go"},
+			"hidden": {".*"},
 		},
 	}
 }
@@ -78,18 +78,25 @@ func ParseProjectConfig(data []byte) (*ProjectConfig, error) {
 	return &config, nil
 }
 
-// GetFileCategories returns the list of FileCategory entries from the config.
+// GetFileCategories returns the list of FileCategory entries derived from the config.
 func (c *ProjectConfig) GetFileCategories() []FileCategory {
-	return c.Categories
+	categories := make([]FileCategory, 0, len(c.Categories))
+	for name, patterns := range c.Categories {
+		categories = append(categories, FileCategory{
+			Name:     name,
+			Patterns: patterns,
+		})
+	}
+	return categories
 }
 
 // CategorizeFile returns the category name for a given file path.
 // Categories are checked in order: the first matching category wins.
 // Returns "source" if no category matches.
 func (c *ProjectConfig) CategorizeFile(path string) string {
-	for _, cat := range c.Categories {
-		if PathspecMatchAny(cat.Patterns, path) {
-			return cat.Name
+	for name, patterns := range c.Categories {
+		if PathspecMatchAny(patterns, path) {
+			return name
 		}
 	}
 	return "source"
