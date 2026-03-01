@@ -19,6 +19,7 @@ categories:
     patterns:
       - "src/**/*.go"
       - "!*_test.go"
+      - "!src/api/critic.pb.go"
   - name: Backend Tests
     patterns:
       - "*_test.go"
@@ -31,14 +32,14 @@ categories:
   - name: integration tests
     patterns:
       - "/test/*"
+  - name: Agent Integration
+    patterns:
+      - "agents/**/*"
   - name: auto generated
     patterns:
       - "src/webui/frontend/src/gen/*.ts"
       - "package-lock.json"
       - "src/api/critic.pb.go"
-  - name: Agent Integration
-    patterns:
-      - "agents/**/*"
   - name: hidden
     patterns:
       - ".*"

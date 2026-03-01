@@ -26,9 +26,6 @@ func getDiffSummaryImpl(server *Server, req *api.GetDiffSummaryRequest) (*api.Ge
 	diff := session.GetDiffSummary()
 
 	pc := server.config.ProjectConfig
-	if pc == nil {
-		pc = config.DefaultProjectConfig()
-	}
 
 	return &api.GetDiffSummaryResponse{
 		State: string(state),

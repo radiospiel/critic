@@ -70,21 +70,19 @@ Examples:
 			gitRoot := git.GetGitRoot()
 
 			// Load project config (optional)
-			var projectConfig *config.ProjectConfig
 			var projectConfigPath string
 			if projectFile != "" {
 				projectConfigPath = projectFile
 			} else {
 				projectConfigPath = filepath.Join(gitRoot, "project.critic")
 			}
-			pc, err := config.LoadProjectConfigFromFile(projectConfigPath)
+			projectConfig, err := config.LoadProjectConfigFromFile(projectConfigPath)
 			if err != nil {
 				if projectFile != "" {
 					return fmt.Errorf("failed to load project config from %s: %w", projectFile, err)
 				}
 				logger.Error("failed to load project.critic: %v", err)
-			} else {
-				projectConfig = pc
+				projectConfig = config.DefaultProjectConfig()
 			}
 
 			// Initialize the message database

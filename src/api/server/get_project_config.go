@@ -5,7 +5,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/src/api"
-	"github.com/radiospiel/critic/src/config"
 )
 
 // GetProjectConfig returns the parsed project.critic configuration.
@@ -21,9 +20,6 @@ func (s *Server) GetProjectConfig(
 
 func getProjectConfigImpl(server *Server) (*api.GetProjectConfigResponse, error) {
 	pc := server.config.ProjectConfig
-	if pc == nil {
-		pc = config.DefaultProjectConfig()
-	}
 
 	categories := make([]*api.FileCategory, 0, len(pc.Categories))
 	for _, cat := range pc.Categories {
