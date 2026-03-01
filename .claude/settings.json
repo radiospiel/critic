@@ -21,10 +21,6 @@
           {
             "type": "command",
             "command": "bash agents/hooks/critic-loop-on-idle.sh"
-          },
-          {
-            "type": "prompt",
-            "prompt": "file:agents/hooks/critic-loop-prompt.md"
           }
         ]
       }
