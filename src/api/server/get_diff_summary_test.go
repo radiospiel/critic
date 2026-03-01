@@ -5,17 +5,20 @@ import (
 
 	"github.com/radiospiel/critic/simple-go/assert"
 	"github.com/radiospiel/critic/src/api"
+	"github.com/radiospiel/critic/src/config"
 	"github.com/radiospiel/critic/src/pkg/types"
 )
 
 func TestConvertDiffSummary(t *testing.T) {
+	pc := config.DefaultProjectConfig()
+
 	// Test nil diff
-	result := convertDiffSummary(nil)
+	result := convertDiffSummary(nil, pc)
 	assert.Nil(t, result, "nil diff should return nil")
 
 	// Test empty diff
 	files := []*types.FileDiff{}
-	result = convertDiffSummary(files)
+	result = convertDiffSummary(files, pc)
 	assert.NotNil(t, result, "empty diff should not be nil")
 	assert.Equals(t, len(result.Files), 0, "empty diff should have no files")
 
@@ -41,7 +44,7 @@ func TestConvertDiffSummary(t *testing.T) {
 		},
 	}
 
-	result = convertDiffSummary(files)
+	result = convertDiffSummary(files, pc)
 	assert.NotNil(t, result, "diff should not be nil")
 	assert.Equals(t, len(result.Files), 1, "should have 1 file")
 
@@ -52,8 +55,10 @@ func TestConvertDiffSummary(t *testing.T) {
 }
 
 func TestConvertFileSummary(t *testing.T) {
+	pc := config.DefaultProjectConfig()
+
 	// Test nil file diff
-	result := convertFileSummary(nil)
+	result := convertFileSummary(nil, pc)
 	assert.Nil(t, result, "nil file diff should return nil")
 
 	// Test file diff with all fields - renamed file
@@ -69,7 +74,7 @@ func TestConvertFileSummary(t *testing.T) {
 		},
 	}
 
-	result = convertFileSummary(fd)
+	result = convertFileSummary(fd, pc)
 	assert.NotNil(t, result, "result should not be nil")
 	assert.Equals(t, result.OldPath, "path/to/old.go", "old path should match")
 	assert.Equals(t, result.NewPath, "path/to/new.go", "new path should match")
@@ -80,18 +85,55 @@ func TestConvertFileSummary(t *testing.T) {
 
 	// Test new file
 	fd = &types.FileDiff{FileStatus: types.FileStatusNew}
-	result = convertFileSummary(fd)
+	result = convertFileSummary(fd, pc)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_NEW, "status should be NEW")
 
 	// Test deleted file
 	fd = &types.FileDiff{FileStatus: types.FileStatusDeleted}
-	result = convertFileSummary(fd)
+	result = convertFileSummary(fd, pc)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_DELETED, "status should be DELETED")
 
 	// Test modified file (default)
 	fd = &types.FileDiff{}
-	result = convertFileSummary(fd)
+	result = convertFileSummary(fd, pc)
 	assert.Equals(t, result.Status, api.FileStatus_FILE_STATUS_MODIFIED, "status should be MODIFIED")
+}
+
+func TestConvertFileSummary_Category(t *testing.T) {
+	pc := &config.ProjectConfig{
+		Categories: []config.FileCategory{
+			{Name: "Backend", Patterns: []string{"src/**/*.go", "!*_test.go"}},
+			{Name: "Backend Tests", Patterns: []string{"*_test.go"}},
+			{Name: "Web UI", Patterns: []string{"src/webui/**/*"}},
+			{Name: "hidden", Patterns: []string{".*"}},
+		},
+	}
+
+	tests := []struct {
+		oldPath  string
+		newPath  string
+		expected string
+	}{
+		{"", "src/config/project.go", "Backend"},
+		{"", "src/config/project_test.go", "Backend Tests"},
+		{"", "src/webui/frontend/src/App.tsx", "Web UI"},
+		{"", ".gitignore", "hidden"},
+		{"", "README.md", "source"},
+		// Deleted file: uses OldPath
+		{"src/old_file.go", "", "Backend"},
+	}
+
+	for _, tt := range tests {
+		name := tt.newPath
+		if name == "" {
+			name = tt.oldPath + " (deleted)"
+		}
+		t.Run(name, func(t *testing.T) {
+			fd := &types.FileDiff{OldPath: tt.oldPath, NewPath: tt.newPath}
+			result := convertFileSummary(fd, pc)
+			assert.Equals(t, result.Category, tt.expected, "category for %q", name)
+		})
+	}
 }
 
 func TestGetDiffSummaryResponseTypes(t *testing.T) {

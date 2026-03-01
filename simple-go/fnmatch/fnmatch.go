@@ -104,6 +104,20 @@ func fnmatchToRegexp(pattern string, separators string) *regexp.Regexp {
 		c := pattern[i]
 		switch c {
 		case '*':
+			if separators != "" && i+1 < len(pattern) && pattern[i+1] == '*' {
+				// ** with separators: match everything including separators.
+				// If followed by a separator char, consume it (e.g. "**/" matches zero or more directory segments).
+				i += 2
+				if i < len(pattern) && strings.ContainsRune(separators, rune(pattern[i])) {
+					// **/ — match zero or more segments ending with separator
+					buf.WriteString("(?:.*" + regexp.QuoteMeta(string(pattern[i])) + ")?")
+					i++
+				} else {
+					// ** at end or before a non-separator — match everything
+					buf.WriteString(".*")
+				}
+				continue
+			}
 			buf.WriteString(starPattern)
 		case '?':
 			buf.WriteString(questionPattern)

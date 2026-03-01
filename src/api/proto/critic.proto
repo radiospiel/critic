@@ -115,6 +115,9 @@ message FileSummary {
   string file_mode_new = 4;
   FileStatus status = 5;
   bool is_binary = 6;
+  // category is the file category name from project.critic config (e.g., "Backend", "Web UI").
+  // Defaults to "source" if no category matches.
+  string category = 7;
 }
 
 // Diff represents a git diff with multiple file changes.

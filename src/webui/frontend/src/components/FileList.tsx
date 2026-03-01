@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { criticClient, resolveConversation, archiveConversation, unresolveConversation, ConversationSummary, CommentConversation } from '../api/client'
-import { FileSummary, FileStatus, FileCategory } from '../gen/critic_pb'
+import { FileSummary, FileStatus } from '../gen/critic_pb'
 import { pluralize } from './Pluralize'
-import { matchesAnyPattern } from '../utils/glob'
 
 function formatTimestamp(dateStr: string): string {
   const date = new Date(dateStr)
@@ -58,19 +57,6 @@ function getStatusLabel(status: FileStatus): string {
   }
 }
 
-// Convert a git pathspec glob pattern to a regex.
-// Categorize a file based on project config categories.
-// Categories are checked in order: the first matching category wins.
-// Returns "source" if no category matches.
-function categorizeFile(path: string, categories: FileCategory[]): string {
-  for (const category of categories) {
-    if (matchesAnyPattern(path, category.patterns)) {
-      return category.name
-    }
-  }
-  return 'other'
-}
-
 // Truncate text to maxLen characters, adding ellipsis if needed
 function truncateText(text: string, maxLen: number): string {
   // Strip markdown/HTML and collapse whitespace
@@ -110,7 +96,7 @@ function MessagePreviews({ messages }: { messages: CommentMessage[] }) {
 function FileList({ files, allConversations, selectedFile, onSelectFile, onSelectRootConversation, isFocused, onFocus, filter, onFilterChange, showArchived = false, onShowArchivedChange, rootConversation, isRootConversationSelected, onConversationsChanged, onScrollToLine }: FileListProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [categories, setCategories] = useState<FileCategory[]>([])
+  const [categoryNames, setCategoryNames] = useState<string[]>([])
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set())
   const [showUntracked, setShowUntracked] = useState(false)
   const [openCategory, setOpenCategory] = useState<string>('')
@@ -158,16 +144,17 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
     }
   }
 
-  // Fetch project config (categories) once on mount
+  // Fetch project config (category names for ordering) once on mount
   useEffect(() => {
     criticClient.getProjectConfig({})
       .then((response) => {
         if (response.error) {
           console.error('Failed to fetch project config:', response.error.message)
         } else {
-          setCategories(response.categories)
-          if (response.categories.length > 0) {
-            setOpenCategory(response.categories[0].name)
+          const names = response.categories.map((c) => c.name)
+          setCategoryNames(names)
+          if (names.length > 0) {
+            setOpenCategory(names[0])
           }
         }
         setLoading(false)
@@ -212,20 +199,22 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
     }
   }, [selectedFile, isFocused])
 
-  // Categorize files into a map keyed by category name
+  // Group files by category (provided by backend) into a map keyed by category name
   const sortByPath = (a: FileSummary, b: FileSummary) =>
     getFilePath(a).localeCompare(getFilePath(b))
 
   const categoryMap = useMemo(() => {
     const map = new Map<string, FileSummary[]>()
     // Initialize buckets for each configured category + source
-    for (const cat of categories) {
-      map.set(cat.name, [])
+    for (const name of categoryNames) {
+      map.set(name, [])
     }
-    map.set('other', [])
+    map.set('source', [])
     for (const file of files) {
-      const path = getFilePath(file)
-      const cat = categorizeFile(path, categories)
+      const cat = file.category || 'source'
+      if (!map.has(cat)) {
+        map.set(cat, [])
+      }
       map.get(cat)!.push(file)
     }
     // Sort each bucket by path
@@ -233,7 +222,7 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
       bucket.sort(sortByPath)
     }
     return map
-  }, [files, categories])
+  }, [files, categoryNames])
 
   // All files sorted by path (for 'all' tab)
   const allFilesSorted = useMemo(() => [...files].sort(sortByPath), [files])
@@ -273,15 +262,15 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
 
   // Non-empty category sections for files mode
   const fileSections = useMemo(() => {
-    const allCategoryNames = [...categories.map((c) => c.name), 'other']
-    return allCategoryNames.map((catName) => {
+    const allNames = [...categoryNames, 'source']
+    return allNames.map((catName) => {
       const bucket = categoryMap.get(catName) || []
       const visibleFiles = !showUntracked && untrackedCount > 0
         ? bucket.filter((f) => f.status !== FileStatus.UNTRACKED)
         : bucket
       return { name: catName, files: visibleFiles }
     }).filter((s) => s.files.length > 0)
-  }, [categories, categoryMap, showUntracked, untrackedCount])
+  }, [categoryNames, categoryMap, showUntracked, untrackedCount])
 
   // Files visible for keyboard navigation: in files mode, only the open category
   const visibleFiles = useMemo(() => {

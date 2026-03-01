@@ -196,3 +196,56 @@ func TestFnmatchWithMultipleSeparators(t *testing.T) {
 	assert.False(t, Fnmatch("*", "foo.bar", dupeOpts))
 	assert.False(t, Fnmatch("*", "foo/bar", dupeOpts))
 }
+
+func TestFnmatchDoubleStarWithSeparator(t *testing.T) {
+	// ** matches everything including separators (path-style globstar)
+	tests := []struct {
+		pattern string
+		path    string
+		matches bool
+	}{
+		// **/ prefix — matches in all directories
+		{"**/test.go", "test.go", true},
+		{"**/test.go", "src/test.go", true},
+		{"**/test.go", "src/pkg/test.go", true},
+		{"**/test.go", "test.txt", false},
+
+		// /** suffix — matches everything inside
+		{"test/**", "test/a.go", true},
+		{"test/**", "test/sub/a.go", true},
+		{"test/**", "test/sub/deep/a.go", true},
+		{"test/**", "other/a.go", false},
+
+		// /**/ in the middle — matches zero or more directories
+		{"src/**/test.go", "src/test.go", true},
+		{"src/**/test.go", "src/pkg/test.go", true},
+		{"src/**/test.go", "src/a/b/test.go", true},
+		{"src/**/test.go", "other/test.go", false},
+
+		// **/ with * after separator
+		{"src/**/*.go", "src/main.go", true},
+		{"src/**/*.go", "src/pkg/main.go", true},
+		{"src/**/*.go", "src/a/b/main.go", true},
+		{"src/**/*.go", "src/main.txt", false},
+
+		// * still doesn't cross separators
+		{"src/*.go", "src/main.go", true},
+		{"src/*.go", "src/sub/main.go", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pattern+"_"+tt.path, func(t *testing.T) {
+			result := Fnmatch(tt.pattern, tt.path)
+			assert.Equals(t, result, tt.matches, "pattern: %s, path: %s", tt.pattern, tt.path)
+		})
+	}
+}
+
+func TestFnmatchDoubleStarWithoutSeparator(t *testing.T) {
+	// Without separators, ** just behaves like * (match everything)
+	opts := Options{Separators: ""}
+	assert.True(t, Fnmatch("**", "anything", opts))
+	assert.True(t, Fnmatch("**", "with/slashes", opts))
+	assert.True(t, Fnmatch("a**b", "ab", opts))
+	assert.True(t, Fnmatch("a**b", "axyzb", opts))
+}

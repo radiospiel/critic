@@ -609,6 +609,14 @@ export class FileSummary extends Message$1<FileSummary> {
    */
   isBinary = false;
 
+  /**
+   * category is the file category name from project.critic config (e.g., "Backend", "Web UI").
+   * Defaults to "source" if no category matches.
+   *
+   * @generated from field: string category = 7;
+   */
+  category = "";
+
   constructor(data?: PartialMessage<FileSummary>) {
     super();
     proto3.util.initPartial(data, this);
@@ -623,6 +631,7 @@ export class FileSummary extends Message$1<FileSummary> {
     { no: 4, name: "file_mode_new", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 5, name: "status", kind: "enum", T: proto3.getEnumType(FileStatus) },
     { no: 6, name: "is_binary", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 7, name: "category", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileSummary {

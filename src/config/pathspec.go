@@ -1,10 +1,9 @@
 package config
 
 import (
-	"regexp"
 	"strings"
 
-	"github.com/radiospiel/critic/simple-go/utils"
+	"github.com/radiospiel/critic/simple-go/fnmatch"
 )
 
 // PathspecMatch checks if a file path matches a gitignore-style pathspec glob pattern.
@@ -22,98 +21,67 @@ import (
 //   - A leading "**/" matches in all directories
 //   - A trailing "/**" matches everything inside a directory
 //   - "/**/" in the middle matches zero or more directories
+//
+// This function delegates to fnmatch for the actual matching, transforming the
+// pattern to handle basename-only matching by prepending "**/" when needed.
 func PathspecMatch(pattern string, path string) bool {
-	return CompilePathspec(pattern).MatchString(path)
+	return fnmatch.Fnmatch(pathspecToFnmatch(pattern), path)
 }
 
 // PathspecMatchAny returns true if the path matches any of the given patterns.
+// Supports negation patterns: patterns starting with "!" exclude matching files.
+// A file matches only if it matches at least one positive pattern and none of
+// the negative patterns.
 func PathspecMatchAny(patterns []string, path string) bool {
-	for _, pattern := range patterns {
-		if PathspecMatch(pattern, path) {
-			return true
+	var positive, negative []string
+	for _, p := range patterns {
+		if p == "" {
+			continue
+		}
+		if p[0] == '!' {
+			negative = append(negative, p[1:])
+		} else {
+			positive = append(positive, p)
 		}
 	}
-	return false
+
+	matched := false
+	for _, p := range positive {
+		if PathspecMatch(p, path) {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return false
+	}
+
+	for _, p := range negative {
+		if PathspecMatch(p, path) {
+			return false
+		}
+	}
+	return true
 }
 
-// Matcher is an interface for compiled pattern matchers.
-type Matcher interface {
-	MatchString(s string) bool
-}
-
-// pathspecCache caches compiled pathspec patterns to avoid repeated regex compilation.
-var pathspecCache = utils.NewLRUCache(256, func(pattern string) (Matcher, error) {
-	return pathspecToRegexp(pattern), nil
-})
-
-// CompilePathspec compiles a pathspec pattern and returns a Matcher.
-// Results are cached.
-func CompilePathspec(pattern string) Matcher {
-	m, _ := pathspecCache.Get(pattern)
-	return m
-}
-
-// pathspecToRegexp converts a gitignore-style pathspec pattern to a compiled regex.
-//
-// See https://git-scm.com/docs/gitignore#_pattern_format for the full specification.
-func pathspecToRegexp(pattern string) *regexp.Regexp {
+// pathspecToFnmatch transforms a gitignore-style pathspec pattern into an
+// fnmatch pattern. The key transformation is for patterns without a slash:
+// they match the basename at any depth, achieved by prepending "**/".
+func pathspecToFnmatch(pattern string) string {
 	// Handle leading /
-	isRooted := false
 	if len(pattern) > 0 && pattern[0] == '/' {
-		isRooted = true
-		pattern = pattern[1:]
+		// Rooted: strip leading / and match from root
+		return pattern[1:]
 	}
 
 	// Check if pattern has a slash (which means it matches full path, not just basename).
 	// A trailing slash doesn't count for this purpose.
-	hasSlash := strings.Contains(strings.TrimRight(pattern, "/"), "/")
-
-	var buf strings.Builder
-
-	if !isRooted && !hasSlash {
-		// No slash in pattern: match against the basename at any depth.
-		// (?:.*/)? matches an optional directory prefix ending with /
-		buf.WriteString("^(?:.*/)?")
-	} else {
-		// Has slash or is rooted: match from the root
-		buf.WriteString("^")
+	if strings.Contains(strings.TrimRight(pattern, "/"), "/") {
+		// Has slash: match from the root
+		return pattern
 	}
 
-	i := 0
-	for i < len(pattern) {
-		c := pattern[i]
-		switch c {
-		case '*':
-			if i+1 < len(pattern) && pattern[i+1] == '*' {
-				// ** pattern
-				if i+2 < len(pattern) && pattern[i+2] == '/' {
-					// **/ - match zero or more directories
-					buf.WriteString("(?:.*/)?")
-					i += 3
-					continue
-				}
-				// ** at end or without trailing / - match everything
-				buf.WriteString(".*")
-				i += 2
-				continue
-			}
-			// Single * - match anything except /
-			buf.WriteString("[^/]*")
-		case '?':
-			// ? - match single character except /
-			buf.WriteString("[^/]")
-		case '\\':
-			// Escape next character
-			if i+1 < len(pattern) {
-				i++
-				buf.WriteString(regexp.QuoteMeta(string(pattern[i])))
-			}
-		default:
-			buf.WriteString(regexp.QuoteMeta(string(c)))
-		}
-		i++
-	}
-
-	buf.WriteString("$")
-	return regexp.MustCompile(buf.String())
+	// No slash in pattern: match against the basename at any depth.
+	// Prepend **/ so fnmatch matches at any directory level.
+	return "**/" + pattern
 }

@@ -5,6 +5,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/radiospiel/critic/src/api"
+	"github.com/radiospiel/critic/src/config"
 	"github.com/radiospiel/critic/src/pkg/types"
 )
 
@@ -24,21 +25,26 @@ func getDiffSummaryImpl(server *Server, req *api.GetDiffSummaryRequest) (*api.Ge
 	state := session.GetState()
 	diff := session.GetDiffSummary()
 
+	pc := server.config.ProjectConfig
+	if pc == nil {
+		pc = config.DefaultProjectConfig()
+	}
+
 	return &api.GetDiffSummaryResponse{
 		State: string(state),
-		Diff:  convertDiffSummary(diff),
+		Diff:  convertDiffSummary(diff, pc),
 	}, nil
 }
 
 // convertDiffSummary converts a []*types.FileDiff to an api.DiffSummary (without hunks)
-func convertDiffSummary(files []*types.FileDiff) *api.DiffSummary {
+func convertDiffSummary(files []*types.FileDiff, pc *config.ProjectConfig) *api.DiffSummary {
 	if files == nil {
 		return nil
 	}
 
 	apiFiles := make([]*api.FileSummary, len(files))
 	for i, f := range files {
-		apiFiles[i] = convertFileSummary(f)
+		apiFiles[i] = convertFileSummary(f, pc)
 	}
 
 	return &api.DiffSummary{
@@ -47,9 +53,15 @@ func convertDiffSummary(files []*types.FileDiff) *api.DiffSummary {
 }
 
 // convertFileSummary converts a types.FileDiff to an api.FileSummary (without hunks)
-func convertFileSummary(f *types.FileDiff) *api.FileSummary {
+func convertFileSummary(f *types.FileDiff, pc *config.ProjectConfig) *api.FileSummary {
 	if f == nil {
 		return nil
+	}
+
+	// Use new_path for categorization, fall back to old_path for deleted files
+	path := f.NewPath
+	if path == "" {
+		path = f.OldPath
 	}
 
 	return &api.FileSummary{
@@ -59,6 +71,7 @@ func convertFileSummary(f *types.FileDiff) *api.FileSummary {
 		FileModeNew: f.NewMode,
 		Status:      convertFileStatus(f.FileStatus),
 		IsBinary:    f.IsBinary,
+		Category:    pc.CategorizeFile(path),
 	}
 }
 

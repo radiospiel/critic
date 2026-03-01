@@ -235,11 +235,31 @@ func TestPathspecMatchAny(t *testing.T) {
 	}
 }
 
-func TestCompilePathspec_Caching(t *testing.T) {
-	// Compile the same pattern twice - should return cached result
-	m1 := CompilePathspec("*.go")
-	m2 := CompilePathspec("*.go")
-	// Both should work correctly
-	assert.True(t, m1.MatchString("main.go"))
-	assert.True(t, m2.MatchString("main.go"))
+func TestPathspecMatchAny_Negation(t *testing.T) {
+	// Negation patterns: a file must match at least one positive pattern
+	// and none of the negative patterns.
+	tests := []struct {
+		patterns []string
+		path     string
+		matches  bool
+	}{
+		// Basic negation
+		{[]string{"*.go", "!*_test.go"}, "main.go", true},
+		{[]string{"*.go", "!*_test.go"}, "main_test.go", false},
+		// Negation with doublestar
+		{[]string{"src/**/*.go", "!*_test.go"}, "src/config/project.go", true},
+		{[]string{"src/**/*.go", "!*_test.go"}, "src/config/project_test.go", false},
+		// Only negative patterns — no positive match
+		{[]string{"!*_test.go"}, "main.go", false},
+		// Empty patterns
+		{[]string{}, "main.go", false},
+		{nil, "main.go", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			result := PathspecMatchAny(tt.patterns, tt.path)
+			assert.Equals(t, result, tt.matches, "PathspecMatchAny(%v, %q)", tt.patterns, tt.path)
+		})
+	}
 }

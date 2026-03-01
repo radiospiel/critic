@@ -173,3 +173,144 @@ func TestGetFileCategories(t *testing.T) {
 	assert.True(t, found["test"], "should have test category")
 	assert.True(t, found["hidden"], "should have hidden category")
 }
+
+// TestCategorizeFile_ProjectCritic tests categorization using the actual categories
+// from this project's project.critic config. This ensures the backend matches what
+// the frontend previously computed.
+func TestCategorizeFile_ProjectCritic(t *testing.T) {
+	// Mirror of the categories in project.critic
+	config := &ProjectConfig{
+		Categories: []FileCategory{
+			{Name: "Backend", Patterns: []string{"src/**/*.go", "!*_test.go"}},
+			{Name: "Backend Tests", Patterns: []string{"*_test.go"}},
+			{Name: "Web UI", Patterns: []string{"src/webui/**/*"}},
+			{Name: "VSCode UI", Patterns: []string{"editors/vscode/**/*"}},
+			{Name: "integration tests", Patterns: []string{"/test/*"}},
+			{Name: "auto generated", Patterns: []string{"src/webui/frontend/src/gen/*.ts", "package-lock.json", "src/api/critic.pb.go"}},
+			{Name: "Agent Integration", Patterns: []string{"agents/**/*"}},
+			{Name: "hidden", Patterns: []string{".*"}},
+		},
+	}
+
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		// Backend Go source files
+		{"src/config/project.go", "Backend"},
+		{"src/config/pathspec.go", "Backend"},
+		{"src/api/server/server.go", "Backend"},
+		{"src/api/server/get_diff_summary.go", "Backend"},
+		{"src/git/diff.go", "Backend"},
+		{"src/pkg/types/diff.go", "Backend"},
+
+		// Backend test files — negation in "Backend" excludes *_test.go,
+		// so they fall through to "Backend Tests"
+		{"src/config/project_test.go", "Backend Tests"},
+		{"src/config/pathspec_test.go", "Backend Tests"},
+		{"src/api/server/get_diff_summary_test.go", "Backend Tests"},
+		{"src/git/diff_test.go", "Backend Tests"},
+
+		// Test files at any depth
+		{"simple-go/fnmatch/fnmatch_test.go", "Backend Tests"},
+
+		// Web UI — matches "src/webui/**/*"
+		// Note: Web UI comes after Backend, so Go files under src/webui/ match Backend first
+		{"src/webui/frontend/src/App.tsx", "Web UI"},
+		{"src/webui/frontend/src/components/FileList.tsx", "Web UI"},
+		{"src/webui/frontend/package.json", "Web UI"},
+
+		// Web UI Go files match Backend (higher priority) not Web UI
+		{"src/webui/webui.go", "Backend"},
+
+		// VSCode UI
+		{"editors/vscode/src/extension.ts", "VSCode UI"},
+		{"editors/vscode/package.json", "VSCode UI"},
+
+		// Integration tests — rooted pattern /test/*
+		{"test/integration.go", "integration tests"},
+
+		// Auto generated files — note: files under src/webui/ match "Web UI" first,
+		// and src/api/*.go matches "Backend" first, because categories are checked
+		// in order. Only package-lock.json uniquely matches "auto generated".
+		{"src/webui/frontend/src/gen/critic_pb.ts", "Web UI"},
+		{"src/webui/frontend/src/gen/critic_connect.ts", "Web UI"},
+		{"package-lock.json", "auto generated"},
+		{"src/api/critic.pb.go", "Backend"},
+
+		// Agent Integration
+		{"agents/logs/some-log.md", "Agent Integration"},
+		{"agents/strategy-guide.md", "Agent Integration"},
+
+		// Hidden (dot files)
+		{".gitignore", "hidden"},
+		{".env", "hidden"},
+		{"src/.hidden", "hidden"},
+
+		// Default "source" — no category matches
+		{"README.md", "source"},
+		{"Makefile", "source"},
+		{"go.mod", "source"},
+		{"go.sum", "source"},
+		{"project.critic", "source"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			result := config.CategorizeFile(tt.path)
+			assert.Equals(t, result, tt.expected, "CategorizeFile(%q)", tt.path)
+		})
+	}
+}
+
+// TestCategorizeFile_NegationWithDoublestar tests that negation patterns work
+// correctly with doublestar patterns, which is the key combination used in
+// the Backend category: "src/**/*.go" + "!*_test.go"
+func TestCategorizeFile_NegationWithDoublestar(t *testing.T) {
+	config := &ProjectConfig{
+		Categories: []FileCategory{
+			{Name: "impl", Patterns: []string{"src/**/*.go", "!*_test.go"}},
+			{Name: "test", Patterns: []string{"*_test.go"}},
+		},
+	}
+
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		{"src/main.go", "impl"},
+		{"src/pkg/deep/file.go", "impl"},
+		{"src/main_test.go", "test"},
+		{"src/pkg/deep/file_test.go", "test"},
+		// Non-Go files don't match either
+		{"src/README.md", "source"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			result := config.CategorizeFile(tt.path)
+			assert.Equals(t, result, tt.expected, "CategorizeFile(%q)", tt.path)
+		})
+	}
+}
+
+// TestCategorizeFile_CategoryOrder tests that category ordering matters:
+// the first matching category wins.
+func TestCategorizeFile_CategoryOrder(t *testing.T) {
+	config := &ProjectConfig{
+		Categories: []FileCategory{
+			{Name: "first", Patterns: []string{"*.go"}},
+			{Name: "second", Patterns: []string{"*.go"}},
+		},
+	}
+
+	result := config.CategorizeFile("main.go")
+	assert.Equals(t, result, "first", "first matching category should win")
+}
+
+// TestCategorizeFile_EmptyCategories tests behavior with no categories configured.
+func TestCategorizeFile_EmptyCategories(t *testing.T) {
+	config := &ProjectConfig{}
+	result := config.CategorizeFile("anything.go")
+	assert.Equals(t, result, "source", "should return 'source' when no categories")
+}
