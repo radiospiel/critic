@@ -3,9 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/radiospiel/critic/simple-go/logger"
+	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 )
 
@@ -30,6 +30,8 @@ type ProjectConfig struct {
 	Paths      []string       `yaml:"paths"`
 	Categories []FileCategory `yaml:"categories"`
 	Editor     EditorConfig   `yaml:"editor"`
+	DiffBases  []string       `yaml:"diffbases"`
+	ConfigPath string         `yaml:"-"`
 }
 
 type projectInfo struct {
@@ -45,46 +47,49 @@ func DefaultProjectConfig() *ProjectConfig {
 			{Name: "test", Patterns: []string{"*_test.go"}},
 			{Name: "hidden", Patterns: []string{".*"}},
 		},
+		DiffBases: []string{"green"},
 	}
 }
 
-// LoadProjectConfig resolves the config path and loads the project config.
-// If projectFile is set, it must exist. Otherwise, looks for project.critic in gitRoot
-// and returns DefaultProjectConfig if not found.
-func LoadProjectConfig(path, gitRoot string) (string, *ProjectConfig, error) {
-	if path != "" {
-		// verify that the path exists
-		if _, err := os.Stat(path); err != nil {
-			logger.Error("Cannot load critic configuration from %s: %w", path, err)
-			return path, nil, err
-		}
-	} else {
-		// use default path instead.
-		path = filepath.Join(gitRoot, "project.critic")
-		logger.Info("trying to load critic configuration from default location %s", path)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			logger.Info("No critic configuration at default location %s, falling back to hardcoded default", path)
-			return path, DefaultProjectConfig(), nil
-		}
-	}
-
+// LoadProjectConfig loads the project config from path, falling back to defaults if missing.
+//
+// currentBranch is the current git branch name (used to build default bases).
+// hasRef validates whether a diff base is a valid git ref.
+// The returned config's DiffBases will be the merged result of defaults and configured bases.
+func LoadProjectConfig(path, currentBranch string, hasRef func(string) bool) (*ProjectConfig, error) {
 	pc, err := loadProjectConfigFromFile(path)
 	if err != nil {
-		return path, nil, fmt.Errorf("failed to load project config from %s: %w", path, err)
+		return nil, err
 	}
 
-	logger.Info("Loading critic configuration from %s", path)
-	return path, pc, nil
+	if hasRef != nil {
+		allDiffBases := append([]string{"main", "master", "origin/" + currentBranch, "HEAD"}, pc.DiffBases...)
+		unique := lo.Uniq(allDiffBases)
+		pc.DiffBases = lo.Filter(unique, func(ref string, _ int) bool { return hasRef(ref) })
+	}
+
+	logger.Info("Loading critic configuration from %s", pc.ConfigPath)
+	return pc, nil
 }
 
-// loadProjectConfigFromFile loads and parses a project.critic YAML file from the given path.
+// loadProjectConfigFromFile loads a project config from the given path.
+// If the file cannot be read, it logs the error and returns DefaultProjectConfig.
+// If the file cannot be parsed, it returns the error
 func loadProjectConfigFromFile(path string) (*ProjectConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read project config: %w", err)
+		logger.Error("Cannot load critic configuration from %s: %v, falling back to hardcoded default", path, err)
+		return DefaultProjectConfig(), nil
 	}
 
-	return ParseProjectConfig(data)
+	pc, err := ParseProjectConfig(data)
+	if err != nil {
+		logger.Error("Cannot parse critic configuration from %s: %v", path, err)
+		return nil, err
+	}
+
+	pc.ConfigPath = path
+	return pc, nil
 }
 
 // ParseProjectConfig parses YAML data into a ProjectConfig.

@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime/pprof"
 
 	"github.com/radiospiel/critic/src/api/server"
@@ -16,9 +17,7 @@ import (
 func newHTTPDCmd() *cobra.Command {
 	var port int
 	var dev bool
-	var diffBases []string
 	var cpuProfile string
-	var projectFile string
 
 	cmd := &cobra.Command{
 		Use:   "httpd [flags]",
@@ -35,7 +34,6 @@ Examples:
   critic httpd --port=8000        # Start on custom port
   critic httpd --dev              # Development mode with Vite hot reload
   critic httpd --cpuprofile=cpu.prof  # Enable CPU profiling
-  critic httpd --project=my.critic   # Use custom project config file
 `,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -45,10 +43,6 @@ Examples:
 					fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 				}
 			}()
-
-			// Always include default bases (master, main, HEAD) plus any explicitly added.
-			// Deferred to avoid git calls during help.
-			diffBases = mergeDefaultBases(diffBases)
 
 			// Start CPU profiling if requested
 			if cpuProfile != "" {
@@ -67,8 +61,16 @@ Examples:
 			// Get git root directory
 			gitRoot := git.GetGitRoot()
 
-			// Load project config (optional)
-			projectConfigPath, projectConfig, err := config.LoadProjectConfig(projectFile, gitRoot)
+			// Load project config (optional); merges configured diff bases with defaults.
+			projectFile, _ := cmd.Flags().GetString("project")
+			if projectFile != "" {
+				if _, err := os.Stat(projectFile); err != nil {
+					return fmt.Errorf("project config file not found: %s", projectFile)
+				}
+			} else {
+				projectFile = filepath.Join(gitRoot, "project.critic")
+			}
+			projectConfig, err := config.LoadProjectConfig(projectFile, git.GetCurrentBranch(), git.HasRef)
 			if err != nil {
 				return err
 			}
@@ -83,11 +85,11 @@ Examples:
 			config := server.Config{
 				Port:              port,
 				Dev:               dev,
-				DiffBases:         diffBases,
+				DiffBases:         projectConfig.DiffBases,
 				GitRoot:           gitRoot,
 				Messaging:         mdb,
 				ProjectConfig:     projectConfig,
-				ProjectConfigPath: projectConfigPath,
+				ProjectConfigPath: projectConfig.ConfigPath,
 			}
 
 			srv := server.NewServer(config)
@@ -97,10 +99,7 @@ Examples:
 
 	cmd.Flags().IntVar(&port, "port", 65432, "Port to run the API server on")
 	cmd.Flags().BoolVar(&dev, "dev", false, "Development mode: proxy to Vite dev server for hot reload")
-	cmd.Flags().StringSliceVar(&diffBases, "base-commits", nil, "Diff base commits (defaults to main/master/origin/<branch>/HEAD)")
-	cmd.Flags().Lookup("base-commits").Shorthand = "b"
 	cmd.Flags().StringVar(&cpuProfile, "cpuprofile", "", "Write CPU profile to file (use 'go tool pprof' to analyze)")
-	cmd.Flags().StringVar(&projectFile, "project", "", "Path to project.critic config file (default: auto-detect in git root)")
 
 	return cmd
 }

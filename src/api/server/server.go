@@ -145,7 +145,7 @@ func (s *Server) handleConfigChanges() {
 
 	for range s.configWatcher.Changes() {
 		logger.Info("Project config changed, reloading")
-		_, pc, err := config.LoadProjectConfig(s.config.ProjectConfigPath, "")
+		pc, err := config.LoadProjectConfig(s.config.ProjectConfigPath, "", nil)
 		if err != nil {
 			logger.Error("Failed to reload project config: %v", err)
 			continue
