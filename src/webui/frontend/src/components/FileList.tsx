@@ -422,7 +422,7 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
               checked={showUntracked}
               onChange={() => setShowUntracked(!showUntracked)}
             />
-            show {untrackedCount} untracked {untrackedCount === 1 ? 'file' : 'files'}
+            show {pluralize(untrackedCount, 'untracked file')}
           </label>
         )}
         {onShowArchivedChange && (
@@ -500,6 +500,16 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
                       {getStatusLabel(file.status)}
                     </span>
                     <span className="file-path">{path}</span>
+                    {summary && summary.unresolvedCount > 0 && (
+                      <span className="conversation-icon unresolved" title={`${summary.unresolvedCount} open`}>
+                        {summary.unresolvedCount}
+                      </span>
+                    )}
+                    {summary && summary.explanationCount > 0 && (
+                      <span className="conversation-icon explanation" title={`${pluralize(summary.explanationCount, 'explanation')}`}>
+                        {summary.explanationCount}
+                      </span>
+                    )}
                   </div>
                   {conversations.filter((c) => !(c.conversationType === 'explanation' && c.status === 'resolved')).filter((c) => showArchived || c.status !== 'archived').map((conv) => {
                     const lastMsg = conv.messages[conv.messages.length - 1]
@@ -600,6 +610,11 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
                         {summary.resolvedCount}
                       </span>
                     )}
+                    {summary && summary.explanationCount > 0 && (
+                      <span className="conversation-icon explanation" title={`${pluralize(summary.explanationCount, 'explanation')}`}>
+                        {summary.explanationCount}
+                      </span>
+                    )}
                   </li>
                 )
               }
@@ -625,14 +640,32 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
               return fileSections.map((section) => {
                 const isOpen = openCategory === section.name
                 const label = section.name.charAt(0).toUpperCase() + section.name.slice(1)
+                let catUnresolved = 0
+                let catExplanations = 0
+                for (const f of section.files) {
+                  const s = conversationSummaries.get(getFilePath(f))
+                  if (s) {
+                    catUnresolved += s.unresolvedCount
+                    catExplanations += s.explanationCount
+                  }
+                }
                 return (
                   <li key={section.name} className="file-category-group">
                     <div
                       className={`file-category-header${isOpen ? ' open' : ''}`}
                       onClick={() => selectCategory(section.name)}
                     >
-                      <span className="file-category-label">{label}</span>
-                      <span className="file-category-count">{section.files.length}</span>
+                      <span className="file-category-label">{label} ({pluralize(section.files.length, 'file')})</span>
+                      {catUnresolved > 0 && (
+                        <span className="conversation-icon unresolved" title={`${catUnresolved} open`}>
+                          {catUnresolved}
+                        </span>
+                      )}
+                      {catExplanations > 0 && (
+                        <span className="conversation-icon explanation" title={`${pluralize(catExplanations, 'explanation')}`}>
+                          {catExplanations}
+                        </span>
+                      )}
                     </div>
                     <div className={`file-category-collapse${isOpen ? ' open' : ''}`}>
                       <ul className="file-category-files">

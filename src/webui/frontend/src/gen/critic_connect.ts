@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CreateConversationRequest, CreateConversationResponse, CreateExplanationRequest, CreateExplanationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, GetProjectConfigRequest, GetProjectConfigResponse, GetRootConversationRequest, GetRootConversationResponse, InjectPromptRequest, InjectPromptResponse, MarkConversationAsRequest, MarkConversationAsResponse, ReplyToConversationRequest, ReplyToConversationResponse, SetClaudeSessionRequest, SetClaudeSessionResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
+import { CreateConversationRequest, CreateConversationResponse, CreateExplanationRequest, CreateExplanationResponse, GetConfigRequest, GetConfigResponse, GetConversationsRequest, GetConversationsResponse, GetConversationsSummaryRequest, GetConversationsSummaryResponse, GetDiffBasesRequest, GetDiffBasesResponse, GetDiffRequest, GetDiffResponse, GetDiffSummaryRequest, GetDiffSummaryResponse, GetFileRequest, GetFileResponse, GetLastChangeRequest, GetLastChangeResponse, GetProjectConfigRequest, GetProjectConfigResponse, GetRootConversationRequest, GetRootConversationResponse, MarkConversationAsRequest, MarkConversationAsResponse, ReplyToConversationRequest, ReplyToConversationResponse, SetDiffBaseRequest, SetDiffBaseResponse, WatchFileRequest, WatchFileResponse } from "./critic_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -190,28 +190,6 @@ export const CriticService = {
       name: "CreateExplanation",
       I: CreateExplanationRequest,
       O: CreateExplanationResponse,
-      kind: MethodKind.Unary,
-    },
-    /**
-     * SetClaudeSession stores the Claude Code session ID for prompt injection.
-     *
-     * @generated from rpc critic.v1.CriticService.SetClaudeSession
-     */
-    setClaudeSession: {
-      name: "SetClaudeSession",
-      I: SetClaudeSessionRequest,
-      O: SetClaudeSessionResponse,
-      kind: MethodKind.Unary,
-    },
-    /**
-     * InjectPrompt sends a prompt to the connected Claude Code session.
-     *
-     * @generated from rpc critic.v1.CriticService.InjectPrompt
-     */
-    injectPrompt: {
-      name: "InjectPrompt",
-      I: InjectPromptRequest,
-      O: InjectPromptResponse,
       kind: MethodKind.Unary,
     },
   }

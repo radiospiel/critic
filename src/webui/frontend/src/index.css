@@ -222,6 +222,144 @@ html, body, #root {
   cursor: default;
 }
 
+.claude-dropdown {
+  position: relative;
+}
+
+.claude-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  z-index: 100;
+  min-width: 160px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.claude-dropdown-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.claude-dropdown-menu button:hover {
+  background-color: var(--bg-hover);
+}
+
+/* Claude response modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.modal-dialog {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.modal-markdown {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.modal-markdown p {
+  margin: 0 0 8px;
+}
+
+.modal-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.modal-markdown code {
+  background-color: var(--bg-tertiary);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.modal-markdown pre {
+  background-color: var(--bg-tertiary);
+  padding: 8px 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.modal-markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.modal-spinner-container {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.modal-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border-primary);
+  border-top-color: var(--text-primary);
+  border-radius: 50%;
+  animation: modal-spin 0.8s linear infinite;
+}
+
+@keyframes modal-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Diff base selector */
 .diff-base-selector {
   padding: 8px 16px;
@@ -644,9 +782,9 @@ html, body, #root {
 }
 
 .file-status {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 2px 6px;
+  padding: 1px 4px;
   border-radius: 3px;
   flex-shrink: 0;
 }
@@ -681,6 +819,7 @@ html, body, #root {
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+  font-size: 12px;
 }
 
 /* Empty state */
@@ -1491,17 +1630,17 @@ html, body, #root {
   overflow: hidden;
 }
 
-/* Breathing blue border highlight on conversation when scrolled to */
+/* Breathing blue glow highlight on conversation when scrolled to */
 .comment-conversation.conversation-highlight {
-  animation: border-breathe 5s ease-in-out forwards;
+  animation: border-breathe 3s ease-in-out;
 }
 
 @keyframes border-breathe {
-  0% { border-color: var(--border-primary); box-shadow: 0 0 0 rgba(59, 130, 246, 0); }
-  12% { border-color: #3b82f6; box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.35); }
-  30% { border-color: var(--border-primary); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-  42% { border-color: #3b82f6; box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.35); }
-  65% { border-color: var(--border-primary); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  0% { box-shadow: 0 0 0 rgba(59, 130, 246, 0); }
+  15% { box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.35); }
+  40% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  55% { box-shadow: 0 0 20px 4px rgba(59, 130, 246, 0.35); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
 }
 
 .comment-conversation:last-child {
@@ -1843,6 +1982,11 @@ html, body, #root {
 .conversation-icon.resolved {
   background-color: var(--status-untracked-bg);
   color: var(--status-untracked-text);
+}
+
+.conversation-icon.explanation {
+  background-color: #2563eb;
+  color: #fff;
 }
 
 @keyframes pulse {

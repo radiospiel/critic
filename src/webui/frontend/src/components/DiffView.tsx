@@ -598,7 +598,7 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
         const wrapper = commentScrollRef.current.querySelector('.comment-conversation') as HTMLElement
         if (wrapper) {
           wrapper.classList.add('conversation-highlight')
-          setTimeout(() => wrapper.classList.remove('conversation-highlight'), 5000)
+          setTimeout(() => wrapper.classList.remove('conversation-highlight'), 3000)
         }
       }
     } else if (selectedLineRef.current && !restoreLineNo) {

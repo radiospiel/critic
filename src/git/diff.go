@@ -105,6 +105,27 @@ func GetDiff(base string, path string, contextLines int, opts ...DiffOption) (*c
 		return nil, fmt.Errorf("failed to parse diff: %w", err)
 	}
 
+	// If whitespace-ignoring diff is empty, retry without whitespace flags.
+	// Note: --name-status reports any file with a changed blob, ignoring -w
+	// and --ignore-blank-lines. But --patch respects those flags and produces
+	// an empty diff for whitespace-only changes. So a file can appear in the
+	// file list (via GetDiffNames) but have no patch here. We fall back to
+	// a diff without whitespace flags to show the actual change.
+	if len(files) == 0 {
+		var retryArgs []string
+		if o.end != "" {
+			retryArgs = []string{"diff", base + "..." + o.end, "--patch", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}
+		} else {
+			retryArgs = []string{"diff", base, "--merge-base", "--patch", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}
+		}
+		retryArgs = append(retryArgs, "--", path)
+		retryOutput := git(retryArgs...)
+		files, err = ParseDiff(string(retryOutput))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse diff: %w", err)
+		}
+	}
+
 	if len(files) == 0 {
 		return nil, nil
 	}

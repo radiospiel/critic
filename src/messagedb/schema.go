@@ -138,31 +138,3 @@ func (db *DB) setSchemaVersion(version string) error {
 	return err
 }
 
-// GetSetting retrieves a setting value by key.
-func (db *DB) GetSetting(key string) (string, error) {
-	var value string
-	err := db.Get(&value, `SELECT value FROM settings WHERE key = ?`, key)
-	if err != nil {
-		return "", fmt.Errorf("setting not found: %s", key)
-	}
-	return value, nil
-}
-
-// Setting represents a key-value pair from the settings table.
-type Setting struct {
-	Key   string `db:"key"`
-	Value string `db:"value"`
-}
-
-// ListSettings returns all settings.
-func (db *DB) ListSettings() ([]Setting, error) {
-	var settings []Setting
-	err := db.Select(&settings, `SELECT key, value FROM settings ORDER BY key`)
-	return settings, err
-}
-
-// SetSetting stores a setting value by key.
-func (db *DB) SetSetting(key, value string) error {
-	_, err := db.Exec(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, key, value)
-	return err
-}

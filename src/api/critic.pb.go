@@ -2608,8 +2608,6 @@ type GetConfigResponse struct {
 	GitRoot string `protobuf:"bytes,1,opt,name=git_root,json=gitRoot,proto3" json:"git_root,omitempty"`
 	// dev_mode indicates whether the server is running in development mode.
 	DevMode bool `protobuf:"varint,2,opt,name=dev_mode,json=devMode,proto3" json:"dev_mode,omitempty"`
-	// claude_session_id is the connected Claude Code session ID (empty if not connected).
-	ClaudeSessionId string `protobuf:"bytes,3,opt,name=claude_session_id,json=claudeSessionId,proto3" json:"claude_session_id,omitempty"`
 	// error contains error details if the request failed.
 	Error         *RpcError `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -2658,13 +2656,6 @@ func (x *GetConfigResponse) GetDevMode() bool {
 		return x.DevMode
 	}
 	return false
-}
-
-func (x *GetConfigResponse) GetClaudeSessionId() string {
-	if x != nil {
-		return x.ClaudeSessionId
-	}
-	return ""
 }
 
 func (x *GetConfigResponse) GetError() *RpcError {
@@ -3005,217 +2996,6 @@ func (x *CreateExplanationResponse) GetError() *RpcError {
 	return nil
 }
 
-// SetClaudeSessionRequest stores a Claude Code session ID.
-type SetClaudeSessionRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// session_id is the Claude Code session identifier.
-	SessionId     string `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetClaudeSessionRequest) Reset() {
-	*x = SetClaudeSessionRequest{}
-	mi := &file_critic_proto_msgTypes[45]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetClaudeSessionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetClaudeSessionRequest) ProtoMessage() {}
-
-func (x *SetClaudeSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_critic_proto_msgTypes[45]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetClaudeSessionRequest.ProtoReflect.Descriptor instead.
-func (*SetClaudeSessionRequest) Descriptor() ([]byte, []int) {
-	return file_critic_proto_rawDescGZIP(), []int{45}
-}
-
-func (x *SetClaudeSessionRequest) GetSessionId() string {
-	if x != nil {
-		return x.SessionId
-	}
-	return ""
-}
-
-// SetClaudeSessionResponse confirms the session was stored.
-type SetClaudeSessionResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// success indicates whether the session was stored successfully.
-	Success bool `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	// error contains error details if the request failed.
-	Error         *RpcError `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetClaudeSessionResponse) Reset() {
-	*x = SetClaudeSessionResponse{}
-	mi := &file_critic_proto_msgTypes[46]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetClaudeSessionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetClaudeSessionResponse) ProtoMessage() {}
-
-func (x *SetClaudeSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_critic_proto_msgTypes[46]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetClaudeSessionResponse.ProtoReflect.Descriptor instead.
-func (*SetClaudeSessionResponse) Descriptor() ([]byte, []int) {
-	return file_critic_proto_rawDescGZIP(), []int{46}
-}
-
-func (x *SetClaudeSessionResponse) GetSuccess() bool {
-	if x != nil {
-		return x.Success
-	}
-	return false
-}
-
-func (x *SetClaudeSessionResponse) GetError() *RpcError {
-	if x != nil {
-		return x.Error
-	}
-	return nil
-}
-
-// InjectPromptRequest sends a prompt to the connected Claude Code session.
-type InjectPromptRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// prompt is the text to send to Claude Code.
-	Prompt        string `protobuf:"bytes,1,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *InjectPromptRequest) Reset() {
-	*x = InjectPromptRequest{}
-	mi := &file_critic_proto_msgTypes[47]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *InjectPromptRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*InjectPromptRequest) ProtoMessage() {}
-
-func (x *InjectPromptRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_critic_proto_msgTypes[47]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use InjectPromptRequest.ProtoReflect.Descriptor instead.
-func (*InjectPromptRequest) Descriptor() ([]byte, []int) {
-	return file_critic_proto_rawDescGZIP(), []int{47}
-}
-
-func (x *InjectPromptRequest) GetPrompt() string {
-	if x != nil {
-		return x.Prompt
-	}
-	return ""
-}
-
-// InjectPromptResponse contains the result of the prompt injection.
-type InjectPromptResponse struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// success indicates whether the prompt was executed successfully.
-	Success bool `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	// output is the Claude Code response output.
-	Output string `protobuf:"bytes,2,opt,name=output,proto3" json:"output,omitempty"`
-	// error contains error details if the request failed.
-	Error         *RpcError `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *InjectPromptResponse) Reset() {
-	*x = InjectPromptResponse{}
-	mi := &file_critic_proto_msgTypes[48]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *InjectPromptResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*InjectPromptResponse) ProtoMessage() {}
-
-func (x *InjectPromptResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_critic_proto_msgTypes[48]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use InjectPromptResponse.ProtoReflect.Descriptor instead.
-func (*InjectPromptResponse) Descriptor() ([]byte, []int) {
-	return file_critic_proto_rawDescGZIP(), []int{48}
-}
-
-func (x *InjectPromptResponse) GetSuccess() bool {
-	if x != nil {
-		return x.Success
-	}
-	return false
-}
-
-func (x *InjectPromptResponse) GetOutput() string {
-	if x != nil {
-		return x.Output
-	}
-	return ""
-}
-
-func (x *InjectPromptResponse) GetError() *RpcError {
-	if x != nil {
-		return x.Error
-	}
-	return nil
-}
-
 var File_critic_proto protoreflect.FileDescriptor
 
 const file_critic_proto_rawDesc = "" +
@@ -3370,11 +3150,10 @@ const file_critic_proto_rawDesc = "" +
 	"\x1bGetRootConversationResponse\x12;\n" +
 	"\fconversation\x18\x01 \x01(\v2\x17.critic.v1.ConversationR\fconversation\x12)\n" +
 	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error\"\x12\n" +
-	"\x10GetConfigRequest\"\xa0\x01\n" +
+	"\x10GetConfigRequest\"t\n" +
 	"\x11GetConfigResponse\x12\x19\n" +
 	"\bgit_root\x18\x01 \x01(\tR\agitRoot\x12\x19\n" +
-	"\bdev_mode\x18\x02 \x01(\bR\adevMode\x12*\n" +
-	"\x11claude_session_id\x18\x03 \x01(\tR\x0fclaudeSessionId\x12)\n" +
+	"\bdev_mode\x18\x02 \x01(\bR\adevMode\x12)\n" +
 	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error\"\x19\n" +
 	"\x17GetProjectConfigRequest\"\xd2\x01\n" +
 	"\x18GetProjectConfigResponse\x12!\n" +
@@ -3395,18 +3174,6 @@ const file_critic_proto_rawDesc = "" +
 	"\acomment\x18\x03 \x01(\tR\acomment\"`\n" +
 	"\x19CreateExplanationResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12)\n" +
-	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error\"8\n" +
-	"\x17SetClaudeSessionRequest\x12\x1d\n" +
-	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\"_\n" +
-	"\x18SetClaudeSessionResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12)\n" +
-	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error\"-\n" +
-	"\x13InjectPromptRequest\x12\x16\n" +
-	"\x06prompt\x18\x01 \x01(\tR\x06prompt\"s\n" +
-	"\x14InjectPromptResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x16\n" +
-	"\x06output\x18\x02 \x01(\tR\x06output\x12)\n" +
 	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error*\x97\x01\n" +
 	"\tErrorCode\x12\x1a\n" +
 	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\x1f\n" +
@@ -3438,7 +3205,7 @@ const file_critic_proto_rawDesc = "" +
 	"\x10ConversationType\x12\x1d\n" +
 	"\x19CONVERSATION_TYPE_INVALID\x10\x00\x12\"\n" +
 	"\x1eCONVERSATION_TYPE_CONVERSATION\x10\x01\x12!\n" +
-	"\x1dCONVERSATION_TYPE_EXPLANATION\x10\x022\xb9\f\n" +
+	"\x1dCONVERSATION_TYPE_EXPLANATION\x10\x022\x8b\v\n" +
 	"\rCriticService\x12R\n" +
 	"\rGetLastChange\x12\x1f.critic.v1.GetLastChangeRequest\x1a .critic.v1.GetLastChangeResponse\x12U\n" +
 	"\x0eGetDiffSummary\x12 .critic.v1.GetDiffSummaryRequest\x1a!.critic.v1.GetDiffSummaryResponse\x12@\n" +
@@ -3455,9 +3222,7 @@ const file_critic_proto_rawDesc = "" +
 	"\tGetConfig\x12\x1b.critic.v1.GetConfigRequest\x1a\x1c.critic.v1.GetConfigResponse\x12d\n" +
 	"\x13GetRootConversation\x12%.critic.v1.GetRootConversationRequest\x1a&.critic.v1.GetRootConversationResponse\x12[\n" +
 	"\x10GetProjectConfig\x12\".critic.v1.GetProjectConfigRequest\x1a#.critic.v1.GetProjectConfigResponse\x12^\n" +
-	"\x11CreateExplanation\x12#.critic.v1.CreateExplanationRequest\x1a$.critic.v1.CreateExplanationResponse\x12[\n" +
-	"\x10SetClaudeSession\x12\".critic.v1.SetClaudeSessionRequest\x1a#.critic.v1.SetClaudeSessionResponse\x12O\n" +
-	"\fInjectPrompt\x12\x1e.critic.v1.InjectPromptRequest\x1a\x1f.critic.v1.InjectPromptResponseB*Z(github.com/radiospiel/critic/src/api;apib\x06proto3"
+	"\x11CreateExplanation\x12#.critic.v1.CreateExplanationRequest\x1a$.critic.v1.CreateExplanationResponseB*Z(github.com/radiospiel/critic/src/api;apib\x06proto3"
 
 var (
 	file_critic_proto_rawDescOnce sync.Once
@@ -3472,7 +3237,7 @@ func file_critic_proto_rawDescGZIP() []byte {
 }
 
 var file_critic_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_critic_proto_msgTypes = make([]protoimpl.MessageInfo, 49)
+var file_critic_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_critic_proto_goTypes = []any{
 	(ErrorCode)(0),                          // 0: critic.v1.ErrorCode
 	(FileStatus)(0),                         // 1: critic.v1.FileStatus
@@ -3524,10 +3289,6 @@ var file_critic_proto_goTypes = []any{
 	(*EditorConfig)(nil),                    // 47: critic.v1.EditorConfig
 	(*CreateExplanationRequest)(nil),        // 48: critic.v1.CreateExplanationRequest
 	(*CreateExplanationResponse)(nil),       // 49: critic.v1.CreateExplanationResponse
-	(*SetClaudeSessionRequest)(nil),         // 50: critic.v1.SetClaudeSessionRequest
-	(*SetClaudeSessionResponse)(nil),        // 51: critic.v1.SetClaudeSessionResponse
-	(*InjectPromptRequest)(nil),             // 52: critic.v1.InjectPromptRequest
-	(*InjectPromptResponse)(nil),            // 53: critic.v1.InjectPromptResponse
 }
 var file_critic_proto_depIdxs = []int32{
 	0,  // 0: critic.v1.RpcError.code:type_name -> critic.v1.ErrorCode
@@ -3568,49 +3329,43 @@ var file_critic_proto_depIdxs = []int32{
 	47, // 35: critic.v1.GetProjectConfigResponse.editor:type_name -> critic.v1.EditorConfig
 	5,  // 36: critic.v1.GetProjectConfigResponse.error:type_name -> critic.v1.RpcError
 	5,  // 37: critic.v1.CreateExplanationResponse.error:type_name -> critic.v1.RpcError
-	5,  // 38: critic.v1.SetClaudeSessionResponse.error:type_name -> critic.v1.RpcError
-	5,  // 39: critic.v1.InjectPromptResponse.error:type_name -> critic.v1.RpcError
-	6,  // 40: critic.v1.CriticService.GetLastChange:input_type -> critic.v1.GetLastChangeRequest
-	8,  // 41: critic.v1.CriticService.GetDiffSummary:input_type -> critic.v1.GetDiffSummaryRequest
-	10, // 42: critic.v1.CriticService.GetDiff:input_type -> critic.v1.GetDiffRequest
-	19, // 43: critic.v1.CriticService.GetFile:input_type -> critic.v1.GetFileRequest
-	21, // 44: critic.v1.CriticService.CreateConversation:input_type -> critic.v1.CreateConversationRequest
-	23, // 45: critic.v1.CriticService.GetConversations:input_type -> critic.v1.GetConversationsRequest
-	25, // 46: critic.v1.CriticService.GetConversationsSummary:input_type -> critic.v1.GetConversationsSummaryRequest
-	34, // 47: critic.v1.CriticService.ReplyToConversation:input_type -> critic.v1.ReplyToConversationRequest
-	36, // 48: critic.v1.CriticService.MarkConversationAs:input_type -> critic.v1.MarkConversationAsRequest
-	30, // 49: critic.v1.CriticService.GetDiffBases:input_type -> critic.v1.GetDiffBasesRequest
-	32, // 50: critic.v1.CriticService.SetDiffBase:input_type -> critic.v1.SetDiffBaseRequest
-	38, // 51: critic.v1.CriticService.WatchFile:input_type -> critic.v1.WatchFileRequest
-	42, // 52: critic.v1.CriticService.GetConfig:input_type -> critic.v1.GetConfigRequest
-	40, // 53: critic.v1.CriticService.GetRootConversation:input_type -> critic.v1.GetRootConversationRequest
-	44, // 54: critic.v1.CriticService.GetProjectConfig:input_type -> critic.v1.GetProjectConfigRequest
-	48, // 55: critic.v1.CriticService.CreateExplanation:input_type -> critic.v1.CreateExplanationRequest
-	50, // 56: critic.v1.CriticService.SetClaudeSession:input_type -> critic.v1.SetClaudeSessionRequest
-	52, // 57: critic.v1.CriticService.InjectPrompt:input_type -> critic.v1.InjectPromptRequest
-	7,  // 58: critic.v1.CriticService.GetLastChange:output_type -> critic.v1.GetLastChangeResponse
-	9,  // 59: critic.v1.CriticService.GetDiffSummary:output_type -> critic.v1.GetDiffSummaryResponse
-	11, // 60: critic.v1.CriticService.GetDiff:output_type -> critic.v1.GetDiffResponse
-	20, // 61: critic.v1.CriticService.GetFile:output_type -> critic.v1.GetFileResponse
-	22, // 62: critic.v1.CriticService.CreateConversation:output_type -> critic.v1.CreateConversationResponse
-	24, // 63: critic.v1.CriticService.GetConversations:output_type -> critic.v1.GetConversationsResponse
-	26, // 64: critic.v1.CriticService.GetConversationsSummary:output_type -> critic.v1.GetConversationsSummaryResponse
-	35, // 65: critic.v1.CriticService.ReplyToConversation:output_type -> critic.v1.ReplyToConversationResponse
-	37, // 66: critic.v1.CriticService.MarkConversationAs:output_type -> critic.v1.MarkConversationAsResponse
-	31, // 67: critic.v1.CriticService.GetDiffBases:output_type -> critic.v1.GetDiffBasesResponse
-	33, // 68: critic.v1.CriticService.SetDiffBase:output_type -> critic.v1.SetDiffBaseResponse
-	39, // 69: critic.v1.CriticService.WatchFile:output_type -> critic.v1.WatchFileResponse
-	43, // 70: critic.v1.CriticService.GetConfig:output_type -> critic.v1.GetConfigResponse
-	41, // 71: critic.v1.CriticService.GetRootConversation:output_type -> critic.v1.GetRootConversationResponse
-	45, // 72: critic.v1.CriticService.GetProjectConfig:output_type -> critic.v1.GetProjectConfigResponse
-	49, // 73: critic.v1.CriticService.CreateExplanation:output_type -> critic.v1.CreateExplanationResponse
-	51, // 74: critic.v1.CriticService.SetClaudeSession:output_type -> critic.v1.SetClaudeSessionResponse
-	53, // 75: critic.v1.CriticService.InjectPrompt:output_type -> critic.v1.InjectPromptResponse
-	58, // [58:76] is the sub-list for method output_type
-	40, // [40:58] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	6,  // 38: critic.v1.CriticService.GetLastChange:input_type -> critic.v1.GetLastChangeRequest
+	8,  // 39: critic.v1.CriticService.GetDiffSummary:input_type -> critic.v1.GetDiffSummaryRequest
+	10, // 40: critic.v1.CriticService.GetDiff:input_type -> critic.v1.GetDiffRequest
+	19, // 41: critic.v1.CriticService.GetFile:input_type -> critic.v1.GetFileRequest
+	21, // 42: critic.v1.CriticService.CreateConversation:input_type -> critic.v1.CreateConversationRequest
+	23, // 43: critic.v1.CriticService.GetConversations:input_type -> critic.v1.GetConversationsRequest
+	25, // 44: critic.v1.CriticService.GetConversationsSummary:input_type -> critic.v1.GetConversationsSummaryRequest
+	34, // 45: critic.v1.CriticService.ReplyToConversation:input_type -> critic.v1.ReplyToConversationRequest
+	36, // 46: critic.v1.CriticService.MarkConversationAs:input_type -> critic.v1.MarkConversationAsRequest
+	30, // 47: critic.v1.CriticService.GetDiffBases:input_type -> critic.v1.GetDiffBasesRequest
+	32, // 48: critic.v1.CriticService.SetDiffBase:input_type -> critic.v1.SetDiffBaseRequest
+	38, // 49: critic.v1.CriticService.WatchFile:input_type -> critic.v1.WatchFileRequest
+	42, // 50: critic.v1.CriticService.GetConfig:input_type -> critic.v1.GetConfigRequest
+	40, // 51: critic.v1.CriticService.GetRootConversation:input_type -> critic.v1.GetRootConversationRequest
+	44, // 52: critic.v1.CriticService.GetProjectConfig:input_type -> critic.v1.GetProjectConfigRequest
+	48, // 53: critic.v1.CriticService.CreateExplanation:input_type -> critic.v1.CreateExplanationRequest
+	7,  // 54: critic.v1.CriticService.GetLastChange:output_type -> critic.v1.GetLastChangeResponse
+	9,  // 55: critic.v1.CriticService.GetDiffSummary:output_type -> critic.v1.GetDiffSummaryResponse
+	11, // 56: critic.v1.CriticService.GetDiff:output_type -> critic.v1.GetDiffResponse
+	20, // 57: critic.v1.CriticService.GetFile:output_type -> critic.v1.GetFileResponse
+	22, // 58: critic.v1.CriticService.CreateConversation:output_type -> critic.v1.CreateConversationResponse
+	24, // 59: critic.v1.CriticService.GetConversations:output_type -> critic.v1.GetConversationsResponse
+	26, // 60: critic.v1.CriticService.GetConversationsSummary:output_type -> critic.v1.GetConversationsSummaryResponse
+	35, // 61: critic.v1.CriticService.ReplyToConversation:output_type -> critic.v1.ReplyToConversationResponse
+	37, // 62: critic.v1.CriticService.MarkConversationAs:output_type -> critic.v1.MarkConversationAsResponse
+	31, // 63: critic.v1.CriticService.GetDiffBases:output_type -> critic.v1.GetDiffBasesResponse
+	33, // 64: critic.v1.CriticService.SetDiffBase:output_type -> critic.v1.SetDiffBaseResponse
+	39, // 65: critic.v1.CriticService.WatchFile:output_type -> critic.v1.WatchFileResponse
+	43, // 66: critic.v1.CriticService.GetConfig:output_type -> critic.v1.GetConfigResponse
+	41, // 67: critic.v1.CriticService.GetRootConversation:output_type -> critic.v1.GetRootConversationResponse
+	45, // 68: critic.v1.CriticService.GetProjectConfig:output_type -> critic.v1.GetProjectConfigResponse
+	49, // 69: critic.v1.CriticService.CreateExplanation:output_type -> critic.v1.CreateExplanationResponse
+	54, // [54:70] is the sub-list for method output_type
+	38, // [38:54] is the sub-list for method input_type
+	38, // [38:38] is the sub-list for extension type_name
+	38, // [38:38] is the sub-list for extension extendee
+	0,  // [0:38] is the sub-list for field type_name
 }
 
 func init() { file_critic_proto_init() }
@@ -3624,7 +3379,7 @@ func file_critic_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_critic_proto_rawDesc), len(file_critic_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   49,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

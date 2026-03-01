@@ -4,8 +4,9 @@ import FileList, { FilterType } from './components/FileList'
 import DiffView from './components/DiffView'
 import DiffBaseSelector from './components/DiffBaseSelector'
 import CommentDisplay from './components/CommentDisplay'
-import { criticClient, getConfig, getConversations, getRootConversation, injectPrompt, ServerConfig, CommentConversation } from './api/client'
+import { criticClient, getConfig, getConversations, getRootConversation, ServerConfig, CommentConversation } from './api/client'
 import { FileDiff, FileSummary, FileStatus } from './gen/critic_pb'
+import ClaudeModal from './components/ClaudeModal'
 import { useWebSocket } from './hooks/useWebSocket'
 
 type FocusedPanel = 'fileList' | 'diffView'
@@ -38,9 +39,22 @@ function AppContent() {
   const [showRootConversation, setShowRootConversation] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [allConversations, setAllConversations] = useState<CommentConversation[]>([])
-  const [claudePromptLoading, setClaudePromptLoading] = useState<string | null>(null)
+  const [claudeDropdownOpen, setClaudeDropdownOpen] = useState(false)
+  const [claudeModal, setClaudeModal] = useState<{ text: string } | null>(null)
+  const claudeDropdownRef = useRef<HTMLDivElement>(null)
   const loadTimeRef = useRef(Date.now())
   const { theme, toggleTheme } = useTheme()
+
+  // Close claude dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (claudeDropdownRef.current && !claudeDropdownRef.current.contains(e.target as Node)) {
+        setClaudeDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   // Load server config and project config on mount
   useEffect(() => {
@@ -260,16 +274,6 @@ function AppContent() {
     setCurrentLineNo({ lineNoNew, lineNoOld })
   }, [])
 
-  const handleClaudePrompt = useCallback(async (prompt: string, label: string) => {
-    setClaudePromptLoading(label)
-    try {
-      await injectPrompt(prompt)
-    } finally {
-      setClaudePromptLoading(null)
-    }
-  }, [])
-
-  const hasClaudeSession = !!serverConfig?.claudeSessionId
 
   // Filter conversations for the selected file (derived from single bulk load)
   const selectedFileConversations = useMemo(
@@ -341,22 +345,24 @@ function AppContent() {
           <span>Critic</span>
           <span className="render-timestamp">{secondsSinceLoad}s</span>
           <div className="header-buttons">
-            <button
-              className="claude-button"
-              disabled={!hasClaudeSession || claudePromptLoading !== null}
-              onClick={() => handleClaudePrompt('/critic:loop', 'loop')}
-              title={hasClaudeSession ? 'Ask Claude to check and resolve feedback' : 'No Claude session connected — run /critic:activate'}
-            >
-              {claudePromptLoading === 'loop' ? '...' : 'Ask Claude'}
-            </button>
-            <button
-              className="claude-button"
-              disabled={!hasClaudeSession || claudePromptLoading !== null}
-              onClick={() => handleClaudePrompt('/critic:summarize', 'summarize')}
-              title={hasClaudeSession ? 'Ask Claude to summarize changes' : 'No Claude session connected — run /critic:activate'}
-            >
-              {claudePromptLoading === 'summarize' ? '...' : 'Summarize'}
-            </button>
+            <div className="claude-dropdown" ref={claudeDropdownRef}>
+              <button
+                className="claude-button"
+                onClick={() => setClaudeDropdownOpen(o => !o)}
+              >
+                Ask Claude ▾
+              </button>
+              {claudeDropdownOpen && (
+                <div className="claude-dropdown-menu">
+                  <button onClick={() => { setClaudeDropdownOpen(false); setClaudeModal({ text: 'Run in Claude Code:\n\n  /critic:loop\n\nThis will process all unresolved feedback.' }) }}>
+                    Process feedback
+                  </button>
+                  <button onClick={() => { setClaudeDropdownOpen(false); setClaudeModal({ text: 'Run in Claude Code:\n\n  /critic:explain\n\nThis will post explanations on non-obvious changes.' }) }}>
+                    Explain changes
+                  </button>
+                </div>
+              )}
+            </div>
             <button className="help-button" onClick={() => { setSelectedFile(null); setSelectedFileDiff(null); setShowRootConversation(false) }} title="Keyboard shortcuts">
               ?
             </button>
@@ -483,6 +489,9 @@ function AppContent() {
           </div>
         )}
       </main>
+      {claudeModal && (
+        <ClaudeModal text={claudeModal.text} onClose={() => setClaudeModal(null)} />
+      )}
     </div>
   )
 }

@@ -14,7 +14,6 @@ func Execute() error {
 	rootCmd.AddCommand(newConvoCmd())
 	rootCmd.AddCommand(newTestCmd())
 	rootCmd.AddCommand(newREPLCmd())
-	rootCmd.AddCommand(newSettingsCmd())
 
 	return rootCmd.Execute()
 }
