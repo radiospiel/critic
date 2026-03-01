@@ -420,6 +420,31 @@ interface SelectionRange {
   end: number
 }
 
+// Find the line index in allLines closest to the target line number.
+// Used to restore selection position after file navigation or data reload.
+function findBestLineIndex(
+  allLines: { line: Line; hunkIdx: number; lineIdx: number }[],
+  restoreLineNo: { lineNoNew: number; lineNoOld: number }
+): number {
+  let bestIndex = -1
+  let bestDistance = Infinity
+
+  for (let i = 0; i < allLines.length; i++) {
+    const { line } = allLines[i]
+    if (line.lineNoNew === restoreLineNo.lineNoNew && restoreLineNo.lineNoNew > 0) return i
+    if (line.lineNoOld === restoreLineNo.lineNoOld && restoreLineNo.lineNoOld > 0) return i
+    if (line.lineNoNew > 0 && restoreLineNo.lineNoNew > 0) {
+      const distance = Math.abs(line.lineNoNew - restoreLineNo.lineNoNew)
+      if (distance < bestDistance) { bestDistance = distance; bestIndex = i }
+    }
+    if (line.lineNoOld > 0 && restoreLineNo.lineNoOld > 0) {
+      const distance = Math.abs(line.lineNoOld - restoreLineNo.lineNoOld)
+      if (distance < bestDistance) { bestDistance = distance; bestIndex = i }
+    }
+  }
+  return bestIndex
+}
+
 function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo, showOnlyConversations = false, showArchived = false, serverConfig, conversations: conversationsProp, onConversationsChanged }: DiffViewProps) {
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
   const [editorOpen, setEditorOpen] = useState(false)
@@ -428,6 +453,8 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
   const commentScrollRef = useRef<HTMLTableRowElement>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [scrollJump, setScrollJump] = useState(false)
+  const prevPathRef = useRef<string | null>(null)
+  const prevRestoreRef = useRef<{ lineNoNew: number; lineNoOld: number } | null>(null)
 
   const path = fileDiff.status === FileStatus.DELETED ? fileDiff.oldPath : fileDiff.newPath
   const language = getLanguage(path)
@@ -515,50 +542,41 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
     return { added, deleted }
   }, [fileDiff.hunks])
 
-  // Reset view mode when file changes
+  // Reset view mode when file changes (not on data reload)
   useEffect(() => {
+    const currentPath = fileDiff.status === FileStatus.DELETED ? fileDiff.oldPath : fileDiff.newPath
+    if (prevPathRef.current !== null && prevPathRef.current === currentPath) return
     setViewMode('diff')
   }, [fileDiff])
 
   // Reset selection when file changes, trying to restore to the target line if provided
   useEffect(() => {
+    const currentPath = fileDiff.status === FileStatus.DELETED ? fileDiff.oldPath : fileDiff.newPath
+    const fileChanged = prevPathRef.current === null || prevPathRef.current !== currentPath
+    prevPathRef.current = currentPath
+
+    // On data reload (same file), preserve editor and scroll state
+    const restoreChanged = restoreLineNo !== prevRestoreRef.current &&
+      (restoreLineNo?.lineNoNew !== prevRestoreRef.current?.lineNoNew ||
+       restoreLineNo?.lineNoOld !== prevRestoreRef.current?.lineNoOld)
+    prevRestoreRef.current = restoreLineNo ?? null
+
+    if (!fileChanged) {
+      // User clicked a different conversation in the same file — scroll to it
+      if (restoreChanged && restoreLineNo && allLines.length > 0) {
+        const bestIndex = findBestLineIndex(allLines, restoreLineNo)
+        if (bestIndex >= 0) {
+          setScrollJump(true)
+          setSelection({ start: bestIndex, end: bestIndex })
+        }
+      }
+      return
+    }
+
     setEditorOpen(false)
 
     if (restoreLineNo && allLines.length > 0) {
-      // Try to find the exact line by lineNoNew first, then lineNoOld
-      let bestIndex = -1
-      let bestDistance = Infinity
-
-      for (let i = 0; i < allLines.length; i++) {
-        const { line } = allLines[i]
-        // Exact match on new line number
-        if (line.lineNoNew === restoreLineNo.lineNoNew && restoreLineNo.lineNoNew > 0) {
-          bestIndex = i
-          break
-        }
-        // Exact match on old line number
-        if (line.lineNoOld === restoreLineNo.lineNoOld && restoreLineNo.lineNoOld > 0) {
-          bestIndex = i
-          break
-        }
-        // Track closest line by new line number
-        if (line.lineNoNew > 0 && restoreLineNo.lineNoNew > 0) {
-          const distance = Math.abs(line.lineNoNew - restoreLineNo.lineNoNew)
-          if (distance < bestDistance) {
-            bestDistance = distance
-            bestIndex = i
-          }
-        }
-        // Track closest line by old line number
-        if (line.lineNoOld > 0 && restoreLineNo.lineNoOld > 0) {
-          const distance = Math.abs(line.lineNoOld - restoreLineNo.lineNoOld)
-          if (distance < bestDistance) {
-            bestDistance = distance
-            bestIndex = i
-          }
-        }
-      }
-
+      const bestIndex = findBestLineIndex(allLines, restoreLineNo)
       if (bestIndex >= 0) {
         setScrollJump(true)
         setSelection({ start: bestIndex, end: bestIndex })
@@ -574,7 +592,15 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
     if (scrollJump) {
       setScrollJump(false)
       const target = commentScrollRef.current || selectedLineRef.current
-      target?.scrollIntoView({ block: 'start' })
+      target?.scrollIntoView({ block: 'center' })
+      // Flash the conversation border to draw attention
+      if (commentScrollRef.current) {
+        const wrapper = commentScrollRef.current.querySelector('.comment-conversation') as HTMLElement
+        if (wrapper) {
+          wrapper.classList.add('conversation-highlight')
+          setTimeout(() => wrapper.classList.remove('conversation-highlight'), 5000)
+        }
+      }
     } else if (selectedLineRef.current && !restoreLineNo) {
       // Skip scroll when a jump is pending (restoreLineNo set but not yet processed).
       // Use instant scroll for keyboard navigation to avoid competing animations.
@@ -617,7 +643,9 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
-      if ((e.target as HTMLElement)?.isContentEditable) {
+      // TipTap editor uses contentEditable divs; without this guard, keypresses
+      // (e.g. 'j', 'k') while typing a comment would trigger diff navigation.
+      if ((e.target as HTMLElement)?.isContentEditable || (e.target as HTMLElement)?.closest('.tiptap')) {
         return
       }
 

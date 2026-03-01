@@ -179,7 +179,7 @@ func (s *Server) Start() error {
 	// Start git directory watcher
 	if s.config.GitRoot != "" {
 		gitDir := s.config.GitRoot + "/.git"
-		watcher, err := git.NewGitWatcher(gitDir, 100) // 100ms debounce
+		watcher, err := git.NewGitWatcher(gitDir, 200) // 200ms debounce
 		if err != nil {
 			logger.Error("Failed to start git watcher: %v", err)
 		} else {

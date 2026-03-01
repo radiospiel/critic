@@ -15,7 +15,15 @@ function getFilePath(file: FileSummary): string {
 }
 
 function AppContent() {
-  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [selectedFile, _setSelectedFile] = useState<string | null>(() => sessionStorage.getItem('critic-selected-file'))
+  const setSelectedFile = useCallback((file: string | null) => {
+    _setSelectedFile(file)
+    if (file) {
+      sessionStorage.setItem('critic-selected-file', file)
+    } else {
+      sessionStorage.removeItem('critic-selected-file')
+    }
+  }, [])
   const [selectedFileDiff, setSelectedFileDiff] = useState<FileDiff | null>(null)
   const [loading, setLoading] = useState(false)
   const [files, setFiles] = useState<FileSummary[]>([])
@@ -83,6 +91,11 @@ function AppContent() {
   useEffect(() => {
     loadFileList()
     loadAllConversations()
+    // Restore previously selected file on mount (e.g. after HMR or page reload)
+    const restored = sessionStorage.getItem('critic-selected-file')
+    if (restored) {
+      loadFileDiff(restored, undefined, true)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadFileDiff = useCallback((file: string, ctxLines?: number, preserveSelection?: boolean) => {
