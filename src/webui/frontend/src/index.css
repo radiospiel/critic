@@ -467,11 +467,11 @@ html, body, #root {
 }
 
 .diff-graph-line.start {
-  top: calc(50% + 6px);
+  bottom: calc(50% + 6px);
 }
 
 .diff-graph-line.end {
-  bottom: calc(50% + 6px);
+  top: calc(50% + 6px);
 }
 
 .diff-graph-arrow {

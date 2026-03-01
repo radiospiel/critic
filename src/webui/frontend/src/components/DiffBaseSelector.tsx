@@ -84,7 +84,7 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
   if (bases.length === 0) return null
 
   const displayBase = (base: string) => {
-    if (!base) return 'working dir'
+    if (!base) return '(working dir)'
     return base
   }
 
@@ -116,7 +116,7 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
             const isEnd = value === currentEnd
             const inRange = logicalIdx >= startIdx && logicalIdx <= endIdx
             const isLast = displayIdx === displayList.length - 1
-            const label = value || 'working dir'
+            const label = value || '(working dir)'
 
             return (
               <div
@@ -126,8 +126,8 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
               >
                 <span className="diff-graph-gutter">
                   {inRange && <span className={`diff-graph-line${isStart ? ' start' : ''}${isEnd ? ' end' : ''}`} />}
-                  {isStart && <span className="diff-graph-arrow down" />}
-                  {isEnd && <span className="diff-graph-arrow up" />}
+                  {isStart && <span className="diff-graph-arrow up" />}
+                  {isEnd && <span className="diff-graph-arrow down" />}
                 </span>
                 <span className="diff-graph-label" title={label}>{label}</span>
               </div>
