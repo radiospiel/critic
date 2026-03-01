@@ -45,6 +45,11 @@ var levelColors = [...]string{
 	FATAL: "\033[35m", // magenta
 }
 
+// SetLevelColor overrides the ANSI color for a given log level.
+func SetLevelColor(level LevelT, color string) {
+	levelColors[level] = color
+}
+
 const colorReset = "\033[0m"
 
 // SimpleLogger is a logger with support for topics, and filenames
@@ -222,6 +227,15 @@ func SetLogFile(path string) {
 	sharedDest.logger = log.New(f, "", log.LstdFlags|log.Lmicroseconds)
 }
 
+// SetLogFlags sets the flags on the underlying log.Logger (e.g. 0 to disable timestamps).
+func SetLogFlags(flags int) {
+	sharedDest.mu.Lock()
+	defer sharedDest.mu.Unlock()
+	if sharedDest.logger != nil {
+		sharedDest.logger.SetFlags(flags)
+	}
+}
+
 // SetNullLog sets the logger to discard all output
 func SetNullLog() {
 	SetLogFile("/dev/null")
@@ -246,6 +260,7 @@ func WithTopic(topic string) *SimpleLogger {
 func WithCaller(file string, line int) *SimpleLogger {
 	return sharedInstance.WithCaller(file, line)
 }
+
 
 // WithLevel returns a logger that uses the provided log level. This method allows chaining of WithXXX() calls.
 func (sl *SimpleLogger) WithLevel(level LevelT) *SimpleLogger {

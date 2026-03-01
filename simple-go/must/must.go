@@ -73,10 +73,10 @@ func escapeIfNecessary(s string, _ int) string {
 	return s
 }
 
-// tryExecWithCaller executes a command with explicit caller info for logging
-func tryExecWithCaller(logger *logger.SimpleLogger, name string, args []string) ([]byte, error) {
+// TryExecWithCaller executes a command with the given logger for caller info.
+func TryExecWithCaller(l *logger.SimpleLogger, name string, args ...string) ([]byte, error) {
 	stringified := lo.Map(args, escapeIfNecessary)
-	logger.Info("%s %s", name, strings.Join(stringified, " "))
+	l.Info("%s %s", name, strings.Join(stringified, " "))
 
 	cmd := exec.Command(name, args...)
 	output, err := cmd.Output()
@@ -86,13 +86,13 @@ func tryExecWithCaller(logger *logger.SimpleLogger, name string, args []string) 
 // TryExec executes a command and returns (output, nil) on success or (nil, error) on failure.
 func TryExec(name string, args ...string) ([]byte, error) {
 	_, file, line, _ := runtime.Caller(1)
-	return tryExecWithCaller(logger.WithCaller(file, line), name, args)
+	return TryExecWithCaller(logger.WithCaller(file, line), name, args...)
 }
 
 // Exec executes a command, panicking on error.
 func Exec(name string, args ...string) []byte {
 	_, file, line, _ := runtime.Caller(1)
-	output, err := tryExecWithCaller(logger.WithCaller(file, line), name, args)
+	output, err := TryExecWithCaller(logger.WithCaller(file, line), name, args...)
 	if err != nil {
 		msg := fmt.Sprintf("in %s: Exec(%s %v) failed: %v", Getwd(), name, args, err)
 		if exitErr, ok := err.(*exec.ExitError); ok {
