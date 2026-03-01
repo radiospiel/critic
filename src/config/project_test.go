@@ -8,16 +8,6 @@ import (
 	"github.com/radiospiel/critic/simple-go/assert"
 )
 
-// findCategory returns the patterns for a named category, or nil if not found.
-func findCategory(categories []FileCategory, name string) []string {
-	for _, cat := range categories {
-		if cat.Name == name {
-			return cat.Patterns
-		}
-	}
-	return nil
-}
-
 func TestParseProjectConfig(t *testing.T) {
 	yaml := `
 project:
@@ -27,13 +17,11 @@ paths:
   - src/go
 
 categories:
-  - name: test
-    patterns:
-      - "*_test.go"
-      - "/test/*"
-  - name: hidden
-    patterns:
-      - ".*"
+  test:
+    - "*_test.go"
+    - "/test/*"
+  hidden:
+    - ".*"
 
 editor:
   url: "vscode://file/{file}:{line}"
@@ -44,13 +32,11 @@ editor:
 	assert.Equals(t, len(config.Paths), 1, "paths count")
 	assert.Equals(t, config.Paths[0], "src/go", "paths[0]")
 	assert.Equals(t, len(config.Categories), 2, "categories count")
-	testPatterns := findCategory(config.Categories, "test")
-	assert.Equals(t, len(testPatterns), 2, "test patterns count")
-	assert.Equals(t, testPatterns[0], "*_test.go", "test pattern 0")
-	assert.Equals(t, testPatterns[1], "/test/*", "test pattern 1")
-	hiddenPatterns := findCategory(config.Categories, "hidden")
-	assert.Equals(t, len(hiddenPatterns), 1, "hidden patterns count")
-	assert.Equals(t, hiddenPatterns[0], ".*", "hidden pattern 0")
+	assert.Equals(t, len(config.Categories["test"]), 2, "test patterns count")
+	assert.Equals(t, config.Categories["test"][0], "*_test.go", "test pattern 0")
+	assert.Equals(t, config.Categories["test"][1], "/test/*", "test pattern 1")
+	assert.Equals(t, len(config.Categories["hidden"]), 1, "hidden patterns count")
+	assert.Equals(t, config.Categories["hidden"][0], ".*", "hidden pattern 0")
 	assert.Equals(t, config.Editor.URL, "vscode://file/{file}:{line}", "editor url")
 }
 
@@ -76,20 +62,17 @@ func TestParseProjectConfig_InvalidYAML(t *testing.T) {
 func TestDefaultProjectConfig(t *testing.T) {
 	config := DefaultProjectConfig()
 	assert.NotNil(t, config, "default config should not be nil")
-	testPatterns := findCategory(config.Categories, "test")
-	assert.Equals(t, len(testPatterns), 1, "default test patterns")
-	assert.Equals(t, testPatterns[0], "*_test.go", "default test pattern")
-	hiddenPatterns := findCategory(config.Categories, "hidden")
-	assert.Equals(t, len(hiddenPatterns), 1, "default hidden patterns")
-	assert.Equals(t, hiddenPatterns[0], ".*", "default hidden pattern")
+	assert.Equals(t, len(config.Categories["test"]), 1, "default test patterns")
+	assert.Equals(t, config.Categories["test"][0], "*_test.go", "default test pattern")
+	assert.Equals(t, len(config.Categories["hidden"]), 1, "default hidden patterns")
+	assert.Equals(t, config.Categories["hidden"][0], ".*", "default hidden pattern")
 }
 
 func TestLoadProjectConfig_FileNotFound(t *testing.T) {
 	config, err := LoadProjectConfig("/nonexistent/directory")
 	assert.NoError(t, err, "missing file should return default config, not error")
 	assert.NotNil(t, config, "should return default config")
-	testPatterns := findCategory(config.Categories, "test")
-	assert.Equals(t, len(testPatterns), 1, "should have default test patterns")
+	assert.Equals(t, len(config.Categories["test"]), 1, "should have default test patterns")
 }
 
 func TestLoadProjectConfig_ValidFile(t *testing.T) {
@@ -103,13 +86,11 @@ paths:
   - src
 
 categories:
-  - name: test
-    patterns:
-      - "*_test.go"
-  - name: hidden
-    patterns:
-      - ".*"
-      - "vendor/**"
+  test:
+    - "*_test.go"
+  hidden:
+    - ".*"
+    - "vendor/**"
 
 editor:
   url: "idea://open?file={file}&line={line}"
@@ -121,16 +102,15 @@ editor:
 	assert.NoError(t, err)
 	assert.Equals(t, config.Project.Name, "test-project", "project name")
 	assert.Equals(t, len(config.Paths), 1, "paths count")
-	hiddenPatterns := findCategory(config.Categories, "hidden")
-	assert.Equals(t, len(hiddenPatterns), 2, "hidden patterns count")
+	assert.Equals(t, len(config.Categories["hidden"]), 2, "hidden patterns count")
 	assert.Equals(t, config.Editor.URL, "idea://open?file={file}&line={line}", "editor url")
 }
 
 func TestCategorizeFile(t *testing.T) {
 	config := &ProjectConfig{
-		Categories: []FileCategory{
-			{Name: "test", Patterns: []string{"*_test.go", "/test/*"}},
-			{Name: "hidden", Patterns: []string{".*"}},
+		Categories: map[string][]string{
+			"test":   {"*_test.go", "/test/*"},
+			"hidden": {".*"},
 		},
 	}
 
@@ -157,15 +137,16 @@ func TestCategorizeFile(t *testing.T) {
 
 func TestGetFileCategories(t *testing.T) {
 	config := &ProjectConfig{
-		Categories: []FileCategory{
-			{Name: "test", Patterns: []string{"*_test.go"}},
-			{Name: "hidden", Patterns: []string{".*"}},
+		Categories: map[string][]string{
+			"test":   {"*_test.go"},
+			"hidden": {".*"},
 		},
 	}
 
 	categories := config.GetFileCategories()
 	assert.Equals(t, len(categories), 2, "should have 2 categories")
 
+	// Check that both categories are present (order may vary due to map)
 	found := map[string]bool{}
 	for _, cat := range categories {
 		found[cat.Name] = true

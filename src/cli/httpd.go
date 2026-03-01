@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime/pprof"
 
 	"github.com/radiospiel/critic/simple-go/logger"
@@ -71,20 +70,19 @@ Examples:
 
 			// Load project config (optional)
 			var projectConfig *config.ProjectConfig
-			var projectConfigPath string
 			if projectFile != "" {
-				projectConfigPath = projectFile
-			} else {
-				projectConfigPath = filepath.Join(gitRoot, "project.critic")
-			}
-			pc, err := config.LoadProjectConfigFromFile(projectConfigPath)
-			if err != nil {
-				if projectFile != "" {
+				pc, err := config.LoadProjectConfigFromFile(projectFile)
+				if err != nil {
 					return fmt.Errorf("failed to load project config from %s: %w", projectFile, err)
 				}
-				logger.Error("failed to load project.critic: %v", err)
-			} else {
 				projectConfig = pc
+			} else {
+				pc, err := config.LoadProjectConfig(gitRoot)
+				if err != nil {
+					logger.Error("failed to load project.critic: %v", err)
+				} else {
+					projectConfig = pc
+				}
 			}
 
 			// Initialize the message database
@@ -95,13 +93,12 @@ Examples:
 			defer mdb.Close()
 
 			config := server.Config{
-				Port:              port,
-				Dev:               dev,
-				DiffBases:         diffBases,
-				GitRoot:           gitRoot,
-				Messaging:         mdb,
-				ProjectConfig:     projectConfig,
-				ProjectConfigPath: projectConfigPath,
+				Port:          port,
+				Dev:           dev,
+				DiffBases:     diffBases,
+				GitRoot:       gitRoot,
+				Messaging:     mdb,
+				ProjectConfig: projectConfig,
 			}
 
 			srv := server.NewServer(config)

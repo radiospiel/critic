@@ -3,7 +3,7 @@ import hljs from 'highlight.js'
 import { FileDiff, FileStatus, Line, LineType } from '../gen/critic_pb'
 import InlineCommentEditor, { CommentLineInfo } from './CommentEditor'
 import CommentDisplay from './CommentDisplay'
-import { CommentConversation, ServerConfig, criticClient } from '../api/client'
+import { CommentConversation, ServerConfig } from '../api/client'
 import LinkToSource from './LinkToSource'
 
 const ALT_JUMP_SIZE = 25
@@ -287,80 +287,6 @@ function getStatusDescription(status: FileStatus): string {
   }
 }
 
-interface FileViewProps {
-  path: string
-  language: string | undefined
-  serverConfig?: ServerConfig | null
-}
-
-function FileView({ path, language, serverConfig }: FileViewProps) {
-  const [content, setContent] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    setContent(null)
-    setError(null)
-    setLoading(true)
-    criticClient.getFile({ path }).then((response) => {
-      if (response.error) {
-        setError(response.error.message || 'Failed to load file')
-      } else {
-        setContent(response.content)
-      }
-      setLoading(false)
-    }).catch((err) => {
-      setError(String(err))
-      setLoading(false)
-    })
-  }, [path])
-
-  if (loading) {
-    return <div className="file-view-content file-view-loading">Loading file...</div>
-  }
-  if (error) {
-    return <div className="file-view-content file-view-error">{error}</div>
-  }
-  if (content === null) {
-    return null
-  }
-
-  const lines = content.split('\n')
-  let highlighted: string
-  if (language) {
-    try {
-      highlighted = hljs.highlight(content, { language, ignoreIllegals: true }).value
-    } catch {
-      highlighted = escapeHtml(content)
-    }
-  } else {
-    highlighted = escapeHtml(content)
-  }
-  const highlightedLines = highlighted.split('\n')
-
-  return (
-    <div className="file-view-content">
-      <table className="diff-table diff-table-unified">
-        <tbody>
-          {lines.map((_, i) => (
-            <tr key={i} className="diff-line-context">
-              <td className="diff-line-number"></td>
-              <td className="diff-line-number">
-                <LinkToSource lineNo={i + 1} filePath={path} serverConfig={serverConfig} />
-              </td>
-              <td className="diff-line-prefix"></td>
-              <td
-                className="diff-line-content"
-                dangerouslySetInnerHTML={{ __html: highlightedLines[i] || '&nbsp;' }}
-              />
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
 interface UnifiedLineProps {
   line: Line
   language: string | undefined
@@ -423,7 +349,6 @@ interface SelectionRange {
 function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused = true, onFocus, contextLines = 3, onIncreaseContext, onDecreaseContext, onResetContext, onSelectionChange, restoreLineNo, showOnlyConversations = false, showArchived = false, serverConfig, conversations: conversationsProp, onConversationsChanged }: DiffViewProps) {
   const [selection, setSelection] = useState<SelectionRange>({ start: 0, end: 0 })
   const [editorOpen, setEditorOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<'diff' | 'file'>('diff')
   const selectedLineRef = useRef<HTMLTableRowElement>(null)
   const commentScrollRef = useRef<HTMLTableRowElement>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -514,11 +439,6 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
     }
     return { added, deleted }
   }, [fileDiff.hunks])
-
-  // Reset view mode when file changes
-  useEffect(() => {
-    setViewMode('diff')
-  }, [fileDiff])
 
   // Reset selection when file changes, trying to restore to the target line if provided
   useEffect(() => {
@@ -722,10 +642,6 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
     <div className={`diff-view${isFocused ? ' focused' : ''}`}>
       <div className="diff-header">
         <div className="diff-header-info">
-          <div className="view-mode-toggle">
-            <button className={`view-mode-button${viewMode === 'diff' ? ' active' : ''}`} onClick={() => setViewMode('diff')}>Diff</button>
-            <button className={`view-mode-button${viewMode === 'file' ? ' active' : ''}`} onClick={() => setViewMode('file')}>File</button>
-          </div>
           <span className="diff-file-path">{path}</span>
           <span className="diff-file-status">{getStatusDescription(fileDiff.status)}</span>
           {fileDiff.status === FileStatus.RENAMED && fileDiff.oldPath !== fileDiff.newPath && (
@@ -737,45 +653,36 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
             <span className="diff-stats-added">+{stats.added}</span>
             <span className="diff-stats-deleted">-{stats.deleted}</span>
           </span>
-          {viewMode === 'diff' && (
-            <div className="diff-context-controls">
-              <button
-                className="diff-context-button"
-                onClick={onDecreaseContext}
-                disabled={contextLines <= 3}
-                title="Decrease context lines (Shift+C)"
-              >
-                −C
-              </button>
-              <button
-                className="diff-context-button"
-                onClick={onResetContext}
-                disabled={contextLines === 3}
-                title="Reset to default context (3 lines)"
-              >
-                C
-              </button>
-              <button
-                className="diff-context-button"
-                onClick={onIncreaseContext}
-                title="Increase context lines (c)"
-              >
-                +C
-              </button>
-            </div>
-          )}
+          <div className="diff-context-controls">
+            <button
+              className="diff-context-button"
+              onClick={onDecreaseContext}
+              disabled={contextLines <= 3}
+              title="Decrease context lines (Shift+C)"
+            >
+              −C
+            </button>
+            <button
+              className="diff-context-button"
+              onClick={onResetContext}
+              disabled={contextLines === 3}
+              title="Reset to default context (3 lines)"
+            >
+              C
+            </button>
+            <button
+              className="diff-context-button"
+              onClick={onIncreaseContext}
+              title="Increase context lines (c)"
+            >
+              +C
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="diff-content" ref={containerRef}>
-        {viewMode === 'file' ? (
-          fileDiff.status === FileStatus.DELETED ? (
-            <div className="diff-empty-notice">File was deleted</div>
-          ) : (
-            <FileView path={path} language={language} serverConfig={serverConfig} />
-          )
-        ) : null}
-        {viewMode === 'diff' && (filteredHunks.length === 0 ? (
+        {filteredHunks.length === 0 ? (
           <div className="diff-empty-notice">{showOnlyConversations ? 'No conversations in this file (you probably have outdated conversation data, this will be fixed automatically.)' : 'No changes in this file'}</div>
         ) : (
           <table className="diff-table diff-table-unified">
@@ -855,7 +762,7 @@ function DiffView({ fileDiff, onNavigatePrevFile, onNavigateNextFile, isFocused 
               })()}
             </tbody>
           </table>
-        ))}
+        )}
       </div>
     </div>
   )

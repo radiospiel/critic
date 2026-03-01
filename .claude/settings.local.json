@@ -59,7 +59,16 @@
       "Bash(buf:*)",
       "Bash(curl:*)",
       "Bash(npx buf generate:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(cd /Users/eno/projects/critic/editors/vscode && npm audit 2>&1)",
+      "Bash(cd /Users/eno/projects/critic/editors/vscode && node -e \"console.log\\(require\\('@vscode/vsce/package.json'\\).version\\)\" && npm view @vscode/vsce version 2>&1)",
+      "Bash(rm -rf node_modules package-lock.json && npm install 2>&1)",
+      "Bash(npm audit:*)",
+      "Bash(npm run:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(git-summarize:*)",
+      "Bash(git wip:*)"
     ]
   }
 }

@@ -1,0 +1,110 @@
+{
+  "name": "critic-vscode",
+  "displayName": "Critic Code Review",
+  "description": "Inline AI-assisted code review with the critic tool",
+  "version": "0.1.0",
+  "publisher": "radiospiel",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/radiospiel/critic"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "keywords": ["code review", "ai", "critic", "comments"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "critic",
+          "title": "Critic",
+          "icon": "resources/critic-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "critic": [
+        {
+          "id": "critic.fileList",
+          "name": "Changed Files"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "critic.refresh",
+        "title": "Critic: Refresh Comments"
+      },
+      {
+        "command": "critic.openWebUI",
+        "title": "Critic: Open Web UI in Browser"
+      },
+      {
+        "command": "critic.resolveConversation",
+        "title": "Critic: Resolve Conversation"
+      },
+      {
+        "command": "critic.archiveConversation",
+        "title": "Critic: Archive Conversation"
+      },
+      {
+        "command": "critic.openFile",
+        "title": "Critic: Open File"
+      },
+      {
+        "command": "critic.statusBarMenu",
+        "title": "Critic: Status Bar Menu"
+      },
+      {
+        "command": "_critic.internal.reply",
+        "title": "Submit Comment"
+      }
+    ],
+    "menus": {
+      "comments/commentThread/context": [
+        {
+          "command": "_critic.internal.reply",
+          "group": "inline",
+          "when": "commentController == critic-review"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Critic",
+      "properties": {
+        "critic.serverUrl": {
+          "type": "string",
+          "default": "http://localhost:65432",
+          "description": "URL of the critic server (e.g. http://localhost:65432)"
+        },
+        "critic.pollIntervalMs": {
+          "type": "number",
+          "default": 2000,
+          "description": "How often to poll the critic server for changes (milliseconds)"
+        },
+        "critic.showResolvedComments": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to show resolved conversations in the editor"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "pretest": "npm run compile",
+    "vscode:prepublish": "npm run compile",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.3.0"
+  }
+}
