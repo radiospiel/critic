@@ -107,39 +107,28 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
       {panelOpen && (
         <div className="diff-graph-panel">
           <div className="diff-graph-hint">Click on branch names to adjust selection</div>
-          {bases.map((base, idx) => {
-            const isStart = base === currentStart
-            const isEnd = base === currentEnd
+          {fullList.map((value, idx) => {
+            const isStart = value === currentStart
+            const isEnd = value === currentEnd
             const inRange = idx >= startIdx && idx <= endIdx
+            const isLast = idx === fullList.length - 1
+            const label = value || 'working dir'
+
             return (
               <div
-                key={base}
-                className={`diff-graph-row${isStart ? ' selected-start' : ''}${isEnd ? ' selected-end' : ''}${inRange ? ' in-range' : ''}`}
-                onClick={() => handleNodeClick(base)}
+                key={value || '__workdir__'}
+                className={`diff-graph-row${isStart ? ' selected-start' : ''}${isEnd ? ' selected-end' : ''}${inRange ? ' in-range' : ''}${isLast ? ' last' : ''}`}
+                onClick={() => handleNodeClick(value)}
               >
-                <span className="diff-graph-line-segment" />
-                <span className={`diff-graph-node${isStart ? ' start' : ''}${isEnd ? ' end' : ''}`} />
-                <span className="diff-graph-label" title={base}>{base}</span>
+                <span className="diff-graph-gutter">
+                  {inRange && <span className={`diff-graph-line${isStart ? ' start' : ''}${isEnd ? ' end' : ''}`} />}
+                  {isStart && <span className="diff-graph-arrow down" />}
+                  {isEnd && <span className="diff-graph-arrow up" />}
+                </span>
+                <span className="diff-graph-label" title={label}>{label}</span>
               </div>
             )
           })}
-
-          {/* Working dir row */}
-          {(() => {
-            const idx = fullList.length - 1
-            const isEnd = currentEnd === ''
-            const inRange = idx >= startIdx && idx <= endIdx
-            return (
-              <div
-                className={`diff-graph-row last${isEnd ? ' selected-end' : ''}${inRange ? ' in-range' : ''}`}
-                onClick={() => handleNodeClick('')}
-              >
-                <span className="diff-graph-line-segment" />
-                <span className={`diff-graph-node${isEnd ? ' end' : ''}`} />
-                <span className="diff-graph-label">working dir</span>
-              </div>
-            )
-          })()}
         </div>
       )}
     </div>
