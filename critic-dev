@@ -37,10 +37,12 @@ SCRIPT_DIR=$(get_script_dir)
 GOBIN=$(go env GOPATH)/bin
 DBINARY=$GOBIN/dcritic
 
-if [[ "${1:-}" =~ ^(mcp|convo|httpd|test)$ ]]; then
+if [[ "${1:-}" =~ ^(mcp|convo|httpd|test|repl)$ ]]; then
     # Other subcommands: pass through as-is
+    set -xv
     exec $DBINARY "$@"
 else
     # No subcommand or unknown arg: default to tui with cpuprofile
+    set -xv
     exec $DBINARY httpd --dev "$@"
 fi

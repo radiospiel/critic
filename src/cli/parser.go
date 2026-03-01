@@ -51,6 +51,7 @@ func Execute() error {
 	rootCmd.AddCommand(newMCPCmd())
 	rootCmd.AddCommand(newConvoCmd())
 	rootCmd.AddCommand(newTestCmd())
+	rootCmd.AddCommand(newREPLCmd())
 
 	return rootCmd.Execute()
 }
