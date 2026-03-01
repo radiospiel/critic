@@ -1,6 +1,10 @@
 project:
   name: "critic"
 
+diffbases:
+  - green
+  - master
+
 # paths:
 #   - src
 #   - simple-go
