@@ -150,7 +150,7 @@ function AppContent() {
       // Reset the timer
       loadTimeRef.current = Date.now()
       setSecondsSinceLoad(0)
-      // Reload config (picks up session_id changes), file list, conversations, and root conversation
+      // Reload config, file list, conversations, and root conversation
       getConfig().then((result) => { if (result.config) setServerConfig(result.config) })
       loadFileList()
       loadAllConversations()
