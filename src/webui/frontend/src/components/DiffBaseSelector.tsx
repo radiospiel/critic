@@ -77,6 +77,8 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
       } else {
         // Click in middle: deactivate clicked entry and everything toward
         // the start (older side), keeping the end (newer) side.
+        // Guard: the remainder [clickIdx+1..endIdx] must be at least 2.
+        if (endIdx - clickIdx < 2) return
         applyRange(fullList[clickIdx + 1], currentEnd)
       }
     } else {
