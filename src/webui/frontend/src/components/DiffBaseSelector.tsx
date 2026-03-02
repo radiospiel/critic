@@ -48,6 +48,18 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
     const endIdx = fullList.indexOf(currentEnd)
     if (clickIdx < 0 || startIdx < 0 || endIdx < 0) return
 
+    // Range click logic:
+    //
+    // The user selects a contiguous range [start..end] within fullList.
+    // A minimum of 2 entries must always remain selected.
+    //
+    // - Clicking an INACTIVE entry (outside the range) expands the nearest
+    //   edge to include it — and all entries in between.
+    // - Clicking an ACTIVE entry (inside the range) shrinks the range:
+    //     * Start edge  → removes it, moving start one step inward.
+    //     * End edge    → removes it, moving end one step inward.
+    //     * Middle      → removes it AND everything older (toward start),
+    //                     keeping the newer side (toward end).
     const isInRange = clickIdx >= startIdx && clickIdx <= endIdx
     const rangeSize = endIdx - startIdx + 1
 
