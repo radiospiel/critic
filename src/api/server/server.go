@@ -269,7 +269,8 @@ func (s *Server) Start() error {
 	// Start server in goroutine
 	serverErr := make(chan error, 1)
 	go func() {
-		fmt.Printf("Critic running at http://localhost%s\n", addr)
+		url := fmt.Sprintf("http://localhost%s", addr)
+		fmt.Printf("Critic running at %s\n", logger.Hyperlink(url, url))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErr <- err
 		}

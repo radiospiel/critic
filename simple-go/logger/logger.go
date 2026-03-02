@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -51,6 +52,31 @@ func SetLevelColor(level LevelT, color string) {
 }
 
 const colorReset = "\033[0m"
+
+// OSC 8 hyperlink escape sequences for clickable links in supported terminals.
+const (
+	oscOpen  = "\033]8;;"
+	oscClose = "\033\\"
+)
+
+// urlPattern matches http:// and https:// URLs in log messages.
+var urlPattern = regexp.MustCompile(`https?://[^\s"'` + "`" + `\x00-\x1f]+`)
+
+// Hyperlink wraps text as a clickable OSC 8 hyperlink pointing to url.
+// Only produces escape sequences when the log destination is a TTY.
+func Hyperlink(url, text string) string {
+	if !sharedDest.enableColors {
+		return text
+	}
+	return oscOpen + url + oscClose + text + oscOpen + oscClose
+}
+
+// linkifyURLs replaces bare URLs in s with OSC 8 clickable hyperlinks.
+func linkifyURLs(s string) string {
+	return urlPattern.ReplaceAllStringFunc(s, func(url string) string {
+		return oscOpen + url + oscClose + url + oscOpen + oscClose
+	})
+}
 
 // SimpleLogger is a logger with support for topics, and filenames
 // Note that most calls will call directly to the sharedInstance, but a caller
@@ -164,8 +190,9 @@ func processLogEntry(entry logMessage) {
 	}
 	msg = entry.level.String() + ": " + msg
 
-	// apply color
+	// apply color and hyperlinks
 	if sharedDest.enableColors {
+		msg = linkifyURLs(msg)
 		color := levelColors[entry.level]
 		if color != "" {
 			msg = color + msg + colorReset
