@@ -75,7 +75,7 @@ src/api/%.pb.go src/api/apiconnect/%.connect.go: $(PROTO_DIR)/%.proto
 
 # Generate TypeScript types from .proto files
 $(FRONTEND_DIR)/src/gen/%_pb.ts $(FRONTEND_DIR)/src/gen/%_connect.ts: $(PROTO_DIR)/%.proto
-	cd $(FRONTEND_DIR) && npx buf generate ../../api/proto
+	cd $(FRONTEND_DIR) && buf generate ../../api/proto
 
 # Regenerate all proto files (Go + TypeScript)
 proto: $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(PROTO_GEN_TS) $(PROTO_GEN_TS_CONNECT)
