@@ -48,23 +48,46 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
     const endIdx = fullList.indexOf(currentEnd)
     if (clickIdx < 0 || startIdx < 0 || endIdx < 0) return
 
-    if (clickIdx === startIdx) {
-      // Click on start: shrink range (move start inward), unless neighbors
-      if (startIdx + 1 >= endIdx) return
-      applyRange(fullList[startIdx + 1], currentEnd)
-    } else if (clickIdx === endIdx) {
-      // Click on end: shrink range (move end inward), unless neighbors
-      if (endIdx - 1 <= startIdx) return
-      applyRange(currentStart, fullList[endIdx - 1])
-    } else if (clickIdx > startIdx && clickIdx < endIdx) {
-      // Inside range: set start to clicked branch
-      applyRange(value, currentEnd)
-    } else if (clickIdx < startIdx) {
-      // Before range: expand start outward
-      applyRange(value, currentEnd)
-    } else if (clickIdx > endIdx) {
-      // After range: expand end outward
-      applyRange(currentStart, value)
+    // Range click logic:
+    //
+    // The user selects a contiguous range [start..end] within fullList.
+    // A minimum of 2 entries must always remain selected.
+    //
+    // - Clicking an INACTIVE entry (outside the range) expands the nearest
+    //   edge to include it — and all entries in between.
+    // - Clicking an ACTIVE entry (inside the range) shrinks the range:
+    //     * Start edge  → removes it, moving start one step inward.
+    //     * End edge    → removes it, moving end one step inward.
+    //     * Middle      → removes it AND everything older (toward start),
+    //                     keeping the newer side (toward end).
+    const isInRange = clickIdx >= startIdx && clickIdx <= endIdx
+    const rangeSize = endIdx - startIdx + 1
+
+    if (isInRange) {
+      // Clicking an active entry: deactivate it.
+      // Guard: don't shrink below 2 active entries.
+      if (rangeSize <= 2) return
+
+      if (clickIdx === startIdx) {
+        // Click on start: shrink range by moving start inward
+        applyRange(fullList[startIdx + 1], currentEnd)
+      } else if (clickIdx === endIdx) {
+        // Click on end: shrink range by moving end inward
+        applyRange(currentStart, fullList[endIdx - 1])
+      } else {
+        // Click in middle: deactivate clicked entry and everything toward
+        // the start (older side), keeping the end (newer) side.
+        // Guard: the remainder [clickIdx+1..endIdx] must be at least 2.
+        if (endIdx - clickIdx < 2) return
+        applyRange(fullList[clickIdx + 1], currentEnd)
+      }
+    } else {
+      // Clicking an inactive entry: activate it by expanding the range.
+      if (clickIdx < startIdx) {
+        applyRange(value, currentEnd)
+      } else {
+        applyRange(currentStart, value)
+      }
     }
   }
 
