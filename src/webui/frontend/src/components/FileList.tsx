@@ -97,6 +97,7 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [categoryNames, setCategoryNames] = useState<string[]>([])
+  const [categoryPaths, setCategoryPaths] = useState<Map<string, string>>(new Map())
   const [resolvingIds, setResolvingIds] = useState<Set<string>>(new Set())
   const [showUntracked, setShowUntracked] = useState(false)
   const [openCategory, setOpenCategory] = useState<string>('')
@@ -153,6 +154,11 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
         } else {
           const names = response.categories.map((c) => c.name)
           setCategoryNames(names)
+          const paths = new Map<string, string>()
+          for (const c of response.categories) {
+            if (c.path) paths.set(c.name, c.path)
+          }
+          setCategoryPaths(paths)
           if (names.length > 0) {
             setOpenCategory(names[0])
           }
@@ -581,8 +587,9 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
         ) : (
           <>
             {(() => {
-              const renderFileItem = (file: FileSummary) => {
+              const renderFileItem = (file: FileSummary, pathPrefix?: string) => {
                 const path = getFilePath(file)
+                const displayPath = pathPrefix && path.startsWith(pathPrefix + '/') ? path.slice(pathPrefix.length + 1) : path
                 const isSelected = selectedFile === path
                 const summary = conversationSummaries.get(path)
                 return (
@@ -599,7 +606,7 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
                     <span className={`file-status status-${getStatusLabel(file.status).toLowerCase()}`}>
                       {getStatusLabel(file.status)}
                     </span>
-                    <span className="file-path">{path}</span>
+                    <span className="file-path">{displayPath}</span>
                     {summary && summary.unresolvedCount > 0 && (
                       <span className="conversation-icon unresolved" title={`${summary.unresolvedCount} open`}>
                         {summary.unresolvedCount}
@@ -639,7 +646,8 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
 
               return fileSections.map((section) => {
                 const isOpen = openCategory === section.name
-                const label = section.name.charAt(0).toUpperCase() + section.name.slice(1)
+                const catPath = categoryPaths.get(section.name)
+                const label = section.name.charAt(0).toUpperCase() + section.name.slice(1) + (catPath ? ` (in ${catPath})` : '')
                 let catUnresolved = 0
                 let catExplanations = 0
                 for (const f of section.files) {
@@ -669,7 +677,7 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
                     </div>
                     <div className={`file-category-collapse${isOpen ? ' open' : ''}`}>
                       <ul className="file-category-files">
-                        {section.files.map(renderFileItem)}
+                        {section.files.map((file) => renderFileItem(file, catPath))}
                       </ul>
                     </div>
                   </li>

@@ -2781,7 +2781,10 @@ type FileCategory struct {
 	// name is the category name (e.g., "test", "hidden", "docs").
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// patterns is the list of gitignore-style glob patterns for this category.
-	Patterns      []string `protobuf:"bytes,2,rep,name=patterns,proto3" json:"patterns,omitempty"`
+	Patterns []string `protobuf:"bytes,2,rep,name=patterns,proto3" json:"patterns,omitempty"`
+	// path is an optional prefix. When set, the category header shows "(in <path>)"
+	// and file paths have the "<path>/" prefix removed in the file list.
+	Path          string `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2828,6 +2831,13 @@ func (x *FileCategory) GetPatterns() []string {
 		return x.Patterns
 	}
 	return nil
+}
+
+func (x *FileCategory) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
 }
 
 // EditorConfig holds editor integration settings.
@@ -3162,10 +3172,11 @@ const file_critic_proto_rawDesc = "" +
 	"categories\x18\x02 \x03(\v2\x17.critic.v1.FileCategoryR\n" +
 	"categories\x12/\n" +
 	"\x06editor\x18\x03 \x01(\v2\x17.critic.v1.EditorConfigR\x06editor\x12)\n" +
-	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error\">\n" +
+	"\x05error\x18\x0f \x01(\v2\x13.critic.v1.RpcErrorR\x05error\"R\n" +
 	"\fFileCategory\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
-	"\bpatterns\x18\x02 \x03(\tR\bpatterns\" \n" +
+	"\bpatterns\x18\x02 \x03(\tR\bpatterns\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\" \n" +
 	"\fEditorConfig\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\"\\\n" +
 	"\x18CreateExplanationRequest\x12\x12\n" +

@@ -308,6 +308,24 @@ func TestCategorizeFile_CategoryOrder(t *testing.T) {
 	assert.Equals(t, result, "first", "first matching category should win")
 }
 
+func TestParseProjectConfig_CategoryPath(t *testing.T) {
+	yaml := `
+categories:
+  - name: Backend
+    path: "src"
+    patterns:
+      - "src/**/*.go"
+  - name: Frontend
+    patterns:
+      - "web/**/*"
+`
+	config, err := ParseProjectConfig([]byte(yaml))
+	assert.NoError(t, err)
+	assert.Equals(t, len(config.Categories), 2, "categories count")
+	assert.Equals(t, config.Categories[0].Path, "src", "Backend path")
+	assert.Equals(t, config.Categories[1].Path, "", "Frontend path should be empty")
+}
+
 // TestCategorizeFile_EmptyCategories tests behavior with no categories configured.
 func TestCategorizeFile_EmptyCategories(t *testing.T) {
 	config := &ProjectConfig{}

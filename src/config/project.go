@@ -14,6 +14,7 @@ import (
 type FileCategory struct {
 	Name     string   `yaml:"name" json:"name"`
 	Patterns []string `yaml:"patterns" json:"patterns"`
+	Path     string   `yaml:"path,omitempty" json:"path,omitempty"`
 }
 
 // EditorConfig holds editor integration settings.
