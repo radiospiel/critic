@@ -1,7 +1,7 @@
 # Task: Add agent CLI subcommand
 
 **Started:** 2026-03-02 17:05:06
-**Ended:** 2026-03-02 17:12:00
+**Ended:** 2026-03-02 18:45:00
 **Strategy:** Feature (TDD)
 **Status:** Completed
 **Complexity:** Medium
@@ -24,6 +24,10 @@ Add a `critic agent` CLI subcommand designed for AI agent interaction. Subcomman
 - [x] Register agent command in parser.go
 - [x] Run tests, fix issues — all 12 CLI tests + 20 messagedb tests pass
 - [x] Commit and push
+- [x] Replace MCP installation docs with agent CLI docs
+- [x] Replace MCP tool calls in hooks with `critic agent` CLI calls
+- [x] Add `--status=actionable` support (delegates to DB layer)
+- [x] Add test for actionable filter — all 13 CLI tests pass
 
 ## Obstacles
 - **Issue:** Go module proxy returning 503 DNS resolution failures

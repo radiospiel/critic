@@ -5,7 +5,7 @@
 #
 # How it works:
 # - First time the Stop hook fires: no guard file exists → create it → exit 2
-#   (Claude continues and checks for unresolved critic conversations via MCP)
+#   (Claude continues and checks for unresolved critic conversations via CLI)
 # - Second time the Stop hook fires (after Claude addressed feedback):
 #   guard file exists → remove it → exit 0 (Claude stops normally)
 # - Next stop cycle: guard is gone → repeats from the top

@@ -238,6 +238,38 @@ func TestAgentConversations_CombinedFilters(t *testing.T) {
 	assert.Equals(t, entries[0].Status, "unresolved")
 }
 
+func TestAgentConversations_ActionableFilter(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// conv1: unresolved, last author = human → actionable
+	_, err := db.CreateConversation(critic.AuthorHuman, "Please fix", "src/main.go", 10, "abc123", "", critic.TypeConversation)
+	assert.NoError(t, err)
+
+	// conv2: unresolved, last author = ai → NOT actionable
+	conv2, err := db.CreateConversation(critic.AuthorHuman, "Comment", "src/util.go", 5, "abc123", "", critic.TypeConversation)
+	assert.NoError(t, err)
+	_, err = db.ReplyToConversation(conv2.UUID, "Fixed", critic.AuthorAI)
+	assert.NoError(t, err)
+
+	// conv3: resolved, last author = human → NOT actionable
+	conv3, err := db.CreateConversation(critic.AuthorHuman, "Old issue", "src/test.go", 1, "abc123", "", critic.TypeConversation)
+	assert.NoError(t, err)
+	err = db.MarkConversationAs(conv3.UUID, critic.ConversationResolved)
+	assert.NoError(t, err)
+
+	cmd, buf := captureCmd()
+	err = runAgentConversations(cmd, db, "actionable", "")
+	assert.NoError(t, err)
+
+	var entries []AgentConversationEntry
+	err = json.Unmarshal(buf.Bytes(), &entries)
+	assert.NoError(t, err)
+	assert.Equals(t, len(entries), 1, "expected 1 actionable conversation")
+	assert.Equals(t, entries[0].Author, "human")
+	assert.Equals(t, entries[0].Status, "unresolved")
+}
+
 func TestAgentConversation_Show(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()

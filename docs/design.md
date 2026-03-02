@@ -1,16 +1,16 @@
 # System Design
 
-This document describes the communication architecture between the WebUI, MCP server, and other components in Critic.
+This document describes the communication architecture between the WebUI, agent CLI, and other components in Critic.
 
 ## Overview
 
-Critic is a mcp and web server which orchestrates the communication between changes a coding agent and a human user. It allows humans to review code changes made by the agent, and to ask for adjustments, without going through a github. This allows for a faster turn-around between changes and review, allowing the agent to actively employ a human-in-the-loop review process. 
+Critic is a web server which orchestrates the communication between a coding agent and a human user. It allows humans to review code changes made by the agent, and to ask for adjustments, without going through GitHub. This allows for a faster turn-around between changes and review, allowing the agent to actively employ a human-in-the-loop review process.
 
-Critic uses a **loosely-coupled, event-driven architecture**. This design allows the MCP server to run independently from the HTTP server. Messaging between the agent and the user takes place using a SQLite database, changes in the source code are directly handled via a git-controlled file system.
+Critic uses a **loosely-coupled, event-driven architecture**. This design allows the agent CLI to run independently from the HTTP server. Messaging between the agent and the user takes place using a SQLite database, changes in the source code are directly handled via a git-controlled file system.
 
 The event-driven architecture allows the WebUI to automatically reflects changes, both to the source files and in the messages between users and agents, in real-time. The WebUI is also only *one* UI – a terminal-driven UI would equally possible.
 
-**Note that critic is designed as a single-user experience.** A typical scenario runs the critic mcp and http servers on the same machine that also runs the coding agent, and only listens on localhost. It is important to not deploy critic in an unsecured environment, since the web client has access to **the entire tree of source files**. 
+**Note that critic is designed as a single-user experience.** A typical scenario runs the critic web server on the same machine that also runs the coding agent, and only listens on localhost. It is important to not deploy critic in an unsecured environment, since the web client has access to **the entire tree of source files**.
 
 ## Architecture Diagram
 
@@ -18,17 +18,19 @@ The event-driven architecture allows the WebUI to automatically reflects changes
 
 ## Components
 
-### 1. MCP Server (`src/mcp/`)
+### 1. Agent CLI (`src/cli/agent.go`)
 
-The MCP server provides tools for AI assistants to interact with code review conversations:
+The agent CLI provides commands for AI agents to interact with code review conversations:
 
-| Tool | Description |
-|------|-------------|
-| `get_critic_conversations` | List all conversation UUIDs |
-| `get_full_critic_conversation` | Get a full conversation thread |
-| `reply_to_critic_conversation` | Add a reply to a conversation |
+| Command | Description |
+|---------|-------------|
+| `critic agent conversations` | List conversations (uuid, author, status) |
+| `critic agent conversation <uuid>` | Get a full conversation thread |
+| `critic agent reply <uuid> <msg>` | Reply to a conversation |
+| `critic agent announce <msg>` | Post an announcement |
+| `critic agent explain <file> <line> <msg>` | Post an explanation |
 
-The MCP server connects directly to the SQLite database to read and write messages.
+The agent CLI connects directly to the SQLite database to read and write messages.
 
 ### 2. HTTP Server (`src/api/server/`)
 
@@ -41,7 +43,7 @@ The HTTP server employs Git and database watchers to detect changes, and informs
 
 #### Database Watcher (`src/messagedb/db_watcher.go`)
 
-Detects database changes made by external processes (like the MCP server).
+Detects database changes made by external processes (like the agent CLI).
 
 **How it works:**
 - Polls the `_db_mtime` table every 1000ms. Note that this is using fresh connections, to work around limitations with WAL mode.
@@ -67,11 +69,11 @@ Manages WebSocket connections and broadcasts updates to all connected clients.
 
 ## Communication Flow
 
-### When MCP Server Adds a Comment
+### When Agent CLI Adds a Comment
 
 ```
-1. Claude AI (via MCP)
-   └─> MCP.handleReplyToCriticConversation()
+1. AI Agent (via CLI)
+   └─> critic agent reply <uuid> "message"
        └─> db.CreateReply()
            └─> SQL: INSERT INTO messages (...)
 
@@ -110,8 +112,8 @@ Manages WebSocket connections and broadcasts updates to all connected clients.
 4. DBWatcher (same server, sees change immediately)
    └─> Broadcasts to all OTHER connected clients
 
-5. MCP Server
-   └─> On next tool call, sees the new message
+5. Agent CLI
+   └─> On next `critic agent conversations` call, sees the new message
 ```
 
 ### When Git State Changes
@@ -172,7 +174,7 @@ CREATE TRIGGER _messages_delete_mtime AFTER DELETE ON messages ...
 
 ### Why Polling Instead of Notifications?
 
-SQLite doesn't support cross-process change notifications. Polling the `_db_mtime` table with fresh connections is a reliable way to detect changes made by any process (MCP server, CLI, etc.).
+SQLite doesn't support cross-process change notifications. Polling the `_db_mtime` table with fresh connections is a reliable way to detect changes made by any process (agent CLI, web UI, etc.).
 
 ### Why Triggers for `_db_mtime`?
 

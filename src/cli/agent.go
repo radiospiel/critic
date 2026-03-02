@@ -56,10 +56,14 @@ func newAgentConversationsCmd() *cobra.Command {
 
 Supports comma-separated multi-value filters:
   --status=unresolved,resolved
+  --status=actionable          (unresolved with last message from human)
   --last-author=human,ai
+
+All output is JSON.
 
 Examples:
   critic agent conversations
+  critic agent conversations --status=actionable
   critic agent conversations --status=unresolved
   critic agent conversations --last-author=human
   critic agent conversations --status=unresolved --last-author=human,ai
@@ -77,7 +81,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVar(&statusFilter, "status", "", "Filter by status (comma-separated): unresolved, resolved, actionable")
+	cmd.Flags().StringVar(&statusFilter, "status", "", "Filter by status (comma-separated): unresolved, resolved, actionable (unresolved + last msg from human)")
 	cmd.Flags().StringVar(&lastAuthorFilter, "last-author", "", "Filter by last message author (comma-separated): human, ai")
 
 	return cmd
@@ -85,30 +89,33 @@ Examples:
 
 // runAgentConversations implements the conversations listing logic
 func runAgentConversations(cmd *cobra.Command, messaging critic.Messaging, statusFilter, lastAuthorFilter string) error {
-	// Parse comma-separated filters into sets
 	statusSet := parseCommaSeparated(statusFilter)
 	lastAuthorSet := parseCommaSeparated(lastAuthorFilter)
 
-	// Get all conversations (we'll filter client-side for multi-value support)
-	roots, err := messaging.GetConversations("", nil)
-	if err != nil {
-		return fmt.Errorf("failed to get conversations: %w", err)
-	}
-
-	if len(roots) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "[]")
-		return nil
-	}
-
-	// Apply status filter
-	if len(statusSet) > 0 {
-		var filtered []*critic.Conversation
-		for _, conv := range roots {
-			if statusSet[string(conv.Status)] {
-				filtered = append(filtered, conv)
+	// Delegate status filtering to the DB layer, which supports virtual
+	// statuses like "actionable" (unresolved + last message from human).
+	// For multi-value status filters, make separate calls and merge.
+	var roots []*critic.Conversation
+	if len(statusSet) == 0 {
+		var err error
+		roots, err = messaging.GetConversations("", nil)
+		if err != nil {
+			return fmt.Errorf("failed to get conversations: %w", err)
+		}
+	} else {
+		seen := make(map[string]bool)
+		for status := range statusSet {
+			convs, err := messaging.GetConversations(status, nil)
+			if err != nil {
+				return fmt.Errorf("failed to get conversations: %w", err)
+			}
+			for _, conv := range convs {
+				if !seen[conv.UUID] {
+					seen[conv.UUID] = true
+					roots = append(roots, conv)
+				}
 			}
 		}
-		roots = filtered
 	}
 
 	if len(roots) == 0 {
