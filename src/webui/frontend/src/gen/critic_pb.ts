@@ -2399,6 +2399,14 @@ export class FileCategory extends Message$1<FileCategory> {
    */
   patterns: string[] = [];
 
+  /**
+   * path is an optional prefix. When set, the category header shows "(in <path>)"
+   * and file paths have the "<path>/" prefix removed in the file list.
+   *
+   * @generated from field: string path = 3;
+   */
+  path = "";
+
   constructor(data?: PartialMessage<FileCategory>) {
     super();
     proto3.util.initPartial(data, this);
@@ -2409,6 +2417,7 @@ export class FileCategory extends Message$1<FileCategory> {
   static readonly fields: FieldList = proto3.util.newFieldList(() => [
     { no: 1, name: "name", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 2, name: "patterns", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
+    { no: 3, name: "path", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): FileCategory {

@@ -26,6 +26,7 @@ func getProjectConfigImpl(server *Server) (*api.GetProjectConfigResponse, error)
 		categories = append(categories, &api.FileCategory{
 			Name:     cat.Name,
 			Patterns: cat.Patterns,
+			Path:     cat.Path,
 		})
 	}
 

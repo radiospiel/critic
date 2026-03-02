@@ -444,6 +444,9 @@ message FileCategory {
   string name = 1;
   // patterns is the list of gitignore-style glob patterns for this category.
   repeated string patterns = 2;
+  // path is an optional prefix. When set, the category header shows "(in <path>)"
+  // and file paths have the "<path>/" prefix removed in the file list.
+  string path = 3;
 }
 
 // EditorConfig holds editor integration settings.
