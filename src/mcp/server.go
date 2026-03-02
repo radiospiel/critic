@@ -28,7 +28,6 @@ type Server struct {
 	writer      io.Writer
 	messaging   critic.Messaging
 	initialized bool
-	sessionID   string
 }
 
 // NewServer creates a new MCP server
@@ -189,20 +188,6 @@ func (s *Server) handleToolsList(req Request) error {
 			},
 		},
 		{
-			Name:        "critic_set_session_id",
-			Description: "Store the current Claude Code session ID so the critic UI can send prompts back to this session. Call this once during /critic:activate.",
-			InputSchema: InputSchema{
-				Type: "object",
-				Properties: map[string]Property{
-					"session_id": {
-						Type:        "string",
-						Description: "The Claude Code session ID (UUID format)",
-					},
-				},
-				Required: []string{"session_id"},
-			},
-		},
-		{
 			Name:        "critic_explain",
 			Description: "Post an explanation on a specific code line. Explanations are informal annotations shown with a lightbulb icon in the Critic UI.",
 			InputSchema: InputSchema{
@@ -253,8 +238,6 @@ func (s *Server) handleToolsCall(req Request) error {
 		return s.handleReplyToCriticConversation(req, params)
 	case "critic_announce":
 		return s.handleCriticAnnounce(req, params)
-	case "critic_set_session_id":
-		return s.handleCriticSetSessionID(req, params)
 	case "critic_explain":
 		return s.handleCriticExplain(req, params)
 	default:
@@ -489,18 +472,6 @@ func (s *Server) handleCriticAnnounce(req Request, params CallToolParams) error 
 
 	s.logToStderr("Created announcement: %s", reply.UUID)
 	return s.sendToolResult(req.ID, string(result))
-}
-
-// handleCriticSetSessionID stores the Claude Code session ID
-func (s *Server) handleCriticSetSessionID(req Request, params CallToolParams) error {
-	sessionID, ok := params.Arguments["session_id"].(string)
-	if !ok || sessionID == "" {
-		return s.sendToolError(req.ID, "session_id is required")
-	}
-
-	s.sessionID = sessionID
-	s.logToStderr("Session ID set: %s", sessionID)
-	return s.sendToolResult(req.ID, fmt.Sprintf("Session ID stored: %s", sessionID))
 }
 
 // handleCriticExplain handles the critic_explain tool
