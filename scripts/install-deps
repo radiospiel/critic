@@ -1,57 +1,22 @@
 #!/bin/bash
 set -e
 
-# Detect OS
-OS=$(uname -s)
+GOBIN="${GOPATH:-$HOME/go}/bin"
 
 # Versions
 PROTOC_GEN_GO_VERSION="v1.36.11"
 PROTOC_GEN_CONNECT_GO_VERSION="v1.19.1"
 
-GOBIN="${GOPATH:-$HOME/go}/bin"
+# Install protoc via brew if not present
+type -p protoc >/dev/null 2>&1 || (
+    echo "Installing protoc via brew..."
+    brew install protobuf
+)
 
-# Install protoc or buf if neither is present
-# buf (installed via npm) can be used as an alternative to protoc
-if ! type -p protoc >/dev/null 2>&1 && ! type -p buf >/dev/null 2>&1; then
-    echo "Installing protoc..."
-    install_success=false
-
-    if [ "$OS" = "Darwin" ]; then
-        if brew install protobuf 2>/dev/null; then
-            install_success=true
-        fi
-    elif [ "$OS" = "Linux" ]; then
-        if sudo apt-get update && sudo apt-get install -y protobuf-compiler 2>/dev/null; then
-            install_success=true
-        fi
-    fi
-
-    # Fallback to buf via npm if protoc installation failed
-    if [ "$install_success" = false ]; then
-        echo "protoc installation failed, trying buf via npm..."
-        if type -p npm >/dev/null 2>&1; then
-            npm install -g @bufbuild/buf
-            echo "Installed buf as protoc alternative"
-        else
-            echo "Neither protoc nor npm available. Please install protoc manually."
-            exit 1
-        fi
-    fi
-fi
-
-# Install buf if not present
-type -p buf >/dev/null 2>&1 || (
-    echo "Installing buf..."
-    if [ "$OS" = "Darwin" ]; then
-        brew install bufbuild/buf/buf
-    elif [ "$OS" = "Linux" ]; then
-        curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$(uname -s)-$(uname -m)" -o /tmp/buf
-        sudo install -m 755 /tmp/buf /usr/local/bin/buf
-        rm /tmp/buf
-    else
-        echo "Unknown OS: $OS. Please install buf manually."
-        exit 1
-    fi
+# Install esbuild via brew if not present
+type -p esbuild >/dev/null 2>&1 || (
+    echo "Installing esbuild via brew..."
+    brew install esbuild
 )
 
 # Install protoc-gen-go if not present in GOPATH
@@ -65,14 +30,3 @@ type -p buf >/dev/null 2>&1 || (
 	echo "Installing protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION..."
 	go install connectrpc.com/connect/cmd/protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION
 )
-
-# Install TypeScript generators via npm if npm is available
-if ! type -p npm >/dev/null 2>&1; then
-	echo "npm not found, skipping TypeScript generator installation"
-else
-    # Check if packages are installed globally
-    npm list -g @bufbuild/protoc-gen-es@1.10.1 @connectrpc/protoc-gen-connect-es@1.7.0 >/dev/null 2>&1 || (
-		echo "Installing npm protoc dependencies"
-		npm install -g @bufbuild/protoc-gen-es@1.10.1 @connectrpc/protoc-gen-connect-es@1.7.0
-	)
-fi
