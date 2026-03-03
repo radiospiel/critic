@@ -457,7 +457,12 @@ function AppContent() {
               <p>Install the Critic skills into your project:</p>
               <pre><code>critic agent --install-skills</code></pre>
               <p>Then use the slash commands:</p>
-              <pre><code>/critic-summarize  — summarize changes and post an announcement{'\n'}/critic-step       — address unresolved feedback{'\n'}/critic-loop       — repeat step until all conversations are resolved</code></pre>
+              <pre><code>
+                  /critic-summarize  — summarize changes and post an announcement{'\n'}
+                  /critic-explain    — explain the changes{'\n'}
+                  /critic-loop       — repeat step until all conversations are resolved{'\n'}
+                  /critic-step       — address unresolved feedback
+                </code></pre>
             </section>
 <section>
               <h3>Keyboard Shortcuts</h3>
