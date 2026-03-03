@@ -1,14 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getDiffBases, setDiffRange } from '../api/client'
 
+interface BranchSelection {
+  start: string
+  end: string
+  soloMode: string | null
+}
+
 interface DiffBaseSelectorProps {
   onBaseChange?: () => void
 }
 
 function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
   const [bases, setBases] = useState<string[]>([])
-  const [currentStart, setCurrentStart] = useState<string>('')
-  const [currentEnd, setCurrentEnd] = useState<string>('')
+  const [branchSelection, setBranchSelection] = useState<BranchSelection>({ start: '', end: '', soloMode: null })
   const [loading, setLoading] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
 
@@ -16,8 +21,7 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
     const result = await getDiffBases()
     if (!result.error) {
       setBases(result.bases)
-      setCurrentStart(result.currentStart)
-      setCurrentEnd(result.currentEnd)
+      setBranchSelection({ start: result.currentStart, end: result.currentEnd, soloMode: null })
     }
   }, [])
 
@@ -25,13 +29,17 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
     fetchBases()
   }, [fetchBases])
 
-  const applyRange = async (newStart: string, newEnd: string) => {
-    if (newStart === currentStart && newEnd === currentEnd) return
+  const { start: currentStart, end: currentEnd, soloMode } = branchSelection
+
+  const applyRange = async (newStart: string, newEnd: string, newSoloRef: string | null) => {
+    if (newStart === currentStart && newEnd === currentEnd) {
+      setBranchSelection({ start: newStart, end: newEnd, soloMode: newSoloRef })
+      return
+    }
     setLoading(true)
     const result = await setDiffRange(newStart, newEnd)
     if (result.success) {
-      setCurrentStart(newStart)
-      setCurrentEnd(newEnd)
+      setBranchSelection({ start: newStart, end: newEnd, soloMode: newSoloRef })
       onBaseChange?.()
     }
     setLoading(false)
@@ -40,56 +48,6 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
   // Logical order: bases (oldest first) then '' (working dir).
   // This order is used for range semantics (start < end in index terms).
   const fullList = [...bases, '']
-
-  const handleNodeClick = (value: string) => {
-    if (loading) return
-    const clickIdx = fullList.indexOf(value)
-    const startIdx = fullList.indexOf(currentStart)
-    const endIdx = fullList.indexOf(currentEnd)
-    if (clickIdx < 0 || startIdx < 0 || endIdx < 0) return
-
-    // Range click logic:
-    //
-    // The user selects a contiguous range [start..end] within fullList.
-    // A minimum of 2 entries must always remain selected.
-    //
-    // - Clicking an INACTIVE entry (outside the range) expands the nearest
-    //   edge to include it — and all entries in between.
-    // - Clicking an ACTIVE entry (inside the range) shrinks the range:
-    //     * Start edge  → removes it, moving start one step inward.
-    //     * End edge    → removes it, moving end one step inward.
-    //     * Middle      → removes it AND everything older (toward start),
-    //                     keeping the newer side (toward end).
-    const isInRange = clickIdx >= startIdx && clickIdx <= endIdx
-    const rangeSize = endIdx - startIdx + 1
-
-    if (isInRange) {
-      // Clicking an active entry: deactivate it.
-      // Guard: don't shrink below 2 active entries.
-      if (rangeSize <= 2) return
-
-      if (clickIdx === startIdx) {
-        // Click on start: shrink range by moving start inward
-        applyRange(fullList[startIdx + 1], currentEnd)
-      } else if (clickIdx === endIdx) {
-        // Click on end: shrink range by moving end inward
-        applyRange(currentStart, fullList[endIdx - 1])
-      } else {
-        // Click in middle: deactivate clicked entry and everything toward
-        // the start (older side), keeping the end (newer) side.
-        // Guard: the remainder [clickIdx+1..endIdx] must be at least 2.
-        if (endIdx - clickIdx < 2) return
-        applyRange(fullList[clickIdx + 1], currentEnd)
-      }
-    } else {
-      // Clicking an inactive entry: activate it by expanding the range.
-      if (clickIdx < startIdx) {
-        applyRange(value, currentEnd)
-      } else {
-        applyRange(currentStart, value)
-      }
-    }
-  }
 
   // Escape closes the panel
   useEffect(() => {
@@ -113,6 +71,7 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
 
   const startIdx = fullList.indexOf(currentStart)
   const endIdx = fullList.indexOf(currentEnd)
+  const isSoloMode = soloMode !== null
 
   // Display list: reversed so newest (working dir) is at top, oldest at bottom.
   const displayList = [...fullList].reverse()
@@ -128,29 +87,60 @@ function DiffBaseSelector({ onBaseChange }: DiffBaseSelectorProps) {
         <span className="diff-base-value">{displayBase(currentStart)}</span>
         <span className="diff-range-separator">&rarr;</span>
         <span className="diff-base-value">{displayBase(currentEnd)}</span>
+        <span className="diff-base-chevron">{panelOpen ? '\u25B4' : '\u25BE'}</span>
       </button>
 
       {panelOpen && (
         <div className="diff-graph-panel">
-          <div className="diff-graph-hint">Click on branch names to adjust selection</div>
-          {displayList.map((value, displayIdx) => {
+          <div className="diff-graph-hint">Click to toggle between changes in a single branch or all changes</div>
+          {displayList.filter(v => v !== '').map((value, displayIdx) => {
             const logicalIdx = fullList.indexOf(value)
             const isStart = value === currentStart
             const isEnd = value === currentEnd
-            const inRange = logicalIdx >= startIdx && logicalIdx <= endIdx
+            const inRange = logicalIdx >= startIdx && logicalIdx <= endIdx && (!isSoloMode || isStart)
             const isLast = displayIdx === displayList.length - 1
             const label = value || '(working dir)'
+
+            const hasNewer = logicalIdx + 1 < fullList.length
+            const soloEnd = hasNewer ? fullList[logicalIdx + 1] : ''
+            const isSolo = value === soloMode
+            const clickable = value !== '' && hasNewer
+
+            const handleRowClick = () => {
+              if (loading || !clickable) return
+              if (value === currentStart) {
+                // Toggle mode on current branch
+                if (isSoloMode) {
+                  applyRange(value, '', null)
+                } else {
+                  applyRange(value, soloEnd, value)
+                }
+              } else {
+                // Activate this branch in current mode
+                if (isSoloMode) {
+                  applyRange(value, soloEnd, value)
+                } else {
+                  applyRange(value, '', null)
+                }
+              }
+            }
 
             return (
               <div
                 key={value || '__workdir__'}
-                className={`diff-graph-row${isStart ? ' selected-start' : ''}${isEnd ? ' selected-end' : ''}${inRange ? ' in-range' : ''}${isLast ? ' last' : ''}`}
-                onClick={() => handleNodeClick(value)}
+                className={`diff-graph-row${isStart ? ' selected-start' : ''}${isEnd ? ' selected-end' : ''}${inRange ? ' in-range' : ''}${isSolo ? ' solo' : ''}${isLast ? ' last' : ''}${!clickable ? ' inert' : ''}`}
+                onClick={handleRowClick}
               >
                 <span className="diff-graph-gutter">
-                  {inRange && <span className={`diff-graph-line${isStart ? ' start' : ''}${isEnd ? ' end' : ''}`} />}
-                  {isStart && <span className="diff-graph-arrow up" />}
-                  {isEnd && <span className="diff-graph-arrow down" />}
+                  {inRange && !isSoloMode && <span className={`diff-graph-line${isStart ? ' start' : ''}${isEnd ? ' end' : ''}`} />}
+                  {isSoloMode && isSolo ? (
+                    <span className="diff-graph-eye"><svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M7 1C3.5 1 1 5 1 5s2.5 4 6 4 6-4 6-4-2.5-4-6-4Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/><circle cx="7" cy="5" r="1.8" fill="currentColor"/></svg></span>
+                  ) : (
+                    <>
+                      {isStart && !isSoloMode && <span className="diff-graph-arrow up" />}
+                      {isEnd && !isSoloMode && <span className="diff-graph-arrow down" />}
+                    </>
+                  )}
                 </span>
                 <span className="diff-graph-label" title={label}>{label}</span>
               </div>

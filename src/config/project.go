@@ -75,7 +75,7 @@ func LoadProjectConfig(path, currentBranch string, gitOps *GitOps) (*ProjectConf
 	}
 
 	if gitOps != nil && gitOps.HasRef != nil {
-		allDiffBases := append([]string{"main", "master", "origin/" + currentBranch, "HEAD"}, pc.DiffBases...)
+		allDiffBases := append([]string{"main", "master", "HEAD"}, pc.DiffBases...)
 		unique := lo.Uniq(allDiffBases)
 		candidates := lo.Filter(unique, func(ref string, _ int) bool { return gitOps.HasRef(ref) })
 

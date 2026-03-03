@@ -162,7 +162,7 @@ func (s *Session) SetDiffBases(bases []string) error {
 	s.diffBases = append([]string{}, bases...)
 	s.mu.Unlock()
 
-	return s.SetCurrentDiffBase(bases[0])
+	return s.SetCurrentDiffBase(bases[len(bases)-1])
 }
 
 // SetCurrentDiffBase sets the current base ref for the session, and
