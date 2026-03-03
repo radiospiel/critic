@@ -25,6 +25,7 @@
     "react-markdown": "^10.1.0"
   },
   "devDependencies": {
+    "@bufbuild/buf": "^1.50.0",
     "@bufbuild/protoc-gen-es": "^1.10.0",
     "@connectrpc/protoc-gen-connect-es": "^1.7.0",
     "@types/react": "^18.2.0",
