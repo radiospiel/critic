@@ -454,17 +454,17 @@ function AppContent() {
             </section>
             <section>
               <h3>Connect Claude Code</h3>
-              <p>Register the Critic MCP server so Claude can read and reply to your review comments:</p>
-              <pre><code>claude mcp add critic -- critic mcp</code></pre>
+              <p>Install the Critic skills into your project:</p>
+              <pre><code>critic agent --install-skills</code></pre>
               <p>Then use the slash commands:</p>
-              <pre><code>/critic:summarize  — summarize changes and post via critic_announce{'\n'}/critic:step       — address unresolved feedback{'\n'}/critic:loop       — repeat step until all conversations are resolved</code></pre>
+              <pre><code>
+                  /critic-summarize  — summarize changes and post an announcement{'\n'}
+                  /critic-explain    — explain the changes{'\n'}
+                  /critic-loop       — repeat step until all conversations are resolved{'\n'}
+                  /critic-step       — address unresolved feedback
+                </code></pre>
             </section>
-            <section>
-              <h3>VS Code Extension</h3>
-              <p>Install the Critic extension to see review comments inline in VS Code:</p>
-              <pre><code>curl -O {window.location.origin}/download/critic-vscode.vsix{'\n'}code --install-extension critic-vscode.vsix</code></pre>
-            </section>
-            <section>
+<section>
               <h3>Keyboard Shortcuts</h3>
               <table className="shortcut-table">
                 <tbody>

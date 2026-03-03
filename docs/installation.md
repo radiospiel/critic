@@ -30,44 +30,35 @@ make install
 | `make tests` | Run unit and integration tests |
 | `make clean` | Remove build artifacts |
 
-## MCP Server Configuration
+## Agent CLI
 
-Critic can run as an MCP (Model Context Protocol) server, enabling AI coding assistants like Claude Code to participate in human-in-the-loop code review workflows.
+AI coding agents interact with critic via the `critic agent` CLI subcommand. All output is JSON.
 
-### Installing as an MCP Server
+### Available Commands
 
-**For Claude Code:**
+| Command | Description |
+|---------|-------------|
+| `critic agent conversations [--status=...] [--last-author=...]` | List conversations (JSON array of uuid/author/status) |
+| `critic agent conversation <uuid>` | Get full conversation with all messages |
+| `critic agent reply <uuid> <message>` | Reply to a conversation (as AI) |
+| `critic agent announce <message>` | Post an announcement visible in the Critic UI |
+| `critic agent explain <file> <line> <comment>` | Post an explanation on a code line |
 
-```bash
-# Add critic as an MCP server (use absolute path to the binary)
-claude mcp add critic -- /path/to/critic mcp
+### Status Filters
 
-# Or if critic is in your PATH
-claude mcp add critic -- critic mcp
-```
+The `--status` flag accepts comma-separated values:
+- `unresolved` — conversations not yet resolved
+- `resolved` — resolved conversations
+- `actionable` — unresolved conversations where the last message is from a human (i.e., awaiting agent response)
 
-**For other MCP clients**, add to your MCP configuration file:
-
-```json
-{
-  "mcpServers": {
-    "critic": {
-      "command": "/path/to/critic",
-      "args": ["mcp"]
-    }
-  }
-}
-```
+The `--last-author` flag filters by who posted the last message: `human` or `ai`.
 
 ### Verifying Installation
 
-After installation, the AI assistant will have access to these tools:
-
-| Tool | Description |
-|------|-------------|
-| `get_critic_conversations` | List conversation UUIDs (filter by `unresolved`/`resolved`) |
-| `get_full_critic_conversation` | Get full conversation thread by UUID |
-| `reply_to_critic_conversation` | Add a reply to a conversation |
+```bash
+# Should print [] (empty JSON array) if no conversations exist
+critic agent conversations
+```
 
 ## Configuring AI Agents for HITL Workflow
 
@@ -78,32 +69,20 @@ To enable human-in-the-loop code review, configure your AI coding agent to check
 ```markdown
 ### Human-in-the-Loop Code Review
 
-**The `/critic` command:** When the user types `/critic`, check for and respond to reviewer feedback:
+Before committing any significant code changes, check for reviewer feedback:
 
-1. Call `get_critic_conversations(status: "unresolved")` to check for pending feedback
-2. For each conversation, call `get_full_critic_conversation(uuid)` to read the feedback
-3. Address the feedback in your code changes
-4. Call `reply_to_critic_conversation(uuid, message)` to acknowledge or discuss
-5. Wait for reviewer approval before proceeding
-
-**Command variations:**
-- `/critic` - Check for feedback and respond to all unresolved conversations
-- `/critic wait` - Notify the user you're waiting, then check for feedback when they respond
-- `/critic status` - Just report the count of unresolved conversations
-
-If the critic MCP server is available:
-- Proactively check for feedback after completing implementation tasks
-- Always respond to reviewer comments before marking work as complete
-- Request explicit approval for significant architectural decisions
+- Run `critic agent conversations --status=actionable` to find conversations needing attention.
+- If there are actionable conversations, read each via `critic agent conversation <uuid>`, address the feedback, and reply via `critic agent reply <uuid> '<message>'`.
+- Wait for reviewer approval before proceeding. Address any feedback in subsequent iterations.
 ```
 
 ### Workflow Example
 
-1. **Developer starts AI coding session** with critic MCP server configured
+1. **Developer starts AI coding session** with critic installed
 2. **AI implements feature**, developer reviews in `critic webui`
 3. **Human reviewer** adds inline comments on the diff
-4. **Developer types `/critic`** to trigger feedback check
-5. **AI reads feedback**, addresses it, and replies to acknowledge
+4. **AI checks feedback** via `critic agent conversations --status=actionable`
+5. **AI reads feedback** via `critic agent conversation <uuid>`, addresses it, and replies via `critic agent reply <uuid> '<message>'`
 6. **Human approves** or continues the conversation
 7. **AI commits** once approved
 
@@ -112,7 +91,7 @@ If the critic MCP server is available:
 For a more interactive workflow, the human can:
 
 1. Run `critic webui` in a terminal
-2. Tell the AI: `/critic wait`
+2. Tell the AI to wait for feedback
 3. Add comments in the web UI
 4. Press Enter in Claude Code to signal "feedback ready"
 5. AI processes all feedback and responds

@@ -40,9 +40,11 @@ Note that timestamps **must always** have the time of day! It is important to al
 
 ### Ask for human reviewer approval
 
-If the "critic" MCP server is available, but not on claude code for web:
+Before committing any significant code changes, check for reviewer feedback:
 
-- Before committing any significant code changes, call the get_review_feedback tool. Wait for reviewer approval before proceeding. Address any feedback in subsequent iterations.
+- Run `critic agent conversations --status=actionable` to find conversations needing attention.
+- If there are actionable conversations, read each via `critic agent conversation <uuid>`, address the feedback, and reply via `critic agent reply <uuid> '<message>'`.
+- Wait for reviewer approval before proceeding. Address any feedback in subsequent iterations.
 
 ### Test
 
