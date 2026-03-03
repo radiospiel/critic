@@ -2,6 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -9,8 +12,40 @@ import (
 	"github.com/radiospiel/critic/src/git"
 	"github.com/radiospiel/critic/src/messagedb"
 	"github.com/radiospiel/critic/src/pkg/critic"
+	"github.com/radiospiel/critic/src/skills"
 	"github.com/spf13/cobra"
 )
+
+// ReplyResponse represents the response from creating a reply
+type ReplyResponse struct {
+	UUID      string `json:"uuid"`
+	Author    string `json:"author"`
+	Message   string `json:"message"`
+	CreatedAt string `json:"created_at"`
+}
+
+// MessageResponse represents a message in a conversation for JSON output
+type MessageResponse struct {
+	UUID      string `json:"uuid"`
+	Author    string `json:"author"`
+	Message   string `json:"message"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	IsUnread  bool   `json:"is_unread"`
+}
+
+// ConversationResponse represents a full conversation for JSON output
+type ConversationResponse struct {
+	UUID        string            `json:"uuid"`
+	Status      string            `json:"status"`
+	FilePath    string            `json:"file_path"`
+	LineNumber  int               `json:"line_number"`
+	CodeVersion string            `json:"code_version"`
+	Context     string            `json:"context"`
+	CreatedAt   string            `json:"created_at"`
+	UpdatedAt   string            `json:"updated_at"`
+	Messages    []MessageResponse `json:"messages"`
+}
 
 // AgentConversationEntry represents a conversation in the agent conversations list output
 type AgentConversationEntry struct {
@@ -21,6 +56,8 @@ type AgentConversationEntry struct {
 
 // newAgentCmd creates the agent parent command
 func newAgentCmd() *cobra.Command {
+	var installSkills bool
+
 	cmd := &cobra.Command{
 		Use:   "agent",
 		Short: "Commands for AI agent interaction",
@@ -32,8 +69,19 @@ Available subcommands:
   reply           Reply to a conversation
   announce        Post an announcement
   explain         Post an explanation on a code line
+
+Flags:
+  --install-skills  Install critic skills into .claude/skills/
 `,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if installSkills {
+				return runInstallSkills()
+			}
+			return cmd.Help()
+		},
 	}
+
+	cmd.Flags().BoolVar(&installSkills, "install-skills", false, "Install critic skills into .claude/skills/ in the current project")
 
 	cmd.AddCommand(newAgentConversationsCmd())
 	cmd.AddCommand(newAgentConversationCmd())
@@ -42,6 +90,49 @@ Available subcommands:
 	cmd.AddCommand(newAgentExplainCmd())
 
 	return cmd
+}
+
+// runInstallSkills copies embedded skill files into .claude/skills/ under the git root.
+func runInstallSkills() error {
+	gitRoot := git.GetGitRoot()
+	targetDir := filepath.Join(gitRoot, ".claude", "skills")
+
+	err := fs.WalkDir(skills.FS, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == "." {
+			return nil
+		}
+
+		dest := filepath.Join(targetDir, path)
+
+		if d.IsDir() {
+			return os.MkdirAll(dest, 0755)
+		}
+
+		data, err := fs.ReadFile(skills.FS, path)
+		if err != nil {
+			return fmt.Errorf("reading embedded %s: %w", path, err)
+		}
+
+		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+			return err
+		}
+
+		if err := os.WriteFile(dest, data, 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", dest, err)
+		}
+
+		fmt.Printf("  %s\n", path)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("installing skills: %w", err)
+	}
+
+	fmt.Printf("Skills installed into %s\n", targetDir)
+	return nil
 }
 
 // newAgentConversationsCmd creates the agent conversations command
