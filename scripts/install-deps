@@ -30,3 +30,15 @@ type -p esbuild >/dev/null 2>&1 || (
 	echo "Installing protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION..."
 	go install connectrpc.com/connect/cmd/protoc-gen-connect-go@$PROTOC_GEN_CONNECT_GO_VERSION
 )
+
+# Install protoc-gen-es (TypeScript proto generation) if not present
+type -p protoc-gen-es >/dev/null 2>&1 || (
+    echo "Installing protoc-gen-es..."
+    npm install -g @bufbuild/protoc-gen-es
+)
+
+# Install protoc-gen-connect-es (TypeScript Connect RPC generation) if not present
+type -p protoc-gen-connect-es >/dev/null 2>&1 || (
+    echo "Installing protoc-gen-connect-es..."
+    npm install -g @connectrpc/protoc-gen-connect-es
+)

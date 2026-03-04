@@ -73,9 +73,12 @@ src/api/%.pb.go src/api/apiconnect/%.connect.go: $(PROTO_DIR)/%.proto
 		--connect-go_out=src/api --connect-go_opt=paths=source_relative \
 		$<
 
-# Generate TypeScript types from .proto files
+# Generate TypeScript types from .proto files (using protoc directly with ES plugins)
 $(FRONTEND_DIR)/src/gen/%_pb.ts $(FRONTEND_DIR)/src/gen/%_connect.ts: $(PROTO_DIR)/%.proto
-	cd $(FRONTEND_DIR) && npx buf generate ../../api/proto
+	protoc -I $(PROTO_DIR) \
+		--es_out=$(FRONTEND_DIR)/src/gen --es_opt=target=ts \
+		--connect-es_out=$(FRONTEND_DIR)/src/gen --connect-es_opt=target=ts \
+		$<
 
 # Regenerate all proto files (Go + TypeScript)
 proto: $(PROTO_GEN_GO) $(PROTO_GEN_CONNECT) $(PROTO_GEN_TS) $(PROTO_GEN_TS_CONNECT)
