@@ -157,10 +157,23 @@ func processLogEntry(entry logMessage) {
 	}
 	if entry.file != "" && entry.line != 0 {
 		file := entry.file
+		absFile := entry.file
+		if !strings.HasPrefix(absFile, "/") {
+			absFile = wd + "/" + absFile
+		}
 		if strings.HasPrefix(file, wd+"/") {
 			file = file[len(wd)+1:]
 		}
-		msg = fmt.Sprintf("%s:%d ", file, entry.line) + msg
+		fileRef := fmt.Sprintf("%s:%d", file, entry.line)
+		if sharedDest.enableColors {
+			restoreColor := colorReset
+			if levelColor := levelColors[entry.level]; levelColor != "" {
+				restoreColor = levelColor
+			}
+			fileRef = fmt.Sprintf("\033]8;;file://%s\033\\\033[33m%s%s\033]8;;\033\\",
+				absFile, fileRef, restoreColor)
+		}
+		msg = fileRef + " " + msg
 	}
 	msg = entry.level.String() + ": " + msg
 

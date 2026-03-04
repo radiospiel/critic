@@ -10,7 +10,6 @@ func Execute() error {
 
 	// Add subcommands
 	rootCmd.AddCommand(newHTTPDCmd())
-	rootCmd.AddCommand(newTestCmd())
 	rootCmd.AddCommand(newREPLCmd())
 	rootCmd.AddCommand(newAgentCmd())
 
