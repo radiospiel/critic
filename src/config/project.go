@@ -31,7 +31,8 @@ type ProjectConfig struct {
 	Paths      []string       `yaml:"paths"`
 	Categories []FileCategory `yaml:"categories"`
 	Editor     EditorConfig   `yaml:"editor"`
-	DiffBases  []string       `yaml:"diffbases"`
+	DiffBase   string         `yaml:"diffbase"`
+	DiffBases  []string       `yaml:"-"` // computed: diff base + discovered branches
 	ConfigPath string         `yaml:"-"`
 }
 
@@ -48,7 +49,6 @@ func DefaultProjectConfig() *ProjectConfig {
 			{Name: "test", Patterns: []string{"*_test.go"}},
 			{Name: "hidden", Patterns: []string{".*"}},
 		},
-		DiffBases: []string{"green"},
 	}
 }
 
@@ -57,17 +57,22 @@ func DefaultProjectConfig() *ProjectConfig {
 type GitOps struct {
 	HasRef              func(string) bool
 	ResolveRef          func(string) string
-	SortByGraphOrder    func([]string)
 	LocalBranchesOnPath func(string) []string
 }
 
 // LoadProjectConfig loads the project config from path, falling back to defaults if missing.
 //
-// currentBranch is the current git branch name (used to build default bases).
-// gitOps provides git operations for ref validation, branch discovery, and ordering.
-// When gitOps is nil, DiffBases are left as-is from the config file.
-// The returned config's DiffBases will be the merged result of defaults and configured bases,
-// sorted by graph distance from HEAD (oldest first), with discovered local branches included.
+// currentBranch is the current git branch name.
+// gitOps provides git operations for ref validation and branch discovery.
+// When gitOps is nil, DiffBases are left empty.
+//
+// The DiffBase is resolved as follows:
+//  1. If configured in project.critic, use that value (must exist as a git ref).
+//  2. Otherwise, detect "master" or "main" (whichever exists).
+//  3. If neither exists, return an error.
+//
+// DiffBases is then populated with the diff base plus any local branches
+// discovered on the path from the diff base to HEAD.
 func LoadProjectConfig(path, currentBranch string, gitOps *GitOps) (*ProjectConfig, error) {
 	pc, err := loadProjectConfigFromFile(path)
 	if err != nil {
@@ -75,43 +80,45 @@ func LoadProjectConfig(path, currentBranch string, gitOps *GitOps) (*ProjectConf
 	}
 
 	if gitOps != nil && gitOps.HasRef != nil {
-		allDiffBases := append([]string{"main", "master", "HEAD"}, pc.DiffBases...)
-		unique := lo.Uniq(allDiffBases)
-		candidates := lo.Filter(unique, func(ref string, _ int) bool { return gitOps.HasRef(ref) })
-
-		// Sort candidates by graph order so we can identify the oldest.
-		if gitOps.SortByGraphOrder != nil && len(candidates) > 0 {
-			gitOps.SortByGraphOrder(candidates)
+		// Resolve the single diff base
+		diffBase := pc.DiffBase
+		if diffBase == "" {
+			// Auto-detect: try "master" then "main"
+			for _, candidate := range []string{"master", "main"} {
+				if gitOps.HasRef(candidate) {
+					diffBase = candidate
+					break
+				}
+			}
+			if diffBase == "" {
+				return nil, fmt.Errorf("no diff base configured and neither 'master' nor 'main' branch exists")
+			}
+		} else if !gitOps.HasRef(diffBase) {
+			return nil, fmt.Errorf("configured diff base %q does not exist", diffBase)
 		}
 
-		// Discover local branches on the ancestry path from oldest to HEAD.
-		if gitOps.LocalBranchesOnPath != nil && gitOps.ResolveRef != nil && len(candidates) > 0 {
-			oldest := candidates[0]
-			discovered := gitOps.LocalBranchesOnPath(oldest)
+		pc.DiffBase = diffBase
 
-			// Merge discovered branches, dedup by resolved SHA.
+		// Start with the diff base itself
+		candidates := []string{diffBase}
+
+		// Discover local branches on the path from diff base to HEAD
+		if gitOps.LocalBranchesOnPath != nil {
+			discovered := gitOps.LocalBranchesOnPath(diffBase)
+			candidates = append(candidates, discovered...)
+		}
+
+		// Deduplicate by resolved SHA
+		if gitOps.ResolveRef != nil {
 			seenSHA := make(map[string]bool)
-			var merged []string
-			addRef := func(ref string) {
+			candidates = lo.Filter(candidates, func(ref string, _ int) bool {
 				sha := gitOps.ResolveRef(ref)
 				if seenSHA[sha] {
-					return
+					return false
 				}
 				seenSHA[sha] = true
-				merged = append(merged, ref)
-			}
-			for _, ref := range candidates {
-				addRef(ref)
-			}
-			for _, ref := range discovered {
-				addRef(ref)
-			}
-			candidates = merged
-		}
-
-		// Final sort by graph order, oldest first.
-		if gitOps.SortByGraphOrder != nil {
-			gitOps.SortByGraphOrder(candidates)
+				return true
+			})
 		}
 
 		pc.DiffBases = candidates

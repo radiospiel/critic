@@ -65,6 +65,16 @@ project:
 	assert.Nil(t, config.Paths, "paths should be nil")
 	assert.Nil(t, config.Categories, "categories should be nil")
 	assert.Equals(t, config.Editor.URL, "", "editor url should be empty")
+	assert.Equals(t, config.DiffBase, "", "diff base should be empty")
+}
+
+func TestParseProjectConfig_DiffBase(t *testing.T) {
+	yaml := `
+diffbase: master
+`
+	config, err := ParseProjectConfig([]byte(yaml))
+	assert.NoError(t, err)
+	assert.Equals(t, config.DiffBase, "master", "diff base")
 }
 
 func TestParseProjectConfig_InvalidYAML(t *testing.T) {
@@ -82,6 +92,72 @@ func TestDefaultProjectConfig(t *testing.T) {
 	hiddenPatterns := findCategory(config.Categories, "hidden")
 	assert.Equals(t, len(hiddenPatterns), 1, "default hidden patterns")
 	assert.Equals(t, hiddenPatterns[0], ".*", "default hidden pattern")
+	assert.Equals(t, config.DiffBase, "", "default diff base should be empty")
+}
+
+func TestLoadProjectConfig_WithGitOps(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.critic")
+	yaml := `
+diffbase: main
+`
+	err := os.WriteFile(path, []byte(yaml), 0644)
+	assert.NoError(t, err)
+
+	gitOps := &GitOps{
+		HasRef:     func(ref string) bool { return ref == "main" },
+		ResolveRef: func(ref string) string { return "sha-" + ref },
+		LocalBranchesOnPath: func(ancestor string) []string {
+			return []string{"feature-a", "feature-b"}
+		},
+	}
+
+	config, err := LoadProjectConfig(path, "feature-b", gitOps)
+	assert.NoError(t, err)
+	assert.Equals(t, config.DiffBase, "main", "diff base")
+	assert.Equals(t, len(config.DiffBases), 3, "should have diff base + 2 discovered branches")
+	assert.Equals(t, config.DiffBases[0], "main", "first should be the configured diff base")
+	assert.Equals(t, config.DiffBases[1], "feature-a", "second should be first discovered branch")
+	assert.Equals(t, config.DiffBases[2], "feature-b", "third should be second discovered branch")
+}
+
+func TestLoadProjectConfig_AutoDetectMaster(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.critic")
+	yaml := `
+project:
+  name: "test"
+`
+	err := os.WriteFile(path, []byte(yaml), 0644)
+	assert.NoError(t, err)
+
+	gitOps := &GitOps{
+		HasRef:              func(ref string) bool { return ref == "master" },
+		ResolveRef:          func(ref string) string { return "sha-" + ref },
+		LocalBranchesOnPath: func(ancestor string) []string { return nil },
+	}
+
+	config, err := LoadProjectConfig(path, "", gitOps)
+	assert.NoError(t, err)
+	assert.Equals(t, config.DiffBase, "master", "should auto-detect master")
+}
+
+func TestLoadProjectConfig_NoBranchFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "project.critic")
+	yaml := `
+project:
+  name: "test"
+`
+	err := os.WriteFile(path, []byte(yaml), 0644)
+	assert.NoError(t, err)
+
+	gitOps := &GitOps{
+		HasRef: func(ref string) bool { return false },
+	}
+
+	_, err = LoadProjectConfig(path, "", gitOps)
+	assert.True(t, err != nil, "should fail when no diff base available")
 }
 
 func TestLoadProjectConfig_FileNotFound(t *testing.T) {
