@@ -1,9 +1,7 @@
 project:
   name: "critic"
 
-diffbases:
-  - green
-  - master
+diffbase: master
 
 # paths:
 #   - src
