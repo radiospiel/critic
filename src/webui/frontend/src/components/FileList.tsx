@@ -639,15 +639,15 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
                 }
               }
 
-              // If only one section, always keep it open
-              if (fileSections.length === 1 && openCategory !== fileSections[0].name) {
+              // Ensure at least one category is always open
+              if (fileSections.length > 0 && !fileSections.some((s) => s.name === openCategory)) {
                 setOpenCategory(fileSections[0].name)
               }
 
               return fileSections.map((section) => {
                 const isOpen = openCategory === section.name
                 const catPath = categoryPaths.get(section.name)
-                const label = section.name.charAt(0).toUpperCase() + section.name.slice(1) + (catPath ? ` (in ${catPath})` : '')
+                const displayName = section.name === 'source' ? 'Other' : section.name.charAt(0).toUpperCase() + section.name.slice(1)
                 let catUnresolved = 0
                 let catExplanations = 0
                 for (const f of section.files) {
@@ -663,7 +663,10 @@ function FileList({ files, allConversations, selectedFile, onSelectFile, onSelec
                       className={`file-category-header${isOpen ? ' open' : ''}`}
                       onClick={() => selectCategory(section.name)}
                     >
-                      <span className="file-category-label">{label} ({pluralize(section.files.length, 'file')})</span>
+                      <span className="file-category-label">
+                        {displayName} ({pluralize(section.files.length, 'file')})
+                        {catPath && <span className="file-category-path">{catPath}</span>}
+                      </span>
                       {catUnresolved > 0 && (
                         <span className="conversation-icon unresolved" title={`${catUnresolved} open`}>
                           {catUnresolved}
