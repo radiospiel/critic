@@ -51,6 +51,7 @@ func SetLevelColor(level LevelT, color string) {
 }
 
 const colorReset = "\033[0m"
+const colorYellow = "\033[33m"
 
 // SimpleLogger is a logger with support for topics, and filenames
 // Note that most calls will call directly to the sharedInstance, but a caller
@@ -160,7 +161,13 @@ func processLogEntry(entry logMessage) {
 		if strings.HasPrefix(file, wd+"/") {
 			file = file[len(wd)+1:]
 		}
-		msg = fmt.Sprintf("%s:%d ", file, entry.line) + msg
+		ref := fmt.Sprintf("%s:%d", file, entry.line)
+		if sharedDest.enableColors {
+			// Wrap in OSC 8 hyperlink with yellow text
+			ref = fmt.Sprintf("\033]8;;file://%s\033\\%s%s%s\033]8;;\033\\",
+				entry.file, colorYellow, ref, colorReset)
+		}
+		msg = ref + " " + msg
 	}
 	msg = entry.level.String() + ": " + msg
 
