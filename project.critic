@@ -28,6 +28,8 @@ categories:
   - name: Web UI
     patterns:
       - "src/webui/**/*"
+      - "!package-lock.json"
+      - "!src/webui/frontend/src/gen/*.ts"
   - name: VSCode UI
     patterns:
       - "editors/vscode/**/*"
